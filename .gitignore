@@ -1,10 +1,13 @@
 # Dependency directories
+**/node_modules/    
 node_modules/
 jspm_packages/
 
 # Local env files (אבטחה - לא להעלות מפתחות סודיים)
 .env
 *.env.local
+**/server/.env
+**/client/.env
 
 # Build outputs
 dist/
