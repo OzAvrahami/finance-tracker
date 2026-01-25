@@ -35,5 +35,14 @@ exports.createTransaction = async (req, res) => {
 };
 
 exports.getAllTransactions = async (req, res) => {
-    // לוגיקה לקבלת נתונים תבוא כאן
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*'); // מושך את כל השורות מהטבלה
+
+    if (error) throw error;
+    res.status(200).json(data); // מחזיר את הנתונים כ-JSON
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 };
