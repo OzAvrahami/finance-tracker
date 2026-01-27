@@ -1,7 +1,7 @@
-// server/index.js
 const express = require('express');
 const cors = require('cors');
 const transactionRoutes = require('./routes/transactionRoutes');
+const legoRoutes = require('./routes/legoRoutes');
 require('dotenv').config();
 
 const app = express();
@@ -10,6 +10,7 @@ app.use(express.json());
 
 // שימוש בנתיבים שהגדרנו
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/lego', legoRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Architecture is solid on port ${PORT}`));
