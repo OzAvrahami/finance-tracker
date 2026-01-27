@@ -10,17 +10,33 @@ exports.createTransaction = async (req, res) => {
       .from('transactions')
       .insert([{
         description: transaction.description,
-        type: transaction.movement_type, // הוצאה/הכנסה
+        type: transaction.movement_type,
         category: transaction.category,
         total_amount: transaction.total_amount,
-        payment_source: transaction.payment_source, // מזומן/אשראי
-        credit_card_name: transaction.credit_card_name, // שם הכרטיס
+        payment_source: transaction.payment_source,
+        credit_card_name: transaction.credit_card_name,
         transaction_date: transaction.transaction_date,
-        tags: transaction.tags // תגיות
+        tags: transaction.tags
       }])
       .select();
 
     if (transError) throw transError;
+
+    if (transaction.category === 'Lego') {
+      const legoItem = items[0]; 
+      if (legoItem) {
+          const setNumberMatch = legoItem.item_name.match(/\d+/);
+          const setNumber = setNumberMatch ? setNumberMatch[0] : "Unknown";
+
+          await supabase.from('lego_sets').insert([{
+            set_number: setNumber,
+            name: legoItem.item_name,
+            purchase_price: legoItem.price_per_unit,
+            purchase_date: transaction.transaction_date,
+            status: 'New'
+          }]);
+      }
+    }
 
     // 2. אם המשתמש הוסיף פריטים, נשמור אותם בטבלה הנפרדת
     if (items && items.length > 0) {
@@ -54,7 +70,7 @@ exports.getAllTransactions = async (req, res) => {
       .select('*'); // מושך את כל השורות מהטבלה
 
     if (error) throw error;
-    res.status(200).json(data); // מחזיר את הנתונים כ-JSON
+    res.status(200).json(data);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
