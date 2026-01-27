@@ -15,7 +15,7 @@ const Navbar = () => {
       <div style={{ display: 'flex', gap: '30px' }}>
         <Link to="/" style={navLinkStyle}>דף הבית</Link>
         <Link to="/add" style={navLinkStyle}>הוספת הוצאה</Link>
-        <Link to="/lego" state={navLinkStyle}>אוסף לגו</Link>
+        <Link to="/lego" style={navLinkStyle}>אוסף לגו</Link>
       </div>
       <div style={{ color: '#4cc9f0', fontWeight: 'bold', fontSize: '1.2rem' }}>
         Finance & Lego Tracker
