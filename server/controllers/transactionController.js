@@ -23,19 +23,19 @@ exports.createTransaction = async (req, res) => {
     if (transError) throw transError;
 
     if (transaction.category === 'Lego') {
-      const legoItem = items[0]; 
-      if (legoItem) {
-          const setNumberMatch = legoItem.item_name.match(/\d+/);
-          const setNumber = setNumberMatch ? setNumberMatch[0] : "Unknown";
+        const legoItem = items[0]; 
+        if (legoItem) {
+            // שינוי: משתמשים בשדה הייעודי set_number אם הוא קיים
+            const setNumber = legoItem.set_number || "Unknown"; 
 
-          await supabase.from('lego_sets').insert([{
-            set_number: setNumber,
-            name: legoItem.item_name,
-            purchase_price: legoItem.price_per_unit,
-            purchase_date: transaction.transaction_date,
-            status: 'New'
-          }]);
-      }
+            await supabase.from('lego_sets').insert([{
+              set_number: setNumber,
+              name: legoItem.item_name,
+              purchase_price: legoItem.price_per_unit,
+              purchase_date: transaction.transaction_date,
+              status: 'New'
+            }]);
+        }
     }
 
     // 2. אם המשתמש הוסיף פריטים, נשמור אותם בטבלה הנפרדת
@@ -46,6 +46,7 @@ exports.createTransaction = async (req, res) => {
         quantity: item.quantity,
         price_per_unit: item.price_per_unit,
         total_item_price: item.quantity * item.price_per_unit,
+        set_number: item.set_number || null, // שמירת המספר גם בטבלת הפריטים
         transaction_id: transactionId
       }));
 
@@ -92,4 +93,10 @@ exports.deleteTransaction = async (req, res) => {
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
+};
+
+exports.getTags = async (req, res) => {
+  const { data, error } = await supabase.rpc('get_unique_tags');
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data.map(t => t.tag));
 };
