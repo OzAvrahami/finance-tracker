@@ -18,4 +18,5 @@ export const getLegoSets = () => api.get('/lego');
 // Add new lego set
 export const addLegoSet = (setData) => api.post('/lego', setData);
 
+export const updateLegoSet = (id, setData) => api.put(`/lego/${id}`, setData);
 export default api;

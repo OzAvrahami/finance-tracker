@@ -6,4 +6,6 @@ router.get('/', legoController.getAllSets);
 
 router.post('/', legoController.addSet);
 
+router.put('/:id', legoController.updateSet);
+
 module.exports = router;

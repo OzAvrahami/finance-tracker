@@ -19,4 +19,19 @@ exports.addSet = async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message});
     }
+};
+
+exports.updateSet = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { data, error } = await supabase
+            .from('lego_sets')
+            .update(req.body)
+            .eq('id', id)
+            .select();
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (error) {
+        res.status(400).json({ error: error.message});
+    }
 }
