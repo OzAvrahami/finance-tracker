@@ -11,6 +11,7 @@ const api = axios.create({
 // Send data
 export const createTransaction = (data) => api.post('/transactions', data);
 export const getTransactions = () => api.get('/transactions');
+export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
 
 // Lego set collection
 export const getLegoSets = () => api.get('/lego');
@@ -19,4 +20,5 @@ export const getLegoSets = () => api.get('/lego');
 export const addLegoSet = (setData) => api.post('/lego', setData);
 
 export const updateLegoSet = (id, setData) => api.put(`/lego/${id}`, setData);
+
 export default api;

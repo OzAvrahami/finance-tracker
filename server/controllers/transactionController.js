@@ -75,3 +75,21 @@ exports.getAllTransactions = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
+exports.deleteTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // מחיקה מ-Supabase (בגלל שהגדרנו Cascade ב-DB, זה ימחק גם את הפריטים הקשורים)
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    res.status(200).json({ message: 'Transaction deleted successfully' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};

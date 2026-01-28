@@ -9,4 +9,7 @@ router.post('/', transactionController.createTransaction);
 // נתיב לקבלת כל ההוצאות
 router.get('/', transactionController.getAllTransactions);
 
+// הוסף את השורה הזו לפני ה-module.exports
+router.delete('/:id', transactionController.deleteTransaction);
+
 module.exports = router;
