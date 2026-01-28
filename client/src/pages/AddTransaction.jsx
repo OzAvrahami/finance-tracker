@@ -72,7 +72,7 @@ const AddTransaction = () => {
 
   const addItemRow = () => {
     // הוספת שורה חדשה (כולל שדה למספר סט)
-    setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '' }]);
+    setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', tags: '' }]);
   };
 
   const removeItemRow = (index) => {
@@ -212,31 +212,48 @@ const AddTransaction = () => {
         {/* --- אזור הפריטים --- */}
         <h3>פירוט פריטים</h3>
         {items.map((item, index) => (
-          <div key={index} style={itemRowStyle}>
+          <div key={index} style={{ marginBottom: '15px', padding: '15px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
             
-            {/* שדה מיוחד למספר סט - מופיע רק אם הקטגוריה היא לגו */}
-            {transaction.category === 'Lego' && (
-              <div style={{ flex: 1 }}>
-                <input 
-                  type="text" 
-                  placeholder="מס' סט (75192)"
-                  value={item.set_number || ''}
-                  style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5' }} 
-                  onChange={(e) => handleItemChange(index, 'set_number', e.target.value)} 
-                />
-              </div>
-            )}
+            {/* שורה עליונה: שם, כמות, מחיר */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                {/* שדה מספר סט ללגו */}
+                {transaction.category === 'Lego' && (
+                  <div style={{ flex: 1 }}>
+                    <input 
+                      type="text" 
+                      placeholder="מס' סט (75192)"
+                      value={item.set_number || ''}
+                      style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5' }} 
+                      onChange={(e) => handleItemChange(index, 'set_number', e.target.value)} 
+                    />
+                  </div>
+                )}
 
-            <input type="text" placeholder="שם הפריט" value={item.item_name} style={{...inputStyle, flex: 3}} 
-                   onChange={(e) => handleItemChange(index, 'item_name', e.target.value)} />
-            
-            <input type="number" placeholder="כמות" value={item.quantity} style={{...inputStyle, flex: 0.8}} 
-                   onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))} />
-            
-            <input type="number" placeholder="מחיר ליח'" value={item.price_per_unit} style={{...inputStyle, flex: 1}} 
-                   onChange={(e) => handleItemChange(index, 'price_per_unit', Number(e.target.value))} />
-            
-            <button type="button" onClick={() => removeItemRow(index)} style={deleteBtnStyle}>🗑️</button>
+                <input type="text" placeholder="שם הפריט" value={item.item_name} style={{...inputStyle, flex: 3}} 
+                      onChange={(e) => handleItemChange(index, 'item_name', e.target.value)} />
+                
+                <input type="number" placeholder="כמות" value={item.quantity} style={{...inputStyle, flex: 0.8}} 
+                      onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))} />
+                
+                <input type="number" placeholder="מחיר יח'" value={item.price_per_unit} style={{...inputStyle, flex: 1}} 
+                      onChange={(e) => handleItemChange(index, 'price_per_unit', Number(e.target.value))} />
+            </div>
+
+            {/* שורה תחתונה: תגיות וכפתור מחיקה */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <input 
+                    type="text" 
+                    placeholder="תגיות לפריט זה (למשל: מתנה, חלקים חסרים)" 
+                    value={item.tags || ''}
+                    style={{ ...inputStyle, flex: 1, fontSize: '0.9rem', color: '#666' }}
+                    onChange={(e) => handleItemChange(index, 'tags', e.target.value)} 
+                />
+                
+                <button type="button" onClick={() => removeItemRow(index)} style={{ ...deleteBtnStyle, color: '#e74c3c' }}>
+                    🗑️
+                </button>
+            </div>
+
           </div>
         ))}
         
