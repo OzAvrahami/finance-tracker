@@ -209,7 +209,8 @@ const AddTransaction = () => {
               <label>בחר כרטיס (חובה):</label>
               <select required style={inputStyle} value={transaction.credit_card_name} onChange={(e) => setTransaction({...transaction, credit_card_name: e.target.value})}>
                 <option value="">בחר כרטיס...</option>
-                <option value="Mastercard">Mastercard זהב</option>
+                <option value="5304_Cal">5304 Visa Cal</option>
+                <option value="5746_Cal">5746 Visa Cal</option>
                 <option value="Visa">Visa Signature</option>
                 <option value="Amex">American Express</option>
               </select>
