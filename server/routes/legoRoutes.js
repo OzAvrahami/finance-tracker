@@ -8,4 +8,6 @@ router.post('/', legoController.addSet);
 
 router.put('/:id', legoController.updateSet);
 
+router.get('/themes', legoController.getThemes);
+
 module.exports = router;

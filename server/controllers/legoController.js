@@ -35,3 +35,19 @@ exports.updateSet = async (req, res) => {
         res.status(400).json({ error: error.message});
     }
 }
+
+exports.getThemes = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('lego_sets')
+      .select('theme');
+
+    if (error) throw error;
+
+    const uniqueThemes = [...new Set(data.map(item => item.theme).filter(Boolean))];
+    
+    res.json(uniqueThemes);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};

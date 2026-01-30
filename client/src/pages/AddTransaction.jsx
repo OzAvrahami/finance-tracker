@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createTransaction, getTags } from '../services/api';
+import { createTransaction, getTags, getLegoThemes } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 
@@ -9,7 +9,8 @@ const AddTransaction = () => {
   // State לניהול התגיות
   const [availableTags, setAvailableTags] = useState([]); 
   const [tagInput, setTagInput] = useState(''); 
-  const [selectedTags, setSelectedTags] = useState([]); 
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [availableThemes, setAvailableThemes] = useState([]);
 
   // State ראשי לטופס
   const [transaction, setTransaction] = useState({
@@ -29,11 +30,16 @@ const AddTransaction = () => {
   useEffect(() => {
     const loadTags = async () => {
       try {
-        const res = await getTags();
-        // מוודא שאנחנו מקבלים מערך
-        setAvailableTags(Array.isArray(res.data) ? res.data : []);
+        // Tags
+        const tagsRes = await getTags();
+        setAvailableTags(Array.isArray(tagsRes.data) ? tagsRes.data : []);
+
+        // Lego themes
+        const themesRes = await getLegoThemes();
+        setAvailableThemes(themesRes.data || []);
+
       } catch (e) {
-        console.log("No tags yet or error fetching");
+        console.log("Error loading data");
       }
     };
     loadTags();
@@ -71,8 +77,14 @@ const AddTransaction = () => {
   };
 
   const addItemRow = () => {
-    // הוספת שורה חדשה (כולל שדה למספר סט)
-    setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', tags: '' }]);
+    setItems([...items, {
+      item_name: '',
+      theme: '',
+      quantity: 1,
+      price_per_unit: 0,
+      set_number: '',
+      tags: ''
+    }]);
   };
 
   const removeItemRow = (index) => {
@@ -226,6 +238,21 @@ const AddTransaction = () => {
                       style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5' }} 
                       onChange={(e) => handleItemChange(index, 'set_number', e.target.value)} 
                     />
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="נושא"
+                      value={item.theme || ''}
+                      list="lego-themes-list"
+                      style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5'}}
+                      onChange={(e) => handleItemChange(index, 'theme', e.target.value)}
+                    />
+                    <datalist id="lego-themes-list">
+                      {availableThemes.map((theme, idx) => (
+                        <option key={idx} value={theme} />
+                      ))}
+                    </datalist>
                   </div>
                 )}
 

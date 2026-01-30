@@ -27,5 +27,6 @@ export const getExistingTags = async () => {
 export const getLegoSets = () => api.get('/lego');
 export const addLegoSet = (setData) => api.post('/lego', setData);
 export const updateLegoSet = (id, setData) => api.put(`/lego/${id}`, setData);
+export const getLegoThemes = () => api.get('/lego/themes');
 
 export default api;

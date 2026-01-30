@@ -36,6 +36,7 @@ exports.createTransaction = async (req, res) => {
           const { error } = await supabase.from('lego_sets').insert([{
             set_number: item.set_number,
             name: item.item_name,
+            theme: item.theme || 'General',
             purchase_price: item.price_per_unit,
             purchase_date: transaction.transaction_date,
             status: 'New'
