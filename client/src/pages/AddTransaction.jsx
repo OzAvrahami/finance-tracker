@@ -21,6 +21,7 @@ const AddTransaction = () => {
     transaction_date: new Date().toISOString().split('T')[0],
     payment_source: 'Credit Card', // ברירת מחדל
     credit_card_name: '',
+    global_discount: 0,
     tags: ''
   });
 
@@ -45,13 +46,26 @@ const AddTransaction = () => {
     loadTags();
   }, []);
 
-  // 2. חישוב סכום אוטומטי לפי פריטים
+  // Calculate total transaction amount automatically
   useEffect(() => {
-    if (items.length > 0) {
-      const total = items.reduce((sum, item) => sum + (item.quantity * item.price_per_unit), 0);
-      setTransaction(prev => ({ ...prev, total_amount: total }));
-    }
-  }, [items]);
+      if (items.length > 0) {
+          // 1. Sum up all items (after their specific discounts)
+          const itemsTotal = items.reduce((sum, item) => {
+              return sum + calculateItemFinalPrice(
+                  Number(item.price_per_unit) || 0,
+                  Number(item.quantity) || 1,
+                  item.discount_type,
+                  Number(item.discount_value) || 0
+              );
+          }, 0);
+
+          // 2. Subtract global discount (e.g., points used)
+          const globalDiscount = Number(transaction.global_discount) || 0;
+          const finalTotal = Math.max(0, itemsTotal - globalDiscount);
+
+          setTransaction(prev => ({ ...prev, total_amount: finalTotal }));
+      }
+  }, [items, transaction.global_discount]);
 
   // --- לוגיקת תגיות ---
   const handleTagKeyDown = (e) => {
@@ -83,7 +97,9 @@ const AddTransaction = () => {
       quantity: 1,
       price_per_unit: 0,
       set_number: '',
-      tags: ''
+      tags: '',
+      discount_type: 'amount',
+      discount_value: 0
     }]);
   };
 
@@ -113,6 +129,21 @@ const AddTransaction = () => {
     } catch (error) {
       alert('שגיאה בשמירה: ' + error.message);
     }
+  };
+
+  // Helper to calculate final price per item based on discount
+  const calculateItemFinalPrice = (price, quantity, type, value) => {
+      const baseTotal = price * quantity;
+      if (!value || value === 0) return baseTotal;
+
+      let discountAmount = 0;
+      if (type === 'percent') {
+          discountAmount = baseTotal * (value / 100);
+      } else {
+          discountAmount = value; // Fixed amount discount
+      }
+      
+      return Math.max(0, baseTotal - discountAmount); // Prevent negative price
   };
 
   return (
@@ -221,72 +252,151 @@ const AddTransaction = () => {
 
         <hr style={{ margin: '30px 0', border: '0.5px solid #eee' }} />
 
-        {/* --- אזור הפריטים --- */}
+        {/* --- Item Details Section --- */}
         <h3>פירוט פריטים</h3>
-        {items.map((item, index) => (
-          <div key={index} style={{ marginBottom: '15px', padding: '15px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-            
-            {/* שורה עליונה: שם, כמות, מחיר */}
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                {/* שדה מספר סט ללגו */}
-                {transaction.category === 'Lego' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          {items.map((item, index) => {
+            // Calculate live final price for display
+            const finalPrice = calculateItemFinalPrice(
+                item.price_per_unit, 
+                item.quantity, 
+                item.discount_type, 
+                item.discount_value
+            );
+
+            return (
+            <div key={index} style={itemCardStyle}>
+              
+              {/* Row 1: Lego Specifics */}
+              {transaction.category === 'Lego' && (
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
                   <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>מספר סט</label>
                     <input 
                       type="text" 
-                      placeholder="מס' סט (75192)"
+                      placeholder="Example: 75192"
                       value={item.set_number || ''}
                       style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5' }} 
                       onChange={(e) => handleItemChange(index, 'set_number', e.target.value)} 
                     />
                   </div>
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="נושא"
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>נושא</label>
+                    <input 
+                      type="text" 
                       value={item.theme || ''}
-                      list="lego-themes-list"
-                      style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5'}}
-                      onChange={(e) => handleItemChange(index, 'theme', e.target.value)}
+                      list="lego-themes-list" 
+                      style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5' }} 
+                      onChange={(e) => handleItemChange(index, 'theme', e.target.value)} 
                     />
-                    <datalist id="lego-themes-list">
-                      {availableThemes.map((theme, idx) => (
-                        <option key={idx} value={theme} />
-                      ))}
-                    </datalist>
                   </div>
-                )}
+                </div>
+              )}
 
-                <input type="text" placeholder="שם הפריט" value={item.item_name} style={{...inputStyle, flex: 3}} 
-                      onChange={(e) => handleItemChange(index, 'item_name', e.target.value)} />
-                
-                <input type="number" placeholder="כמות" value={item.quantity} style={{...inputStyle, flex: 0.8}} 
-                      onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))} />
-                
-                <input type="number" placeholder="מחיר יח'" value={item.price_per_unit} style={{...inputStyle, flex: 1}} 
-                      onChange={(e) => handleItemChange(index, 'price_per_unit', Number(e.target.value))} />
-            </div>
-
-            {/* שורה תחתונה: תגיות וכפתור מחיקה */}
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <input 
+              {/* Row 2: Basic Info */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ flex: 3 }}>
+                  <label style={labelStyle}>שם הפריט</label>
+                  <input 
                     type="text" 
-                    placeholder="תגיות לפריט זה (למשל: מתנה, חלקים חסרים)" 
-                    value={item.tags || ''}
-                    style={{ ...inputStyle, flex: 1, fontSize: '0.9rem', color: '#666' }}
-                    onChange={(e) => handleItemChange(index, 'tags', e.target.value)} 
-                />
-                
-                <button type="button" onClick={() => removeItemRow(index)} style={{ ...deleteBtnStyle, color: '#e74c3c' }}>
-                    🗑️
-                </button>
-            </div>
+                    value={item.item_name} 
+                    style={inputStyle} 
+                    onChange={(e) => handleItemChange(index, 'item_name', e.target.value)} 
+                  />
+                </div>
+                <div style={{ flex: 0.8 }}>
+                  <label style={labelStyle}>כמות</label>
+                  <input 
+                    type="number" 
+                    value={item.quantity} 
+                    style={inputStyle} 
+                    onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))} 
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>מחיר יח' (לפני הנחה)</label>
+                  <input 
+                    type="number" 
+                    value={item.price_per_unit} 
+                    style={inputStyle} 
+                    onChange={(e) => handleItemChange(index, 'price_per_unit', Number(e.target.value))} 
+                  />
+                </div>
+              </div>
 
-          </div>
-        ))}
+              {/* Row 3: Discounts Logic */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', backgroundColor: '#eefcf5', padding: '10px', borderRadius: '6px' }}>
+                <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>סוג הנחה</label>
+                    <select 
+                        style={inputStyle} 
+                        value={item.discount_type}
+                        onChange={(e) => handleItemChange(index, 'discount_type', e.target.value)}
+                    >
+                        <option value="amount">סכום (₪)</option>
+                        <option value="percent">אחוז (%)</option>
+                    </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>שווי הנחה</label>
+                    <input 
+                        type="number" 
+                        placeholder="0"
+                        value={item.discount_value} 
+                        style={inputStyle}
+                        onChange={(e) => handleItemChange(index, 'discount_value', Number(e.target.value))} 
+                    />
+                </div>
+                <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>סה"כ לשורה (סופי)</label>
+                    <div style={{ ...inputStyle, backgroundColor: '#e2e6ea', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                        ₪{finalPrice.toFixed(2)}
+                    </div>
+                </div>
+              </div>
+
+              {/* Row 4: Tags & Delete */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1 }}>
+                  <input 
+                    type="text" 
+                    placeholder="תגיות..." 
+                    value={item.tags || ''}
+                    style={{ ...inputStyle, fontSize: '0.9rem' }}
+                    onChange={(e) => handleItemChange(index, 'tags', e.target.value)} 
+                  />
+                </div>
+                <button type="button" onClick={() => removeItemRow(index)} style={deleteRowBtnStyle}>🗑️</button>
+              </div>
+
+            </div>
+          )})}
+        </div>
+
+        {/* --- Global Discount Field (Below items) --- */}
+        <div style={{ marginTop: '20px', padding: '15px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeeba' }}>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                <label style={{ fontWeight: 'bold', color: '#856404' }}>הנחה כללית / שימוש בנקודות (₪):</label>
+                <input 
+                    type="number" 
+                    value={transaction.global_discount}
+                    onChange={(e) => setTransaction({ ...transaction, global_discount: Number(e.target.value) })}
+                    style={{ ...inputStyle, width: '150px', borderColor: '#ffeeba' }}
+                    placeholder="0"
+                />
+                <span style={{ fontSize: '0.9rem', color: '#856404' }}>(מופחת מהסה"כ לתשלום)</span>
+            </div>
+        </div>
         
         <button type="button" onClick={addItemRow} style={addBtnStyle}>+ הוסף פריט</button>
 
         <button type="submit" style={submitBtnStyle}>שמור תנועה</button>
+
+        <datalist id="lego-themes-list">
+            {availableThemes.map((theme, idx) => (
+                <option key={idx} value={theme} />
+            ))}
+        </datalist>
       </form>
     </div>
   );
@@ -300,9 +410,38 @@ const inputStyle = { padding: '12px', borderRadius: '6px', border: '1px solid #d
 const tagsContainerStyle = { display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', minHeight: '45px', alignItems: 'center' };
 const tagChipStyle = { background: '#e9ecef', padding: '5px 10px', borderRadius: '20px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '5px' };
 const tagInputStyle = { border: 'none', outline: 'none', flex: 1, minWidth: '100px', fontSize: '1rem' };
-const itemRowStyle = { display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center' };
 const addBtnStyle = { marginTop: '10px', padding: '10px', background: '#f8f9fa', border: '1px dashed #ced4da', borderRadius: '6px', cursor: 'pointer' };
 const submitBtnStyle = { marginTop: '40px', padding: '15px', background: '#1a1a2e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', width: '100%', fontSize: '1.1rem', fontWeight: 'bold' };
-const deleteBtnStyle = { border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2rem' };
+// --- Styles ---
+
+const itemCardStyle = {
+  background: '#f8f9fa',
+  padding: '20px',
+  borderRadius: '10px',
+  border: '1px solid #e9ecef',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+};
+
+const labelStyle = {
+  display: 'block',
+  marginBottom: '5px',
+  fontSize: '0.85rem',
+  color: '#6c757d',
+  fontWeight: '600'
+};
+
+const deleteRowBtnStyle = {
+  background: '#ffe3e3',
+  border: '1px solid #ffa8a8',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  padding: '10px 15px',
+  fontSize: '1.2rem',
+  height: '46px', // Align with input height
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'background 0.2s'
+};
 
 export default AddTransaction;
