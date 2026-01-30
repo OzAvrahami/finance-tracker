@@ -8,20 +8,13 @@ const api = axios.create({
 });
 
 
-// Send data
+// Transaction
 export const createTransaction = (data) => api.post('/transactions', data);
 export const getTransactions = () => api.get('/transactions');
-export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
 export const getTags = () => api.get('/transactions/tags');
-
-/*
-// שליפת רשימת תגיות ייחודיות
-export const getExistingTags = async () => {
-  const { data, error } = await supabase.rpc('get_unique_tags');
-  if (error) throw error;
-  return data.map(t => t.tag).filter(Boolean); // מחזיר מערך נקי של מילים
-};*/
-
+export const getTransactionById = (id) => api.get(`transactions/${id}`);
+export const updateTransaction = (id, data) => api.put(`transactions/${id}`, data);
+export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
 
 // Lego set collection
 export const getLegoSets = () => api.get('/lego');

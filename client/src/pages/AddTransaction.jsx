@@ -1,88 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import { createTransaction, getTags, getLegoThemes } from '../services/api';
-import { useNavigate } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes } from '../services/api';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const AddTransaction = () => {
   const navigate = useNavigate();
+  const { id } = useParams(); 
+  const isEditMode = Boolean(id);
 
-  // State לניהול התגיות
-  const [availableTags, setAvailableTags] = useState([]); 
-  const [tagInput, setTagInput] = useState(''); 
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [availableThemes, setAvailableThemes] = useState([]);
-
-  // State ראשי לטופס
+  const [loading, setLoading] = useState(false);
+  
   const [transaction, setTransaction] = useState({
+    transaction_date: new Date().toISOString().split('T')[0],
     description: '',
     movement_type: 'expense',
-    category: '',
-    total_amount: '',
-    transaction_date: new Date().toISOString().split('T')[0],
-    payment_source: 'Credit Card', // ברירת מחדל
+    category: 'General',
+    payment_source: 'credit_card',
     credit_card_name: '',
+    total_amount: 0,
     global_discount: 0,
     tags: ''
   });
 
   const [items, setItems] = useState([]);
 
-  // 1. טעינת תגיות קיימות בטעינת הדף
+  const [availableTags, setAvailableTags] = useState([]);
+  const [legoThemes, setLegoThemes] = useState([]);
+
+  // Load Tags & Themes
   useEffect(() => {
-    const loadTags = async () => {
-      try {
-        // Tags
-        const tagsRes = await getTags();
-        setAvailableTags(Array.isArray(tagsRes.data) ? tagsRes.data : []);
-
-        // Lego themes
-        const themesRes = await getLegoThemes();
-        setAvailableThemes(themesRes.data || []);
-
-      } catch (e) {
-        console.log("Error loading data");
-      }
-    };
-    loadTags();
+    getTags().then(res => setAvailableTags(res.data)).catch(console.error);
+    getLegoThemes().then(res => setLegoThemes(res.data)).catch(console.error);
   }, []);
 
-  // Calculate total transaction amount automatically
+  // Load Data for Edit Mode
   useEffect(() => {
-      if (items.length > 0) {
-          // 1. Sum up all items (after their specific discounts)
-          const itemsTotal = items.reduce((sum, item) => {
-              return sum + calculateItemFinalPrice(
-                  Number(item.price_per_unit) || 0,
-                  Number(item.quantity) || 1,
-                  item.discount_type,
-                  Number(item.discount_value) || 0
-              );
-          }, 0);
+    if (isEditMode) {
+      setLoading(true);
+      getTransactionById(id)
+        .then(res => {
+          const data = res.data;
+          
+          if (!data) {
+              console.error("No data received!");
+              return;
+          }
 
-          // 2. Subtract global discount (e.g., points used)
-          const globalDiscount = Number(transaction.global_discount) || 0;
-          const finalTotal = Math.max(0, itemsTotal - globalDiscount);
+          setTransaction({
+            transaction_date: data.transaction_date || new Date().toISOString().split('T')[0],
+            description: data.description || '',
+            movement_type: data.type || 'expense',
+            category: data.category || 'General',
+            payment_source: data.payment_method || 'credit_card',
+            credit_card_name: data.credit_card_name || '',
+            total_amount: data.total_amount || 0,
+            global_discount: data.global_discount || 0,
+            tags: data.tags || ''
+          });
 
-          setTransaction(prev => ({ ...prev, total_amount: finalTotal }));
-      }
+          if (data.transaction_items && Array.isArray(data.transaction_items)) {
+             setItems(data.transaction_items.map(item => ({
+                item_name: item.item_name,
+                quantity: item.quantity,
+                price_per_unit: item.price_per_unit,
+                set_number: item.set_number || '',
+                theme: item.theme || '',
+                tags: item.tags || '',
+                discount_type: item.discount_type || 'amount',
+                discount_value: item.discount_value || 0
+             })));
+          } else {
+              setItems([]);
+          }
+          setLoading(false);
+        })
+        .catch(err => {
+            console.error("Failed to load transaction", err);
+            alert("שגיאה בטעינת העסקה");
+            navigate('/');
+        });
+    }
+  }, [id, isEditMode, navigate]);
+
+  // --- Calculations ---
+  const calculateFinalPrice = (price, type, value) => {
+    if (!price) return 0;
+    const p = Number(price);
+    const v = Number(value);
+    if (type === 'percent') return p - (p * (v / 100));
+    return p - v;
+  };
+
+  const calculateTotal = () => {
+    const itemsTotal = items.reduce((sum, item) => {
+      const linePrice = calculateFinalPrice(item.price_per_unit, item.discount_type, item.discount_value);
+      return sum + (linePrice * item.quantity);
+    }, 0);
+    
+    // Global discount logic
+    const finalTotal = itemsTotal - Number(transaction.global_discount);
+    return finalTotal > 0 ? finalTotal : 0;
+  };
+
+  useEffect(() => {
+    setTransaction(prev => ({ ...prev, total_amount: calculateTotal() }));
   }, [items, transaction.global_discount]);
 
-  // --- לוגיקת תגיות ---
-  const handleTagKeyDown = (e) => {
-    if (e.key === 'Enter' && tagInput.trim()) {
-      e.preventDefault();
-      const newTag = tagInput.trim();
-      if (!selectedTags.includes(newTag)) {
-        setSelectedTags([...selectedTags, newTag]);
-      }
-      setTagInput('');
-    }
-  };
 
-  const removeTag = (tagToRemove) => {
-    setSelectedTags(selectedTags.filter(tag => tag !== tagToRemove));
+  // --- Handlers ---
+  const handleTransactionChange = (e) => {
+    const { name, value } = e.target;
+    setTransaction(prev => ({ ...prev, [name]: value }));
   };
-  // --------------------
 
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
@@ -90,359 +118,204 @@ const AddTransaction = () => {
     setItems(newItems);
   };
 
-  const addItemRow = () => {
-    setItems([...items, {
-      item_name: '',
-      theme: '',
-      quantity: 1,
-      price_per_unit: 0,
-      set_number: '',
-      tags: '',
-      discount_type: 'amount',
-      discount_value: 0
-    }]);
+  const addItem = () => {
+    setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', tags: '', discount_type: 'amount', discount_value: 0 }]);
   };
 
-  const removeItemRow = (index) => {
-    setItems(items.filter((_, i) => i !== index));
+  const removeItem = (index) => {
+    const newItems = items.filter((_, i) => i !== index);
+    setItems(newItems);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // בדיקת חובה לכרטיס אשראי
-    if (transaction.payment_source === 'Credit Card' && !transaction.credit_card_name) {
-      alert("נא לבחור איזה כרטיס אשראי זה");
-      return;
-    }
-
-    // איחוד התגיות למחרוזת
-    const finalTransaction = {
-      ...transaction,
-      tags: selectedTags.join(',') 
-    };
-
     try {
-      await createTransaction({ transaction: finalTransaction, items });
-      alert('התנועה נשמרה בהצלחה!');
+      const payload = { transaction, items };
+      
+      if (isEditMode) {
+        await updateTransaction(id, payload);
+        alert('העסקה עודכנה בהצלחה! 💾');
+      } else {
+        await createTransaction(payload);
+        alert('התנועה נשמרה בהצלחה! 🚀');
+      }
       navigate('/');
     } catch (error) {
-      alert('שגיאה בשמירה: ' + error.message);
+      console.error('Error saving transaction:', error);
+      alert('שגיאה בשמירת התנועה: ' + (error.message || 'שגיאה לא ידועה'));
     }
   };
 
-  // Helper to calculate final price per item based on discount
-  const calculateItemFinalPrice = (price, quantity, type, value) => {
-      const baseTotal = price * quantity;
-      if (!value || value === 0) return baseTotal;
-
-      let discountAmount = 0;
-      if (type === 'percent') {
-          discountAmount = baseTotal * (value / 100);
-      } else {
-          discountAmount = value; // Fixed amount discount
-      }
-      
-      return Math.max(0, baseTotal - discountAmount); // Prevent negative price
-  };
+  if (loading) return <div style={{textAlign: 'center', marginTop: '50px'}}>טוען נתונים...</div>;
 
   return (
-    <div dir="rtl" style={{ padding: '40px', maxWidth: '1000px', margin: '0 auto', fontFamily: 'Segoe UI' }}>
-      <h2 style={{ borderBottom: '3px solid #4cc9f0', display: 'inline-block' }}>הזנת תנועה חדשה</h2>
+    <div style={{ maxWidth: '800px', margin: '40px auto', padding: '30px', backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', fontFamily: 'Segoe UI' }} dir="rtl">
       
-      <form onSubmit={handleSubmit} style={formCardStyle}>
-        <div style={gridStyle}>
-          
-          {/* תיאור */}
-          <div style={inputGroup}>
-            <label>תיאור (חובה):</label>
-            <input type="text" required style={inputStyle} 
-                   value={transaction.description}
-                   onChange={(e) => setTransaction({...transaction, description: e.target.value})} />
-          </div>
+      <h1 style={{ textAlign: 'center', color: '#1a1a2e', marginBottom: '30px' }}>
+          {isEditMode ? 'עריכת תנועה ✏️' : 'הוספת תנועה חדשה 💰'}
+      </h1>
 
-          {/* סוג תנועה */}
-          <div style={inputGroup}>
-            <label>סוג תנועה:</label>
-            <select style={inputStyle} value={transaction.movement_type} onChange={(e) => setTransaction({...transaction, movement_type: e.target.value})}>
-              <option value="expense">הוצאה</option>
-              <option value="income">הכנסה</option>
-            </select>
-          </div>
-
-          {/* קטגוריה */}
-          <div style={inputGroup}>
-            <label>קטגוריה (חובה):</label>
-            <select required style={inputStyle} value={transaction.category} onChange={(e) => setTransaction({...transaction, category: e.target.value})}>
-              <option value="">בחר קטגוריה...</option>
-              <option value="Food">אוכל/סופר</option>
-              <option value="Lego">לגו 🧱</option>
-              <option value="Vehicle">רכב</option>
-              <option value="Housing">מגורים/חשבונות</option>
-              <option value="Salary">משכורת</option>
-              <option value="General">כללי</option>
-            </select>
-          </div>
-
-          {/* סכום כולל */}
-          <div style={inputGroup}>
-            <label>סכום כולל:</label>
-            <input type="number" required style={inputStyle}
-                   value={transaction.total_amount}
-                   onChange={(e) => setTransaction({...transaction, total_amount: e.target.value})} />
-          </div>
-
-          {/* מקור תשלום */}
-          <div style={inputGroup}>
-            <label>מקור תשלום:</label>
-            <select required style={inputStyle} value={transaction.payment_source} onChange={(e) => setTransaction({...transaction, payment_source: e.target.value})}>
-              <option value="Credit Card">כרטיס אשראי</option>
-              <option value="Cash">מזומן</option>
-              <option value="Bank Transfer">העברה בנקאית</option>
-              <option value="Bit">ביט / פפר פיי</option>
-            </select>
-          </div>
-
-          {/* בחירת כרטיס - מותנה */}
-          {transaction.payment_source === 'Credit Card' && (
-            <div style={inputGroup}>
-              <label>בחר כרטיס (חובה):</label>
-              <select required style={inputStyle} value={transaction.credit_card_name} onChange={(e) => setTransaction({...transaction, credit_card_name: e.target.value})}>
-                <option value="">בחר כרטיס...</option>
-                <option value="5304_Cal">5304 Visa Cal</option>
-                <option value="5746_Cal">5746 Visa Cal</option>
-                <option value="Visa">Visa Signature</option>
-                <option value="Amex">American Express</option>
-              </select>
-            </div>
-          )}
-
-          {/* תאריך */}
-          <div style={inputGroup}>
-            <label>תאריך:</label>
-            <input type="date" required style={inputStyle}
-                   value={transaction.transaction_date}
-                   onChange={(e) => setTransaction({...transaction, transaction_date: e.target.value})} />
-          </div>
-
-          {/* --- רכיב התגיות החדש --- */}
-          <div style={{ ...inputGroup, gridColumn: '1 / -1' }}>
-            <label>תגיות (הקלד ולחץ Enter):</label>
-            <div style={tagsContainerStyle}>
-              {selectedTags.map(tag => (
-                <span key={tag} style={tagChipStyle}>
-                  {tag}
-                  <X size={14} style={{ cursor: 'pointer' }} onClick={() => removeTag(tag)} />
-                </span>
-              ))}
-              <input 
-                type="text" 
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                placeholder="הוסף תגית..." 
-                style={tagInputStyle}
-                list="tags-suggestions" 
-              />
-              <datalist id="tags-suggestions">
-                {availableTags.map((tag, i) => <option key={i} value={tag} />)}
-              </datalist>
-            </div>
-          </div>
-        </div>
-
-        <hr style={{ margin: '30px 0', border: '0.5px solid #eee' }} />
-
-        {/* --- Item Details Section --- */}
-        <h3>פירוט פריטים</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          {items.map((item, index) => {
-            // Calculate live final price for display
-            const finalPrice = calculateItemFinalPrice(
-                item.price_per_unit, 
-                item.quantity, 
-                item.discount_type, 
-                item.discount_value
-            );
-
-            return (
-            <div key={index} style={itemCardStyle}>
-              
-              {/* Row 1: Lego Specifics */}
-              {transaction.category === 'Lego' && (
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>מספר סט</label>
-                    <input 
-                      type="text" 
-                      placeholder="Example: 75192"
-                      value={item.set_number || ''}
-                      style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5' }} 
-                      onChange={(e) => handleItemChange(index, 'set_number', e.target.value)} 
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>נושא</label>
-                    <input 
-                      type="text" 
-                      value={item.theme || ''}
-                      list="lego-themes-list" 
-                      style={{ ...inputStyle, borderColor: '#f39c12', background: '#fffcf5' }} 
-                      onChange={(e) => handleItemChange(index, 'theme', e.target.value)} 
-                    />
-                  </div>
+      <form onSubmit={handleSubmit}>
+        
+        {/* --- Transaction Details --- */}
+        <div style={sectionStyle}>
+            <div style={rowStyle}>
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>תאריך</label>
+                    <input type="date" name="transaction_date" value={transaction.transaction_date} onChange={handleTransactionChange} style={inputStyle} required />
                 </div>
-              )}
-
-              {/* Row 2: Basic Info */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                <div style={{ flex: 3 }}>
-                  <label style={labelStyle}>שם הפריט</label>
-                  <input 
-                    type="text" 
-                    value={item.item_name} 
-                    style={inputStyle} 
-                    onChange={(e) => handleItemChange(index, 'item_name', e.target.value)} 
-                  />
-                </div>
-                <div style={{ flex: 0.8 }}>
-                  <label style={labelStyle}>כמות</label>
-                  <input 
-                    type="number" 
-                    value={item.quantity} 
-                    style={inputStyle} 
-                    onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))} 
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>מחיר יח' (לפני הנחה)</label>
-                  <input 
-                    type="number" 
-                    value={item.price_per_unit} 
-                    style={inputStyle} 
-                    onChange={(e) => handleItemChange(index, 'price_per_unit', Number(e.target.value))} 
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: Discounts Logic */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', backgroundColor: '#eefcf5', padding: '10px', borderRadius: '6px' }}>
-                <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>סוג הנחה</label>
-                    <select 
-                        style={inputStyle} 
-                        value={item.discount_type}
-                        onChange={(e) => handleItemChange(index, 'discount_type', e.target.value)}
-                    >
-                        <option value="amount">סכום (₪)</option>
-                        <option value="percent">אחוז (%)</option>
+                
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>סוג תנועה</label>
+                    <select name="movement_type" value={transaction.movement_type} onChange={handleTransactionChange} style={inputStyle}>
+                        <option value="expense">הוצאה 💸</option>
+                        <option value="income">הכנסה 💰</option>
                     </select>
                 </div>
-                <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>שווי הנחה</label>
+            </div>
+
+            <div style={inputGroupStyle}>
+                <label style={labelStyle}>תיאור כללי</label>
+                <input type="text" name="description" value={transaction.description} onChange={handleTransactionChange} placeholder="למשל: קניות בסופר, דלק, משכורת..." style={inputStyle} required />
+            </div>
+
+            <div style={rowStyle}>
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>קטגוריה</label>
+                    <input type="text" name="category" value={transaction.category} onChange={handleTransactionChange} list="categories" style={inputStyle} required />
+                    <datalist id="categories">
+                        <option value="Food" />
+                        <option value="Lego" />
+                        <option value="Electronics" />
+                        <option value="Transport" />
+                        <option value="Salary" />
+                    </datalist>
+                </div>
+
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>אמצעי תשלום</label>
+                    <select name="payment_source" value={transaction.payment_source} onChange={handleTransactionChange} style={inputStyle}>
+                        <option value="credit_card">כרטיס אשראי 💳</option>
+                        <option value="cash">מזומן 💵</option>
+                        <option value="bank_transfer">העברה בנקאית 🏦</option>
+                        <option value="bit">Bit / PayBox 📱</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Credit Card Name Input */}
+            {transaction.payment_source === 'credit_card' && (
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>שם כרטיס / 4 ספרות אחרונות</label>
                     <input 
-                        type="number" 
-                        placeholder="0"
-                        value={item.discount_value} 
-                        style={inputStyle}
-                        onChange={(e) => handleItemChange(index, 'discount_value', Number(e.target.value))} 
+                        type="text" 
+                        name="credit_card_name" 
+                        value={transaction.credit_card_name} 
+                        onChange={handleTransactionChange} 
+                        placeholder="למשל: מאקס (1234)" 
+                        style={inputStyle} 
                     />
                 </div>
-                <div style={{ flex: 1 }}>
-                    <label style={labelStyle}>סה"כ לשורה (סופי)</label>
-                    <div style={{ ...inputStyle, backgroundColor: '#e2e6ea', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
-                        ₪{finalPrice.toFixed(2)}
-                    </div>
-                </div>
-              </div>
-
-              {/* Row 4: Tags & Delete */}
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                  <input 
-                    type="text" 
-                    placeholder="תגיות..." 
-                    value={item.tags || ''}
-                    style={{ ...inputStyle, fontSize: '0.9rem' }}
-                    onChange={(e) => handleItemChange(index, 'tags', e.target.value)} 
-                  />
-                </div>
-                <button type="button" onClick={() => removeItemRow(index)} style={deleteRowBtnStyle}>🗑️</button>
-              </div>
-
-            </div>
-          )})}
+            )}
         </div>
 
-        {/* --- Global Discount Field (Below items) --- */}
-        <div style={{ marginTop: '20px', padding: '15px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeeba' }}>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                <label style={{ fontWeight: 'bold', color: '#856404' }}>הנחה כללית / שימוש בנקודות (₪):</label>
-                <input 
-                    type="number" 
-                    value={transaction.global_discount}
-                    onChange={(e) => setTransaction({ ...transaction, global_discount: Number(e.target.value) })}
-                    style={{ ...inputStyle, width: '150px', borderColor: '#ffeeba' }}
-                    placeholder="0"
-                />
-                <span style={{ fontSize: '0.9rem', color: '#856404' }}>(מופחת מהסה"כ לתשלום)</span>
-            </div>
-        </div>
+        <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
+
+        {/* --- Items Section --- */}
+        <h3 style={{ color: '#444', marginBottom: '15px' }}>פירוט פריטים 🛒</h3>
         
-        <button type="button" onClick={addItemRow} style={addBtnStyle}>+ הוסף פריט</button>
+        {items.map((item, index) => (
+            <div key={index} style={itemCardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <span style={badgeStyle}>פריט #{index + 1}</span>
+                    <button type="button" onClick={() => removeItem(index)} style={deleteBtnStyle}>🗑️ הסר</button>
+                </div>
 
-        <button type="submit" style={submitBtnStyle}>שמור תנועה</button>
+                {/* שורה עליונה: שם, כמות, מחיר - תמיד מופיע */}
+                <div style={gridRowStyle}>
+                    <input type="text" placeholder="שם הפריט" value={item.item_name} onChange={(e) => handleItemChange(index, 'item_name', e.target.value)} style={inputStyle} required />
+                    <input type="number" placeholder="כמות" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} style={inputStyle} min="1" />
+                    <input type="number" placeholder="מחיר ליחידה" value={item.price_per_unit} onChange={(e) => handleItemChange(index, 'price_per_unit', e.target.value)} style={inputStyle} min="0" step="0.01" />
+                </div>
 
-        <datalist id="lego-themes-list">
-            {availableThemes.map((theme, idx) => (
-                <option key={idx} value={theme} />
-            ))}
-        </datalist>
+                {/* שורה תחתונה: לגו (רק אם נבחרה קטגוריית לגו) + הנחות */}
+                <div style={{ ...gridRowStyle, marginTop: '10px' }}>
+                     
+                     {/* --- התנאי החדש: מציג את שדות הלגו רק אם הקטגוריה היא Lego --- */}
+                     {transaction.category === 'Lego' && (
+                        <>
+                             <input 
+                                type="text" 
+                                placeholder="מספר סט" 
+                                value={item.set_number} 
+                                onChange={(e) => handleItemChange(index, 'set_number', e.target.value)} 
+                                style={{ ...inputStyle, borderColor: item.set_number ? '#3b82f6' : '#eee' }} 
+                             />
+                             
+                             <input 
+                                type="text" 
+                                list={`themes-${index}`} 
+                                placeholder="נושא (למשל: Star Wars)"
+                                value={item.theme} 
+                                onChange={(e) => handleItemChange(index, 'theme', e.target.value)} 
+                                style={inputStyle}
+                             />
+                             <datalist id={`themes-${index}`}>
+                                {legoThemes.map((t, i) => (
+                                    <option key={i} value={t} />
+                                ))}
+                             </datalist>
+                        </>
+                     )}
+
+                     {/* שדות ההנחה - נשארים תמיד כי רלוונטיים לכל קנייה */}
+                     <div style={{ display: 'flex', gap: '5px' }}>
+                        <select value={item.discount_type} onChange={(e) => handleItemChange(index, 'discount_type', e.target.value)} style={{ ...inputStyle, width: '80px' }}>
+                            <option value="amount">₪</option>
+                            <option value="percent">%</option>
+                        </select>
+                        <input type="number" placeholder="הנחה" value={item.discount_value} onChange={(e) => handleItemChange(index, 'discount_value', e.target.value)} style={inputStyle} />
+                     </div>
+                </div>
+            </div>
+        ))}
+        
+        <button type="button" onClick={addItem} style={addBtnStyle}>+ הוסף פריט נוסף</button>
+
+        <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
+
+        {/* --- Footer & Total --- */}
+        <div style={footerStyle}>
+            <div style={{ flex: 1 }}>
+                 <label style={labelStyle}>הנחה כללית על כל הקבלה (₪)</label>
+                 <input type="number" name="global_discount" value={transaction.global_discount} onChange={handleTransactionChange} style={{ ...inputStyle, width: '150px' }} />
+            </div>
+
+            <div style={{ textAlign: 'left' }}>
+                <h2 style={{ margin: 0, color: '#1a1a2e' }}>סה"כ: ₪{transaction.total_amount.toLocaleString()}</h2>
+                <button type="submit" style={submitBtnStyle}>
+                    {isEditMode ? 'עדכן תנועה' : 'שמור תנועה'}
+                </button>
+            </div>
+        </div>
+
       </form>
     </div>
   );
 };
 
-// --- עיצובים ---
-const formCardStyle = { background: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 5px 20px rgba(0,0,0,0.05)' };
-const gridStyle = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' };
-const inputGroup = { display: 'flex', flexDirection: 'column', gap: '8px' };
-const inputStyle = { padding: '12px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '1rem' };
-const tagsContainerStyle = { display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', minHeight: '45px', alignItems: 'center' };
-const tagChipStyle = { background: '#e9ecef', padding: '5px 10px', borderRadius: '20px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '5px' };
-const tagInputStyle = { border: 'none', outline: 'none', flex: 1, minWidth: '100px', fontSize: '1rem' };
-const addBtnStyle = { marginTop: '10px', padding: '10px', background: '#f8f9fa', border: '1px dashed #ced4da', borderRadius: '6px', cursor: 'pointer' };
-const submitBtnStyle = { marginTop: '40px', padding: '15px', background: '#1a1a2e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', width: '100%', fontSize: '1.1rem', fontWeight: 'bold' };
 // --- Styles ---
-
-const itemCardStyle = {
-  background: '#f8f9fa',
-  padding: '20px',
-  borderRadius: '10px',
-  border: '1px solid #e9ecef',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-};
-
-const labelStyle = {
-  display: 'block',
-  marginBottom: '5px',
-  fontSize: '0.85rem',
-  color: '#6c757d',
-  fontWeight: '600'
-};
-
-const deleteRowBtnStyle = {
-  background: '#ffe3e3',
-  border: '1px solid #ffa8a8',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  padding: '10px 15px',
-  fontSize: '1.2rem',
-  height: '46px', // Align with input height
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  transition: 'background 0.2s'
-};
+const sectionStyle = { display: 'flex', flexDirection: 'column', gap: '15px' };
+const rowStyle = { display: 'flex', gap: '20px', flexWrap: 'wrap' };
+const inputGroupStyle = { flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '5px' };
+const labelStyle = { fontSize: '0.9rem', fontWeight: 'bold', color: '#555' };
+const inputStyle = { padding: '10px', borderRadius: '8px', border: '1px solid #eee', fontSize: '1rem', width: '100%', boxSizing: 'border-box' };
+const itemCardStyle = { backgroundColor: '#f9fafb', padding: '15px', borderRadius: '10px', border: '1px solid #eee', marginBottom: '15px' };
+const badgeStyle = { fontSize: '0.8rem', backgroundColor: '#e5e7eb', padding: '3px 8px', borderRadius: '4px', color: '#374151' };
+const gridRowStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' };
+const deleteBtnStyle = { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem' };
+const addBtnStyle = { width: '100%', padding: '10px', backgroundColor: '#eef2ff', color: '#4f46e5', border: '1px dashed #6366f1', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' };
+const footerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' };
+const submitBtnStyle = { padding: '12px 30px', backgroundColor: '#1a1a2e', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' };
 
 export default AddTransaction;

@@ -69,7 +69,8 @@ exports.createTransaction = async (req, res) => {
             purchase_price: finalPaidPrice, // Actual price paid
             original_price: originalPrice,  // MSRP / Base price
             purchase_date: transaction.transaction_date,
-            status: 'New'
+            status: 'New',
+            transaction_id: transaction.id
           }]);
           
           if (error) console.error(`Error inserting lego set ${item.set_number}:`, error.message);
@@ -139,17 +140,35 @@ exports.getTransactions = async (req, res) => {
   }
 };
 
-// Delete a transaction (Cascade delete will handle items)
+// Delete a transaction + its items + related lego sets
 exports.deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    const { error } = await supabase
+    
+    const { error: legoError } = await supabase
+      .from('lego_sets')
+      .delete()
+      .eq('transaction_id', id);
+
+    if (legoError) {
+        console.error("Error deleting related lego sets:", legoError);
+    }
+
+    const { error: itemsError } = await supabase
+      .from('transaction_items')
+      .delete()
+      .eq('transaction_id', id);
+
+    if (itemsError) throw itemsError;
+
+    const { error: transactionError } = await supabase
       .from('transactions')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
-    res.status(200).json({ message: 'Transaction deleted successfully' });
+    if (transactionError) throw transactionError;
+
+    res.status(200).json({ message: 'Transaction and all related data deleted successfully' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -165,6 +184,86 @@ exports.getTags = async (req, res) => {
     const tags = data.map(t => t.tag).filter(Boolean);
     res.status(200).json(tags);
   } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+// --- New Functions for Edit Mode ---
+
+// 1. Get single transaction with items
+exports.getTransactionById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`*, transaction_items(*)`) // Fetch transaction + its items
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+// 2. Update transaction
+exports.updateTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { transaction, items } = req.body;
+
+    // A. Update the main transaction details
+    const { error: transError } = await supabase
+      .from('transactions')
+      .update({
+        description: transaction.description,
+        type: transaction.movement_type,
+        category: transaction.category,
+        total_amount: transaction.total_amount,
+        global_discount: Number(transaction.global_discount) || 0,
+        payment_method: transaction.payment_source,
+        credit_card_name: transaction.credit_card_name || null,
+        transaction_date: transaction.transaction_date,
+        tags: transaction.tags
+      })
+      .eq('id', id);
+
+    if (transError) throw transError;
+
+    // B. Sync Items: The safest strategy is Delete All -> Insert New
+    // This handles added items, removed items, and modified items in one go.
+    
+    // 1. Delete existing items for this transaction
+    await supabase.from('transaction_items').delete().eq('transaction_id', id);
+
+    // 2. Insert the updated list
+    if (items && items.length > 0) {
+      const itemsToInsert = items.map(item => ({
+        transaction_id: id, // Link to the existing transaction ID
+        item_name: item.item_name,
+        quantity: Number(item.quantity) || 1,
+        price_per_unit: Number(item.price_per_unit) || 0,
+        set_number: item.set_number || null,
+        theme: item.theme || null,
+        discount_type: item.discount_type || 'amount',
+        discount_value: Number(item.discount_value) || 0,
+        // Recalculate final price
+        final_price: calculateFinalPrice(item.price_per_unit, item.discount_type, item.discount_value),
+        tags: item.tags || ''
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('transaction_items')
+        .insert(itemsToInsert);
+        
+      if (itemsError) throw itemsError;
+    }
+
+    res.status(200).json({ message: 'Transaction updated successfully' });
+
+  } catch (error) {
+    console.error("Update Error:", error);
     res.status(400).json({ error: error.message });
   }
 };

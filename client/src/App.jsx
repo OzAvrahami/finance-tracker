@@ -13,6 +13,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/add" element={<AddTransaction />} />
+          <Route path="/edit-transaction/:id" element={<AddTransaction />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/lego" element={<LegoCollection />} />
         </Routes>
