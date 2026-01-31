@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const axios = require('axios');
 
 // Helper function to calculate price after discount
 const calculateFinalPrice = (price, type, value) => {
@@ -144,7 +145,7 @@ exports.getTransactions = async (req, res) => {
 exports.deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const { error: legoError } = await supabase
       .from('lego_sets')
       .delete()
@@ -267,3 +268,38 @@ exports.updateTransaction = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
+exports.getLegoSetDetails = async (req, res) => {
+  const { setNum } = req.params;
+
+  const formattedSetNum = setNum.includes('-') ? setNum : `${setNum}-1`;
+
+  try{
+    const apiKey = process.env.REBRICKABLE_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ error: "Missing API Key" });
+    }
+
+    const setResponse = await axios.get(`https://rebrickable.com/api/v3/lego/sets/${formattedSetNum}/`, {
+      headers: { 'Authorization': `key ${apiKey}`}
+    });
+
+    const themeId = setResponse.data.theme_id;
+    const themeResponse = await axios.get(`https://rebrickable.com/api/v3/lego/themes/${themeId}/`, {
+      headers: { 'Authorization': `key ${apiKey}` }
+    });
+
+    res.status(200).json({
+      name: setResponse.data.name,
+      theme: themeResponse.data.name,
+      img: setResponse.data.set_img_url,
+      year: setResponse.data.year,
+      parts: setResponse.data.num_parts
+    });
+
+  } catch (error) {
+    console.error("Lego Fetch Error:", error.message);
+    res.status(404).json({ error: 'Set not found' });
+  }
+}

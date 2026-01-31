@@ -11,7 +11,7 @@ router.post('/', transactionController.createTransaction);
 
 // Get all transactions (for history/dashboard)
 router.get('/', transactionController.getTransactions);
-
+router.get('/lego/details/:setNum', transactionController.getLegoSetDetails);
 
 // --- Dynamic Routes ---
 // Update transaction by ID

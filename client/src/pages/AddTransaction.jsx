@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes } from '../services/api';
+import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails } from '../services/api';
 import { useNavigate, useParams } from 'react-router-dom';
 
 const AddTransaction = () => {
@@ -146,6 +146,22 @@ const AddTransaction = () => {
     }
   };
 
+  const handleSetNumberBlur = async (index, setNumber) => {
+    if (!setNumber || transaction.category !== 'Lego') return;
+
+    try {
+        const res = await getLegoSetDetails(setNumber);
+        
+        const newItems = [...items];
+        if (!newItems[index].item_name) newItems[index].item_name = res.data.name;
+        if (!newItems[index].theme) newItems[index].theme = res.data.theme;
+        
+        setItems(newItems);
+    } catch (error) {
+        console.log("Set details not found");
+    }
+  };
+
   if (loading) return <div style={{textAlign: 'center', marginTop: '50px'}}>טוען נתונים...</div>;
 
   return (
@@ -249,6 +265,7 @@ const AddTransaction = () => {
                                 placeholder="מספר סט" 
                                 value={item.set_number} 
                                 onChange={(e) => handleItemChange(index, 'set_number', e.target.value)} 
+                                onBlur={(e) => handleSetNumberBlur(index, e.target.value)}
                                 style={{ ...inputStyle, borderColor: item.set_number ? '#3b82f6' : '#eee' }} 
                              />
                              
@@ -279,7 +296,7 @@ const AddTransaction = () => {
                 </div>
             </div>
         ))}
-        
+
         <button type="button" onClick={addItem} style={addBtnStyle}>+ הוסף פריט נוסף</button>
 
         <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />

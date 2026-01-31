@@ -21,5 +21,6 @@ export const getLegoSets = () => api.get('/lego');
 export const addLegoSet = (setData) => api.post('/lego', setData);
 export const updateLegoSet = (id, setData) => api.put(`/lego/${id}`, setData);
 export const getLegoThemes = () => api.get('/lego/themes');
+export const getLegoSetDetails = (setNum) => api.get(`/transactions/lego/details/${setNum}`);
 
 export default api;

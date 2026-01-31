@@ -1,4 +1,5 @@
 const supabase = require("../config/supabase");
+const axios = require('axios');
 
 exports.getAllSets = async (req, res) => {
     try {
@@ -34,7 +35,7 @@ exports.updateSet = async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message});
     }
-}
+};
 
 exports.getThemes = async (req, res) => {
   try {
