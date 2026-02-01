@@ -12,6 +12,7 @@ const api = axios.create({
 export const createTransaction = (data) => api.post('/transactions', data);
 export const getTransactions = () => api.get('/transactions');
 export const getTags = () => api.get('/transactions/tags');
+export const getCategories = () => api.get('/transactions/categories');
 export const getTransactionById = (id) => api.get(`transactions/${id}`);
 export const updateTransaction = (id, data) => api.put(`transactions/${id}`, data);
 export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);

@@ -23,8 +23,6 @@ exports.createTransaction = async (req, res) => {
   try {
     const { transaction, items } = req.body;
     
-    console.log("Creating transaction. Items count:", items ? items.length : 0);
-
     // 1. Insert Main Transaction
     const { data: transData, error: transError } = await supabase
       .from('transactions')
@@ -115,7 +113,31 @@ exports.createTransaction = async (req, res) => {
       if (itemsError) throw itemsError;
     }
 
-    res.status(201).json({ message: 'Transaction saved successfully', data: transData });
+    const description = transaction.description ? transaction.description.trim() : '';
+    const wordCount = description.split(/\s+/).length;
+
+    if (wordCount <= 2 && transaction.category) {
+      const { data: categoryData } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('name', transaction.category)
+        .single();
+
+        if (categoryData) {
+          const currentKeywords = categoryData.keywords || [];
+          const  isKeywordExists = currentKeywords.some(k => k.toLowerCase() === description.toLowerCase());
+
+          if (!isKeywordExists) {
+            const updatedKeywords = [...currentKeywords, description];
+            await supabase  
+              .from('categories')
+              .update({ keywords: updatedKeywords })
+              .eq('id', categoryData.id);
+          }
+        }
+    }
+
+    res.status(201).json({ message: 'Transaction saved successfully', id: transData.id });
 
   } catch (error) {
     console.error("Create Transaction Error:", error);
@@ -302,4 +324,19 @@ exports.getLegoSetDetails = async (req, res) => {
     console.error("Lego Fetch Error:", error.message);
     res.status(404).json({ error: 'Set not found' });
   }
-}
+};
+
+exports.getCategories = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      res.status(200).json(data);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails } from '../services/api';
+import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories } from '../services/api';
 import { useNavigate, useParams } from 'react-router-dom';
 
 const AddTransaction = () => {
@@ -8,6 +8,10 @@ const AddTransaction = () => {
   const isEditMode = Boolean(id);
 
   const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
+  const [legoThemes, setLegoThemes] = useState([]);
+  const [categories, setCategories] = useState([]);
   
   const [transaction, setTransaction] = useState({
     transaction_date: new Date().toISOString().split('T')[0],
@@ -21,15 +25,13 @@ const AddTransaction = () => {
     tags: ''
   });
 
-  const [items, setItems] = useState([]);
 
-  const [availableTags, setAvailableTags] = useState([]);
-  const [legoThemes, setLegoThemes] = useState([]);
 
   // Load Tags & Themes
   useEffect(() => {
     getTags().then(res => setAvailableTags(res.data)).catch(console.error);
     getLegoThemes().then(res => setLegoThemes(res.data)).catch(console.error);
+    getCategories().then(res => setCategories(res.data)).catch(console.error);
   }, []);
 
   // Load Data for Edit Mode
@@ -109,7 +111,24 @@ const AddTransaction = () => {
   // --- Handlers ---
   const handleTransactionChange = (e) => {
     const { name, value } = e.target;
-    setTransaction(prev => ({ ...prev, [name]: value }));
+    setTransaction(prev => {
+      const updated = { ...prev, [name]: value };
+
+      if ( name === 'description' ) {
+        const foundCategory = categories.find(cat =>
+          cat.keywords && cat.keywords.some(keywords => value.toLowerCase().includes(keywords.toLowerCase()))
+        );
+
+        if (foundCategory) {
+          updated.category = foundCategory.name;
+        } else {
+          updated.category = '';
+        }
+      }
+
+      return updated
+
+    });
   };
 
   const handleItemChange = (index, field, value) => {
@@ -200,11 +219,9 @@ const AddTransaction = () => {
                     <label style={labelStyle}>קטגוריה</label>
                     <input type="text" name="category" value={transaction.category} onChange={handleTransactionChange} list="categories" style={inputStyle} required />
                     <datalist id="categories">
-                        <option value="Food" />
-                        <option value="Lego" />
-                        <option value="Electronics" />
-                        <option value="Transport" />
-                        <option value="Salary" />
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.name}>{cat.icon || ''}</option>
+                      ))}
                     </datalist>
                 </div>
 

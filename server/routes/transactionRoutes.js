@@ -4,7 +4,8 @@ const transactionController = require('../controllers/transactionController');
 
 // --- General Routes ---
 // Get unique tags for autocomplete
-router.get('/tags', transactionController.getTags); 
+router.get('/tags', transactionController.getTags);
+router.get('/categories', transactionController.getCategories);
 
 // Create a new transaction
 router.post('/', transactionController.createTransaction);
