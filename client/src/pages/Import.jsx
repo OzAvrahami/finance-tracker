@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { uploadImportFile, getCategories, saveImportedTransactions } from '../services/api';
+import { uploadImportFile, getCategories, saveImportedTransactions, createCategory } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 
 const Import = () => {
   const [file, setFile] = useState(null);
-  const [profile, setProfile] = useState('cal'); // ברירת מחדל
+  const [profile, setProfile] = useState('cal');
   const [previewData, setPreviewData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1 = Upload, 2 = Preview & Edit
+  const [step, setStep] = useState(1);
+  
+  // State עבור הוספת קטגוריה
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  
+  // --- השינוי החדש: זוכרים איזו שורה ביקשה להוסיף קטגוריה ---
+  const [targetRowId, setTargetRowId] = useState(null); 
+  // --------------------------------------------------------
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -50,6 +59,41 @@ const Import = () => {
     ));
   };
 
+  // --- שמירת קטגוריה ועדכון השורה הרלוונטית ---
+  const handleSaveNewCategory = async () => {
+    if (!newCategoryName.trim()) return;
+
+    try {
+      // 1. יצירה בשרת
+      const res = await createCategory({ name: newCategoryName });
+      const newCat = res.data;
+
+      // 2. עדכון רשימת הקטגוריות הכללית
+      setCategories(prev => [...prev, newCat]);
+
+      // 3. --- התיקון: אם הגענו משורה ספציפית, נעדכן אותה מיד ---
+      if (targetRowId !== null) {
+        handleCategoryChange(targetRowId, newCat.id);
+        setTargetRowId(null); // איפוס הזיכרון
+      }
+      // -------------------------------------------------------
+
+      // 4. ניקוי וסגירה
+      setNewCategoryName('');
+      setShowNewCategoryModal(false);
+      
+    } catch (error) {
+      console.error("Failed to create category", error);
+      alert("שגיאה ביצירת קטגוריה");
+    }
+  };
+
+  // פונקציה לפתיחת המודל שתופסת את ה-ID של השורה
+  const openNewCategoryModal = (rowId) => {
+    setTargetRowId(rowId); // שומרים את ה-ID בצד
+    setShowNewCategoryModal(true);
+  };
+
   const handleSaveToDB = async () => {
     const unclassified = previewData.filter(row => !row.category_id);
     if (unclassified.length > 0) {
@@ -60,9 +104,9 @@ const Import = () => {
 
     try {
       setLoading(true);
-      await saveImportedTransactions(previewData); // שליחה לשרת
+      await saveImportedTransactions(previewData);
       alert('העסקאות נשמרו בהצלחה! 🎉');
-      navigate('/'); // חזרה לדף הבית
+      navigate('/');
     } catch (error) {
       console.error(error);
       alert('שגיאה בשמירת הנתונים');
@@ -107,7 +151,7 @@ const Import = () => {
                   <th style={thStyle}>תאריך</th>
                   <th style={thStyle}>תיאור</th>
                   <th style={thStyle}>חיוב בפועל (₪)</th>
-                  <th style={thStyle}>פרטים נוספים (מט"ח/תשלומים)</th>
+                  <th style={thStyle}>פרטים נוספים</th>
                   <th style={thStyle}>קטגוריה</th>
                 </tr>
               </thead>
@@ -132,22 +176,34 @@ const Import = () => {
                     </td>
 
                     <td style={tdStyle}>
-                      <select 
-                        value={row.category_id} 
-                        onChange={(e) => handleCategoryChange(row.id, e.target.value)}
-                        style={{ 
-                          ...inputStyle, 
-                          borderColor: row.category_id ? '#ddd' : 'red', // אדום אם לא נבחרה קטגוריה
-                          backgroundColor: row.category_id ? 'white' : '#fff0f0'
-                        }}
-                      >
-                        <option value="">-- בחר קטגוריה --</option>
-                        {categories.map(cat => (
-                          <option key={cat.id} value={cat.id}>
-                            {cat.icon} {cat.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <select 
+                            value={row.category_id} 
+                            onChange={(e) => handleCategoryChange(row.id, e.target.value)}
+                            style={{ 
+                              ...inputStyle, 
+                              borderColor: row.category_id ? '#ddd' : 'red',
+                              backgroundColor: row.category_id ? 'white' : '#fff0f0'
+                            }}
+                          >
+                            <option value="">-- בחר קטגוריה --</option>
+                            {categories.map(cat => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.icon} {cat.name}
+                              </option>
+                            ))}
+                          </select>
+                          
+                          <button
+                            type="button"
+                            // כאן אנחנו קוראים לפונקציה ושולחים לה את ה-ID של השורה הנוכחית
+                            onClick={() => openNewCategoryModal(row.id)}
+                            style={miniAddBtnStyle}
+                            title="צור קטגוריה חדשה"
+                          >
+                            +
+                          </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -165,14 +221,42 @@ const Import = () => {
           </div>
         </div>
       )}
+
+      {/* --- Modal --- */}
+      {showNewCategoryModal && (
+        <div style={modalOverlayStyle}>
+          <div style={modalContentStyle}>
+            <h3 style={{ marginTop: 0 }}>קטגוריה חדשה ✨</h3>
+            <input
+              type="text"
+              placeholder="שם הקטגוריה..."
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              style={{...inputStyle, width: '100%', boxSizing: 'border-box'}}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setShowNewCategoryModal(false)} style={cancelBtnStyle}>ביטול</button>
+              <button type="button" onClick={handleSaveNewCategory} style={saveModalBtnStyle}>שמור</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
+// --- Styles ---
 const cardStyle = { background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' };
 const inputStyle = { padding: '8px', borderRadius: '4px', border: '1px solid #ddd', width: '100%', maxWidth: '200px' };
 const buttonStyle = { padding: '10px 20px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' };
 const thStyle = { padding: '12px', textAlign: 'right', fontWeight: 'bold' };
 const tdStyle = { padding: '12px', verticalAlign: 'top' };
+const miniAddBtnStyle = { background: 'white', border: '1px solid #3498db', color: '#3498db', borderRadius: '4px', width: '30px', height: '35px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const modalOverlayStyle = { position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 };
+const modalContentStyle = { backgroundColor: 'white', padding: '25px', borderRadius: '12px', width: '90%', maxWidth: '350px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' };
+const cancelBtnStyle = { padding: '8px 15px', backgroundColor: '#f3f4f6', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#374151' };
+const saveModalBtnStyle = { padding: '8px 15px', backgroundColor: '#4f46e5', border: 'none', borderRadius: '6px', cursor: 'pointer', color: 'white', fontWeight: 'bold' };
 
 export default Import;

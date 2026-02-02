@@ -1,4 +1,4 @@
-const supabase = require("../config/supabase");
+const supabase = require('../config/supabase');
 const axios = require('axios');
 
 exports.getAllSets = async (req, res) => {

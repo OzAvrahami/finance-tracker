@@ -1,8 +1,6 @@
 const xlsx = require('xlsx');
-const { createClient } = require('@supabase/supabase-js');
+const supabase = require('../config/supabase');
 const profiles = require('../config/importProfiles');
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 exports.previewImport = async (req, res) => {
   try {

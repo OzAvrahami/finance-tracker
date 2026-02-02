@@ -8,6 +8,9 @@ const api = axios.create({
 });
 
 
+// Categories
+export const createCategory = (data) => api.post('/categories', data);
+
 // Import file
 export const uploadImportFile = (formData) => api.post('/import/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
 export const saveImportedTransactions = (transactions) => api.post('/import/save', { transactions });
