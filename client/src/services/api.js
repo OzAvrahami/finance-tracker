@@ -8,6 +8,10 @@ const api = axios.create({
 });
 
 
+// Import file
+export const uploadImportFile = (formData) => api.post('/import/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+export const saveImportedTransactions = (transactions) => api.post('/import/save', { transactions });
+
 // Transaction
 export const createTransaction = (data) => api.post('/transactions', data);
 export const getTransactions = () => api.get('/transactions');
@@ -23,5 +27,6 @@ export const addLegoSet = (setData) => api.post('/lego', setData);
 export const updateLegoSet = (id, setData) => api.put(`/lego/${id}`, setData);
 export const getLegoThemes = () => api.get('/lego/themes');
 export const getLegoSetDetails = (setNum) => api.get(`/transactions/lego/details/${setNum}`);
+
 
 export default api;

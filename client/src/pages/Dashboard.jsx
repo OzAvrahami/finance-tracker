@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getTransactions, getLegoSets } from '../services/api'; // וודא שיש לך getTransactions ב-api.js שמביא הכל
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { getTransactions, getLegoSets } from '../services/api'; 
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'; // הורדתי רכיבים לא בשימוש
 import { Wallet, TrendingUp, TrendingDown, Package } from 'lucide-react';
 
 const Dashboard = () => {
@@ -11,12 +11,12 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // משיכת תנועות
         const transRes = await getTransactions();
         setTransactions(transRes.data);
 
-        // משיכת לגו לחישוב שווי
+        // חישוב שווי הלגו
         const legoRes = await getLegoSets();
+        // הערה: כאן הנחתי שהשדה הוא purchase_price, אם ב-DB זה משהו אחר, צריך להתאים
         const totalLego = legoRes.data.reduce((sum, item) => sum + (Number(item.purchase_price) || 0), 0);
         setLegoValue(totalLego);
         
@@ -28,32 +28,35 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  // --- חישובים לכרטיסיות (לוגיקה בצד לקוח) ---
   const currentMonth = new Date().getMonth();
   const monthlyTrans = transactions.filter(t => new Date(t.transaction_date).getMonth() === currentMonth);
   
+  // 1. תיקון: שימוש ב-movement_type במקום type
   const income = monthlyTrans
-    .filter(t => t.type === 'income')
+    .filter(t => t.movement_type === 'income')
     .reduce((sum, t) => sum + Number(t.total_amount), 0);
 
   const expenses = monthlyTrans
-    .filter(t => t.type === 'expense')
+    .filter(t => t.movement_type === 'expense')
     .reduce((sum, t) => sum + Number(t.total_amount), 0);
 
   const balance = income - expenses;
 
-  // --- הכנת נתונים לגרף (הוצאות לפי קטגוריה) ---
+  // 2. תיקון: שליפת שם הקטגוריה מהאובייקט המקושר
   const categoryData = [];
-  monthlyTrans.filter(t => t.type === 'expense').forEach(t => {
-    const existing = categoryData.find(c => c.name === t.category);
+  monthlyTrans.filter(t => t.movement_type === 'expense').forEach(t => {
+    // מנסה לקחת את השם מהטבלה המקושרת, אם אין - שם 'כללי'
+    const catName = t.categories?.name || 'כללי';
+    
+    const existing = categoryData.find(c => c.name === catName);
     if (existing) {
       existing.value += Number(t.total_amount);
     } else {
-      categoryData.push({ name: t.category, value: Number(t.total_amount) });
+      categoryData.push({ name: catName, value: Number(t.total_amount) });
     }
   });
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF'];
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF5733'];
 
   if (loading) return <div>טוען נתונים...</div>;
 
@@ -95,10 +98,13 @@ const Dashboard = () => {
               <li key={t.id} style={listItem}>
                 <div>
                   <div style={{ fontWeight: 'bold' }}>{t.description}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>{t.transaction_date} | {t.category}</div>
+                  {/* 3. תיקון: הצגת האייקון ושם הקטגוריה החדש */}
+                  <div style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>
+                    {t.transaction_date} | {t.categories?.icon} {t.categories?.name || 'כללי'}
+                  </div>
                 </div>
-                <div style={{ color: t.type === 'income' ? '#2ecc71' : '#e74c3c', fontWeight: 'bold' }}>
-                  {t.type === 'income' ? '+' : '-'}₪{t.total_amount}
+                <div style={{ color: t.movement_type === 'income' ? '#2ecc71' : '#e74c3c', fontWeight: 'bold' }}>
+                  {t.movement_type === 'income' ? '+' : '-'}₪{t.total_amount}
                 </div>
               </li>
             ))}
@@ -121,7 +127,7 @@ const StatCard = ({ title, value, color, icon }) => (
 );
 
 const cardsContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' };
-const gridContainer = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }; // במסכים קטנים כדאי לשנות לטור אחד
+const gridContainer = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }; 
 const cardStyle = { background: 'white', padding: '20px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' };
 const chartCard = { ...cardStyle };
 const recentCard = { ...cardStyle };

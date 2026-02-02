@@ -63,15 +63,19 @@ const Transactions = () => {
                 <td style={tdStyle}>{format(new Date(t.transaction_date), 'dd/MM/yyyy')}</td>
                 <td style={tdStyle}>{t.description}</td>
                 <td style={tdStyle}>
-                    <span style={{ 
-                        padding: '4px 8px', 
+                  {t.categories ? (
+                    <span style={{
+                      padding: '4px 8px', 
                         borderRadius: '12px', 
                         backgroundColor: '#e3f2fd', 
                         color: '#1565c0',
                         fontSize: '0.85rem'
                     }}>
-                        {t.category}
+                      {t.categories.name}
                     </span>
+                  ) : (
+                    'ללא קטגוריה'
+                  )}
                 </td>
                 <td style={{ ...tdStyle, color: t.type === 'income' ? '#2ecc71' : '#e74c3c', fontWeight: 'bold' }}>
                   {t.type === 'income' ? '+' : '-'}{t.total_amount?.toLocaleString()}₪

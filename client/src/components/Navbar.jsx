@@ -14,6 +14,7 @@ const Navbar = () => {
     }}>
       <div style={{ display: 'flex', gap: '30px' }}>
         <Link to="/" style={navLinkStyle}>דף הבית</Link>
+        <Link to="/import" style={navLinkStyle}>יבוא מקובץ</Link>
         <Link to="/add" style={navLinkStyle}>הוספת הוצאה</Link>
         <Link to="/transactions" style={navLinkStyle}>היסטוריית תנועות</Link>
         <Link to="/lego" style={navLinkStyle}>אוסף לגו</Link>

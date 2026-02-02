@@ -152,7 +152,10 @@ exports.getTransactions = async (req, res) => {
       .from('transactions')
       .select(`
         *,
-        transaction_items (*)
+        categories (
+          name,
+          icon
+        )
       `)
       .order('transaction_date', { ascending: false });
 
@@ -210,8 +213,6 @@ exports.getTags = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
-
-// --- New Functions for Edit Mode ---
 
 // 1. Get single transaction with items
 exports.getTransactionById = async (req, res) => {
