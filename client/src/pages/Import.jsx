@@ -95,7 +95,10 @@ const Import = () => {
   };
 
   const handleSaveToDB = async () => {
-    const unclassified = previewData.filter(row => !row.category_id);
+
+    const validData = previewData.filter(row => row.transaction_date && row.transaction_date.trim() !== '');
+
+    const unclassified = validData.filter(row => !row.category_id);
     if (unclassified.length > 0) {
       if (!window.confirm(`שים לב: יש ${unclassified.length} עסקאות ללא קטגוריה. האם להמשיך?`)) {
         return;
@@ -104,7 +107,7 @@ const Import = () => {
 
     try {
       setLoading(true);
-      await saveImportedTransactions(previewData);
+      await saveImportedTransactions(validData);
       alert('העסקאות נשמרו בהצלחה! 🎉');
       navigate('/');
     } catch (error) {
@@ -160,7 +163,7 @@ const Import = () => {
                   <tr key={row.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={tdStyle}>{row.transaction_date}</td>
                     <td style={tdStyle}>{row.description}</td>
-                    <td style={tdStyle}>₪{row.total_amount.toFixed(2)}</td>
+                    <td style={tdStyle}>₪{(row.total_amount || 0 ).toFixed(2)}</td>
                     
                     <td style={tdStyle}>
                       {row.currency !== 'ILS' && (

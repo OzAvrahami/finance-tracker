@@ -91,6 +91,8 @@ exports.saveImport = async (req, res) => {
       return res.status(400).json({ error: 'No transactions to save' });
     }
 
+
+
     console.log('🔍 First Transaction Check:', {
         description: transactions[0].description,
         received_cat_id: transactions[0].category_id,
@@ -103,10 +105,12 @@ exports.saveImport = async (req, res) => {
       transaction_date: t.transaction_date,
       charge_date: t.charge_date,
       description: t.description,
-      total_amount: t.total_amount === '' ? 0 : t.total_amount,
+      //total_amount: t.total_amount === '' ? 0 : t.total_amount,
+      total_amount: isNaN(parseFloat(t.total_amount)) ? 0 : parseFloat(t.total_amount),
       movement_type: t.movement_type,
       category_id: t.category_id || null,
-      original_amount: t.original_amount === '' ? null : t.original_amount,
+      //original_amount: t.original_amount === '' ? null : t.original_amount,
+      original_amount: isNaN(parseFloat(t.original_amount)) ? 0 : parseFloat(t.original_amount),
       currency: t.currency,
       exchange_rate: t.exchange_rate === '' ? null : t.exchange_rate,
       installments_info: t.installments_info,
