@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Import = () => {
   const [file, setFile] = useState(null);
-  const [profile, setProfile] = useState('cal');
+  const [profile, setProfile] = useState('cal_bank');
   const [previewData, setPreviewData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -128,7 +128,7 @@ const Import = () => {
           <div style={{ marginBottom: '15px' }}>
             <label>בחר מקור: </label>
             <select value={profile} onChange={(e) => setProfile(e.target.value)} style={inputStyle}>
-              <option value="cal">כרטיס אשראי - כאל (Cal)</option>
+              <option value="cal">כרטיס אשראי - כאל בנקאי (Cal)</option>
             </select>
           </div>
           

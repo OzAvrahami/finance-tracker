@@ -1,6 +1,6 @@
 module.exports = {
-  'cal': {
-    label: 'כרטיס אשראי - כאל (Cal)',
+  'cal_bank': {
+    label: 'כרטיס אשראי - כאל בנקאי (Cal)',
     startRow: 8, // Start to read from line 8 in the excel file
     
     // name of Colum in DB
@@ -21,7 +21,40 @@ module.exports = {
     }
   },
 
-  // מקום להוסיף בעתיד:
-  // 'max': { ... },
-  // 'bank_hapoalim': { ... }
+  'cal': {
+    label: 'כרטיס אשראי - כאל (Cal)',
+    startRow: 3,
+
+    columnsMapping: {
+      date: 'תאריך עסקה',
+      description: 'שם בית העסק',
+      amount: 'סכום חיוב',
+      originalAmount: 'סכום עסקה',
+      installments: 'הערות'
+    },
+
+    isValidRow: (row) => {
+      return row['תאריך עסקה'] && row['שם בית העסק'];
+    }
+  },
+
+  'max': {
+    label: 'כרטיס אשראי - מקס (Max)',
+    startRow: 3,
+
+    columnsMapping: {
+      date: 'תאריך עסקה',
+      description: 'שם בית העסק',
+      amount: 'סכום חיוב',
+      originalAmount: 'סכום עסקה',
+      currency: 'מטבע חיוב',
+      installments: 'הערות',
+      charge_date: 'תאריך חיוב'
+    },
+
+    isValidRow: (row) => {
+      return row['תאריך עסקה'] &&row['שם בית העסק'];
+    }
+  }
+
 };

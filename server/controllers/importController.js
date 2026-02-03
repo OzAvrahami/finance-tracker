@@ -102,8 +102,10 @@ exports.saveImport = async (req, res) => {
     const recordsToInsert = transactions.map(t => ({
       payment_source: t.payment_source, 
       payment_method: t.payment_method,
-      transaction_date: t.transaction_date,
-      charge_date: t.charge_date,
+      //transaction_date: t.transaction_date,
+      //charge_date: t.charge_date,
+      transaction_date: (t.transaction_date === '' || !t.transaction_date) ? null : t.transaction_date,
+      charge_date: (t.charge_date && t.charge_date !== '') ? t.charge_date : t.transaction_date,
       description: t.description,
       //total_amount: t.total_amount === '' ? 0 : t.total_amount,
       total_amount: isNaN(parseFloat(t.total_amount)) ? 0 : parseFloat(t.total_amount),
@@ -123,6 +125,57 @@ exports.saveImport = async (req, res) => {
       .insert(recordsToInsert);
 
     if (error) throw error;
+
+    const newKeyword = recordsToInsert
+      .filter(t => t.category_id)
+      .map(t => {
+        let cleanName = t.description
+          .toString()
+          .replace(/[0-9]/g, '') 
+          .replace(/[^\w\s\u0590-\u05ff]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+          if (cleanName.length < 2) return null;
+          
+          return { keyword: cleanName, target_category_id: t.category_id };
+      })
+      .filter(item => item !== null);
+
+    if (newKeyword.length > 0) {
+        const { data: allCategories } = await supabase.from('categories').select('*');
+        
+        let updatesMap = {}; 
+
+        const getKeywordsForCat = (catId) => {
+            if (updatesMap[catId]) return updatesMap[catId];
+            const cat = allCategories.find(c => c.id === catId);
+            return cat ? (cat.keywords || []) : [];
+        };
+
+        newKeyword.forEach(({ keyword, target_category_id }) => {            
+            allCategories.forEach(cat => {
+                if (cat.id !== target_category_id) {
+                    let currentWords = getKeywordsForCat(cat.id);
+                    if (currentWords.includes(keyword)) {
+                        updatesMap[cat.id] = currentWords.filter(w => w !== keyword);
+                    }
+                }
+            });
+
+            let targetWords = getKeywordsForCat(target_category_id);
+            if (!targetWords.includes(keyword)) {
+                updatesMap[target_category_id] = [...targetWords, keyword];
+            }
+        });
+
+        for (const [catId, updatedKeywords] of Object.entries(updatesMap)) {
+            await supabase
+                .from('categories')
+                .update({ keywords: updatedKeywords })
+                .eq('id', parseInt(catId));
+        }
+    }
 
     res.json({ success: true, count: recordsToInsert.length });
 
