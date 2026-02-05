@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { uploadImportFile, getCategories, saveImportedTransactions, createCategory } from '../services/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 
 const Import = () => {
   const [file, setFile] = useState(null);
@@ -114,6 +115,22 @@ const Import = () => {
 
   return (
     <div dir="rtl" style={{ padding: '30px', maxWidth: '1200px', margin: '0 auto' }}>
+
+      <div style={{ marginBottom: '20px' }}>
+      <Link to="/add" style={{ 
+        display: 'inline-flex', 
+        alignItems: 'center', 
+        gap: '8px',
+        color: '#7f8c8d', // אפור נעים
+        textDecoration: 'none',
+        fontSize: '0.95rem',
+        fontWeight: '500'
+      }}>
+        <ArrowRight size={18} />
+        חזרה להוספה ידנית
+      </Link>
+    </div>
+    
       <h1>אשף ייבוא עסקאות 🧙‍♂️</h1>
       
       {step === 1 && (

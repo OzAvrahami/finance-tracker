@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, createCategory } from '../services/api';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { FileUp } from 'lucide-react';
 
 const AddTransaction = () => {
   const navigate = useNavigate();
@@ -15,12 +16,11 @@ const AddTransaction = () => {
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
-  // שיניתי כאן ל-category_id כדי שיתאים לבסיס הנתונים החדש
   const [transaction, setTransaction] = useState({
     transaction_date: new Date().toISOString().split('T')[0],
     description: '',
     movement_type: 'expense',
-    category_id: '', // עובדים עם ID
+    category_id: '',
     payment_source: '',
     payment_method: 'credit_card',
     credit_card_name: '',
@@ -207,11 +207,42 @@ const AddTransaction = () => {
   if (loading) return <div style={{textAlign: 'center', marginTop: '50px'}}>טוען נתונים...</div>;
 
   return (
-    <div style={{ maxWidth: '800px', margin: '40px auto', padding: '30px', backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', fontFamily: 'Segoe UI' }} dir="rtl">
+  <div style={{ maxWidth: '800px', margin: '40px auto', padding: '30px', backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', fontFamily: 'Segoe UI' }} dir="rtl">
       
-      <h1 style={{ textAlign: 'center', color: '#1a1a2e', marginBottom: '30px' }}>
-          {isEditMode ? 'עריכת תנועה ✏️' : 'הוספת תנועה חדשה 💰'}
-      </h1>
+      {/* --- Header Area (החלק ששונה) --- */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '30px',
+        borderBottom: '1px solid #f0f0f0',
+        paddingBottom: '20px'
+      }}>
+          <h1 style={{ margin: 0, color: '#1a1a2e', fontSize: '1.8rem' }}>
+              {isEditMode ? 'עריכת תנועה ✏️' : 'הוספת תנועה חדשה 💰'}
+          </h1>
+
+          {/* מציג את כפתור הייבוא רק אם אנחנו בהוספה חדשה (לא בעריכה) */}
+          {!isEditMode && (
+            <Link to="/import" style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              backgroundColor: '#eef2ff', 
+              color: '#4f46e5', 
+              padding: '10px 18px', 
+              borderRadius: '30px', 
+              textDecoration: 'none',
+              fontWeight: '600',
+              fontSize: '0.95rem',
+              transition: 'all 0.2s ease',
+              border: '1px solid #e0e7ff'
+            }}>
+              <FileUp size={18} />
+              <span>ייבוא מאקסל?</span>
+            </Link>
+          )}
+      </div>
 
       <form onSubmit={handleSubmit}>
         
@@ -327,7 +358,7 @@ const AddTransaction = () => {
                       {/* משתמשים בפונקציית העזר כדי לבדוק אם זה לגו */}
                       {isLegoCategory() && (
                         <>
-                             <input 
+                              <input 
                                 type="text" 
                                 placeholder="מספר סט" 
                                 value={item.set_number} 
@@ -345,19 +376,19 @@ const AddTransaction = () => {
                                 style={inputStyle}
                              />
                              <datalist id={`themes-${index}`}>
-                                {legoThemes.map((t, i) => (
-                                    <option key={i} value={t} />
-                                ))}
+                                 {legoThemes.map((t, i) => (
+                                     <option key={i} value={t} />
+                                 ))}
                              </datalist>
                         </>
                       )}
 
                       <div style={{ display: 'flex', gap: '5px' }}>
-                         <select value={item.discount_type} onChange={(e) => handleItemChange(index, 'discount_type', e.target.value)} style={{ ...inputStyle, width: '80px' }}>
-                             <option value="amount">₪</option>
-                             <option value="percent">%</option>
-                         </select>
-                         <input type="number" placeholder="הנחה" value={item.discount_value} onChange={(e) => handleItemChange(index, 'discount_value', e.target.value)} style={inputStyle} />
+                          <select value={item.discount_type} onChange={(e) => handleItemChange(index, 'discount_type', e.target.value)} style={{ ...inputStyle, width: '80px' }}>
+                              <option value="amount">₪</option>
+                              <option value="percent">%</option>
+                          </select>
+                          <input type="number" placeholder="הנחה" value={item.discount_value} onChange={(e) => handleItemChange(index, 'discount_value', e.target.value)} style={inputStyle} />
                       </div>
                 </div>
             </div>
