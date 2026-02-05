@@ -9,14 +9,10 @@ const Import = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
-  
-  // State עבור הוספת קטגוריה
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   
-  // --- השינוי החדש: זוכרים איזו שורה ביקשה להוסיף קטגוריה ---
   const [targetRowId, setTargetRowId] = useState(null); 
-  // --------------------------------------------------------
 
   const navigate = useNavigate();
 
@@ -59,26 +55,20 @@ const Import = () => {
     ));
   };
 
-  // --- שמירת קטגוריה ועדכון השורה הרלוונטית ---
   const handleSaveNewCategory = async () => {
     if (!newCategoryName.trim()) return;
 
     try {
-      // 1. יצירה בשרת
       const res = await createCategory({ name: newCategoryName });
       const newCat = res.data;
 
-      // 2. עדכון רשימת הקטגוריות הכללית
       setCategories(prev => [...prev, newCat]);
 
-      // 3. --- התיקון: אם הגענו משורה ספציפית, נעדכן אותה מיד ---
       if (targetRowId !== null) {
         handleCategoryChange(targetRowId, newCat.id);
-        setTargetRowId(null); // איפוס הזיכרון
+        setTargetRowId(null);
       }
-      // -------------------------------------------------------
 
-      // 4. ניקוי וסגירה
       setNewCategoryName('');
       setShowNewCategoryModal(false);
       
@@ -88,10 +78,14 @@ const Import = () => {
     }
   };
 
-  // פונקציה לפתיחת המודל שתופסת את ה-ID של השורה
   const openNewCategoryModal = (rowId) => {
-    setTargetRowId(rowId); // שומרים את ה-ID בצד
+    setTargetRowId(rowId); 
     setShowNewCategoryModal(true);
+  };
+
+  const handleDeleteRow = (idToDelete) => {
+    const updatedData = previewData.filter(row => row.id !== idToDelete);
+    setPreviewData(updatedData);
   };
 
   const handleSaveToDB = async () => {
@@ -156,6 +150,7 @@ const Import = () => {
                   <th style={thStyle}>חיוב בפועל (₪)</th>
                   <th style={thStyle}>פרטים נוספים</th>
                   <th style={thStyle}>קטגוריה</th>
+                  <th style={thStyle}>מחיקה</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,7 +194,6 @@ const Import = () => {
                           
                           <button
                             type="button"
-                            // כאן אנחנו קוראים לפונקציה ושולחים לה את ה-ID של השורה הנוכחית
                             onClick={() => openNewCategoryModal(row.id)}
                             style={miniAddBtnStyle}
                             title="צור קטגוריה חדשה"
@@ -207,6 +201,11 @@ const Import = () => {
                             +
                           </button>
                       </div>
+                    </td>
+                    <td style={tdStyle}>
+                      <button onClick={() => handleDeleteRow(row.id)} style={{ color: 'red', cursor: 'pointer'}}>
+                        🗑️ מחק
+                      </button>
                     </td>
                   </tr>
                 ))}
