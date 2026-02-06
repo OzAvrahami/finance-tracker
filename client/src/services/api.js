@@ -24,6 +24,10 @@ export const getTransactionById = (id) => api.get(`transactions/${id}`);
 export const updateTransaction = (id, data) => api.put(`transactions/${id}`, data);
 export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
 
+// Loan
+export const getAllLoans = () => api.get('/loans');
+export const createLoan = (data) => api.post('/loans', data);
+
 // Lego set collection
 export const getLegoSets = () => api.get('/lego');
 export const addLegoSet = (setData) => api.post('/lego', setData);

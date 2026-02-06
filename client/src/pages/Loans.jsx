@@ -1,0 +1,297 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, X, CreditCard, Landmark, Home } from 'lucide-react';
+import { getAllLoans, createLoan } from '../services/api';
+
+const Loans = () => {
+  const [loans, setLoans] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    fetchLoans();
+  }, []);
+
+  const fetchLoans = async () => {
+    try {
+      const response = await getAllLoans();
+      setLoans(response.data);
+    } catch (error) {
+      console.error("Error fetching loans:", error);
+    }
+  };
+
+  const pageContainerStyle = {
+    padding: '40px',
+    marginRight: '250px',
+    backgroundColor: '#f8fafc',
+    minHeight: '100vh',
+    fontFamily: 'Segoe UI, sans-serif'
+  };
+
+  const headerStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '30px'
+  };
+
+  const cardsGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', // ריספונסיבי
+    gap: '20px'
+  };
+
+  const cardStyle = {
+    backgroundColor: 'white',
+    borderRadius: '16px',
+    padding: '24px',
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+    border: '1px solid #e2e8f0',
+    transition: 'transform 0.2s',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '15px'
+  };
+
+  const addBtnStyle = {
+    backgroundColor: '#2563eb',
+    color: 'white',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontWeight: '600',
+    fontSize: '1rem',
+    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)'
+  };
+
+  return (
+    <div dir="rtl" style={pageContainerStyle}>
+      
+      <div style={headerStyle}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '2rem', color: '#1e293b' }}>ניהול הלוואות</h1>
+          <p style={{ color: '#64748b', marginTop: '5px' }}>תמונת מצב של ההתחייבויות שלך</p>
+        </div>
+        <button onClick={() => setShowModal(true)} style={addBtnStyle}>
+          <Plus size={20} /> הוסף הלוואה
+        </button>
+      </div>
+
+      <div style={cardsGridStyle}>
+        {loans.length === 0 ? (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '60px', color: '#94a3b8', border: '2px dashed #e2e8f0', borderRadius: '12px' }}>
+            עדיין אין הלוואות במערכת. לחץ על הכפתור למעלה כדי להתחיל.
+          </div>
+        ) : (
+          loans.map((loan) => (
+            <div key={loan.id} style={cardStyle}>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ padding: '10px', backgroundColor: '#eff6ff', borderRadius: '10px', color: '#3b82f6' }}>
+                        {loan.loan_type === 'mortgage' ? <Home size={20}/> : <CreditCard size={20}/>}
+                    </div>
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b' }}>{loan.name}</h3>
+                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{loan.lender_name}</span>
+                    </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <span style={{ color: '#64748b', fontSize: '0.9rem' }}>יתרה לסילוק</span>
+                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#ef4444' }}>₪{Number(loan.current_balance).toLocaleString()}</span>
+                </div>
+                
+                <div style={{ width: '100%', height: '6px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: '40%', height: '100%', backgroundColor: '#3b82f6' }}></div> 
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #f1f5f9' }}>
+                    <div>
+                        <span style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8' }}>החזר חודשי</span>
+                        <span style={{ fontWeight: '600', color: '#334155' }}>₪{Number(loan.monthly_payment).toLocaleString()}</span>
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                        <span style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8' }}>סיום משוער</span>
+                        <span style={{ fontWeight: '600', color: '#334155' }}>{loan.end_date || '-'}</span>
+                    </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {showModal && (
+        <AddLoanModal 
+          onClose={() => setShowModal(false)} 
+          onSuccess={() => { setShowModal(false); fetchLoans(); }} 
+        />
+      )}
+    </div>
+  );
+};
+
+const AddLoanModal = ({ onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    lender_name: '',
+    loan_type: 'bank_loan',
+    original_amount: '',
+    current_balance: '',
+    monthly_payment: '',
+    interest_rate: '',
+    total_installments: '',
+    end_date: ''
+  });
+
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...formData,
+        current_balance: formData.current_balance || formData.original_amount
+      };
+      await createLoan(payload);
+      onSuccess();
+    } catch (error) {
+      console.error(error);
+      alert('שגיאה ביצירת הלוואה');
+    }
+  };
+
+  // אובייקטים של עיצוב כדי להבטיח שזה יעבוד אצלך
+  const overlayStyle = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999, // מבטיח שזה יהיה מעל התפריט הצדדי
+    backdropFilter: 'blur(4px)'
+  };
+
+  const modalContainerStyle = {
+    backgroundColor: 'white',
+    padding: '30px',
+    borderRadius: '16px',
+    width: '500px',
+    maxWidth: '90%',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+    textAlign: 'right'
+  };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px',
+    marginTop: '5px',
+    marginBottom: '15px',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    fontSize: '16px',
+    boxSizing: 'border-box' // חשוב כדי שה-padding לא ינפח את השדה
+  };
+
+  const gridStyle = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '15px'
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={modalContainerStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>הקמת הלוואה חדשה</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: '#6b7280' }}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={gridStyle}>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>שם הלוואה *</label>
+              <input name="name" placeholder="למשל: רכב" onChange={handleChange} required style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>סוג</label>
+              <select name="loan_type" onChange={handleChange} style={inputStyle}>
+                <option value="bank_loan">הלוואה רגילה</option>
+                <option value="mortgage">משכנתא</option>
+                <option value="credit_card">אשראי (תשלומים)</option>
+              </select>
+            </div>
+          </div>
+
+          <label style={{ fontSize: '14px', fontWeight: '600' }}>גוף מלווה</label>
+          <input name="lender_name" placeholder="בנק/חברה" onChange={handleChange} style={inputStyle} />
+          
+          <div style={gridStyle}>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>סכום מקורי *</label>
+              <input type="number" name="original_amount" onChange={handleChange} required style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>יתרה (אופציונלי)</label>
+              <input type="number" name="current_balance" onChange={handleChange} style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={gridStyle}>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>החזר חודשי</label>
+              <input type="number" name="monthly_payment" onChange={handleChange} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>ריבית %</label>
+              <input type="number" step="0.01" name="interest_rate" onChange={handleChange} style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={gridStyle}>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>סה"כ תשלומים</label>
+              <input type="number" name="total_installments" onChange={handleChange} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600' }}>תאריך סיום</label>
+              <input type="date" name="end_date" onChange={handleChange} style={inputStyle} />
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              backgroundColor: '#10b981', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '8px', 
+              fontWeight: 'bold', 
+              fontSize: '18px', 
+              cursor: 'pointer',
+              marginTop: '10px'
+            }}
+          >
+            שמור הלוואה
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default Loans;

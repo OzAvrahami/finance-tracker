@@ -5,6 +5,7 @@ import Import from './pages/Import';
 import Transactions from './pages/Transactions';
 import AddTransaction from './pages/AddTransaction';
 import LegoCollection from './pages/LegoCollection';
+import Loans from './pages/Loans';
 
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
           <Route path="/add" element={<AddTransaction />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/lego" element={<LegoCollection />} />
+          <Route path="/loans" element={<Loans /> } />
 
           <Route path="/import" element={<Import />} />
           <Route path="/edit-transaction/:id" element={<AddTransaction />} />
