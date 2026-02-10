@@ -9,7 +9,16 @@ const loanRoutes = require('./routes/loanRoutes');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+
+app.use(cors({
+  origin: [
+    "http://localhost:5173",          // Local
+    "https://YOUR-FRONTEND.vercel.app" // Prod
+  ],
+  credentials: true
+}));
+
+
 app.use(express.json());
 app.use('/api/import', importRoutes);
 app.use('/api/categories', categoryRoutes);
