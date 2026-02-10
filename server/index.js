@@ -18,8 +18,9 @@ app.use(cors({
   credentials: true
 }));
 
-
 app.use(express.json());
+app.get("/health", (req, res) => res.send("OK"));
+
 app.use('/api/import', importRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
