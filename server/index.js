@@ -13,7 +13,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5173",          // Local
-    "https://YOUR-FRONTEND.vercel.app" // Prod
+    "https://finance-tracker-sigma-ten-19.vercel.app/" // Prod
   ],
   credentials: true
 }));
