@@ -11,16 +11,10 @@ require('dotenv').config();
 const app = express();
 
 app.use(cors({
-    /*
-  origin: [
-    "http://localhost:5000/api",          // Local
-    "https://finance-tracker-sigma-ten-19.vercel.app/" // Prod
-  ],
-  credentials: true
-  */
- origin: true,
-  credentials: true
+    origin: "https://finance-tracker-sigma-ten-19.vercel.app",
+    credentials: true
 }));
+
 
 app.use(express.json());
 app.get("/health", (req, res) => res.send("OK"));
