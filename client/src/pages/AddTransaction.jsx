@@ -198,7 +198,23 @@ const AddTransaction = () => {
         await createTransaction(payload);
         alert('התנועה נשמרה בהצלחה! 🚀');
       }
-      navigate('/');
+      
+      // Reset form
+      setTransaction({
+        transaction_date: new Date().toISOString().split('T')[0],
+        description: '',
+        movement_type: 'expense',
+        category_id: '',
+        payment_source: '',
+        payment_method: 'credit_card',
+        credit_card_name: '',
+        total_amount: 0,
+        global_discount: 0,
+        tags: '',
+        loan_id: ''
+      });
+      setItems([]);
+
     } catch (error) {
       console.error('Error saving transaction:', error);
       alert('שגיאה בשמירת התנועה');
