@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   installments_info TEXT DEFAULT NULL,
   exchange_rate NUMERIC DEFAULT NULL,
   charge_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  loan_id BIGINT REFERENCES loans(id) DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

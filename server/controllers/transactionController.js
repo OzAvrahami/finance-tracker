@@ -28,22 +28,33 @@ exports.createTransaction = async (req, res) => {
       .from('transactions')
       .insert([{
         description: transaction.description,
-        type: transaction.movement_type, // 'income' or 'expense'
-        category: transaction.category,
+        movement_type: transaction.movement_type,
+        category_id: transaction.category_id,
         total_amount: transaction.total_amount, // Final total after all discounts
         global_discount: Number(transaction.global_discount) || 0, // Global discount/points used
         payment_method: transaction.payment_source, // Mapping 'payment_source' from UI to DB column
-        credit_card_name: transaction.credit_card_name || null,
         transaction_date: transaction.transaction_date,
-        tags: transaction.tags // Comma separated tags string
+        tags: transaction.tags, // Comma separated tags string
+        loan_id: transaction.loan_id || null
       }])
       .select();
 
     if (transError) throw transError;
     const transactionId = transData[0].id;
 
-    // 2. Lego Automation Logic
-    if (transaction.category === 'Lego') {
+    // 2. Lego Automation Logic - check by category_id
+    // First, look up the category name
+    let categoryName = null;
+    if (transaction.category_id) {
+      const { data: catData } = await supabase
+        .from('categories')
+        .select('name')
+        .eq('id', transaction.category_id)
+        .single();
+      categoryName = catData?.name;
+    }
+
+    if (categoryName === 'Lego' || categoryName === 'לגו') {
       // Filter only items that have a set number
       const legoItems = items.filter(item => item.set_number && item.set_number.trim() !== '');
       
@@ -116,11 +127,11 @@ exports.createTransaction = async (req, res) => {
     const description = transaction.description ? transaction.description.trim() : '';
     const wordCount = description.split(/\s+/).length;
 
-    if (wordCount <= 2 && transaction.category) {
+    if (wordCount <= 2 && transaction.category_id) {
       const { data: categoryData } = await supabase
         .from('categories')
         .select('*')
-        .eq('name', transaction.category)
+        .eq('id', transaction.category_id)
         .single();
 
         if (categoryData) {
@@ -242,14 +253,14 @@ exports.updateTransaction = async (req, res) => {
       .from('transactions')
       .update({
         description: transaction.description,
-        type: transaction.movement_type,
-        category: transaction.category,
+        movement_type: transaction.movement_type,
+        category_id: transaction.category_id,
         total_amount: transaction.total_amount,
         global_discount: Number(transaction.global_discount) || 0,
         payment_method: transaction.payment_source,
-        credit_card_name: transaction.credit_card_name || null,
         transaction_date: transaction.transaction_date,
-        tags: transaction.tags
+        tags: transaction.tags,
+        loan_id: transaction.loan_id || null
       })
       .eq('id', id);
 

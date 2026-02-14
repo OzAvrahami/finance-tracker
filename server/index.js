@@ -11,7 +11,6 @@ const slowDown = require("express-slow-down");
 const morgan = require("morgan");
 const compression = require("compression");
 const hpp = require("hpp");
-const xss = require("xss-clean");
 
 
 require('dotenv').config();
@@ -41,9 +40,6 @@ app.use(compression());
 
 // Prevent HTTP parameter pollution
 app.use(hpp());
-
-// Basic XSS sanitization 
-app.use(xss());
 
 // Logging
 app.use(morgan("combined"));
@@ -99,7 +95,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/lego', legoRoutes);
 app.use('/api/loans', loanRoutes);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => console.log(`Architecture is solid on port ${PORT}`));
 
 // 404 handler

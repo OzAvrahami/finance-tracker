@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, CreditCard, Landmark, Home } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { getAllLoans, createLoan } from '../services/api';
 import LoansDashboard from '../components/LoanDashboard';
 import LoanSimulator from '../components/LoanSimulator';
+import LoanCard from '../components/LoanCard';
 
 const Loans = () => {
   const [loans, setLoans] = useState([]);
@@ -40,18 +41,6 @@ const Loans = () => {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', // ריספונסיבי
     gap: '20px'
-  };
-
-  const cardStyle = {
-    backgroundColor: 'white',
-    borderRadius: '16px',
-    padding: '24px',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    border: '1px solid #e2e8f0',
-    transition: 'transform 0.2s',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '15px'
   };
 
   const addBtnStyle = {
@@ -93,42 +82,7 @@ const Loans = () => {
           </div>
         ) : (
           loans.map((loan) => (
-            <div key={loan.id} style={cardStyle}>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <div style={{ padding: '10px', backgroundColor: '#eff6ff', borderRadius: '10px', color: '#3b82f6' }}>
-                        {loan.loan_type === 'mortgage' ? <Home size={20}/> : <CreditCard size={20}/>}
-                    </div>
-                    <div>
-                        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b' }}>{loan.name}</h3>
-                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{loan.lender_name}</span>
-                    </div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span style={{ color: '#64748b', fontSize: '0.9rem' }}>יתרה לסילוק</span>
-                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#ef4444' }}>₪{Number(loan.current_balance).toLocaleString()}</span>
-                </div>
-                
-                <div style={{ width: '100%', height: '6px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: '40%', height: '100%', backgroundColor: '#3b82f6' }}></div> 
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #f1f5f9' }}>
-                    <div>
-                        <span style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8' }}>החזר חודשי</span>
-                        <span style={{ fontWeight: '600', color: '#334155' }}>₪{Number(loan.monthly_payment).toLocaleString()}</span>
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                        <span style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8' }}>סיום משוער</span>
-                        <span style={{ fontWeight: '600', color: '#334155' }}>{loan.end_date || '-'}</span>
-                    </div>
-                </div>
-              </div>
-            </div>
+            <LoanCard key={loan.id} loan={loan} />
           ))
         )}
       </div>
@@ -204,6 +158,7 @@ const AddLoanModal = ({ onClose, onSuccess }) => {
                 current_balance: formData.current_balance ? parseFloat(formData.current_balance) : originalAmount,
                 monthly_payment: parseFloat(formData.monthly_payment) || 0,
                 total_installments: parseInt(formData.total_installments) || 0,
+                remaining_installments: parseInt(formData.remaining_installments) || 0,
                 grace_months: parseInt(formData.grace_months) || 0,
                 
                 balloon_amount: formData.amortization_type === 'balloon' ? (parseFloat(formData.balloon_amount) || 0) : 0,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, createCategory } from '../services/api';
+import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, createCategory, getAllLoans } from '../services/api';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { FileUp } from 'lucide-react';
 
@@ -13,6 +13,7 @@ const AddTransaction = () => {
   const [availableTags, setAvailableTags] = useState([]);
   const [legoThemes, setLegoThemes] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [loans, setLoans] = useState([]);
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
@@ -26,7 +27,8 @@ const AddTransaction = () => {
     credit_card_name: '',
     total_amount: 0,
     global_discount: 0,
-    tags: ''
+    tags: '',
+    loan_id: ''
   });
 
   // Load Initial Data
@@ -41,6 +43,13 @@ const AddTransaction = () => {
         setAvailableTags(tagsRes.data);
         setLegoThemes(themesRes.data);
         setCategories(catsRes.data);
+
+        try {
+          const loansRes = await getAllLoans();
+          setLoans(loansRes.data);
+        } catch (e) {
+          console.error("Error loading loans", e);
+        }
       } catch (error) {
         console.error("Error loading initial data", error);
       }
@@ -67,7 +76,8 @@ const AddTransaction = () => {
             credit_card_name: data.credit_card_name || '',
             total_amount: data.total_amount || 0,
             global_discount: data.global_discount || 0,
-            tags: data.tags || ''
+            tags: data.tags || '',
+            loan_id: data.loan_id || ''
           });
 
           if (data.transaction_items?.length > 0) {
@@ -112,6 +122,10 @@ const AddTransaction = () => {
   const isLegoCategory = () => {
     const selectedCat = categories.find(c => String(c.id) === String(transaction.category_id));
     return selectedCat?.name === 'Lego' || selectedCat?.name === 'לגו';
+  };
+
+  const isLoanCategory = () => {
+    return String(transaction.category_id) === '24';
   };
 
   // --- Handlers ---
@@ -168,12 +182,13 @@ const AddTransaction = () => {
     e.preventDefault();
     try {
       // מוודאים ששולחים מספר אם יש ערך, או null
-      const payload = { 
+      const payload = {
         transaction: {
             ...transaction,
-            category_id: transaction.category_id ? parseInt(transaction.category_id) : null
-        }, 
-        items 
+            category_id: transaction.category_id ? parseInt(transaction.category_id) : null,
+            loan_id: transaction.loan_id ? parseInt(transaction.loan_id) : null
+        },
+        items
       };
       
       if (isEditMode) {
@@ -273,7 +288,7 @@ const AddTransaction = () => {
                 <label style={labelStyle}>קטגוריה</label>
                 <div style={{ display: 'flex', gap: '10px'}}>
                   <select
-                    name="categories_id"
+                    name="category_id"
                     value={transaction.category_id}
                     onChange={handleTransactionChange}
                     style={inputStyle}
@@ -323,16 +338,51 @@ const AddTransaction = () => {
             {transaction.payment_source === 'credit_card' && (
                 <div style={inputGroupStyle}>
                     <label style={labelStyle}>שם כרטיס / 4 ספרות אחרונות</label>
-                    <input 
-                        type="text" 
-                        name="credit_card_name" 
-                        value={transaction.credit_card_name} 
-                        onChange={handleTransactionChange} 
-                        placeholder="למשל: מאקס (1234)" 
-                        style={inputStyle} 
+                    <input
+                        type="text"
+                        name="credit_card_name"
+                        value={transaction.credit_card_name}
+                        onChange={handleTransactionChange}
+                        placeholder="למשל: מאקס (1234)"
+                        style={inputStyle}
                     />
                 </div>
             )}
+
+            {isLoanCategory() && (
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>בחר הלוואה 🏦</label>
+                    <select
+                      name="loan_id"
+                      value={transaction.loan_id}
+                      onChange={handleTransactionChange}
+                      style={inputStyle}
+                      required
+                    >
+                      <option value="">בחר הלוואה</option>
+                      {loans.map((loan) => (
+                        <option key={loan.id} value={loan.id}>
+                          {loan.name} - {loan.lender_name} (₪{Number(loan.current_balance).toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                </div>
+            )}
+
+            <div style={inputGroupStyle}>
+                <label style={labelStyle}>סכום העסקה (₪)</label>
+                <input
+                    type="number"
+                    name="total_amount"
+                    value={transaction.total_amount}
+                    onChange={handleTransactionChange}
+                    placeholder="הזן סכום"
+                    style={inputStyle}
+                    min="0"
+                    step="0.01"
+                    required
+                />
+            </div>
         </div>
 
         <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
