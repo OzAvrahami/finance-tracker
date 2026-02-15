@@ -5,6 +5,7 @@ const legoRoutes = require('./routes/legoRoutes');
 const importRoutes = require('./routes/importRoutes');
 const categoryRoutes = require('./routes/categoriesRoutes');
 const loanRoutes = require('./routes/loanRoutes');
+const { requireAuth } = require('./middleware/auth');
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const slowDown = require("express-slow-down");
@@ -88,6 +89,8 @@ app.use(cors({
 app.use(express.json());
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
+// Auth middleware - protect all /api/* routes
+app.use('/api', requireAuth);
 
 app.use('/api/import', importRoutes);
 app.use('/api/categories', categoryRoutes);

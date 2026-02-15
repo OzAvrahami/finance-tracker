@@ -1,9 +1,11 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, List, PiggyBank, Package, Landmark, Settings } from 'lucide-react';
+import { LayoutDashboard, List, PiggyBank, Package, Landmark, Settings, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
   const location = useLocation();
+  const { signOut } = useAuth();
 
   const menuItems = [
     { path: '/', label: 'לוח בקרה', icon: <LayoutDashboard size={20} /> },
@@ -59,6 +61,29 @@ const Layout = () => {
             );
           })}
         </nav>
+
+        <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
+          <button
+            onClick={signOut}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 15px',
+              borderRadius: '10px',
+              border: 'none',
+              background: 'transparent',
+              color: '#6c757d',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              width: '100%',
+              textAlign: 'right'
+            }}
+          >
+            <LogOut size={20} />
+            התנתקות
+          </button>
+        </div>
       </aside>
 
       <main style={{ 

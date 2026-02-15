@@ -6,26 +6,31 @@ import Transactions from './pages/Transactions';
 import AddTransaction from './pages/AddTransaction';
 import LegoCollection from './pages/LegoCollection';
 import Loans from './pages/Loans';
+import Login from './pages/Login';
+import ProtectedRoute from './components/ProtectedRoute';
 
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<Layout />}>
+        <Route path="/login" element={<Login />} />
+
+        <Route element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route path="/" element={<Dashboard />} />
           <Route path="/add" element={<AddTransaction />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/lego" element={<LegoCollection />} />
           <Route path="/loans" element={<Loans /> } />
-
           <Route path="/import" element={<Import />} />
           <Route path="/edit-transaction/:id" element={<AddTransaction />} />
         </Route>
       </Routes>
-
     </BrowserRouter>
-
   );
 }
 
