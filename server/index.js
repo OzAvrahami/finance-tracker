@@ -5,6 +5,7 @@ const legoRoutes = require('./routes/legoRoutes');
 const importRoutes = require('./routes/importRoutes');
 const categoryRoutes = require('./routes/categoriesRoutes');
 const loanRoutes = require('./routes/loanRoutes');
+const budgetRoutes = require('./routes/budgetRoutes');
 const { requireAuth } = require('./middleware/auth');
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
@@ -97,6 +98,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/lego', legoRoutes);
 app.use('/api/loans', loanRoutes);
+app.use('/api/budgets', budgetRoutes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => console.log(`Architecture is solid on port ${PORT}`));

@@ -58,5 +58,10 @@ export const updateLegoSet = (id, setData) => api.put(`/lego/${id}`, setData);
 export const getLegoThemes = () => api.get('/lego/themes');
 export const getLegoSetDetails = (setNum) => api.get(`/transactions/lego/details/${setNum}`);
 
+// Budget
+export const getBudgetsByMonth = (month) => api.get(`/budgets?month=${month}`);
+export const upsertBudget = (data) => api.post('/budgets', data);
+export const copyBudget = (data) => api.post('/budgets/copy', data);
+export const deleteBudget = (id) => api.delete(`/budgets/${id}`);
 
 export default api;

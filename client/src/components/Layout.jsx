@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, List, PiggyBank, Package, Landmark, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, List, PiggyBank, Package, Landmark, Settings, LogOut, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
@@ -12,6 +12,7 @@ const Layout = () => {
     { path: '/add', label: 'הוספת הוצאה/הכנסה', icon: <LayoutDashboard size={20} /> },
     { path: '/transactions', label: 'יומן תנועות', icon: <List size={20} /> },
     { path: '/loans', label: 'הלוואות ומשכנתא', icon: <Landmark size={20} /> },
+    { path: '/budget', label: 'תקציב חודשי', icon: <Wallet size={20} /> },
     { path: '/investments', label: 'פנסיה וגמל', icon: <PiggyBank size={20} /> },
     { path: '/lego', label: 'מלאי LEGO', icon: <Package size={20} /> },
     { path: '/settings', label: 'הגדרות', icon: <Settings size={20} /> },
