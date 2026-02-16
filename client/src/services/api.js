@@ -36,13 +36,14 @@ export const createCategory = (data) => api.post('/categories', data);
 
 // Import file
 export const uploadImportFile = (formData) => api.post('/import/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-export const saveImportedTransactions = (transactions) => api.post('/import/save', { transactions });
+export const saveImportedTransactions = (transactions, paymentSourceId) => api.post('/import/save', { transactions, payment_source_id: paymentSourceId });
 
 // Transaction
 export const createTransaction = (data) => api.post('/transactions', data);
 export const getTransactions = () => api.get('/transactions');
 export const getTags = () => api.get('/transactions/tags');
 export const getCategories = () => api.get('/transactions/categories');
+export const getPaymentSources = () => api.get('/transactions/payment-sources');
 export const getTransactionById = (id) => api.get(`transactions/${id}`);
 export const updateTransaction = (id, data) => api.put(`transactions/${id}`, data);
 export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);

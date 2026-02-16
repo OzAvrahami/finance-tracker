@@ -67,14 +67,8 @@ const Transactions = () => {
         // ג. חיפוש בשם הקטגוריה (למשל: למצוא את כל ה"מזון" גם אם כתוב "רמי לוי")
         const matchCategory = t.categories?.name?.toLowerCase().includes(lowerSearch);
         
-        // ד. חיפוש באמצעי תשלום (לפי השם בעברית)
-        let paymentHebrew = '';
-        if (t.payment_source === 'credit_card') paymentHebrew = 'אשראי כרטיס';
-        else if (t.payment_source === 'cash') paymentHebrew = 'מזומן';
-        else if (t.payment_source === 'bit') paymentHebrew = 'ביט פייבוקס bit paybox';
-        else if (t.payment_source === 'bank_transfer') paymentHebrew = 'העברה בנקאית בנק';
-        
-        const matchSource = paymentHebrew.includes(lowerSearch);
+        // ד. חיפוש באמצעי תשלום (לפי שם אמצעי התשלום מהטבלה)
+        const matchSource = (t.payment_sources?.name || '').toLowerCase().includes(lowerSearch);
 
         // אם אחד מהם נכון - השורה תוצג
         return matchDesc || matchAmount || matchCategory || matchSource;
@@ -301,7 +295,7 @@ const Transactions = () => {
                     {/* <div style={{fontSize: '0.75rem', color:'#999'}}>תשלום 2 מתוך 10</div> */}
                 </td>
                 <td style={tdStyle}>
-                  {t.payment_source}
+                  {t.payment_sources?.name || t.payment_method || '-'}
                 </td>
                 <td style={{ ...tdStyle, fontWeight: 'bold', color: t.movement_type === 'income' ? '#2ecc71' : '#e74c3c' }}>
                   ₪{Number(t.total_amount).toLocaleString()}

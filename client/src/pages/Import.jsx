@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { uploadImportFile, getCategories, saveImportedTransactions, createCategory } from '../services/api';
+import { uploadImportFile, getCategories, getPaymentSources, saveImportedTransactions, createCategory } from '../services/api';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 
@@ -8,6 +8,8 @@ const Import = () => {
   const [profile, setProfile] = useState('cal_bank');
   const [previewData, setPreviewData] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [paymentSources, setPaymentSources] = useState([]);
+  const [selectedPaymentSourceId, setSelectedPaymentSourceId] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
@@ -19,6 +21,10 @@ const Import = () => {
 
   useEffect(() => {
     getCategories().then(res => setCategories(res.data)).catch(console.error);
+    getPaymentSources().then(res => {
+      setPaymentSources(res.data);
+      if (res.data.length > 0) setSelectedPaymentSourceId(res.data[0].id);
+    }).catch(console.error);
   }, []);
 
   const handleFileChange = (e) => {
@@ -102,7 +108,7 @@ const Import = () => {
 
     try {
       setLoading(true);
-      await saveImportedTransactions(validData);
+      await saveImportedTransactions(validData, selectedPaymentSourceId);
       alert('העסקאות נשמרו בהצלחה! 🎉');
       navigate('/');
     } catch (error) {
@@ -140,6 +146,17 @@ const Import = () => {
             <label>בחר מקור: </label>
             <select value={profile} onChange={(e) => setProfile(e.target.value)} style={inputStyle}>
               <option value="cal">כרטיס אשראי - כאל בנקאי (Cal)</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '15px' }}>
+            <label>אמצעי תשלום: </label>
+            <select value={selectedPaymentSourceId} onChange={(e) => setSelectedPaymentSourceId(e.target.value)} style={inputStyle}>
+              {paymentSources.map(ps => (
+                <option key={ps.id} value={ps.id}>
+                  {ps.name}{ps.last4 ? ` (${ps.last4})` : ''}
+                </option>
+              ))}
             </select>
           </div>
           

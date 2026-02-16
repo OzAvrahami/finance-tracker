@@ -99,24 +99,22 @@ exports.saveImport = async (req, res) => {
         type_of_cat: typeof transactions[0].category_id
     });
     
+    const paymentSourceId = req.body.payment_source_id || null;
+
     const recordsToInsert = transactions.map(t => ({
-      payment_source: t.payment_source, 
-      payment_method: t.payment_method,
-      //transaction_date: t.transaction_date,
-      //charge_date: t.charge_date,
+      payment_source_id: paymentSourceId,
+      payment_method: t.payment_method || 'credit_card',
       transaction_date: (t.transaction_date === '' || !t.transaction_date) ? null : t.transaction_date,
       charge_date: (t.charge_date && t.charge_date !== '') ? t.charge_date : t.transaction_date,
       description: t.description,
-      //total_amount: t.total_amount === '' ? 0 : t.total_amount,
       total_amount: isNaN(parseFloat(t.total_amount)) ? 0 : parseFloat(t.total_amount),
       movement_type: t.movement_type,
       category_id: t.category_id || null,
-      //original_amount: t.original_amount === '' ? null : t.original_amount,
       original_amount: isNaN(parseFloat(t.original_amount)) ? 0 : parseFloat(t.original_amount),
       currency: t.currency,
       exchange_rate: t.exchange_rate === '' ? null : t.exchange_rate,
       installments_info: t.installments_info,
-      
+
       created_at: new Date()
     }));
 

@@ -21,15 +21,16 @@ const Layout = () => {
   return (
     <div className="app-container" dir="rtl" style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
       
-      <aside style={{ 
-        width: '260px', 
-        backgroundColor: '#fff', 
-        borderLeft: '1px solid #e9ecef', 
+      <aside style={{
+        width: '260px',
+        backgroundColor: '#fff',
+        borderLeft: '1px solid #e9ecef',
         padding: '20px',
         display: 'flex',
         flexDirection: 'column',
         position: 'fixed',
-        height: '100%',
+        height: '100vh',
+        boxSizing: 'border-box',
         right: 0
       }}>
         <div style={{ marginBottom: '40px', fontSize: '1.5rem', fontWeight: 'bold', color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '10px' }}>

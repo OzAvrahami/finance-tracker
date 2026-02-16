@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, createCategory, getAllLoans } from '../services/api';
+import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, getPaymentSources, createCategory, getAllLoans } from '../services/api';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { FileUp } from 'lucide-react';
 
@@ -13,36 +13,52 @@ const AddTransaction = () => {
   const [availableTags, setAvailableTags] = useState([]);
   const [legoThemes, setLegoThemes] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [paymentSources, setPaymentSources] = useState([]);
   const [loans, setLoans] = useState([]);
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
+  const getNextMonth2nd = (dateStr) => {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const next = new Date(d.getFullYear(), d.getMonth() + 1, 2);
+    return next.toISOString().split('T')[0];
+  };
+
   const [transaction, setTransaction] = useState({
     transaction_date: new Date().toISOString().split('T')[0],
+    charge_date: getNextMonth2nd(),
     description: '',
     movement_type: 'expense',
     category_id: '',
-    payment_source: '',
-    payment_method: 'credit_card',
-    credit_card_name: '',
+    payment_source_id: '',
     total_amount: 0,
     global_discount: 0,
     tags: '',
-    loan_id: ''
+    loan_id: '',
+    original_amount: '',
+    currency: 'ILS',
+    exchange_rate: '',
+    installments_info: ''
   });
 
   // Load Initial Data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [tagsRes, themesRes, catsRes] = await Promise.all([
+        const [tagsRes, themesRes, catsRes, psRes] = await Promise.all([
           getTags(),
           getLegoThemes(),
-          getCategories()
+          getCategories(),
+          getPaymentSources()
         ]);
         setAvailableTags(tagsRes.data);
         setLegoThemes(themesRes.data);
         setCategories(catsRes.data);
+        setPaymentSources(psRes.data);
+        // Set default payment_source_id to first active source
+        if (psRes.data.length > 0 && !id) {
+          setTransaction(prev => ({ ...prev, payment_source_id: psRes.data[0].id }));
+        }
 
         try {
           const loansRes = await getAllLoans();
@@ -68,16 +84,19 @@ const AddTransaction = () => {
 
           setTransaction({
             transaction_date: data.transaction_date || new Date().toISOString().split('T')[0],
+            charge_date: data.charge_date || data.transaction_date || new Date().toISOString().split('T')[0],
             description: data.description || '',
-            movement_type: data.movement_type || 'expense', // שים לב לשם השדה ב-DB
-            category_id: data.category_id || '', // טוענים את ה-ID
-            payment_source: data.payment_source || 'credit_card',
-            payment_method: data.payment_method || 'credit_card',
-            credit_card_name: data.credit_card_name || '',
+            movement_type: data.movement_type || 'expense',
+            category_id: data.category_id || '',
+            payment_source_id: data.payment_source_id || '',
             total_amount: data.total_amount || 0,
             global_discount: data.global_discount || 0,
             tags: data.tags || '',
-            loan_id: data.loan_id || ''
+            loan_id: data.loan_id || '',
+            original_amount: data.original_amount || '',
+            currency: data.currency || 'ILS',
+            exchange_rate: data.exchange_rate || '',
+            installments_info: data.installments_info || ''
           });
 
           if (data.transaction_items?.length > 0) {
@@ -131,7 +150,7 @@ const AddTransaction = () => {
   // --- Handlers ---
   const handleTransactionChange = (e) => {
     const { name, value } = e.target;
-    
+
     setTransaction(prev => {
       const updated = { ...prev, [name]: value };
 
@@ -142,7 +161,25 @@ const AddTransaction = () => {
         );
 
         if (foundCategory) {
-          updated.category_id = foundCategory.id; // מעדכנים את ה-ID, לא את השם!
+          updated.category_id = foundCategory.id;
+        }
+      }
+
+      // חישוב אוטומטי של תאריך חיוב
+      if (name === 'payment_source_id') {
+        const selectedPS = paymentSources.find(ps => String(ps.id) === String(value));
+        if (selectedPS?.method === 'credit_card') {
+          updated.charge_date = getNextMonth2nd(prev.transaction_date);
+        } else {
+          updated.charge_date = prev.transaction_date;
+        }
+      }
+      if (name === 'transaction_date') {
+        const currentPS = paymentSources.find(ps => String(ps.id) === String(prev.payment_source_id));
+        if (currentPS?.method === 'credit_card') {
+          updated.charge_date = getNextMonth2nd(value);
+        } else {
+          updated.charge_date = value;
         }
       }
 
@@ -182,11 +219,14 @@ const AddTransaction = () => {
     e.preventDefault();
     try {
       // מוודאים ששולחים מספר אם יש ערך, או null
+      const selectedPS = paymentSources.find(ps => String(ps.id) === String(transaction.payment_source_id));
       const payload = {
         transaction: {
             ...transaction,
             category_id: transaction.category_id ? parseInt(transaction.category_id) : null,
-            loan_id: transaction.loan_id ? parseInt(transaction.loan_id) : null
+            loan_id: transaction.loan_id ? parseInt(transaction.loan_id) : null,
+            payment_source_id: transaction.payment_source_id ? parseInt(transaction.payment_source_id) : null,
+            payment_method: selectedPS?.method || 'credit_card'
         },
         items
       };
@@ -202,16 +242,19 @@ const AddTransaction = () => {
       // Reset form
       setTransaction({
         transaction_date: new Date().toISOString().split('T')[0],
+        charge_date: getNextMonth2nd(),
         description: '',
         movement_type: 'expense',
         category_id: '',
-        payment_source: '',
-        payment_method: 'credit_card',
-        credit_card_name: '',
+        payment_source_id: paymentSources.length > 0 ? paymentSources[0].id : '',
         total_amount: 0,
         global_discount: 0,
         tags: '',
-        loan_id: ''
+        loan_id: '',
+        original_amount: '',
+        currency: 'ILS',
+        exchange_rate: '',
+        installments_info: ''
       });
       setItems([]);
 
@@ -342,28 +385,16 @@ const AddTransaction = () => {
 
                 <div style={inputGroupStyle}>
                     <label style={labelStyle}>אמצעי תשלום</label>
-                    <select name="payment_source" value={transaction.payment_source} onChange={handleTransactionChange} style={inputStyle}>
-                        <option value="credit_card">כרטיס אשראי 💳</option>
-                        <option value="cash">מזומן 💵</option>
-                        <option value="bank_transfer">העברה בנקאית 🏦</option>
-                        <option value="bit">Bit / PayBox 📱</option>
+                    <select name="payment_source_id" value={transaction.payment_source_id} onChange={handleTransactionChange} style={inputStyle}>
+                        <option value="">בחר אמצעי תשלום</option>
+                        {paymentSources.map(ps => (
+                          <option key={ps.id} value={ps.id}>
+                            {ps.name}{ps.last4 ? ` (${ps.last4})` : ''}
+                          </option>
+                        ))}
                     </select>
                 </div>
             </div>
-
-            {transaction.payment_source === 'credit_card' && (
-                <div style={inputGroupStyle}>
-                    <label style={labelStyle}>שם כרטיס / 4 ספרות אחרונות</label>
-                    <input
-                        type="text"
-                        name="credit_card_name"
-                        value={transaction.credit_card_name}
-                        onChange={handleTransactionChange}
-                        placeholder="למשל: מאקס (1234)"
-                        style={inputStyle}
-                    />
-                </div>
-            )}
 
             {isLoanCategory() && (
                 <div style={inputGroupStyle}>
@@ -398,6 +429,43 @@ const AddTransaction = () => {
                     step="0.01"
                     required
                 />
+            </div>
+
+            {/* תאריך חיוב + תשלומים */}
+            <div style={rowStyle}>
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>תאריך חיוב</label>
+                    <input type="date" name="charge_date" value={transaction.charge_date} onChange={handleTransactionChange} style={inputStyle} />
+                </div>
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>תשלומים</label>
+                    <input type="text" name="installments_info" value={transaction.installments_info} onChange={handleTransactionChange} placeholder="למשל: 3/12 תשלומים" style={inputStyle} />
+                </div>
+            </div>
+
+            {/* מטבע חוץ */}
+            <div style={rowStyle}>
+                <div style={inputGroupStyle}>
+                    <label style={labelStyle}>מטבע</label>
+                    <select name="currency" value={transaction.currency} onChange={handleTransactionChange} style={inputStyle}>
+                        <option value="ILS">ILS - שקל</option>
+                        <option value="USD">USD - דולר</option>
+                        <option value="EUR">EUR - יורו</option>
+                        <option value="GBP">GBP - ליש"ט</option>
+                    </select>
+                </div>
+                {transaction.currency !== 'ILS' && (
+                    <>
+                        <div style={inputGroupStyle}>
+                            <label style={labelStyle}>סכום מקורי ({transaction.currency})</label>
+                            <input type="number" name="original_amount" value={transaction.original_amount} onChange={handleTransactionChange} placeholder="סכום במטבע מקור" style={inputStyle} step="0.01" />
+                        </div>
+                        <div style={inputGroupStyle}>
+                            <label style={labelStyle}>שער המרה</label>
+                            <input type="number" name="exchange_rate" value={transaction.exchange_rate} onChange={handleTransactionChange} placeholder="שער" style={inputStyle} step="0.0001" />
+                        </div>
+                    </>
+                )}
             </div>
         </div>
 

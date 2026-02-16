@@ -16,6 +16,7 @@ const createTransactionSchema = z.object({
 // Get unique tags for autocomplete
 router.get('/tags', transactionController.getTags);
 router.get('/categories', transactionController.getCategories);
+router.get('/payment-sources', transactionController.getPaymentSources);
 
 // Create a new transaction
 router.post('/', transactionController.createTransaction);

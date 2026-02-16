@@ -30,12 +30,18 @@ exports.createTransaction = async (req, res) => {
         description: transaction.description,
         movement_type: transaction.movement_type,
         category_id: transaction.category_id,
-        total_amount: transaction.total_amount, // Final total after all discounts
-        global_discount: Number(transaction.global_discount) || 0, // Global discount/points used
-        payment_method: transaction.payment_source, // Mapping 'payment_source' from UI to DB column
+        total_amount: transaction.total_amount,
+        global_discount: Number(transaction.global_discount) || 0,
+        payment_source_id: transaction.payment_source_id || null,
+        payment_method: transaction.payment_method || 'credit_card',
         transaction_date: transaction.transaction_date,
-        tags: transaction.tags, // Comma separated tags string
-        loan_id: transaction.loan_id || null
+        charge_date: transaction.charge_date || transaction.transaction_date,
+        tags: transaction.tags,
+        loan_id: transaction.loan_id || null,
+        original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
+        currency: transaction.currency || 'ILS',
+        exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
+        installments_info: transaction.installments_info || null
       }])
       .select();
 
@@ -166,6 +172,14 @@ exports.getTransactions = async (req, res) => {
         categories (
           name,
           icon
+        ),
+        payment_sources (
+          id,
+          name,
+          method,
+          slug,
+          issuer,
+          last4
         )
       `)
       .order('transaction_date', { ascending: false });
@@ -257,10 +271,16 @@ exports.updateTransaction = async (req, res) => {
         category_id: transaction.category_id,
         total_amount: transaction.total_amount,
         global_discount: Number(transaction.global_discount) || 0,
-        payment_method: transaction.payment_source,
+        payment_source_id: transaction.payment_source_id || null,
+        payment_method: transaction.payment_method || 'credit_card',
         transaction_date: transaction.transaction_date,
+        charge_date: transaction.charge_date || transaction.transaction_date,
         tags: transaction.tags,
-        loan_id: transaction.loan_id || null
+        loan_id: transaction.loan_id || null,
+        original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
+        currency: transaction.currency || 'ILS',
+        exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
+        installments_info: transaction.installments_info || null
       })
       .eq('id', id);
 
@@ -348,6 +368,22 @@ exports.getCategories = async (req, res) => {
       if (error) throw error;
 
       res.status(200).json(data);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+// Get active payment sources
+exports.getPaymentSources = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('payment_sources')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+
+    if (error) throw error;
+    res.status(200).json(data);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
