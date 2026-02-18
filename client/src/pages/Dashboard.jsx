@@ -1,26 +1,33 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getTransactions, getLegoSets } from '../services/api'; 
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, Package } from 'lucide-react';
-import { preparePieChartData, calculateSummaryStats, filterTransactionsByMonth } from '../utils/dashboardHelpers';
+import { Link } from 'react-router-dom';
+import { getTransactions, getAllLoans, getBudgetsByMonth, getCategories } from '../services/api';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react';
+import { calculateSummaryStats, filterTransactionsByMonth, prepareMonthlyChartData } from '../utils/dashboardHelpers';
 
 const Dashboard = () => {
   const [transactions, setTransactions] = useState([]);
-  const [legoValue, setLegoValue] = useState(0);
+  const [loans, setLoans] = useState([]);
+  const [budgets, setBudgets] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [transRes, legoRes] = await Promise.all([getTransactions(), getLegoSets()]);
-        
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const [transRes, loansRes, budgetsRes, catsRes] = await Promise.all([
+          getTransactions(),
+          getAllLoans().catch(() => ({ data: [] })),
+          getBudgetsByMonth(currentMonth).catch(() => ({ data: [] })),
+          getCategories(),
+        ]);
         setTransactions(transRes.data);
-
-        const totalLego = legoRes.data.reduce((sum, item) => sum + (Number(item.purchase_price) || 0), 0);
-        setLegoValue(totalLego);
-        
+        setLoans(loansRes.data);
+        setBudgets(budgetsRes.data);
+        setCategories(catsRes.data);
       } catch (error) {
-        console.error("Error fetching dashboard data", error);
+        console.error('Error fetching dashboard data', error);
       } finally {
         setLoading(false);
       }
@@ -28,95 +35,275 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  const monthlyTransactions = useMemo(() => {
-    return filterTransactionsByMonth(transactions);
-  }, [transactions]);
+  const monthlyTransactions = useMemo(() => filterTransactionsByMonth(transactions), [transactions]);
+  const stats = useMemo(() => calculateSummaryStats(monthlyTransactions), [monthlyTransactions]);
+  const chartData = useMemo(() => prepareMonthlyChartData(transactions, 6), [transactions]);
 
-  const stats = useMemo(() => {
-    return calculateSummaryStats(monthlyTransactions);
-  }, [monthlyTransactions]);
+  // Calculate budget progress - spending per category this month
+  const budgetProgress = useMemo(() => {
+    if (!budgets.length) return [];
+    const expenseByCategory = {};
+    monthlyTransactions.filter(t => t.movement_type === 'expense').forEach(t => {
+      const catId = t.category_id;
+      if (catId) {
+        expenseByCategory[catId] = (expenseByCategory[catId] || 0) + Number(t.total_amount);
+      }
+    });
 
-  const chartData = useMemo(() => {
-    return preparePieChartData(monthlyTransactions);
-  }, [monthlyTransactions]);
+    return budgets.map(b => {
+      const cat = categories.find(c => c.id === b.category_id);
+      const spent = expenseByCategory[b.category_id] || 0;
+      const budget = Number(b.amount);
+      const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+      const remaining = budget - spent;
+      return { id: b.id, name: cat?.name || 'כללי', icon: cat?.icon || '', spent, budget, pct, remaining };
+    }).sort((a, b) => b.pct - a.pct);
+  }, [budgets, monthlyTransactions, categories]);
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF5733'];
+  // Calculate total loan debt
+  const totalDebt = useMemo(() => loans.reduce((s, l) => s + (Number(l.current_balance) || 0), 0), [loans]);
 
-  if (loading) return <div style={{textAlign: 'center', marginTop: '50px'}}>טוען נתונים...</div>;
+  if (loading) {
+    return <div style={{ textAlign: 'center', marginTop: 80, color: '#64748B', fontSize: 16 }}>טוען נתונים...</div>;
+  }
 
   return (
-    <div dir="rtl" style={{ padding: '30px', backgroundColor: '#f4f6f8', minHeight: '100vh' }}>
-      <h1 style={{ marginBottom: '30px', color: '#2c3e50' }}>לוח בקרה פיננסי 📊</h1>
+    <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {/* Summary Cards */}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24 }}>
+        <SummaryCard
+          title="יתרה נוכחית"
+          value={stats.balance}
+          icon={<Wallet size={20} />}
+          iconBg="#EFF6FF"
+          iconColor="#2563EB"
+        />
+        <SummaryCard
+          title="הכנסות החודש"
+          value={stats.income}
+          icon={<TrendingUp size={20} />}
+          iconBg="#ECFDF5"
+          iconColor="#059669"
+        />
+        <SummaryCard
+          title="הוצאות החודש"
+          value={stats.expenses}
+          icon={<TrendingDown size={20} />}
+          iconBg="#FFF1F2"
+          iconColor="#E11D48"
+        />
+        <SummaryCard
+          title="נטו לחיסכון"
+          value={stats.balance}
+          icon={<PiggyBank size={20} />}
+          iconBg="#EEF2FF"
+          iconColor="#4F46E5"
+          valueColor="#4338CA"
+        />
+      </section>
 
-      {/* כרטיסיות סיכום */}
-      <div style={cardsContainer}>
-        <StatCard title="הכנסות החודש" value={stats.income} color="#2ecc71" icon={<TrendingUp />} />
-        <StatCard title="הוצאות החודש" value={stats.expenses} color="#e74c3c" icon={<TrendingDown />} />
-        <StatCard title="מאזן חודשי" value={stats.balance} color="#3498db" icon={<Wallet />} />
-        <StatCard title="שווי הלגו" value={legoValue} color="#f39c12" icon={<Package />} />
-      </div>
-
-      <div style={gridContainer}>
-        {/* גרף עוגה */}
-        <div style={chartCard}>
-          <h3>התפלגות הוצאות (החודש)</h3>
-          <div style={{ width: '100%', height: 300 }}>
-            {chartData.length > 0 ? (
-                <ResponsiveContainer>
-                <PieChart>
-                    <Pie data={chartData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" label>
-                    {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => `₪${value.toLocaleString()}`} />
-                </PieChart>
-                </ResponsiveContainer>
+      {/* Chart + Loans */}
+      <section style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+        {/* Chart */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <h2 style={cardTitleStyle}>מגמת הכנסות והוצאות</h2>
+            <span style={{ fontSize: 14, color: '#64748B', backgroundColor: '#F8F9FC', padding: '6px 12px', borderRadius: 8 }}>
+              6 חודשים אחרונים
+            </span>
+          </div>
+          <div style={{ width: '100%', height: 280 }}>
+            {chartData.some(d => d.income > 0 || d.expenses > 0) ? (
+              <ResponsiveContainer>
+                <BarChart data={chartData} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 12 }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(value) => `₪${value.toLocaleString()}`} />
+                  <Bar dataKey="income" name="הכנסות" fill="#34D399" radius={[2, 2, 0, 0]} barSize={14} />
+                  <Bar dataKey="expenses" name="הוצאות" fill="#FB7185" radius={[2, 2, 0, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
-                <p style={{textAlign: 'center', marginTop: '100px', color: '#888'}}>אין נתונים לחודש זה</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94A3B8' }}>
+                אין מספיק נתונים להצגה
+              </div>
             )}
           </div>
         </div>
 
-        {/* תנועות אחרונות */}
-        <div style={recentCard}>
-          <h3>פעולות אחרונות</h3>
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {transactions.slice(0, 5).map(t => (
-              <li key={t.id} style={listItem}>
-                <div>
-                  <div style={{ fontWeight: 'bold' }}>{t.description}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>
-                    {new Date(t.transaction_date).toLocaleDateString('he-IL')} | {t.categories?.icon} {t.categories?.name || 'כללי'}
+        {/* Loan Status */}
+        <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <h2 style={cardTitleStyle}>סטטוס הלוואות</h2>
+            <DollarSign size={20} color="#94A3B8" />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24, flex: 1 }}>
+            {/* Total debt */}
+            <div style={{ textAlign: 'center', padding: 16, backgroundColor: '#EFF6FF', borderRadius: 12, border: '1px solid #DBEAFE' }}>
+              <p style={{ fontSize: 14, color: '#1D4ED8', margin: '0 0 4px 0', fontWeight: 500 }}>יתרת חוב כוללת</p>
+              <p style={{ fontSize: 24, fontWeight: 700, color: '#1E293B', margin: 0 }} dir="ltr">
+                ₪{totalDebt.toLocaleString()}
+              </p>
+            </div>
+
+            {loans.length > 0 ? loans.slice(0, 3).map(loan => {
+              const original = Number(loan.original_amount) || 1;
+              const current = Number(loan.current_balance) || 0;
+              const paid = original - current;
+              const pct = Math.round((paid / original) * 100);
+              return (
+                <div key={loan.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
+                    <span style={{ fontWeight: 500, color: '#334155' }}>{loan.name}</span>
+                    <span style={{ color: '#0F172A' }} dir="ltr">₪{Number(loan.monthly_payment).toLocaleString()} / חודש</span>
                   </div>
+                  <div style={{ height: 12, backgroundColor: '#F1F5F9', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', backgroundColor: '#2563EB', width: `${pct}%`, borderRadius: 9999 }} />
+                  </div>
+                  <p style={{ fontSize: 12, color: '#64748B', margin: '8px 0 0 0', textAlign: 'left' }}>שולמו {pct}% מהקרן</p>
                 </div>
-                <div style={{ color: t.movement_type === 'income' ? '#2ecc71' : '#e74c3c', fontWeight: 'bold' }}>
-                  {t.movement_type === 'income' ? '+' : '-'}₪{Number(t.total_amount).toLocaleString()}
-                </div>
-              </li>
-            ))}
-          </ul>
+              );
+            }) : (
+              <p style={{ color: '#94A3B8', textAlign: 'center', marginTop: 16 }}>אין הלוואות פעילות</p>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
+
+      {/* Recent Transactions + Budget */}
+      <section style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 24, alignItems: 'start' }}>
+        {/* Recent Transactions */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <h2 style={cardTitleStyle}>תנועות אחרונות</h2>
+            <Link to="/transactions" style={{ fontSize: 14, color: '#2563EB', fontWeight: 500, textDecoration: 'none' }}>
+              לכל התנועות
+            </Link>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse' }}>
+              <thead style={{ fontSize: 14, color: '#64748B', borderBottom: '1px solid #F1F5F9' }}>
+                <tr>
+                  <th style={{ paddingBottom: 12, fontWeight: 500 }}>תאריך</th>
+                  <th style={{ paddingBottom: 12, fontWeight: 500, paddingRight: 16 }}>תיאור</th>
+                  <th style={{ paddingBottom: 12, fontWeight: 500, paddingRight: 16 }}>קטגוריה</th>
+                  <th style={{ paddingBottom: 12, fontWeight: 500, textAlign: 'left', paddingLeft: 8 }}>סכום</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.slice(0, 5).map(t => {
+                  const isIncome = t.movement_type === 'income';
+                  const catName = t.categories?.name || 'כללי';
+                  const badgeColors = isIncome
+                    ? { bg: '#ECFDF5', color: '#047857' }
+                    : { bg: '#EEF2FF', color: '#4338CA' };
+                  return (
+                    <tr key={t.id} className="tr-hover" style={{ transition: 'background-color 0.2s', borderTop: '1px solid #F8F9FC' }}>
+                      <td style={{ padding: '16px 0', fontSize: 14, color: '#475569', whiteSpace: 'nowrap' }}>
+                        {new Date(t.transaction_date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td style={{ padding: '16px 16px 16px 0', fontWeight: 500, color: '#1E293B' }}>
+                        {t.description}
+                      </td>
+                      <td style={{ padding: '16px 16px 16px 0' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          padding: '2px 10px', borderRadius: 9999,
+                          fontSize: 12, fontWeight: 500,
+                          backgroundColor: badgeColors.bg, color: badgeColors.color,
+                        }}>
+                          {t.categories?.icon} {catName}
+                        </span>
+                      </td>
+                      <td style={{
+                        padding: '16px 0 16px 8px', textAlign: 'left', fontWeight: 700,
+                        color: isIncome ? '#059669' : '#E11D48',
+                      }} dir="ltr">
+                        {isIncome ? '+' : '-'}₪{Number(t.total_amount).toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {transactions.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: 32, color: '#94A3B8' }}>
+                      אין תנועות עדיין
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Budget Progress */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <h2 style={cardTitleStyle}>מצב תקציב חודשי</h2>
+            <Link to="/budget" style={{ fontSize: 14, color: '#2563EB', fontWeight: 500, textDecoration: 'none' }}>
+              לתקציב המלא
+            </Link>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {budgetProgress.length > 0 ? budgetProgress.slice(0, 4).map(b => {
+              const barColor = b.pct >= 100 ? '#EF4444' : b.pct >= 85 ? '#F59E0B' : '#3B82F6';
+              const textColor = b.pct >= 100 ? '#E11D48' : b.pct >= 85 ? '#D97706' : '#64748B';
+              const amountColor = b.pct >= 100 ? '#BE123C' : b.pct >= 85 ? '#B45309' : '#0F172A';
+              return (
+                <div key={b.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'baseline' }}>
+                    <span style={{ fontWeight: 500, color: '#1E293B', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {b.icon} {b.name}
+                    </span>
+                    <span style={{ fontSize: 14, color: '#475569' }}>
+                      <span style={{ fontWeight: 700, color: amountColor }} dir="ltr">₪{b.spent.toLocaleString()}</span>
+                      {' '}מתוך{' '}
+                      <span dir="ltr">₪{b.budget.toLocaleString()}</span>
+                    </span>
+                  </div>
+                  <div style={{ height: 16, backgroundColor: '#F1F5F9', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', backgroundColor: barColor, width: `${b.pct}%`, borderRadius: 9999 }} />
+                  </div>
+                  <p style={{ fontSize: 12, color: textColor, fontWeight: b.pct >= 85 ? 500 : 400, margin: '4px 0 0 0', textAlign: 'left', paddingLeft: 4 }}>
+                    {b.remaining >= 0 ? `נותרו ₪${b.remaining.toLocaleString()}` : `חריגה של ₪${Math.abs(b.remaining).toLocaleString()}`}
+                  </p>
+                </div>
+              );
+            }) : (
+              <p style={{ color: '#94A3B8', textAlign: 'center' }}>לא הוגדר תקציב לחודש זה</p>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
 
-const StatCard = ({ title, value, color, icon }) => (
-  <div style={{ ...cardStyle, borderRight: `5px solid ${color}`, display: 'flex', alignItems: 'center', gap: '15px' }}>
-    <div style={{ color: color }}>{icon}</div>
-    <div>
-      <div style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>{title}</div>
-      <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>₪{value.toLocaleString()}</div>
+// --- Sub-components ---
+
+const SummaryCard = ({ title, value, icon, iconBg, iconColor, valueColor = '#0F172A' }) => (
+  <div style={{
+    backgroundColor: 'white', padding: 24, borderRadius: 16,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #F1F5F9',
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <h3 style={{ color: '#64748B', fontSize: 14, fontWeight: 500, margin: 0 }}>{title}</h3>
+      <div style={{ padding: 8, backgroundColor: iconBg, borderRadius: 8, color: iconColor, display: 'flex' }}>
+        {icon}
+      </div>
     </div>
+    <span style={{ fontSize: 30, fontWeight: 700, color: valueColor }} dir="ltr">
+      ₪{value.toLocaleString()}
+    </span>
   </div>
 );
 
-const cardsContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' };
-const gridContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }; 
-const cardStyle = { background: 'white', padding: '20px', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' };
-const chartCard = { ...cardStyle, minHeight: '400px' };
-const recentCard = { ...cardStyle, minHeight: '400px' };
-const listItem = { display: 'flex', justifyContent: 'space-between', padding: '15px 0', borderBottom: '1px solid #eee' };
+// --- Styles ---
+const cardStyle = {
+  backgroundColor: 'white', padding: 24, borderRadius: 16,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #F1F5F9',
+};
+const cardTitleStyle = { fontSize: 18, fontWeight: 700, color: '#1E293B', margin: 0 };
 
 export default Dashboard;

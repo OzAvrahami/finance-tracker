@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { uploadImportFile, getCategories, getPaymentSources, saveImportedTransactions, createCategory } from '../services/api';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import CategoryCombobox from '../components/CategoryCombobox';
 
 const Import = () => {
   const [file, setFile] = useState(null);
@@ -145,7 +146,10 @@ const Import = () => {
           <div style={{ marginBottom: '15px' }}>
             <label>בחר מקור: </label>
             <select value={profile} onChange={(e) => setProfile(e.target.value)} style={inputStyle}>
-              <option value="cal">כרטיס אשראי - כאל בנקאי (Cal)</option>
+              <option value="cal_bank">כרטיס אשראי - כאל בנקאי (Cal)</option>
+              <option value="debit_bank">כרטיס דיירקט בנק</option>
+              <option value="cal">כרטיס אשראי - כאל (Cal)</option>
+              <option value="max">כרטיס אשראי - מקס (Max)</option>
             </select>
           </div>
 
@@ -207,34 +211,13 @@ const Import = () => {
                       )}
                     </td>
 
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <select 
-                            value={row.category_id} 
-                            onChange={(e) => handleCategoryChange(row.id, e.target.value)}
-                            style={{ 
-                              ...inputStyle, 
-                              borderColor: row.category_id ? '#ddd' : 'red',
-                              backgroundColor: row.category_id ? 'white' : '#fff0f0'
-                            }}
-                          >
-                            <option value="">-- בחר קטגוריה --</option>
-                            {categories.map(cat => (
-                              <option key={cat.id} value={cat.id}>
-                                {cat.icon} {cat.name}
-                              </option>
-                            ))}
-                          </select>
-                          
-                          <button
-                            type="button"
-                            onClick={() => openNewCategoryModal(row.id)}
-                            style={miniAddBtnStyle}
-                            title="צור קטגוריה חדשה"
-                          >
-                            +
-                          </button>
-                      </div>
+                    <td style={{ ...tdStyle, minWidth: '200px' }}>
+                      <CategoryCombobox
+                        categories={categories}
+                        selectedCategoryId={row.category_id}
+                        onSelect={(catId) => handleCategoryChange(row.id, catId)}
+                        onOpenNewModal={() => openNewCategoryModal(row.id)}
+                      />
                     </td>
                     <td style={tdStyle}>
                       <button onClick={() => handleDeleteRow(row.id)} style={{ color: 'red', cursor: 'pointer'}}>
@@ -289,7 +272,6 @@ const inputStyle = { padding: '8px', borderRadius: '4px', border: '1px solid #dd
 const buttonStyle = { padding: '10px 20px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' };
 const thStyle = { padding: '12px', textAlign: 'right', fontWeight: 'bold' };
 const tdStyle = { padding: '12px', verticalAlign: 'top' };
-const miniAddBtnStyle = { background: 'white', border: '1px solid #3498db', color: '#3498db', borderRadius: '4px', width: '30px', height: '35px', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const modalOverlayStyle = { position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 };
 const modalContentStyle = { backgroundColor: 'white', padding: '25px', borderRadius: '12px', width: '90%', maxWidth: '350px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' };
 const cancelBtnStyle = { padding: '8px 15px', backgroundColor: '#f3f4f6', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#374151' };
