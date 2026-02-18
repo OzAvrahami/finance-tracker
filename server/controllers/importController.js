@@ -65,8 +65,6 @@ exports.previewImport = async (req, res) => {
             currency: mapping.currency ? row[mapping.currency] : 'ILS',
             exchange_rate: mapping.exchangeRate ? row[mapping.exchangeRate] : null,
             installments_info: mapping.installments ? row[mapping.installments] : null,
-            payment_method: 'credit_card',
-            payment_source: mapping.source ? row[mapping.source] : 'Unknown Credit Card',
             suggested_category: suggestedCategory
         };
       });
@@ -103,7 +101,6 @@ exports.saveImport = async (req, res) => {
 
     const recordsToInsert = transactions.map(t => ({
       payment_source_id: paymentSourceId,
-      payment_method: t.payment_method || 'credit_card',
       transaction_date: (t.transaction_date === '' || !t.transaction_date) ? null : t.transaction_date,
       charge_date: (t.charge_date && t.charge_date !== '') ? t.charge_date : t.transaction_date,
       description: t.description,

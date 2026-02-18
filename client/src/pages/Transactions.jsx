@@ -295,7 +295,7 @@ const Transactions = () => {
                     {/* <div style={{fontSize: '0.75rem', color:'#999'}}>תשלום 2 מתוך 10</div> */}
                 </td>
                 <td style={tdStyle}>
-                  {t.payment_sources?.name || t.payment_method || '-'}
+                  {t.payment_sources?.name || '-'}
                 </td>
                 <td style={{ ...tdStyle, fontWeight: 'bold', color: t.movement_type === 'income' ? '#2ecc71' : '#e74c3c' }}>
                   ₪{Number(t.total_amount).toLocaleString()}

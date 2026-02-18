@@ -37,7 +37,6 @@ CREATE TABLE IF NOT EXISTS transactions (
   movement_type TEXT CHECK (movement_type IN ('income', 'expense')) NOT NULL,
   category_id BIGINT REFERENCES categories(id),
   payment_source_id BIGINT REFERENCES payment_sources(id),
-  payment_method VARCHAR NOT NULL DEFAULT 'credit_card',
   total_amount NUMERIC NOT NULL DEFAULT 0,
   global_discount NUMERIC DEFAULT 0,
   tags TEXT,
