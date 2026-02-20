@@ -1,24 +1,13 @@
 import React from 'react';
 
-const SetCard = ({ set, onStatusChange, styles }) => {
-  // Discount calculation per card
+const SetCard = ({ set, onStatusChange }) => {
   const orig = Number(set.original_price) || 0;
   const paid = Number(set.purchase_price) || 0;
   const discountPercent = orig > paid ? Math.round(((orig - paid) / orig) * 100) : 0;
 
-  // Brickset image url (fix for missing -1 / series like -4)
   const raw = String(set.set_number || '').trim();
   const setNumberForImage = /-\d+$/.test(raw) ? raw : `${raw}-1`;
   const imageUrl = `https://images.brickset.com/sets/images/${setNumberForImage}.jpg`;
-
-  const {
-    cardStyle,
-    imageContainerStyle,
-    imageStyle,
-    setNumberBadge,
-    themeBadge,
-    dealBadge,
-  } = styles;
 
   return (
     <div style={cardStyle}>
@@ -30,8 +19,7 @@ const SetCard = ({ set, onStatusChange, styles }) => {
           loading="lazy"
           onError={(e) => {
             e.currentTarget.onerror = null;
-            e.currentTarget.src =
-              'https://via.placeholder.com/400x300/f0f2f5/aaaaaa?text=No+Image';
+            e.currentTarget.src = 'https://via.placeholder.com/400x300/f0f2f5/aaaaaa?text=No+Image';
           }}
         />
       </div>
@@ -42,16 +30,7 @@ const SetCard = ({ set, onStatusChange, styles }) => {
           {set.theme && <span style={themeBadge}>{set.theme}</span>}
         </div>
 
-        <h3
-          style={{
-            margin: '0 0 15px 0',
-            fontSize: '1.1rem',
-            height: '45px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            lineHeight: '1.3',
-          }}
-        >
+        <h3 style={{ margin: '0 0 15px 0', fontSize: '1.1rem', height: '45px', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.3' }}>
           {set.name}
         </h3>
 
@@ -82,8 +61,7 @@ const SetCard = ({ set, onStatusChange, styles }) => {
               padding: '10px',
               borderRadius: '8px',
               border: '1px solid #eee',
-              background:
-                set.status === 'New' ? '#e3f2fd' : set.status === 'Built' ? '#e8f5e9' : '#fff3e0',
+              background: set.status === 'New' ? '#e3f2fd' : set.status === 'Built' ? '#e8f5e9' : '#fff3e0',
               color: '#333',
               cursor: 'pointer',
               fontWeight: '500',
@@ -97,6 +75,64 @@ const SetCard = ({ set, onStatusChange, styles }) => {
       </div>
     </div>
   );
+};
+
+// --- Styles ---
+const cardStyle = {
+  background: 'white',
+  borderRadius: '16px',
+  overflow: 'hidden',
+  boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
+  border: '1px solid rgba(0,0,0,0.03)',
+  transition: 'transform 0.2s, box-shadow 0.2s',
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const imageContainerStyle = {
+  height: '180px',
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#fff',
+  padding: '10px',
+  borderBottom: '1px solid #f0f0f0',
+};
+
+const imageStyle = {
+  maxWidth: '100%',
+  maxHeight: '100%',
+  objectFit: 'contain',
+};
+
+const setNumberBadge = {
+  background: '#f1f3f5',
+  padding: '4px 8px',
+  borderRadius: '6px',
+  fontSize: '0.8rem',
+  fontWeight: 'bold',
+  color: '#555',
+};
+
+const themeBadge = {
+  background: '#fff0f6',
+  color: '#c026d3',
+  padding: '4px 8px',
+  borderRadius: '6px',
+  fontSize: '0.8rem',
+  fontWeight: '600',
+};
+
+const dealBadge = {
+  marginTop: '10px',
+  background: '#d1fae5',
+  color: '#059669',
+  padding: '6px',
+  borderRadius: '6px',
+  fontSize: '0.85rem',
+  textAlign: 'center',
+  fontWeight: 'bold',
 };
 
 export default SetCard;
