@@ -7,6 +7,7 @@ import AddTransaction from './pages/AddTransaction';
 import LegoCollection from './pages/LegoCollection';
 import Loans from './pages/Loans';
 import Budget from './pages/Budget';
+import ShoppingLists from './pages/ShoppingLists';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -29,6 +30,7 @@ function App() {
           <Route path="/loans" element={<Loans /> } />
           <Route path="/budget" element={<Budget />} />
           <Route path="/import" element={<Import />} />
+          <Route path="/shopping" element={<ShoppingLists />} />
           <Route path="/edit-transaction/:id" element={<AddTransaction />} />
         </Route>
       </Routes>

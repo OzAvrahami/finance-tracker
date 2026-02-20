@@ -65,4 +65,19 @@ export const upsertBudget = (data) => api.post('/budgets', data);
 export const copyBudget = (data) => api.post('/budgets/copy', data);
 export const deleteBudget = (id) => api.delete(`/budgets/${id}`);
 
+// Shopping Lists
+export const getShoppingListTypes = () => api.get('/shopping/list-types');
+export const getShoppingCatalogCategories = (listTypeId) => api.get('/shopping/catalog-categories', { params: listTypeId ? { list_type_id: listTypeId } : {} });
+export const getShoppingCatalogItems = (params) => api.get('/shopping/catalog-items', { params });
+export const getShoppingLists = (status) => api.get('/shopping/lists', { params: status ? { status } : {} });
+export const getShoppingListById = (id) => api.get(`/shopping/lists/${id}`);
+export const createShoppingList = (data) => api.post('/shopping/lists', data);
+export const updateShoppingList = (id, data) => api.put(`/shopping/lists/${id}`, data);
+export const deleteShoppingList = (id) => api.delete(`/shopping/lists/${id}`);
+export const addShoppingListItem = (listId, data) => api.post(`/shopping/lists/${listId}/items`, data);
+export const updateShoppingListItem = (listId, itemId, data) => api.put(`/shopping/lists/${listId}/items/${itemId}`, data);
+export const removeShoppingListItem = (listId, itemId) => api.delete(`/shopping/lists/${listId}/items/${itemId}`);
+export const toggleShoppingItemPurchased = (listId, itemId) => api.patch(`/shopping/lists/${listId}/items/${itemId}/toggle`);
+export const checkoutShoppingList = (listId, data) => api.post(`/shopping/lists/${listId}/checkout`, data);
+
 export default api;

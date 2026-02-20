@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Home, CreditCard, PieChart, DollarSign, Settings, LogOut, Wallet, Package, Upload } from 'lucide-react';
+import { Home, CreditCard, PieChart, DollarSign, Settings, LogOut, Wallet, Package, Upload, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
@@ -13,6 +13,7 @@ const Layout = () => {
     { path: '/transactions', label: 'תנועות', icon: CreditCard },
     { path: '/budget', label: 'תקציב', icon: PieChart },
     { path: '/loans', label: 'הלוואות', icon: DollarSign },
+    { path: '/shopping', label: 'רשימות קניות', icon: ShoppingCart },
     { path: '/import', label: 'ייבוא קובץ', icon: Upload },
     { path: '/lego', label: 'אוסף LEGO', icon: Package },
   ];
@@ -23,6 +24,7 @@ const Layout = () => {
     '/transactions': 'יומן תנועות',
     '/budget': 'תקציב חודשי',
     '/loans': 'ניהול הלוואות',
+    '/shopping': 'רשימות קניות',
     '/import': 'ייבוא עסקאות',
     '/lego': 'אוסף LEGO',
     '/settings': 'הגדרות',
