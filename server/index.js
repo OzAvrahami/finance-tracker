@@ -47,9 +47,9 @@ app.use(hpp());
 // Logging
 app.use(morgan("combined"));
 
-// Body limits 
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+// Body limits
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 // Hard limit:
 const limiter = rateLimit({
@@ -88,8 +88,11 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-app.use(express.json());
 app.get("/health", (req, res) => res.status(200).send("OK"));
+
+// WhatsApp webhook (before auth - Meta needs unauthenticated access)
+const setupWhatsApp = require('./src/whatsapp');
+setupWhatsApp(app);
 
 // Auth middleware - protect all /api/* routes
 app.use('/api', requireAuth);
