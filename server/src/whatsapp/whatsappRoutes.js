@@ -1,6 +1,6 @@
 const express = require('express');
 const { parseIncomingMessage } = require('./whatsappParser');
-const { sendTextMessage } = require('./whatsappService');
+const { handleWhatsAppMessage } = require('./messageHandler');
 
 const router = express.Router();
 
@@ -24,16 +24,16 @@ router.post('/', async (req, res) => {
   // Always respond 200 immediately to prevent Meta retries
   res.status(200).send('OK');
 
-  console.log('[WhatsApp] Incoming webhook:', JSON.stringify(req.body, null, 2));
-
   const parsed = parseIncomingMessage(req.body);
   if (!parsed) return;
 
   console.log(`[WhatsApp] Message from ${parsed.senderName} (${parsed.from}): ${parsed.text}`);
 
-  // Auto-reply with echo
-  const reply = `קיבלתי ✅: ${parsed.text}`;
-  await sendTextMessage(parsed.from, reply);
+  try {
+    await handleWhatsAppMessage(parsed);
+  } catch (error) {
+    console.error('[WhatsApp] handleWhatsAppMessage error:', error.message);
+  }
 });
 
 module.exports = router;
