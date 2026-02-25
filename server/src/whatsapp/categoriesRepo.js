@@ -72,28 +72,84 @@ async function saveMerchantMapping(waId, merchant, categoryId) {
 }
 
 /**
- * Get the first N expense categories (for the numbered selection menu).
- * Returns [{ id, name }]
+ * Get a page of expense categories.
+ * @param {number} page - 0-based page index
+ * @param {number} pageSize - items per page
+ * @returns {{ categories: [{id, name}], hasMore: boolean }}
  */
-async function getTopCategories(limit = 5) {
+async function getCategoriesPage(page = 0, pageSize = 5) {
+  const from = page * pageSize;
+  const to = from + pageSize; // fetch one extra to know if there's more
+
   const { data, error } = await supabase
     .from('categories')
     .select('id, name')
     .eq('type', 'expense')
     .order('id', { ascending: true })
-    .limit(limit);
+    .range(from, to);
 
   if (error) {
-    console.error('[WhatsApp] categoriesRepo.getTopCategories error:', error.message);
-    return [];
+    console.error('[WhatsApp] categoriesRepo.getCategoriesPage error:', error.message);
+    return { categories: [], hasMore: false };
   }
 
-  return data || [];
+  const hasMore = (data || []).length > pageSize;
+  const categories = (data || []).slice(0, pageSize);
+
+  return { categories, hasMore };
+}
+
+/**
+ * Search expense categories by name (ILIKE) and keywords.
+ * Returns up to `limit` results as [{ id, name }].
+ */
+async function searchCategories(query, limit = 5) {
+  const term = (query || '').trim().toLowerCase();
+  if (!term) return [];
+
+  // Search by name
+  const { data: byName, error: nameErr } = await supabase
+    .from('categories')
+    .select('id, name')
+    .eq('type', 'expense')
+    .ilike('name', `%${term}%`)
+    .limit(limit);
+
+  if (nameErr) {
+    console.error('[WhatsApp] categoriesRepo.searchCategories name error:', nameErr.message);
+  }
+
+  const results = byName || [];
+  const foundIds = new Set(results.map(r => r.id));
+
+  // Also search in keywords (fetch all and filter in JS since keywords is TEXT[])
+  if (results.length < limit) {
+    const { data: all, error: kwErr } = await supabase
+      .from('categories')
+      .select('id, name, keywords')
+      .eq('type', 'expense');
+
+    if (kwErr) {
+      console.error('[WhatsApp] categoriesRepo.searchCategories kw error:', kwErr.message);
+    } else {
+      for (const cat of (all || [])) {
+        if (foundIds.has(cat.id)) continue;
+        const kws = cat.keywords || [];
+        if (kws.some(kw => kw && kw.toLowerCase().includes(term))) {
+          results.push({ id: cat.id, name: cat.name });
+          if (results.length >= limit) break;
+        }
+      }
+    }
+  }
+
+  return results;
 }
 
 module.exports = {
   findCategoryByMerchant,
   findMerchantMapping,
   saveMerchantMapping,
-  getTopCategories,
+  getCategoriesPage,
+  searchCategories,
 };
