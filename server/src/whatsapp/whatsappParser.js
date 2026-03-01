@@ -51,4 +51,40 @@ function parseIncomingMessage(body) {
   }
 }
 
-module.exports = { parseIncomingMessage };
+function parseExpenseText(text) {
+  if (!text) return null;
+
+  const cleaned = String(text).trim().replace(/\s+/g, ' ');
+  // merchant + amount + tail (optional)
+  const m = cleaned.match(/^(.+?)\s+(\d+(?:\.\d{1,2})?)(?:\s+(.*))?$/);
+  if (!m) return null;
+
+  const merchant = m[1].trim();
+  const amount = Number(m[2]);
+  const tailRaw = (m[3] || '').trim();
+
+  if (!merchant || !Number.isFinite(amount) || amount <= 0) return null;
+
+  let paymentHint = null;
+
+  if (tailRaw) {
+    const tail = tailRaw.toLowerCase();
+
+    // cash keywords
+    if (/(^|\s)(מזומן|cash)(\s|$)/.test(tail)) {
+      paymentHint = { kind: 'cash' };
+    }
+
+    // card keywords + optional last4
+    const cardMatch = tail.match(/(^|\s)(כרטיס|אשראי|card)(?:\s+(\d{4}))?(\s|$)/);
+    if (cardMatch) {
+      const last4 = cardMatch[3] || null;
+      paymentHint = last4 ? { kind: 'card_last4', last4 } : { kind: 'card' };
+    }
+  }
+
+  return { merchant, amount, paymentHint };
+}
+
+
+module.exports = { parseIncomingMessage, parseExpenseText  };
