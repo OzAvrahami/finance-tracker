@@ -292,7 +292,7 @@ const Transactions = () => {
                 </td>
                 <td style={tdStyle}>
                     <div style={{fontWeight: '500'}}>{t.description}</div>
-                    {/* אם תרצה להוסיף פירוט תשלומים בעתיד */}
+                    {/* אם תרצה להוסיף פירוט תשלומים בעתיד  */}
                     {/* <div style={{fontSize: '0.75rem', color:'#999'}}>תשלום 2 מתוך 10</div> */}
                 </td>
                 <td style={tdStyle}>
