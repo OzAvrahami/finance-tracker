@@ -196,7 +196,7 @@ const AddTransaction = () => {
             <div style={rowStyle}>
               <div style={inputGroupStyle}>
                 <label style={labelStyle}>הערות</label>
-                <input type="text" name='notes' value={transaction.notes} onChange={handleTransactionChange} placeholder="למשל: 3/12 תשלומים" style={inputStyle} />
+                <input type="text" name='notes' value={transaction.notes} onChange={handleTransactionChange} placeholder="הוסף הערה" style={inputStyle} />
               </div>
             </div>
         </div>
