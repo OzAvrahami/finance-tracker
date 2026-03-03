@@ -20,6 +20,26 @@ exports.getListTypes = async (req, res) => {
 
 exports.getCatalogCategories = async (req, res) => {
   try {
+    const { list_type_id } = req.query;
+
+    if (list_type_id) {
+      // Filter via M2M table: only categories linked to this list type
+      const { data, error } = await supabase
+        .from('shopping_catalog_category_list_types')
+        .select('shopping_catalog_categories(id, name, icon, is_active)')
+        .eq('list_type_id', list_type_id);
+
+      if (error) throw error;
+
+      const categories = (data || [])
+        .map(row => row.shopping_catalog_categories)
+        .filter(cat => cat && cat.is_active)
+        .sort((a, b) => a.name.localeCompare(b.name, 'he'));
+
+      return res.json(categories);
+    }
+
+    // No filter — return all active categories
     const { data, error } = await supabase
       .from('shopping_catalog_categories')
       .select('*')
