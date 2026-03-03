@@ -40,7 +40,8 @@ exports.createTransaction = async (req, res) => {
         original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
         currency: transaction.currency || 'ILS',
         exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
-        installments_info: transaction.installments_info || null
+        installments_info: transaction.installments_info || null,
+        notes: transaction.notes || null
       }])
       .select();
 
@@ -278,7 +279,8 @@ exports.updateTransaction = async (req, res) => {
         original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
         currency: transaction.currency || 'ILS',
         exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
-        installments_info: transaction.installments_info || null
+        installments_info: transaction.installments_info || null,
+        notes: transaction.notes || null
       })
       .eq('id', id);
 

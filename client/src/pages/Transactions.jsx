@@ -277,6 +277,7 @@ const Transactions = () => {
               <th onClick={() => handleSort('description')} style={thStyle}>תיאור <ArrowUpDown size={14} /></th>
               <th style={thStyle}>אמצעי תשלום</th>
               <th onClick={() => handleSort('total_amount')} style={thStyle}>סכום <ArrowUpDown size={14} /></th>
+              <th style={thStyle}>הערות</th>
               <th style={thStyle}>פעולות</th>
             </tr>
           </thead>
@@ -299,6 +300,9 @@ const Transactions = () => {
                 </td>
                 <td style={{ ...tdStyle, fontWeight: 'bold', color: t.movement_type === 'income' ? '#2ecc71' : '#e74c3c' }}>
                   ₪{Number(t.total_amount).toLocaleString()}
+                </td>
+                <td style={tdStyle}>
+                  {t.notses}
                 </td>
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', gap: '8px' }}>

@@ -65,7 +65,8 @@ exports.previewImport = async (req, res) => {
             currency: mapping.currency ? row[mapping.currency] : 'ILS',
             exchange_rate: mapping.exchangeRate ? row[mapping.exchangeRate] : null,
             installments_info: mapping.installments ? row[mapping.installments] : null,
-            suggested_category: suggestedCategory
+            suggested_category: suggestedCategory,
+            notes: null
         };
       });
 
@@ -111,6 +112,7 @@ exports.saveImport = async (req, res) => {
       currency: t.currency,
       exchange_rate: t.exchange_rate === '' ? null : t.exchange_rate,
       installments_info: t.installments_info,
+      notes: t.notes,
 
       created_at: new Date()
     }));

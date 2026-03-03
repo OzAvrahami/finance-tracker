@@ -220,6 +220,9 @@ const Import = () => {
                       />
                     </td>
                     <td style={tdStyle}>
+                      {row.notes}
+                    </td>
+                    <td style={tdStyle}>
                       <button onClick={() => handleDeleteRow(row.id)} style={{ color: 'red', cursor: 'pointer'}}>
                         🗑️ מחק
                       </button>

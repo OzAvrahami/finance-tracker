@@ -37,7 +37,8 @@ const useTransactionForm = () => {
     original_amount: '',
     currency: 'ILS',
     exchange_rate: '',
-    installments_info: ''
+    installments_info: '',
+    notes: ''
   });
 
   // Load Initial Data
@@ -95,7 +96,8 @@ const useTransactionForm = () => {
             original_amount: data.original_amount || '',
             currency: data.currency || 'ILS',
             exchange_rate: data.exchange_rate || '',
-            installments_info: data.installments_info || ''
+            installments_info: data.installments_info || '',
+            notes: data.notes || ''
           });
 
           if (data.transaction_items?.length > 0) {
@@ -249,7 +251,8 @@ const useTransactionForm = () => {
         original_amount: '',
         currency: 'ILS',
         exchange_rate: '',
-        installments_info: ''
+        installments_info: '',
+        notes: '',
       });
       setItems([]);
 

@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   total_amount NUMERIC NOT NULL DEFAULT 0,
   global_discount NUMERIC DEFAULT 0,
   tags TEXT,
+  notes TEXT DEFAULT NULL,
   original_amount NUMERIC DEFAULT NULL,
   currency TEXT DEFAULT 'ILS',
   installments_info TEXT DEFAULT NULL,

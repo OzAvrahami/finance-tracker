@@ -191,6 +191,14 @@ const AddTransaction = () => {
                     </>
                 )}
             </div>
+
+            {/* שדה הערות */}
+            <div style={rowStyle}>
+              <div style={inputGroupStyle}>
+                <label style={labelStyle}>הערות</label>
+                <input type="text" name='notes' value={transaction.notes} onChange={handleTransactionChange} placeholder="למשל: 3/12 תשלומים" style={inputStyle} />
+              </div>
+            </div>
         </div>
 
         <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
