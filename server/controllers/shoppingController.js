@@ -274,7 +274,7 @@ exports.addListItem = async (req, res) => {
 
         if (createErr) {
           console.error('Failed to create catalog item:', createErr);
-        } else {
+        } else if (newItem) {
           resolvedCatalogItemId = newItem.id;
         }
       }
