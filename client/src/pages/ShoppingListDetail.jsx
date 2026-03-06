@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronRight, Plus, X, Check, Trash2, ShoppingBag, Package } from 'lucide-react';
 import {
   getShoppingListById, updateShoppingList,
-  getShoppingCatalogCategories, getShoppingCatalogItems,
+  getShoppingCatalogCategories, getShoppingCatalogItems, createShoppingCatalogCategory,
   addShoppingListItem, removeShoppingListItem, toggleShoppingItemPurchased,
   checkoutShoppingList, getPaymentSources, getCategories,
 } from '../services/api';
@@ -22,6 +22,8 @@ const ShoppingListDetail = ({ listId, onBack }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [isCustomItem, setIsCustomItem] = useState(false);
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   // Add item form state
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
@@ -112,6 +114,23 @@ const ShoppingListDetail = ({ listId, onBack }) => {
     });
     return groups;
   }, [list]);
+
+  const handleSaveNewCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    try {
+      const res = await createShoppingCatalogCategory({
+        name: newCategoryName,
+        list_type_id: list?.list_type_id || null,
+      });
+      setCatalogCategories(prev => [...prev, res.data]);
+      setSelectedCategoryId(String(res.data.id));
+      setNewCategoryName('');
+      setShowNewCategoryModal(false);
+    } catch (error) {
+      console.error('Error creating category:', error);
+      alert('שגיאה ביצירת קטגוריה');
+    }
+  };
 
   const handleAddItem = async () => {
     if (!isCustomItem && !selectedCatalogItemId) return alert('נא לבחור פריט מהקטלוג');
@@ -279,13 +298,21 @@ const ShoppingListDetail = ({ listId, onBack }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {/* Category */}
                 <div>
-                  <label style={formLabelStyle}>קטגוריה</label>
-                  <select value={selectedCategoryId} onChange={e => setSelectedCategoryId(e.target.value)} style={formInputStyle}>
-                    <option value="">בחר קטגוריה...</option>
-                    {catalogCategories.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  <label style={formLabelStyle}>קטגוריה *</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select value={selectedCategoryId} onChange={e => setSelectedCategoryId(e.target.value)} style={{ ...formInputStyle, flex: 1 }}>
+                      <option value="">בחר קטגוריה...</option>
+                      {catalogCategories.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewCategoryModal(true)}
+                      title="קטגוריה חדשה"
+                      style={{ padding: '0 10px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', cursor: 'pointer', fontWeight: 700, fontSize: 18, color: '#2563EB', flexShrink: 0 }}
+                    >+</button>
+                  </div>
                 </div>
 
                 {/* Item selection */}
@@ -412,6 +439,33 @@ const ShoppingListDetail = ({ listId, onBack }) => {
         <div style={{ textAlign: 'center', padding: 48, color: '#94A3B8', border: '2px dashed #E2E8F0', borderRadius: 12 }}>
           <ShoppingBag size={36} style={{ marginBottom: 8 }} />
           <p>הרשימה ריקה. הוסף פריטים כדי להתחיל.</p>
+        </div>
+      )}
+
+      {/* New Category Modal */}
+      {showNewCategoryModal && (
+        <div style={overlayStyle}>
+          <div style={{ ...modalStyle, width: 340 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1E293B' }}>קטגוריה חדשה</h3>
+              <button onClick={() => setShowNewCategoryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <label style={formLabelStyle}>שם הקטגוריה</label>
+            <input
+              value={newCategoryName}
+              onChange={e => setNewCategoryName(e.target.value)}
+              placeholder="למשל: מוצרי ניקוי"
+              style={{ ...formInputStyle, marginBottom: 20 }}
+              autoFocus
+              onKeyDown={e => e.key === 'Enter' && handleSaveNewCategory()}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowNewCategoryModal(false)} style={{ padding: '8px 16px', border: '1px solid #E2E8F0', borderRadius: 8, background: 'white', cursor: 'pointer', color: '#475569' }}>ביטול</button>
+              <button onClick={handleSaveNewCategory} style={{ padding: '8px 16px', border: 'none', borderRadius: 8, background: '#2563EB', cursor: 'pointer', color: 'white', fontWeight: 600 }}>שמור</button>
+            </div>
+          </div>
         </div>
       )}
 

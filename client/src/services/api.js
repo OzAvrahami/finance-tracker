@@ -68,6 +68,7 @@ export const deleteBudget = (id) => api.delete(`/budgets/${id}`);
 // Shopping Lists
 export const getShoppingListTypes = () => api.get('/shopping/list-types');
 export const getShoppingCatalogCategories = (listTypeId) => api.get('/shopping/catalog-categories', { params: listTypeId ? { list_type_id: listTypeId } : {} });
+export const createShoppingCatalogCategory = (data) => api.post('/shopping/catalog-categories', data);
 export const getShoppingCatalogItems = (params) => api.get('/shopping/catalog-items', { params });
 export const getShoppingLists = (status) => api.get('/shopping/lists', { params: status ? { status } : {} });
 export const getShoppingListById = (id) => api.get(`/shopping/lists/${id}`);

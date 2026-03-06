@@ -5,6 +5,7 @@ const shoppingController = require('../controllers/shoppingController');
 // Reference data
 router.get('/list-types', shoppingController.getListTypes);
 router.get('/catalog-categories', shoppingController.getCatalogCategories);
+router.post('/catalog-categories', shoppingController.createCatalogCategory);
 router.get('/catalog-items', shoppingController.getCatalogItems);
 
 // Shopping lists CRUD

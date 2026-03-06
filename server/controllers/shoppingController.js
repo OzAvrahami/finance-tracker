@@ -54,6 +54,38 @@ exports.getCatalogCategories = async (req, res) => {
   }
 };
 
+exports.createCatalogCategory = async (req, res) => {
+  try {
+    const { name, icon, list_type_id } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    const { data: newCategory, error } = await supabase
+      .from('shopping_catalog_categories')
+      .insert([{ name: name.trim(), icon: icon || null, is_active: true }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Link the new category to the list type if provided
+    if (list_type_id) {
+      const { error: linkErr } = await supabase
+        .from('shopping_catalog_category_list_types')
+        .insert([{ category_id: newCategory.id, list_type_id }]);
+
+      if (linkErr) console.error('Failed to link category to list type:', linkErr);
+    }
+
+    res.status(201).json(newCategory);
+  } catch (error) {
+    console.error('createCatalogCategory Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getCatalogItems = async (req, res) => {
   try {
     const { category_id, search } = req.query;
@@ -205,14 +237,54 @@ exports.addListItem = async (req, res) => {
       return res.status(400).json({ error: 'catalog_item_id or custom_name is required' });
     }
 
+    if (!category_id) {
+      return res.status(400).json({ error: 'category_id is required' });
+    }
+
+    let resolvedCatalogItemId = catalog_item_id || null;
     let itemUnit = unit;
     let itemPrice = price;
 
-    if (catalog_item_id && (!unit || !price)) {
+    // If no catalog_item_id but a custom_name was given, look up or create the catalog item
+    if (!catalog_item_id && custom_name) {
+      const { data: existingItem } = await supabase
+        .from('shopping_catalog_items')
+        .select('id, default_unit, default_price')
+        .ilike('name', custom_name.trim())
+        .eq('category_id', category_id)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingItem) {
+        resolvedCatalogItemId = existingItem.id;
+        if (!itemUnit) itemUnit = existingItem.default_unit;
+        if (!itemPrice && itemPrice !== 0) itemPrice = existingItem.default_price;
+      } else {
+        const { data: newItem, error: createErr } = await supabase
+          .from('shopping_catalog_items')
+          .insert([{
+            name: custom_name.trim(),
+            category_id,
+            default_unit: unit || null,
+            default_price: price || null,
+            is_active: true,
+          }])
+          .select()
+          .single();
+
+        if (createErr) {
+          console.error('Failed to create catalog item:', createErr);
+        } else {
+          resolvedCatalogItemId = newItem.id;
+        }
+      }
+    }
+
+    if (resolvedCatalogItemId && (!itemUnit || !itemPrice)) {
       const { data: catalogItem } = await supabase
         .from('shopping_catalog_items')
         .select('default_unit, default_price')
-        .eq('id', catalog_item_id)
+        .eq('id', resolvedCatalogItemId)
         .single();
 
       if (catalogItem) {
@@ -225,7 +297,7 @@ exports.addListItem = async (req, res) => {
       .from('shopping_list_items')
       .insert([{
         list_id: id,
-        catalog_item_id: catalog_item_id || null,
+        catalog_item_id: resolvedCatalogItemId,
         custom_name: custom_name || null,
         category_id,
         quantity: quantity || 1,
