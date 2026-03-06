@@ -298,7 +298,7 @@ exports.addListItem = async (req, res) => {
       .insert([{
         list_id: id,
         catalog_item_id: resolvedCatalogItemId,
-        custom_name: custom_name || null,
+        custom_name: resolvedCatalogItemId ? null : (custom_name || null),
         category_id,
         quantity: quantity || 1,
         unit: itemUnit || null,
