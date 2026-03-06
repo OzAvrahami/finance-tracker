@@ -247,13 +247,13 @@ exports.addListItem = async (req, res) => {
 
     // If no catalog_item_id but a custom_name was given, look up or create the catalog item
     if (!catalog_item_id && custom_name) {
-      const { data: existingItem } = await supabase
+      const { data: foundItems } = await supabase
         .from('shopping_catalog_items')
         .select('id, default_unit, default_price')
         .ilike('name', custom_name.trim())
         .eq('category_id', category_id)
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      const existingItem = foundItems?.[0] || null;
 
       if (existingItem) {
         resolvedCatalogItemId = existingItem.id;
