@@ -15,7 +15,13 @@ const Transactions = () => {
   // --- State פילטרים ומיון ---
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const fmt = (d) => d.toISOString().split('T')[0];
+    return { start: fmt(start), end: fmt(end) };
+  });
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', direction: 'desc' });
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
 
