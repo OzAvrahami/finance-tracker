@@ -1,0 +1,18 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Feature request
+    url: https://github.com/YOUR-USER/YOUR-REPO/issues/new?template=feature.md
+    about: Suggest a new feature
+
+  - name: Bug report
+    url: https://github.com/YOUR-USER/YOUR-REPO/issues/new?template=bug.md
+    about: Report a bug
+
+  - name: UI improvement
+    url: https://github.com/YOUR-USER/YOUR-REPO/issues/new?template=ui.md
+    about: UI or layout fixes
+
+  - name: Database change
+    url: https://github.com/YOUR-USER/YOUR-REPO/issues/new?template=db-change.md
+    about: Request a database schema update
