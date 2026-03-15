@@ -1,5 +1,6 @@
 import React from 'react';
 import { inputStyle, itemCardStyle, badgeStyle, gridRowStyle, deleteBtnStyle } from '../pages/AddTransaction.styles';
+import { BRAND_OPTIONS } from '../utils/legoHelpers';
 
 const ItemCard = ({ item, index, isLego, legoThemes, onItemChange, onRemove, onSetNumberBlur }) => {
   return (
@@ -41,6 +42,16 @@ const ItemCard = ({ item, index, isLego, legoThemes, onItemChange, onRemove, onS
                 <option key={i} value={t} />
               ))}
             </datalist>
+
+            <select
+              value={item.brand || 'LEGO'}
+              onChange={(e) => onItemChange(index, 'brand', e.target.value)}
+              style={inputStyle}
+            >
+              {BRAND_OPTIONS.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
           </>
         )}
 

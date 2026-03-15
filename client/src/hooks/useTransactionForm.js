@@ -193,7 +193,7 @@ const useTransactionForm = () => {
     setItems(newItems);
   };
 
-  const addItem = () => setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', tags: '', discount_type: 'amount', discount_value: 0 }]);
+  const addItem = () => setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', tags: '', discount_type: 'amount', discount_value: 0 }]);
 
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
 

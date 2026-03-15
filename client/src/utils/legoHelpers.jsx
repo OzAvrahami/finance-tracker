@@ -21,3 +21,5 @@ export const STATUS_OPTIONS = [
   { key: 'In Progress', label: 'בבנייה' },
   { key: 'Built', label: 'בנוי' },
 ];
+
+export const BRAND_OPTIONS = ['LEGO', 'CaDA', 'Mould King', 'Cobi', 'Other'];

@@ -86,7 +86,8 @@ exports.createTransaction = async (req, res) => {
             original_price: originalPrice,  // MSRP / Base price
             purchase_date: transaction.transaction_date,
             status: 'New',
-            transaction_id: transaction.id
+            transaction_id: transaction.id,
+            brand: item.brand || 'LEGO'
           }]);
           
           if (error) console.error(`Error inserting lego set ${item.set_number}:`, error.message);

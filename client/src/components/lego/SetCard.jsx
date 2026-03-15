@@ -1,6 +1,7 @@
 import React from 'react';
+import { BRAND_OPTIONS } from '../../utils/legoHelpers';
 
-const SetCard = ({ set, onStatusChange }) => {
+const SetCard = ({ set, onStatusChange, onBrandChange }) => {
   const orig = Number(set.original_price) || 0;
   const paid = Number(set.purchase_price) || 0;
   const discountPercent = orig > paid ? Math.round(((orig - paid) / orig) * 100) : 0;
@@ -27,7 +28,10 @@ const SetCard = ({ set, onStatusChange }) => {
       <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px' }}>
           <span style={setNumberBadge}>#{set.set_number}</span>
-          {set.theme && <span style={themeBadge}>{set.theme}</span>}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {set.theme && <span style={themeBadge}>{set.theme}</span>}
+            {set.brand && set.brand !== 'LEGO' && <span style={brandBadge}>{set.brand}</span>}
+          </div>
         </div>
 
         <h3 style={{ margin: '0 0 15px 0', fontSize: '1.1rem', height: '45px', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.3' }}>
@@ -52,7 +56,7 @@ const SetCard = ({ set, onStatusChange }) => {
           {discountPercent > 0 && <div style={dealBadge}>🔥 חסכת {discountPercent}%</div>}
         </div>
 
-        <div style={{ marginTop: 'auto' }}>
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <select
             value={set.status}
             onChange={(e) => onStatusChange(set.id, e.target.value)}
@@ -70,6 +74,25 @@ const SetCard = ({ set, onStatusChange }) => {
             <option value="New">📦 חדש בקופסה</option>
             <option value="In Progress">🚧 בתהליך בנייה</option>
             <option value="Built">✅ מורכב ומוצג</option>
+          </select>
+
+          <select
+            value={set.brand || 'LEGO'}
+            onChange={(e) => onBrandChange(set.id, e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              borderRadius: '8px',
+              border: '1px solid #eee',
+              background: '#fafafa',
+              color: '#333',
+              cursor: 'pointer',
+              fontWeight: '500',
+            }}
+          >
+            {BRAND_OPTIONS.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -118,6 +141,15 @@ const setNumberBadge = {
 const themeBadge = {
   background: '#fff0f6',
   color: '#c026d3',
+  padding: '4px 8px',
+  borderRadius: '6px',
+  fontSize: '0.8rem',
+  fontWeight: '600',
+};
+
+const brandBadge = {
+  background: '#fffbeb',
+  color: '#d97706',
   padding: '4px 8px',
   borderRadius: '6px',
   fontSize: '0.8rem',

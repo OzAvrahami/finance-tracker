@@ -32,6 +32,15 @@ const LegoCollection = () => {
     }
   };
 
+  const handleBrandChange = async (id, newBrand) => {
+    try {
+      await updateLegoSet(id, { brand: newBrand });
+      loadSets();
+    } catch (error) {
+      alert('Error updating brand');
+    }
+  };
+
   const stats = useMemo(() => calculateStats(sets), [sets]);
 
   const filteredSets = filterStatus === 'All'
@@ -54,7 +63,7 @@ const LegoCollection = () => {
       {filteredSets.length > 0 ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '25px' }}>
           {filteredSets.map(set => (
-            <SetCard key={set.id} set={set} onStatusChange={handleStatusChange} />
+            <SetCard key={set.id} set={set} onStatusChange={handleStatusChange} onBrandChange={handleBrandChange} />
           ))}
         </div>
       ) : (
