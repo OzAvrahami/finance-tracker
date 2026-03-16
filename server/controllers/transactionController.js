@@ -1,6 +1,21 @@
 const supabase = require('../config/supabase');
 const axios = require('axios');
 
+// Advances a YYYY-MM-DD date string by N months, clamping to the last valid day of the target month.
+// e.g. Jan 31 + 1 month → Feb 28 (not Feb 31)
+const advanceMonthClamped = (dateStr, months) => {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDate();
+  const rawMonth = d.getMonth() + months;
+  const targetYear = d.getFullYear() + Math.floor(rawMonth / 12);
+  const targetMonth = ((rawMonth % 12) + 12) % 12;
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const clampedDay = Math.min(day, lastDay);
+  const mm = String(targetMonth + 1).padStart(2, '0');
+  const dd = String(clampedDay).padStart(2, '0');
+  return `${targetYear}-${mm}-${dd}`;
+};
+
 // Helper function to calculate price after discount
 const calculateFinalPrice = (price, type, value) => {
   const basePrice = Number(price) || 0;
@@ -22,7 +37,13 @@ const calculateFinalPrice = (price, type, value) => {
 exports.createTransaction = async (req, res) => {
   try {
     const { transaction, items } = req.body;
-    
+
+    const installmentCount = Math.max(1, parseInt(transaction.installment_count) || 1);
+    const fullAmount = Number(transaction.total_amount);
+    const perAmount = installmentCount > 1
+      ? Math.round((fullAmount / installmentCount) * 100) / 100
+      : fullAmount;
+
     // 1. Insert Main Transaction
     const { data: transData, error: transError } = await supabase
       .from('transactions')
@@ -30,7 +51,7 @@ exports.createTransaction = async (req, res) => {
         description: transaction.description,
         movement_type: transaction.movement_type,
         category_id: transaction.category_id,
-        total_amount: transaction.total_amount,
+        total_amount: perAmount,
         global_discount: Number(transaction.global_discount) || 0,
         payment_source_id: transaction.payment_source_id || null,
         transaction_date: transaction.transaction_date,
@@ -40,7 +61,10 @@ exports.createTransaction = async (req, res) => {
         original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
         currency: transaction.currency || 'ILS',
         exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
-        installments_info: transaction.installments_info || null,
+        installments_info: installmentCount > 1 ? `1/${installmentCount}` : (transaction.installments_info || null),
+        installment_number: installmentCount > 1 ? 1 : null,
+        installment_count: installmentCount > 1 ? installmentCount : null,
+        parent_transaction_id: null,
         notes: transaction.notes || null
       }])
       .select();
@@ -155,7 +179,43 @@ exports.createTransaction = async (req, res) => {
         }
     }
 
-    res.status(201).json({ message: 'Transaction saved successfully', id: transData.id });
+    // 5. Auto-create remaining installments
+    if (installmentCount > 1) {
+      const siblings = [];
+      for (let i = 1; i < installmentCount; i++) {
+        const isLast = i === installmentCount - 1;
+        const siblingAmount = isLast
+          ? Math.round((fullAmount - perAmount * (installmentCount - 1)) * 100) / 100
+          : perAmount;
+
+        siblings.push({
+          description: transaction.description,
+          movement_type: transaction.movement_type,
+          category_id: transaction.category_id,
+          total_amount: siblingAmount,
+          global_discount: 0,
+          payment_source_id: transaction.payment_source_id || null,
+          transaction_date: advanceMonthClamped(transaction.transaction_date, i),
+          charge_date: advanceMonthClamped(transaction.charge_date || transaction.transaction_date, i),
+          tags: transaction.tags,
+          loan_id: transaction.loan_id || null,
+          currency: transaction.currency || 'ILS',
+          installments_info: `${i + 1}/${installmentCount}`,
+          installment_number: i + 1,
+          installment_count: installmentCount,
+          parent_transaction_id: transactionId,
+          notes: transaction.notes || null,
+        });
+      }
+
+      const { error: siblingsError } = await supabase
+        .from('transactions')
+        .insert(siblings);
+
+      if (siblingsError) throw siblingsError;
+    }
+
+    res.status(201).json({ message: 'Transaction saved successfully', id: transactionId });
 
   } catch (error) {
     console.error("Create Transaction Error:", error);

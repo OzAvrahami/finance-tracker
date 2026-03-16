@@ -161,10 +161,29 @@ const AddTransaction = () => {
                     <label style={labelStyle}>תאריך חיוב</label>
                     <input type="date" name="charge_date" value={transaction.charge_date} onChange={handleTransactionChange} style={inputStyle} />
                 </div>
-                <div style={inputGroupStyle}>
-                    <label style={labelStyle}>תשלומים</label>
-                    <input type="text" name="installments_info" value={transaction.installments_info} onChange={handleTransactionChange} placeholder="למשל: 3/12 תשלומים" style={inputStyle} />
-                </div>
+                {!isEditMode ? (
+                    <div style={inputGroupStyle}>
+                        <label style={labelStyle}>מספר תשלומים</label>
+                        <input
+                            type="number"
+                            name="installment_count"
+                            value={transaction.installment_count}
+                            onChange={handleTransactionChange}
+                            min="1"
+                            style={inputStyle}
+                        />
+                        {transaction.installment_count > 1 && transaction.total_amount > 0 && (
+                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                                ₪{Math.round(transaction.total_amount / transaction.installment_count * 100) / 100} לתשלום
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div style={inputGroupStyle}>
+                        <label style={labelStyle}>תשלומים</label>
+                        <input type="text" name="installments_info" value={transaction.installments_info} onChange={handleTransactionChange} placeholder="למשל: 3/12 תשלומים" style={inputStyle} />
+                    </div>
+                )}
             </div>
 
             {/* מטבע חוץ */}

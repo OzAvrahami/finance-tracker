@@ -38,6 +38,7 @@ const useTransactionForm = () => {
     currency: 'ILS',
     exchange_rate: '',
     installments_info: '',
+    installment_count: 1,
     notes: ''
   });
 
@@ -97,6 +98,7 @@ const useTransactionForm = () => {
             currency: data.currency || 'ILS',
             exchange_rate: data.exchange_rate || '',
             installments_info: data.installments_info || '',
+            installment_count: 1,
             notes: data.notes || ''
           });
 
@@ -224,6 +226,7 @@ const useTransactionForm = () => {
             category_id: transaction.category_id ? parseInt(transaction.category_id) : null,
             loan_id: transaction.loan_id ? parseInt(transaction.loan_id) : null,
             payment_source_id: transaction.payment_source_id ? parseInt(transaction.payment_source_id) : null,
+            installment_count: parseInt(transaction.installment_count) || 1,
         },
         items
       };
@@ -252,6 +255,7 @@ const useTransactionForm = () => {
         currency: 'ILS',
         exchange_rate: '',
         installments_info: '',
+        installment_count: 1,
         notes: '',
       });
       setItems([]);
