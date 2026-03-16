@@ -114,6 +114,7 @@ const AddLoanModal = ({ onClose, onSuccess }) => {
         monthly_payment: '',
         interest_rate: '',
         total_installments: '',
+        start_date: '',
         end_date: ''
     });
   
@@ -165,7 +166,8 @@ const AddLoanModal = ({ onClose, onSuccess }) => {
                 prime_margin: formData.interest_type === 'prime' ? primeMargin : 0,
                 interest_rate: calculatedInterest,
                 
-                end_date: formData.end_date || null 
+                start_date: formData.start_date || null,
+                end_date: formData.end_date || null
             };
             
             await createLoan(payload);
@@ -321,7 +323,14 @@ return (
               <label style={{ fontSize: '14px', fontWeight: '600' }}>סה"כ תשלומים</label>
               <input type="number" name="total_installments" onChange={handleChange} style={inputStyle} />
             </div>
-            
+
+            <div>
+               <label style={{ fontSize: '14px', fontWeight: '600' }}>תאריך התחלה</label>
+               <input type="date" name="start_date" onChange={handleChange} style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={gridStyle}>
             <div>
                <label style={{ fontSize: '14px', fontWeight: '600' }}>תאריך סיום</label>
                <input type="date" name="end_date" onChange={handleChange} style={inputStyle} />

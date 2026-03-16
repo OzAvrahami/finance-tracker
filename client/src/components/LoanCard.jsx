@@ -67,6 +67,13 @@ const LoanCard = ({ loan }) => {
             <span style={statValueStyle}>{loan.end_date || '-'}</span>
           </div>
         </div>
+
+        <div style={{ ...statsRowStyle, marginTop: 0, paddingTop: '10px' }}>
+          <div>
+            <span style={statLabelStyle}>תאריך התחלה</span>
+            <span style={statValueStyle}>{loan.start_date || '-'}</span>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -36,3 +36,7 @@ thumbs.db
 **/LICENSE
 **/LICENSE.txt
 **/LICENSE.md
+
+# files
+.gitignore
+CLAUDE.md
