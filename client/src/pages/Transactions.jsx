@@ -308,7 +308,7 @@ const Transactions = () => {
                   ₪{Number(t.total_amount).toLocaleString()}
                 </td>
                 <td style={tdStyle}>
-                  {t.notese}
+                  {t.notes}
                 </td>
                 <td style={tdStyle}>
                   <div style={{ display: 'flex', gap: '8px' }}>
