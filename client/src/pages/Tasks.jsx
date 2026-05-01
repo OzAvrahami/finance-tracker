@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { CheckSquare, Plus, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { getTasks, deleteTask, updateTask } from '../services/api';
 import TaskModal from '../components/TaskModal';
+import { PRIORITY_LABELS, PRIORITY_COLORS, isOverdue } from '../utils/taskHelpers';
 
 // --- Label & color maps (English slug → Hebrew display) ---
 
@@ -19,20 +20,6 @@ export const STATUS_COLORS = {
   waiting:     { bg: '#FEF9C3', color: '#B45309', border: '#FDE68A' },
   done:        { bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' },
   cancelled:   { bg: '#F3F4F6', color: '#9CA3AF', border: '#E5E7EB' },
-};
-
-export const PRIORITY_LABELS = {
-  low:    'נמוך',
-  medium: 'בינוני',
-  high:   'גבוה',
-  urgent: 'דחוף',
-};
-
-export const PRIORITY_COLORS = {
-  low:    { bg: '#F9FAFB', color: '#6B7280' },
-  medium: { bg: '#EFF6FF', color: '#3B82F6' },
-  high:   { bg: '#FFF7ED', color: '#EA580C' },
-  urgent: { bg: '#FEF2F2', color: '#DC2626' },
 };
 
 export const CATEGORY_LABELS = {
@@ -74,12 +61,6 @@ const CATEGORY_OPTIONS = [
 // --- Date helpers ---
 
 const todayStr = () => new Date().toISOString().split('T')[0];
-
-export const isOverdue = (task) => {
-  if (!task.due_date) return false;
-  if (task.status === 'done' || task.status === 'cancelled') return false;
-  return task.due_date < todayStr();
-};
 
 const isDueToday = (task) => {
   if (!task.due_date || task.status === 'done' || task.status === 'cancelled') return false;

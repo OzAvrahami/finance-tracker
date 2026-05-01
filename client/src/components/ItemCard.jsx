@@ -1,5 +1,5 @@
 import React from 'react';
-import { inputStyle, itemCardStyle, badgeStyle, gridRowStyle, deleteBtnStyle } from '../pages/AddTransaction.styles';
+import { inputStyle, itemCardStyle, badgeStyle, gridRowStyle, deleteBtnStyle } from './transactions/AddTransaction.styles';
 import { BRAND_OPTIONS } from '../utils/legoHelpers';
 
 const ItemCard = ({ item, index, isLego, legoThemes, onItemChange, onRemove, onSetNumberBlur }) => {

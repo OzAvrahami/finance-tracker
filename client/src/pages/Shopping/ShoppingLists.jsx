@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, ShoppingCart, Trash2 } from 'lucide-react';
-import { getShoppingLists, getShoppingListTypes, createShoppingList, deleteShoppingList } from '../services/api';
+import { getShoppingLists, getShoppingListTypes, createShoppingList, deleteShoppingList } from '../../services/api';
 import ShoppingListDetail from './ShoppingListDetail';
 
 const STATUS_CONFIG = {

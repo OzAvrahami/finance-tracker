@@ -1,5 +1,5 @@
 import React from 'react';
-import { inputStyle, modalOverlayStyle, modalContentStyle, cancelBtnStyle, saveModalBtnStyle } from '../pages/AddTransaction.styles';
+import { inputStyle, modalOverlayStyle, modalContentStyle, cancelBtnStyle, saveModalBtnStyle } from './transactions/AddTransaction.styles';
 
 const NewCategoryModal = ({ show, newCategoryName, setNewCategoryName, onSave, onClose }) => {
   if (!show) return null;

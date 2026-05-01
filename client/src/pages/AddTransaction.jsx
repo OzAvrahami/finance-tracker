@@ -5,7 +5,7 @@ import useTransactionForm from '../hooks/useTransactionForm';
 import CategoryCombobox from '../components/CategoryCombobox';
 import NewCategoryModal from '../components/NewCategoryModal';
 import ItemCard from '../components/ItemCard';
-import { sectionStyle, rowStyle, inputGroupStyle, labelStyle, inputStyle, addBtnStyle, footerStyle, submitBtnStyle } from './AddTransaction.styles';
+import { sectionStyle, rowStyle, inputGroupStyle, labelStyle, inputStyle, addBtnStyle, footerStyle, submitBtnStyle } from '../components/transactions/AddTransaction.styles';
 
 const AddTransaction = () => {
   const {

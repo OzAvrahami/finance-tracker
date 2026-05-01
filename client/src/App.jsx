@@ -7,7 +7,7 @@ import AddTransaction from './pages/AddTransaction';
 import LegoCollection from './pages/LegoCollection';
 import Loans from './pages/Loans';
 import Budget from './pages/Budget';
-import ShoppingLists from './pages/ShoppingLists';
+import ShoppingLists from './pages/Shopping';
 import Tasks from './pages/Tasks';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';

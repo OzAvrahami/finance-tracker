@@ -5,7 +5,7 @@ import {
   getShoppingCatalogCategories, getShoppingCatalogItems, createShoppingCatalogCategory,
   addShoppingListItem, removeShoppingListItem, toggleShoppingItemPurchased,
   checkoutShoppingList, getPaymentSources, getCategories,
-} from '../services/api';
+} from '../../services/api';
 
 const STATUS_CONFIG = {
   draft:       { bg: '#F1F5F9', text: '#64748B', label: 'טיוטה' },

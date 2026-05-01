@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { inputStyle, categoryDropdownStyle, categoryOptionStyle } from '../pages/AddTransaction.styles';
+import { inputStyle, categoryDropdownStyle, categoryOptionStyle } from './transactions/AddTransaction.styles';
 
 const CategoryCombobox = ({ categories, selectedCategoryId, onSelect, onOpenNewModal }) => {
   const [search, setSearch] = useState('');
