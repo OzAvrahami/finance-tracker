@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
-import { getAllLoans, createLoan } from '../services/api';
-import LoansDashboard from '../components/LoanDashboard';
-import LoanSimulator from '../components/LoanSimulator';
-import LoanCard from '../components/LoanCard';
+import { getAllLoans, createLoan } from '../../services/api';
+import LoansDashboard from '../../components/LoanDashboard';
+import LoanSimulator from '../../components/LoanSimulator';
+import LoanCard from '../../components/LoanCard';
 
 const Loans = () => {
   const [loans, setLoans] = useState([]);

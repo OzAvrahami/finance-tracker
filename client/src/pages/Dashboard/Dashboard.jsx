@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getTransactions, getAllLoans, getBudgetsByMonth, getCategories, getTasks } from '../services/api';
-import { isOverdue, PRIORITY_LABELS, PRIORITY_COLORS } from '../utils/taskHelpers';
+import { getTransactions, getAllLoans, getBudgetsByMonth, getCategories, getTasks } from '../../services/api';
+import { isOverdue, PRIORITY_LABELS, PRIORITY_COLORS } from '../../utils/taskHelpers';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react';
-import { calculateSummaryStats, filterTransactionsByMonth, prepareMonthlyChartData } from '../utils/dashboardHelpers';
+import { calculateSummaryStats, filterTransactionsByMonth, prepareMonthlyChartData } from '../../utils/dashboardHelpers';
 
 const Dashboard = () => {
   const [transactions, setTransactions] = useState([]);

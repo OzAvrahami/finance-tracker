@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Pencil, Trash2, Copy, Plus, TrendingDown, TrendingUp, AlertTriangle } from 'lucide-react';
-import { getBudgetsByMonth, upsertBudget, copyBudget, deleteBudget, getCategories } from '../services/api';
+import { getBudgetsByMonth, upsertBudget, copyBudget, deleteBudget, getCategories } from '../../services/api';
 
 const Budget = () => {
   const currentMonth = new Date().toISOString().slice(0, 7); // '2026-02'

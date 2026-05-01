@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { uploadImportFile, getCategories, getPaymentSources, saveImportedTransactions, createCategory } from '../services/api';
+import { uploadImportFile, getCategories, getPaymentSources, saveImportedTransactions, createCategory } from '../../services/api';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
-import CategoryCombobox from '../components/CategoryCombobox';
+import CategoryCombobox from '../../components/CategoryCombobox';
 
 const Import = () => {
   const [file, setFile] = useState(null);

@@ -4,7 +4,7 @@ import {
   Search, Filter, Download, Edit, Trash2, 
   ArrowUpDown, Calendar, ChevronDown, PlusCircle 
 } from 'lucide-react';
-import { getTransactions, deleteTransaction, getCategories } from '../services/api'; // וודא שהנתיב נכון
+import { getTransactions, deleteTransaction, getCategories } from '../../services/api';
 
 const Transactions = () => {
   // --- State ניהול נתונים ---

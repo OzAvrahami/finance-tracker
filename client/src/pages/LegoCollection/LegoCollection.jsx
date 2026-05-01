@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getLegoSets, updateLegoSet } from '../services/api';
-import { sortBySetNumber, calculateStats } from '../utils/legoHelpers';
-import StatsDashboard from '../components/lego/StatsDashboard';
-import CollectionFilters from '../components/lego/CollectionFilters';
-import SetCard from '../components/lego/SetCard';
+import { getLegoSets, updateLegoSet } from '../../services/api';
+import { sortBySetNumber, calculateStats } from '../../utils/legoHelpers';
+import StatsDashboard from '../../components/lego/StatsDashboard';
+import CollectionFilters from '../../components/lego/CollectionFilters';
+import SetCard from '../../components/lego/SetCard';
 
 const LegoCollection = () => {
   const [sets, setSets] = useState([]);
