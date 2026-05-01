@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getTransactions, getAllLoans, getBudgetsByMonth, getCategories } from '../services/api';
+import { getTransactions, getAllLoans, getBudgetsByMonth, getCategories, getTasks } from '../services/api';
+import { isOverdue, STATUS_LABELS, PRIORITY_LABELS, PRIORITY_COLORS, CATEGORY_LABELS } from './Tasks';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react';
 import { calculateSummaryStats, filterTransactionsByMonth, prepareMonthlyChartData } from '../utils/dashboardHelpers';
@@ -10,22 +11,25 @@ const Dashboard = () => {
   const [loans, setLoans] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const currentMonth = new Date().toISOString().slice(0, 7);
-        const [transRes, loansRes, budgetsRes, catsRes] = await Promise.all([
+        const [transRes, loansRes, budgetsRes, catsRes, tasksRes] = await Promise.all([
           getTransactions(),
           getAllLoans().catch(() => ({ data: [] })),
           getBudgetsByMonth(currentMonth).catch(() => ({ data: [] })),
           getCategories(),
+          getTasks().catch(() => ({ data: [] })),
         ]);
         setTransactions(transRes.data);
         setLoans(loansRes.data);
         setBudgets(budgetsRes.data);
         setCategories(catsRes.data);
+        setTasks(tasksRes.data);
       } catch (error) {
         console.error('Error fetching dashboard data', error);
       } finally {
@@ -62,6 +66,21 @@ const Dashboard = () => {
 
   // Calculate total loan debt
   const totalDebt = useMemo(() => loans.reduce((s, l) => s + (Number(l.current_balance) || 0), 0), [loans]);
+
+  // Task summary for widget
+  const openTasks = useMemo(() => tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled'), [tasks]);
+  const overdueTaskCount = useMemo(() => tasks.filter(isOverdue).length, [tasks]);
+  const topDashTasks = useMemo(() => {
+    const WEIGHT = { urgent: 0, high: 1, medium: 2, low: 3 };
+    return [...openTasks]
+      .sort((a, b) => {
+        const aOver = isOverdue(a) ? 0 : 1;
+        const bOver = isOverdue(b) ? 0 : 1;
+        if (aOver !== bOver) return aOver - bOver;
+        return (WEIGHT[a.priority] ?? 2) - (WEIGHT[b.priority] ?? 2);
+      })
+      .slice(0, 3);
+  }, [openTasks]);
 
   if (loading) {
     return <div style={{ textAlign: 'center', marginTop: 80, color: '#64748B', fontSize: 16 }}>טוען נתונים...</div>;
@@ -168,6 +187,64 @@ const Dashboard = () => {
               <p style={{ color: '#94A3B8', textAlign: 'center', marginTop: 16 }}>אין הלוואות פעילות</p>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* Task Summary Widget */}
+      <section>
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h2 style={cardTitleStyle}>משימות פתוחות</h2>
+            <Link to="/tasks" style={{ fontSize: 14, color: '#2563EB', fontWeight: 500, textDecoration: 'none' }}>
+              לכל המשימות →
+            </Link>
+          </div>
+          {openTasks.length === 0 ? (
+            <p style={{ color: '#94A3B8', textAlign: 'center', padding: '12px 0', margin: 0 }}>אין משימות פתוחות</p>
+          ) : (
+            <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+              {/* Stat pills */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
+                <div style={{ padding: '12px 20px', backgroundColor: '#EFF6FF', borderRadius: 12, textAlign: 'center', minWidth: 72 }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#1E293B' }}>{openTasks.length}</div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>פתוחות</div>
+                </div>
+                {overdueTaskCount > 0 && (
+                  <div style={{ padding: '12px 20px', backgroundColor: '#FEF2F2', borderRadius: 12, textAlign: 'center', minWidth: 72 }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#DC2626' }}>{overdueTaskCount}</div>
+                    <div style={{ fontSize: 12, color: '#DC2626', marginTop: 2 }}>באיחור</div>
+                  </div>
+                )}
+              </div>
+              {/* Top tasks */}
+              <div style={{ flex: 1 }}>
+                {topDashTasks.map((task, i) => {
+                  const overdue = isOverdue(task);
+                  const dotColor = PRIORITY_COLORS[task.priority]?.color || '#CBD5E1';
+                  return (
+                    <div key={task.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 0',
+                      borderBottom: i < topDashTasks.length - 1 ? '1px solid #F8FAFC' : 'none',
+                    }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, backgroundColor: dotColor }} />
+                      <span style={{ flex: 1, fontSize: 14, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {task.title}
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 500, padding: '1px 7px', borderRadius: 9999, backgroundColor: PRIORITY_COLORS[task.priority]?.bg, color: PRIORITY_COLORS[task.priority]?.color, flexShrink: 0 }}>
+                        {PRIORITY_LABELS[task.priority]}
+                      </span>
+                      {task.due_date && (
+                        <span style={{ fontSize: 12, color: overdue ? '#DC2626' : '#94A3B8', whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400, marginRight: 4 }}>
+                          {task.due_date}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

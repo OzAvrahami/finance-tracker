@@ -8,6 +8,7 @@ import LegoCollection from './pages/LegoCollection';
 import Loans from './pages/Loans';
 import Budget from './pages/Budget';
 import ShoppingLists from './pages/ShoppingLists';
+import Tasks from './pages/Tasks';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -31,6 +32,7 @@ function App() {
           <Route path="/budget" element={<Budget />} />
           <Route path="/import" element={<Import />} />
           <Route path="/shopping" element={<ShoppingLists />} />
+          <Route path="/tasks" element={<Tasks />} />
           <Route path="/edit-transaction/:id" element={<AddTransaction />} />
         </Route>
       </Routes>

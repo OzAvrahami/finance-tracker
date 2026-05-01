@@ -81,4 +81,11 @@ export const removeShoppingListItem = (listId, itemId) => api.delete(`/shopping/
 export const toggleShoppingItemPurchased = (listId, itemId) => api.patch(`/shopping/lists/${listId}/items/${itemId}/toggle`);
 export const checkoutShoppingList = (listId, data) => api.post(`/shopping/lists/${listId}/checkout`, data);
 
+// Tasks
+export const getTasks = (params) => api.get('/tasks', { params });
+export const createTask = (data) => api.post('/tasks', data);
+export const getTaskById = (id) => api.get(`/tasks/${id}`);
+export const updateTask = (id, data) => api.put(`/tasks/${id}`, data);
+export const deleteTask = (id) => api.delete(`/tasks/${id}`);
+
 export default api;
