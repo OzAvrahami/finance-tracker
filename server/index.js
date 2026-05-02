@@ -17,7 +17,7 @@ const compression = require("compression");
 const hpp = require("hpp");
 
 
-require('dotenv').config();
+if (process.env.NODE_ENV !== 'production') require('dotenv').config();
 const requiredEnv = [
     "SUPABASE_URL",
     "SUPABASE_KEY"
