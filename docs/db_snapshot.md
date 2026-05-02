@@ -11,7 +11,6 @@ It should be treated as the source of truth for current DB structure.
 - categories
 - lego_sets
 - loans
-- merchant_category_map
 - payment_sources
 - shopping_catalog_categories
 - shopping_catalog_category_list_types
@@ -22,7 +21,6 @@ It should be treated as the source of truth for current DB structure.
 - shopping_lists
 - transaction_items
 - transactions
-- whatsapp_pending_actions
 
 ---
 
@@ -148,33 +146,7 @@ It should be treated as the source of truth for current DB structure.
 
 ---
 
-## 5. merchant_category_map
-
-### Columns
-| column_name | data_type | nullable | default |
-|---|---|---|---|
-| id | bigint | NO | null |
-| wa_id | text | NO | null |
-| merchant_normalized | text | NO | null |
-| category_id | bigint | YES | null |
-| created_at | timestamp with time zone | YES | now() |
-
-### Primary Key
-- `id`
-
-### Foreign Keys
-- `category_id -> categories.id`
-
-### Unique Constraints
-- `(wa_id, merchant_normalized)`
-
-### Indexes
-- `merchant_category_map_pkey` UNIQUE on `(id)`
-- `merchant_category_map_wa_id_merchant_normalized_key` UNIQUE on `(wa_id, merchant_normalized)`
-
----
-
-## 6. payment_sources
+## 5. payment_sources
 
 ### Columns
 | column_name | data_type | nullable | default |
@@ -504,25 +476,6 @@ It should be treated as the source of truth for current DB structure.
 
 ---
 
-## 16. whatsapp_pending_actions
-
-### Columns
-| column_name | data_type | nullable | default |
-|---|---|---|---|
-| id | bigint | NO | null |
-| wa_id | text | NO | null |
-| payload_json | jsonb | NO | null |
-| created_at | timestamp with time zone | YES | now() |
-
-### Primary Key
-- `id`
-
-### Indexes
-- `whatsapp_pending_actions_pkey` UNIQUE on `(id)`
-- `idx_pending_wa_id` on `(wa_id)`
-
----
-
 ## Cross-Table Relationship Summary
 
 ### Financial
@@ -544,8 +497,6 @@ It should be treated as the source of truth for current DB structure.
 - `shopping_catalog_category_list_types.list_type_id -> shopping_list_types.id`
 - `shopping_checkouts.list_id -> shopping_lists.id`
 
-### Mapping / Automation
-- `merchant_category_map.category_id -> categories.id`
 
 ---
 

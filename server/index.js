@@ -91,10 +91,6 @@ app.use(cors({
 
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
-// WhatsApp webhook (before auth - Meta needs unauthenticated access)
-const setupWhatsApp = require('./src/whatsapp');
-setupWhatsApp(app);
-
 // Auth middleware - protect all /api/* routes
 app.use('/api', requireAuth);
 
