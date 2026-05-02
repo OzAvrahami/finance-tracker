@@ -3,6 +3,7 @@ import { CheckSquare, Plus, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { getTasks, deleteTask, updateTask } from '../../services/api';
 import TaskModal from '../../components/TaskModal';
 import { PRIORITY_LABELS, PRIORITY_COLORS, isOverdue } from '../../utils/taskHelpers';
+import style from './Tasks.module.css'
 
 // --- Label & color maps (English slug → Hebrew display) ---
 
@@ -173,7 +174,7 @@ const Tasks = () => {
   return (
     <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className={style.header}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: '#1E293B', margin: 0 }}>יומן משימות</h1>
           <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: 14 }}>

@@ -1,0 +1,50 @@
+/* Tasks.module.css */
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1E293B;
+    margin: 0;
+}
+
+.subtitle {
+    margin: 4p 0 0 0;
+    color: #64748B;
+    font-size: 14px;
+}
+
+.overdue {
+    color: #DC2626;
+    margin-right: 8px;
+    font-weight: 600;
+}
+
+/*
+.newButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+*/
+
+.newButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #2563EB;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.newButton:hover {
+  background-color: #1D4ED8;
+}
