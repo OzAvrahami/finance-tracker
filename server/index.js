@@ -20,7 +20,8 @@ const hpp = require("hpp");
 require('dotenv').config();
 const requiredEnv = [
     "SUPABASE_URL",
-    "SUPABASE_KEY"
+    "SUPABASE_KEY",
+    "EXTERNAL_API_KEY"
 ];
 
 for (const key of requiredEnv) {
@@ -90,6 +91,11 @@ app.use(cors({
 }));
 
 app.get("/health", (req, res) => res.status(200).send("OK"));
+
+// External API v1 — API key auth, mounted before requireAuth so it is not subject to Supabase JWT
+const { apiKeyAuth } = require('./middleware/apiKeyAuth');
+const v1TransactionRoutes = require('./routes/v1/transactionRoutes');
+app.use('/api/v1/transactions', apiKeyAuth, v1TransactionRoutes);
 
 // Auth middleware - protect all /api/* routes
 app.use('/api', requireAuth);
