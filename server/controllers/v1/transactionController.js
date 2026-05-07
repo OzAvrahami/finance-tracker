@@ -14,7 +14,7 @@ const schema = z.object({
   original_amount: z.number().positive().optional(),
   exchange_rate: z.number().positive().optional(),
   notes: z.string().optional(),
-  tags: z.string().optional(),
+  tags: z.array(z.string()).optional(),
   external_id: z.string().max(255).optional(),
   dry_run: z.boolean().optional(),
 });
@@ -36,6 +36,8 @@ async function createTransaction(req, res) {
     currency, original_amount, exchange_rate,
     notes, tags, external_id, dry_run,
   } = parsed.data;
+
+  const safeTags = Array.isArray(tags) ? tags : [];
 
   let duplicateInfo = null;
   if (external_id) {
@@ -118,7 +120,7 @@ async function createTransaction(req, res) {
     ...(original_amount !== undefined && { original_amount }),
     ...(exchange_rate !== undefined && { exchange_rate }),
     ...(notes !== undefined && { notes }),
-    ...(tags !== undefined && { tags }),
+    ...(safeTags.length > 0 && { tags: safeTags }),
     ...(external_id !== undefined && { external_id }),
   };
 
