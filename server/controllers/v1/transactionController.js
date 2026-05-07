@@ -9,7 +9,10 @@ const schema = z.object({
   charge_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be a valid date in YYYY-MM-DD format').optional(),
   category_id: z.number().int().positive().optional(),
   payment_source_id: z.number().int().positive().optional(),
+  payment_source_name: z.string().max(100).optional(),
   currency: z.string().min(3).max(3).optional(),
+  original_amount: z.number().positive().optional(),
+  exchange_rate: z.number().positive().optional(),
   notes: z.string().optional(),
   tags: z.string().optional(),
   external_id: z.string().max(255).optional(),
@@ -26,7 +29,9 @@ async function createTransaction(req, res) {
 
   const {
     type, amount, date, description, charge_date,
-    category_id, payment_source_id, currency, notes, tags, external_id,
+    category_id, payment_source_id, payment_source_name,
+    currency, original_amount, exchange_rate,
+    notes, tags, external_id,
   } = parsed.data;
 
   if (external_id) {
@@ -46,6 +51,45 @@ async function createTransaction(req, res) {
     }
   }
 
+  // Resolve category from keywords when no category_id is provided
+  let resolvedCategoryId = category_id;
+  if (resolvedCategoryId === undefined && description) {
+    const { data: categories } = await supabase
+      .from('categories')
+      .select('id, keywords, type');
+    if (categories) {
+      const match = categories.find(cat =>
+        cat.type === type &&
+        cat.keywords &&
+        cat.keywords.some(k => description.toLowerCase().includes(k.toLowerCase()))
+      );
+      if (match) resolvedCategoryId = match.id;
+    }
+  }
+
+  // Resolve payment source from name/last4 when no payment_source_id is provided
+  let resolvedPaymentSourceId = payment_source_id;
+  if (resolvedPaymentSourceId === undefined && payment_source_name) {
+    const digits = payment_source_name.replace(/\D/g, '');
+    const last4 = digits.length >= 4 ? digits.slice(-4) : null;
+
+    let query = supabase.from('payment_sources').select('id').eq('is_active', true);
+    if (last4) {
+      query = query.eq('last4', last4);
+    } else {
+      query = query.ilike('name', payment_source_name);
+    }
+
+    const { data: sources } = await query;
+    if (!sources || sources.length === 0) {
+      return res.status(400).json({
+        error: 'payment_source_not_found',
+        message: `No active payment source matches '${payment_source_name}'`,
+      });
+    }
+    resolvedPaymentSourceId = sources[0].id;
+  }
+
   const row = {
     movement_type: type,
     total_amount: amount,
@@ -53,8 +97,10 @@ async function createTransaction(req, res) {
     charge_date: charge_date ?? date,
     currency: currency ?? 'ILS',
     ...(description !== undefined && { description }),
-    ...(category_id !== undefined && { category_id }),
-    ...(payment_source_id !== undefined && { payment_source_id }),
+    ...(resolvedCategoryId !== undefined && { category_id: resolvedCategoryId }),
+    ...(resolvedPaymentSourceId !== undefined && { payment_source_id: resolvedPaymentSourceId }),
+    ...(original_amount !== undefined && { original_amount }),
+    ...(exchange_rate !== undefined && { exchange_rate }),
     ...(notes !== undefined && { notes }),
     ...(tags !== undefined && { tags }),
     ...(external_id !== undefined && { external_id }),
