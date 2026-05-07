@@ -25,8 +25,16 @@ async function createTransaction(req, res) {
   const parsed = schema.safeParse(req.body);
 
   if (!parsed.success) {
-    const details = parsed.error.errors.map(e => ({ path: e.path.join('.'), message: e.message }));
-    console.log(JSON.stringify({ event: 'v1.transaction.validation_error', errors: details }));
+    const details = parsed.error.issues.map(e => ({
+      path: e.path.join('.'),
+      message: e.message,
+    }));
+
+    console.log(JSON.stringify({
+      event: 'v1.transaction.validation_error',
+      errors: details,
+    }));
+
     return res.status(400).json({ error: 'validation_error', details });
   }
 
