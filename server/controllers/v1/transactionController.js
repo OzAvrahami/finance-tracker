@@ -16,6 +16,7 @@ const schema = z.object({
   notes: z.string().optional(),
   tags: z.string().optional(),
   external_id: z.string().max(255).optional(),
+  dry_run: z.boolean().optional(),
 });
 
 async function createTransaction(req, res) {
@@ -31,9 +32,10 @@ async function createTransaction(req, res) {
     type, amount, date, description, charge_date,
     category_id, payment_source_id, payment_source_name,
     currency, original_amount, exchange_rate,
-    notes, tags, external_id,
+    notes, tags, external_id, dry_run,
   } = parsed.data;
 
+  let duplicateInfo = null;
   if (external_id) {
     const { data: existing } = await supabase
       .from('transactions')
@@ -42,38 +44,49 @@ async function createTransaction(req, res) {
       .maybeSingle();
 
     if (existing) {
-      console.log(JSON.stringify({ event: 'v1.transaction.duplicate', external_id, existing_id: existing.id }));
-      return res.status(409).json({
-        error: 'already_exists',
-        message: 'Transaction with this external_id already exists',
-        id: existing.id,
-      });
+      if (!dry_run) {
+        console.log(JSON.stringify({ event: 'v1.transaction.duplicate', external_id, existing_id: existing.id }));
+        return res.status(409).json({
+          error: 'already_exists',
+          message: 'Transaction with this external_id already exists',
+          id: existing.id,
+        });
+      }
+      duplicateInfo = { exists: true, id: existing.id };
     }
   }
 
   // Resolve category from keywords when no category_id is provided
   let resolvedCategoryId = category_id;
+  let resolvedCategoryName = null;
+  let resolvedCategoryMatchedKeyword = null;
   if (resolvedCategoryId === undefined && description) {
     const { data: categories } = await supabase
       .from('categories')
-      .select('id, keywords, type');
+      .select('id, name, keywords, type');
     if (categories) {
+      const descLower = description.toLowerCase();
       const match = categories.find(cat =>
         cat.type === type &&
         cat.keywords &&
-        cat.keywords.some(k => description.toLowerCase().includes(k.toLowerCase()))
+        cat.keywords.some(k => descLower.includes(k.toLowerCase()))
       );
-      if (match) resolvedCategoryId = match.id;
+      if (match) {
+        resolvedCategoryId = match.id;
+        resolvedCategoryName = match.name;
+        resolvedCategoryMatchedKeyword = match.keywords.find(k => descLower.includes(k.toLowerCase())) ?? null;
+      }
     }
   }
 
   // Resolve payment source from name/last4 when no payment_source_id is provided
   let resolvedPaymentSourceId = payment_source_id;
+  let resolvedSourceDetail = null;
   if (resolvedPaymentSourceId === undefined && payment_source_name) {
     const digits = payment_source_name.replace(/\D/g, '');
     const last4 = digits.length >= 4 ? digits.slice(-4) : null;
 
-    let query = supabase.from('payment_sources').select('id').eq('is_active', true);
+    let query = supabase.from('payment_sources').select('id, name, last4').eq('is_active', true);
     if (last4) {
       query = query.eq('last4', last4);
     } else {
@@ -88,6 +101,7 @@ async function createTransaction(req, res) {
       });
     }
     resolvedPaymentSourceId = sources[0].id;
+    resolvedSourceDetail = { name: sources[0].name, last4: sources[0].last4 };
   }
 
   const row = {
@@ -105,6 +119,21 @@ async function createTransaction(req, res) {
     ...(tags !== undefined && { tags }),
     ...(external_id !== undefined && { external_id }),
   };
+
+  if (dry_run) {
+    return res.status(200).json({
+      dry_run: true,
+      would_insert: row,
+      resolved: {
+        category_id: resolvedCategoryId ?? null,
+        category_name: resolvedCategoryName,
+        matched_keyword: resolvedCategoryMatchedKeyword,
+        payment_source_id: resolvedPaymentSourceId ?? null,
+        payment_source_detail: resolvedSourceDetail,
+      },
+      duplicate: duplicateInfo,
+    });
+  }
 
   const { data, error } = await supabase
     .from('transactions')
