@@ -20,6 +20,8 @@ const schema = z.object({
 });
 
 async function createTransaction(req, res) {
+  console.log("Incoming transaction body:", JSON.stringify(req.body, null, 2));
+
   const parsed = schema.safeParse(req.body);
 
   if (!parsed.success) {
