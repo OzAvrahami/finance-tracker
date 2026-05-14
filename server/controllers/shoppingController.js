@@ -171,10 +171,13 @@ exports.createShoppingList = async (req, res) => {
     if (!title) {
       return res.status(400).json({ error: 'title is required' });
     }
+    if (!list_type_id) {
+      return res.status(400).json({ error: 'list_type_id is required' });
+    }
 
     const { data, error } = await supabase
       .from('shopping_lists')
-      .insert([{ title, list_type_id: list_type_id || null, status: 'draft' }])
+      .insert([{ title, list_type_id, status: 'draft' }])
       .select();
 
     if (error) throw error;

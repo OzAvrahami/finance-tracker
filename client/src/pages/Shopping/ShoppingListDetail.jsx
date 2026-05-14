@@ -17,6 +17,7 @@ const STATUS_CONFIG = {
 const ShoppingListDetail = ({ listId, onBack }) => {
   const [list, setList] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [catalogCategories, setCatalogCategories] = useState([]);
   const [catalogItems, setCatalogItems] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -46,6 +47,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
       setList(res.data);
     } catch (error) {
       console.error('Error fetching list:', error);
+      setError('שגיאה בטעינת הרשימה');
     } finally {
       setLoading(false);
     }
@@ -167,15 +169,18 @@ const ShoppingListDetail = ({ listId, onBack }) => {
       fetchList();
     } catch (error) {
       console.error('Error toggling item:', error);
+      alert('שגיאה בסימון הפריט');
     }
   };
 
   const handleRemoveItem = async (itemId) => {
+    if (!window.confirm('למחוק את הפריט?')) return;
     try {
       await removeShoppingListItem(listId, itemId);
       fetchList();
     } catch (error) {
       console.error('Error removing item:', error);
+      alert('שגיאה במחיקת הפריט');
     }
   };
 
@@ -185,6 +190,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
       fetchList();
     } catch (error) {
       console.error('Error activating list:', error);
+      alert('שגיאה בהפעלת הרשימה');
     }
   };
 
@@ -197,6 +203,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
       setShowCheckout(true);
     } catch (error) {
       console.error('Error loading checkout data:', error);
+      alert('שגיאה בטעינת נתוני התשלום');
     }
   };
 
@@ -217,6 +224,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
   };
 
   if (loading) return <div style={{ textAlign: 'center', marginTop: 80, color: '#64748B' }}>טוען רשימה...</div>;
+  if (error) return <div style={{ textAlign: 'center', marginTop: 80, color: '#E11D48' }}>{error}</div>;
   if (!list) return <div style={{ textAlign: 'center', marginTop: 80, color: '#E11D48' }}>רשימה לא נמצאה</div>;
 
   const status = STATUS_CONFIG[list.status] || STATUS_CONFIG.draft;

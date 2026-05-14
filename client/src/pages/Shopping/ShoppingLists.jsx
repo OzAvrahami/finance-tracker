@@ -14,6 +14,7 @@ const ShoppingLists = () => {
   const [lists, setLists] = useState([]);
   const [listTypes, setListTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedListId, setSelectedListId] = useState(null);
@@ -40,6 +41,7 @@ const ShoppingLists = () => {
         setListTypes(typesRes.data);
       } catch (error) {
         console.error('Error loading shopping data:', error);
+        setError('שגיאה בטעינת הרשימות. נסה לרענן את הדף.');
       } finally {
         setLoading(false);
       }
@@ -66,6 +68,7 @@ const ShoppingLists = () => {
       fetchLists();
     } catch (error) {
       console.error('Error deleting list:', error);
+      alert('שגיאה במחיקת הרשימה');
     }
   };
 
@@ -98,6 +101,13 @@ const ShoppingLists = () => {
           <Plus size={20} /> רשימה חדשה
         </button>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#B91C1C', fontSize: 14 }}>
+          {error}
+        </div>
+      )}
 
       {/* Status filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -212,6 +222,7 @@ const CreateListModal = ({ listTypes, onClose, onCreate }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) return alert('נא להזין שם לרשימה');
+    if (!listTypeId) return alert('נא לבחור סוג רשימה');
     onCreate(title, listTypeId);
   };
 
