@@ -81,6 +81,12 @@ export const removeShoppingListItem = (listId, itemId) => api.delete(`/shopping/
 export const toggleShoppingItemPurchased = (listId, itemId) => api.patch(`/shopping/lists/${listId}/items/${itemId}/toggle`);
 export const checkoutShoppingList = (listId, data) => api.post(`/shopping/lists/${listId}/checkout`, data);
 
+// Settings — Categories
+export const getSettingsCategories = () => api.get('/settings/categories');
+export const createSettingsCategory = (data) => api.post('/settings/categories', data);
+export const updateSettingsCategory = (id, data) => api.put(`/settings/categories/${id}`, data);
+export const deleteSettingsCategory = (id) => api.delete(`/settings/categories/${id}`);
+
 // Tasks
 export const getTasks = (params) => api.get('/tasks', { params });
 export const createTask = (data) => api.post('/tasks', data);

@@ -9,6 +9,7 @@ import Loans from './pages/Loans';
 import Budget from './pages/Budget';
 import ShoppingLists from './pages/Shopping';
 import Tasks from './pages/Tasks';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -34,6 +35,7 @@ function App() {
           <Route path="/shopping" element={<ShoppingLists />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/edit-transaction/:id" element={<AddTransaction />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,6 +1,6 @@
 -- =============================================
 -- FULL DATABASE SCHEMA - FINANCE TRACKER
--- Last updated: 2026-03-19
+-- Last updated: 2026-05-14
 -- Source of truth: docs/db_snapshot.md
 -- =============================================
 -- Table creation order respects FK dependencies.
@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS categories (
   type        TEXT NOT NULL DEFAULT 'expense' CHECK (type IN ('income', 'expense')),
   keywords    TEXT[] DEFAULT '{}',
   icon        TEXT,
-  created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now())
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
 -- Payment sources: credit cards, bank accounts, cash, etc.
