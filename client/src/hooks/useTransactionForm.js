@@ -236,6 +236,8 @@ const useTransactionForm = () => {
       if (isEditMode) {
         await updateTransaction(id, payload);
         alert('העסקה עודכנה בהצלחה! 💾');
+        navigate('/transactions');
+        return;
       } else {
         await createTransaction(payload);
         alert('התנועה נשמרה בהצלחה! 🚀');
