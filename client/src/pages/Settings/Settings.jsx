@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import CategoriesTab from './CategoriesTab';
+import PaymentSourcesTab from './PaymentSourcesTab';
 
 const TABS = [
-  { key: 'categories', label: 'קטגוריות' },
+  { key: 'categories',      label: 'קטגוריות' },
+  { key: 'payment-sources', label: 'מקורות תשלום' },
 ];
 
 const Settings = () => {
@@ -42,6 +44,7 @@ const Settings = () => {
 
       {/* Tab content */}
       {activeTab === 'categories' && <CategoriesTab />}
+      {activeTab === 'payment-sources' && <PaymentSourcesTab />}
     </div>
   );
 };

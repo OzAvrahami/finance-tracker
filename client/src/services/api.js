@@ -87,6 +87,12 @@ export const createSettingsCategory = (data) => api.post('/settings/categories',
 export const updateSettingsCategory = (id, data) => api.put(`/settings/categories/${id}`, data);
 export const deleteSettingsCategory = (id) => api.delete(`/settings/categories/${id}`);
 
+// Settings — Payment Sources
+export const getSettingsPaymentSources   = ()        => api.get('/settings/payment-sources');
+export const createSettingsPaymentSource = (data)    => api.post('/settings/payment-sources', data);
+export const updateSettingsPaymentSource = (id, data) => api.put(`/settings/payment-sources/${id}`, data);
+export const deleteSettingsPaymentSource = (id)      => api.delete(`/settings/payment-sources/${id}`);
+
 // Tasks
 export const getTasks = (params) => api.get('/tasks', { params });
 export const createTask = (data) => api.post('/tasks', data);
