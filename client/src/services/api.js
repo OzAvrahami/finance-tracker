@@ -81,6 +81,9 @@ export const removeShoppingListItem = (listId, itemId) => api.delete(`/shopping/
 export const toggleShoppingItemPurchased = (listId, itemId) => api.patch(`/shopping/lists/${listId}/items/${itemId}/toggle`);
 export const checkoutShoppingList = (listId, data) => api.post(`/shopping/lists/${listId}/checkout`, data);
 
+// Annual Summary
+export const getAnnualBudgetSummary = (year) => api.get('/budgets/annual-summary', { params: { year } });
+
 // Settings — Categories
 export const getSettingsCategories = () => api.get('/settings/categories');
 export const createSettingsCategory = (data) => api.post('/settings/categories', data);
