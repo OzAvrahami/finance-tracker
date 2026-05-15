@@ -6,6 +6,13 @@ import {
 } from 'lucide-react';
 import { getTransactions, deleteTransaction, getCategories } from '../../services/api';
 
+const formatLocalDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const Transactions = () => {
   // --- State ניהול נתונים ---
   const [transactions, setTransactions] = useState([]);
@@ -19,8 +26,7 @@ const Transactions = () => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const fmt = (d) => d.toISOString().split('T')[0];
-    return { start: fmt(start), end: fmt(end) };
+    return { start: formatLocalDate(start), end: formatLocalDate(end) };
   });
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', direction: 'desc' });
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
@@ -161,9 +167,7 @@ const Transactions = () => {
         return;
     }
     
-    // המרה לפורמט YYYY-MM-DD שמתאים ל-Input
-    const formatDate = (d) => d.toISOString().split('T')[0];
-    setDateRange({ start: formatDate(start), end: formatDate(end) });
+    setDateRange({ start: formatLocalDate(start), end: formatLocalDate(end) });
   };
 
   const handleDelete = async (id) => {
