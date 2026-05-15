@@ -54,26 +54,6 @@ app.use(morgan("combined"));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
-// Hard limit:
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 דקות
-    max: 300,                 // 300 בקשות לכל IP
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many requests, please try again later." }
-});
-
-// Soft limit:
-const speedLimiter = slowDown({
-    windowMs: 15 * 60 * 1000,
-    delayAfter: 150,        // אחרי 150 בקשות מתחילים להאט
-    delayMs: () => 200      // מוסיף 200ms לכל בקשה מעל הסף
-});
-
-app.use("/api", limiter, speedLimiter);
-
-
-
 const allowedOrigins = [
     "http://localhost:5173",
     "https://finance-tracker-sigma-ten-19.vercel.app"
@@ -85,11 +65,29 @@ app.use(cors({
         if (allowedOrigins.includes(origin)) return cb(null, true);
         return cb(new Error(`Not allowed by CORS: ${origin}`));
     },
-    
+
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+// Hard limit:
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 דקות
+    max: 600,                 // 600 בקשות לכל IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later." }
+});
+
+// Soft limit:
+const speedLimiter = slowDown({
+    windowMs: 15 * 60 * 1000,
+    delayAfter: 300,        // אחרי 300 בקשות מתחילים להאט
+    delayMs: () => 200      // מוסיף 200ms לכל בקשה מעל הסף
+});
+
+app.use("/api", limiter, speedLimiter);
 
 app.get("/health", (req, res) => res.status(200).send("OK"));
 
