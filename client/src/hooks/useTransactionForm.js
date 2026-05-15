@@ -136,7 +136,9 @@ const useTransactionForm = () => {
   };
 
   useEffect(() => {
-    setTransaction(prev => ({ ...prev, total_amount: calculateTotal() }));
+    if (items.length > 0) {
+      setTransaction(prev => ({ ...prev, total_amount: calculateTotal() }));
+    }
   }, [items, transaction.global_discount]);
 
   // --- Helpers ---
