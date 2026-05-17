@@ -26,7 +26,7 @@ const ItemCard = ({ item, index, isLego, legoThemes, onItemChange, onRemove, onS
               value={item.set_number}
               onChange={(e) => onItemChange(index, 'set_number', e.target.value)}
               onBlur={(e) => onSetNumberBlur(index, e.target.value)}
-              style={{ ...inputStyle, borderColor: item.set_number ? '#3b82f6' : '#eee' }}
+              style={{ ...inputStyle, borderColor: item.set_number ? 'var(--primary-hi)' : 'var(--border)' }}
             />
 
             <input

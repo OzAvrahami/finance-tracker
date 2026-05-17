@@ -71,14 +71,14 @@ const CategoryCombobox = ({ categories, selectedCategoryId, onSelect, onOpenNewM
                   }}
                   style={{
                     ...categoryOptionStyle,
-                    backgroundColor: String(selectedCategoryId) === String(cat.id) ? '#eef2ff' : 'white'
+                    backgroundColor: String(selectedCategoryId) === String(cat.id) ? 'var(--primary-soft)' : 'var(--surface-elev)'
                   }}
                 >
                   {cat.icon} {cat.name}
                 </div>
               ))
             ) : (
-              <div style={{ padding: '10px', color: '#999', textAlign: 'center' }}>
+              <div style={{ padding: '10px', color: 'var(--ink-4)', textAlign: 'center' }}>
                 לא נמצאו תוצאות
               </div>
             )}
@@ -92,8 +92,8 @@ const CategoryCombobox = ({ categories, selectedCategoryId, onSelect, onOpenNewM
         style={{
           ...inputStyle,
           width: '50px',
-          backgroundColor: '#eef2ff',
-          color: '#4f46e5',
+          backgroundColor: 'var(--primary-soft)',
+          color: 'var(--primary-hi)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',

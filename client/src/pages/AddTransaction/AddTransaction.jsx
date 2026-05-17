@@ -36,7 +36,7 @@ const AddTransaction = () => {
   if (loading) return <div style={{textAlign: 'center', marginTop: '50px'}}>טוען נתונים...</div>;
 
   return (
-  <div style={{ maxWidth: '800px', margin: '40px auto', padding: '30px', backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', fontFamily: 'Segoe UI' }} dir="rtl">
+  <div style={{ maxWidth: '800px', margin: '40px auto', padding: '30px', backgroundColor: 'var(--surface-2)', borderRadius: '15px', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border)', color: 'var(--ink-2)' }} dir="rtl">
 
       {/* --- Header Area --- */}
       <div style={{
@@ -44,10 +44,10 @@ const AddTransaction = () => {
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: '30px',
-        borderBottom: '1px solid #f0f0f0',
+        borderBottom: '1px solid var(--border)',
         paddingBottom: '20px'
       }}>
-          <h1 style={{ margin: 0, color: '#1a1a2e', fontSize: '1.8rem' }}>
+          <h1 style={{ margin: 0, color: 'var(--ink-1)', fontSize: '1.8rem' }}>
               {isEditMode ? 'עריכת תנועה ✏️' : 'הוספת תנועה חדשה 💰'}
           </h1>
 
@@ -56,15 +56,15 @@ const AddTransaction = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: '#eef2ff',
-              color: '#4f46e5',
+              backgroundColor: 'var(--primary-soft)',
+              color: 'var(--primary-hi)',
               padding: '10px 18px',
               borderRadius: '30px',
               textDecoration: 'none',
               fontWeight: '600',
               fontSize: '0.95rem',
               transition: 'all 0.2s ease',
-              border: '1px solid #e0e7ff'
+              border: '1px solid rgba(124,92,255,0.25)'
             }}>
               <FileUp size={18} />
               <span>ייבוא מאקסל?</span>
@@ -173,7 +173,7 @@ const AddTransaction = () => {
                             style={inputStyle}
                         />
                         {transaction.installment_count > 1 && transaction.total_amount > 0 && (
-                            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                            <div className="num" style={{ fontSize: '12px', color: 'var(--ink-4)', marginTop: '4px' }}>
                                 ₪{Math.round(transaction.total_amount / transaction.installment_count * 100) / 100} לתשלום
                             </div>
                         )}
@@ -220,10 +220,10 @@ const AddTransaction = () => {
             </div>
         </div>
 
-        <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
+        <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid var(--border)' }} />
 
         {/* --- Items Section --- */}
-        <h3 style={{ color: '#444', marginBottom: '15px' }}>פירוט פריטים 🛒</h3>
+        <h3 style={{ color: 'var(--ink-2)', marginBottom: '15px' }}>פירוט פריטים 🛒</h3>
 
         {items.map((item, index) => (
           <ItemCard
@@ -240,7 +240,7 @@ const AddTransaction = () => {
 
         <button type="button" onClick={addItem} style={addBtnStyle}>+ הוסף פריט נוסף</button>
 
-        <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
+        <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid var(--border)' }} />
 
         {/* --- Footer --- */}
         <div style={footerStyle}>
@@ -250,7 +250,7 @@ const AddTransaction = () => {
             </div>
 
             <div style={{ textAlign: 'left' }}>
-                <h2 style={{ margin: 0, color: '#1a1a2e' }}>סה"כ: ₪{transaction.total_amount.toLocaleString()}</h2>
+                <h2 style={{ margin: 0, color: 'var(--ink-1)' }}>סה"כ: <span className="num">₪{transaction.total_amount.toLocaleString()}</span></h2>
                 <button type="submit" style={submitBtnStyle}>
                     {isEditMode ? 'עדכן תנועה' : 'שמור תנועה'}
                 </button>
