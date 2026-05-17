@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Search, Filter, Download, Edit, Trash2, 
-  ArrowUpDown, Calendar, ChevronDown, PlusCircle 
+import {
+  Search, Filter, Download, Edit, Trash2,
+  ArrowUpDown, Calendar, ChevronDown, PlusCircle
 } from 'lucide-react';
 import { getTransactions, deleteTransaction, getCategories } from '../../services/api';
 
@@ -36,14 +36,12 @@ const Transactions = () => {
     fetchData();
   }, []);
 
-
   // --- Debounce Effect (מונע קריסה בהקלדה) ---
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchText(searchText);
-    }, 300); // מחכה 300ms אחרי סיום ההקלדה
-
-    return () => clearTimeout(timer); // ניקוי טיימר אם הקלדת שוב
+    }, 300);
+    return () => clearTimeout(timer);
   }, [searchText]);
 
   const fetchData = async () => {
@@ -63,36 +61,21 @@ const Transactions = () => {
   const filteredData = useMemo(() => {
     let data = [...transactions];
 
-    // 1. סינון טקסט (תיאור או סכום)
-    //if (searchText) {
     if (debouncedSearchText) {
-      //const lowerSearch = searchText.toLowerCase();
       const lowerSearch = debouncedSearchText.toLocaleLowerCase();
-      
       data = data.filter(t => {
-        // א. חיפוש בתיאור
         const matchDesc = t.description?.toLowerCase().includes(lowerSearch);
-        
-        // ב. חיפוש בסכום
         const matchAmount = t.total_amount?.toString().includes(lowerSearch);
-        
-        // ג. חיפוש בשם הקטגוריה (למשל: למצוא את כל ה"מזון" גם אם כתוב "רמי לוי")
         const matchCategory = t.categories?.name?.toLowerCase().includes(lowerSearch);
-        
-        // ד. חיפוש באמצעי תשלום (לפי שם אמצעי התשלום מהטבלה)
         const matchSource = (t.payment_sources?.name || '').toLowerCase().includes(lowerSearch);
-
-        // אם אחד מהם נכון - השורה תוצג
         return matchDesc || matchAmount || matchCategory || matchSource;
       });
     }
 
-    // 2. סינון קטגוריה
     if (selectedCategory !== 'all') {
       data = data.filter(t => t.category_id === parseInt(selectedCategory));
     }
 
-    // 3. סינון תאריכים
     if (dateRange.start) {
       data = data.filter(t => new Date(t.transaction_date) >= new Date(dateRange.start));
     }
@@ -100,21 +83,17 @@ const Transactions = () => {
       data = data.filter(t => new Date(t.transaction_date) <= new Date(dateRange.end));
     }
 
-    // 4. מיון
     if (sortConfig.key) {
       data.sort((a, b) => {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
-
-        // טיפול מיוחד לתאריכים ומספרים
         if (sortConfig.key === 'transaction_date') {
-            aValue = new Date(aValue);
-            bValue = new Date(bValue);
+          aValue = new Date(aValue);
+          bValue = new Date(bValue);
         } else if (sortConfig.key === 'total_amount') {
-            aValue = Number(aValue);
-            bValue = Number(bValue);
+          aValue = Number(aValue);
+          bValue = Number(bValue);
         }
-
         if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
@@ -122,10 +101,9 @@ const Transactions = () => {
     }
 
     return data;
-  //}, [transactions, searchText, selectedCategory, dateRange, sortConfig]);
   }, [transactions, debouncedSearchText, selectedCategory, dateRange, sortConfig]);
 
-  // --- לוגיקה חכמה: חישוב סיכומים (מתעדכן לפי הסינון) ---
+  // --- לוגיקה חכמה: חישוב סיכומים ---
   const summary = useMemo(() => {
     return filteredData.reduce((acc, curr) => {
       const amount = Number(curr.total_amount);
@@ -162,11 +140,9 @@ const Transactions = () => {
       start = new Date(now.getFullYear(), 0, 1);
       end = new Date(now.getFullYear(), 11, 31);
     } else {
-        // Clear
-        setDateRange({ start: '', end: '' });
-        return;
+      setDateRange({ start: '', end: '' });
+      return;
     }
-    
     setDateRange({ start: formatLocalDate(start), end: formatLocalDate(end) });
   };
 
@@ -181,16 +157,16 @@ const Transactions = () => {
     }
   };
 
-  if (loading) return <div style={{textAlign: 'center', marginTop: '50px'}}>טוען נתונים...</div>;
+  if (loading) return <div style={{ textAlign: 'center', marginTop: 50, color: 'var(--ink-3)' }}>טוען נתונים...</div>;
 
   return (
-    <div dir="rtl" style={{ fontFamily: 'Segoe UI, sans-serif', color: '#333' }}>
-      
+    <div dir="rtl" style={{ color: 'var(--ink-2)' }}>
+
       {/* --- כותרת ראשית --- */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--s-24)' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.8rem', color: '#1a1a2e' }}>הליבה הפיננסית 📊</h1>
-          <p style={{ margin: '5px 0 0 0', color: '#6c757d' }}>ניהול וחקירת תנועות עומק</p>
+          <h1 style={{ margin: 0, fontSize: 'var(--fs-20)', fontWeight: 700, color: 'var(--ink-1)', letterSpacing: '-0.015em' }}>הליבה הפיננסית 📊</h1>
+          <p style={{ margin: '4px 0 0 0', color: 'var(--ink-4)', fontSize: 'var(--fs-14)' }}>ניהול וחקירת תנועות עומק</p>
         </div>
         <Link to="/add" style={primaryBtnStyle}>
           <PlusCircle size={18} />
@@ -198,26 +174,27 @@ const Transactions = () => {
         </Link>
       </div>
 
-      {/* --- סרגל כלים ופילטרים (המוח) --- */}
+      {/* --- סרגל כלים ופילטרים --- */}
       <div style={filterContainerStyle}>
-        
+
         {/* חיפוש חופשי */}
         <div style={searchBoxStyle}>
-          <Search size={18} color="#888" />
-          <input 
-            type="text" 
-            placeholder="חיפוש לפי תיאור או סכום..." 
+          {/* #5A607A = --ink-4; Lucide color prop does not accept CSS variables */}
+          <Search size={18} color="#5A607A" />
+          <input
+            type="text"
+            placeholder="חיפוש לפי תיאור או סכום..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ border: 'none', outline: 'none', width: '100%', fontSize: '0.95rem' }}
+            style={{ border: 'none', outline: 'none', width: '100%', fontSize: 'var(--fs-14)', backgroundColor: 'transparent', color: 'var(--ink-1)' }}
           />
         </div>
 
         {/* פילטרים נוספים */}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          
-          <select 
-            value={selectedCategory} 
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+          <select
+            value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             style={selectStyle}
           >
@@ -228,19 +205,20 @@ const Transactions = () => {
           </select>
 
           <div style={dateGroupStyle}>
-            <Calendar size={16} color="#666" />
-            <input 
-              type="date" 
-              value={dateRange.start} 
+            {/* #5A607A = --ink-4 */}
+            <Calendar size={16} color="#5A607A" />
+            <input
+              type="date"
+              value={dateRange.start}
               onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-              style={dateInputStyle} 
+              style={dateInputStyle}
             />
-            <span>-</span>
-            <input 
-              type="date" 
-              value={dateRange.end} 
+            <span style={{ color: 'var(--ink-4)' }}>-</span>
+            <input
+              type="date"
+              value={dateRange.end}
               onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-              style={dateInputStyle} 
+              style={dateInputStyle}
             />
           </div>
 
@@ -248,86 +226,87 @@ const Transactions = () => {
           <button onClick={() => setPresetDate('thisMonth')} style={quickBtnStyle}>החודש</button>
           <button onClick={() => setPresetDate('lastMonth')} style={quickBtnStyle}>חודש שעבר</button>
           <button onClick={() => setPresetDate('clear')} style={quickBtnStyle}>הכל</button>
-
         </div>
       </div>
 
-      {/* --- שורת סיכום חכמה (Contextual Summary) --- */}
+      {/* --- שורת סיכום חכמה --- */}
       <div style={summaryBarStyle}>
         <div style={summaryItemStyle}>
-          <span style={{ fontSize: '0.85rem', color: '#666' }}>מספר תנועות</span>
-          <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{filteredData.length}</span>
+          <span style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-4)' }}>מספר תנועות</span>
+          <span className="num" style={{ fontWeight: 700, fontSize: 'var(--fs-16)', color: 'var(--ink-1)' }}>{filteredData.length}</span>
         </div>
-        <div style={{ width: '1px', background: '#ddd', height: '30px' }}></div>
+        <div style={{ width: 1, background: 'var(--border-strong)', height: 30 }} />
         <div style={summaryItemStyle}>
-          <span style={{ fontSize: '0.85rem', color: '#666' }}>סה"כ הכנסות</span>
-          <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#2ecc71' }}>₪{summary.income.toLocaleString()}</span>
+          <span style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-4)' }}>סה"כ הכנסות</span>
+          <span className="num" style={{ fontWeight: 700, fontSize: 'var(--fs-16)', color: 'var(--pos)' }}>₪{summary.income.toLocaleString()}</span>
         </div>
-        <div style={{ width: '1px', background: '#ddd', height: '30px' }}></div>
+        <div style={{ width: 1, background: 'var(--border-strong)', height: 30 }} />
         <div style={summaryItemStyle}>
-          <span style={{ fontSize: '0.85rem', color: '#666' }}>סה"כ הוצאות</span>
-          <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#e74c3c' }}>₪{summary.expense.toLocaleString()}</span>
+          <span style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-4)' }}>סה"כ הוצאות</span>
+          <span className="num" style={{ fontWeight: 700, fontSize: 'var(--fs-16)', color: 'var(--neg)' }}>₪{summary.expense.toLocaleString()}</span>
         </div>
-        <div style={{ width: '1px', background: '#ddd', height: '30px' }}></div>
+        <div style={{ width: 1, background: 'var(--border-strong)', height: 30 }} />
         <div style={summaryItemStyle}>
-          <span style={{ fontSize: '0.85rem', color: '#666' }}>יתרה בסינון</span>
-          <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: summary.income - summary.expense >= 0 ? '#2ecc71' : '#e74c3c' }}>
+          <span style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-4)' }}>יתרה בסינון</span>
+          <span className="num" style={{ fontWeight: 700, fontSize: 'var(--fs-16)', color: summary.income - summary.expense >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
             ₪{(summary.income - summary.expense).toLocaleString()}
           </span>
         </div>
       </div>
 
-      {/* --- הטבלה (The Grid) --- */}
-      <div style={{ backgroundColor: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
+      {/* --- הטבלה --- */}
+      <div style={tableContainerStyle}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #eee' }}>
-              <th onClick={() => handleSort('transaction_date')} style={thStyle}>תאריך <ArrowUpDown size={14} /></th>
+            <tr style={{ backgroundColor: 'var(--surface-3)', borderBottom: '1px solid var(--border-strong)' }}>
+              <th onClick={() => handleSort('transaction_date')} style={thStyle}>תאריך <ArrowUpDown size={13} /></th>
               <th style={thStyle}>קטגוריה</th>
-              <th onClick={() => handleSort('description')} style={thStyle}>תיאור <ArrowUpDown size={14} /></th>
+              <th onClick={() => handleSort('description')} style={thStyle}>תיאור <ArrowUpDown size={13} /></th>
               <th style={thStyle}>אמצעי תשלום</th>
-              <th onClick={() => handleSort('total_amount')} style={thStyle}>סכום <ArrowUpDown size={14} /></th>
+              <th onClick={() => handleSort('total_amount')} style={thStyle}>סכום <ArrowUpDown size={13} /></th>
               <th style={thStyle}>הערות</th>
               <th style={thStyle}>פעולות</th>
             </tr>
           </thead>
           <tbody>
             {filteredData.length > 0 ? filteredData.map((t) => (
-              <tr key={t.id} style={trStyle}>
-                <td style={tdStyle}>{new Date(t.transaction_date).toLocaleDateString('he-IL')}</td>
+              <tr key={t.id} className="tr-hover" style={trStyle}>
+                <td className="num" style={{ ...tdStyle, color: 'var(--ink-4)', whiteSpace: 'nowrap' }}>
+                  {new Date(t.transaction_date).toLocaleDateString('he-IL')}
+                </td>
                 <td style={tdStyle}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                     {t.categories?.icon} {t.categories?.name}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-3)' }}>
+                    {t.categories?.icon} {t.categories?.name}
                   </span>
                 </td>
                 <td style={tdStyle}>
-                    <div style={{fontWeight: '500'}}>{t.description}</div>
-                    {/* אם תרצה להוסיף פירוט תשלומים בעתיד */}
-                    {/* <div style={{fontSize: '0.75rem', color:'#999'}}>תשלום 2 מתוך 10</div> */}
+                  <div style={{ fontWeight: 500, color: 'var(--ink-2)' }}>{t.description}</div>
                 </td>
-                <td style={tdStyle}>
-                  {t.payment_sources?.name || '-'}
+                <td style={{ ...tdStyle, color: 'var(--ink-3)' }}>
+                  {t.payment_sources?.name || '−'}
                 </td>
-                <td style={{ ...tdStyle, fontWeight: 'bold', color: t.movement_type === 'income' ? '#2ecc71' : '#e74c3c' }}>
-                  ₪{Number(t.total_amount).toLocaleString()}
+                <td className="num" style={{ ...tdStyle, fontWeight: 700, color: t.movement_type === 'income' ? 'var(--pos)' : 'var(--neg)' }}>
+                  {t.movement_type === 'income' ? '+' : '−'}₪{Number(t.total_amount).toLocaleString()}
                 </td>
-                <td style={tdStyle}>
+                <td style={{ ...tdStyle, color: 'var(--ink-4)', fontSize: 'var(--fs-13)' }}>
                   {t.notes}
                 </td>
                 <td style={tdStyle}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <Link to={`/edit-transaction/${t.id}`} style={actionBtnStyle} title="ערוך">
-                      <Edit size={16} color="#3498db" />
+                      {/* #9B82FF = --primary-hi */}
+                      <Edit size={15} color="#9B82FF" />
                     </Link>
                     <button onClick={() => handleDelete(t.id)} style={actionBtnStyle} title="מחק">
-                      <Trash2 size={16} color="#e74c3c" />
+                      {/* #FF7A8A = --neg */}
+                      <Trash2 size={15} color="#FF7A8A" />
                     </button>
                   </div>
                 </td>
               </tr>
             )) : (
               <tr>
-                <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+                <td colSpan="7" style={{ padding: 40, textAlign: 'center', color: 'var(--ink-4)' }}>
                   לא נמצאו תנועות התואמות את הסינון 🔍
                 </td>
               </tr>
@@ -335,130 +314,148 @@ const Transactions = () => {
           </tbody>
         </table>
       </div>
-
     </div>
   );
 };
 
-// --- Styles (CSS-in-JS) ---
+// --- Styles ---
 const primaryBtnStyle = {
-  backgroundColor: '#2c3e50',
-  color: 'white',
-  padding: '10px 20px',
-  borderRadius: '8px',
+  background: 'var(--primary-grad)',
+  color: 'var(--primary-ink)',
+  padding: '10px 18px',
+  borderRadius: 'var(--r-10)',
   textDecoration: 'none',
   display: 'flex',
   alignItems: 'center',
-  gap: '8px',
-  fontSize: '0.9rem',
-  fontWeight: '600'
+  gap: 'var(--s-8)',
+  fontSize: 'var(--fs-14)',
+  fontWeight: 600,
+  border: '1px solid rgba(255,255,255,0.12)',
+  boxShadow: '0 4px 12px rgba(124,92,255,0.3)',
 };
 
 const filterContainerStyle = {
-  backgroundColor: 'white',
-  padding: '15px',
-  borderRadius: '10px',
-  boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
-  marginBottom: '20px',
+  backgroundColor: 'var(--surface-2)',
+  padding: 'var(--s-16)',
+  borderRadius: 'var(--r-12)',
+  boxShadow: 'var(--shadow-sm)',
+  border: '1px solid var(--border)',
+  marginBottom: 'var(--s-16)',
   display: 'flex',
   flexWrap: 'wrap',
-  gap: '15px',
-  alignItems: 'center'
+  gap: 'var(--s-12)',
+  alignItems: 'center',
 };
 
 const searchBoxStyle = {
   display: 'flex',
   alignItems: 'center',
-  gap: '10px',
-  backgroundColor: '#f4f6f8',
-  padding: '10px 15px',
-  borderRadius: '30px',
+  gap: 10,
+  backgroundColor: 'var(--surface-3)',
+  padding: '10px 14px',
+  borderRadius: 30,
   flex: 1,
-  minWidth: '250px'
+  minWidth: 250,
+  border: '1px solid var(--border)',
 };
 
 const selectStyle = {
-  padding: '10px 15px',
-  borderRadius: '8px',
-  border: '1px solid #e0e0e0',
-  backgroundColor: 'white',
+  padding: '9px 14px',
+  borderRadius: 'var(--r-8)',
+  border: '1px solid var(--border)',
+  backgroundColor: 'var(--surface-3)',
+  color: 'var(--ink-2)',
   outline: 'none',
-  cursor: 'pointer'
+  cursor: 'pointer',
+  fontSize: 'var(--fs-14)',
 };
 
 const dateGroupStyle = {
   display: 'flex',
   alignItems: 'center',
-  gap: '8px',
-  backgroundColor: '#fff',
-  border: '1px solid #e0e0e0',
+  gap: 8,
+  backgroundColor: 'var(--surface-3)',
+  border: '1px solid var(--border)',
   padding: '8px 12px',
-  borderRadius: '8px'
+  borderRadius: 'var(--r-8)',
 };
 
 const dateInputStyle = {
   border: 'none',
   outline: 'none',
-  color: '#555',
-  fontFamily: 'inherit'
+  color: 'var(--ink-2)',
+  backgroundColor: 'transparent',
+  fontFamily: 'inherit',
+  fontSize: 'var(--fs-13)',
 };
 
 const quickBtnStyle = {
-  backgroundColor: '#eef2ff',
-  color: '#4f46e5',
-  border: 'none',
-  padding: '8px 15px',
-  borderRadius: '20px',
-  fontSize: '0.85rem',
+  backgroundColor: 'var(--primary-soft)',
+  color: 'var(--primary-hi)',
+  border: '1px solid rgba(124,92,255,0.2)',
+  padding: '8px 14px',
+  borderRadius: 20,
+  fontSize: 'var(--fs-13)',
   cursor: 'pointer',
-  fontWeight: '600'
+  fontWeight: 600,
 };
 
 const summaryBarStyle = {
   display: 'flex',
   alignItems: 'center',
-  gap: '20px',
-  backgroundColor: '#fff',
-  padding: '15px 25px',
-  borderRadius: '10px',
-  marginBottom: '20px',
-  border: '1px solid #e9ecef'
+  gap: 'var(--s-20)',
+  backgroundColor: 'var(--surface-2)',
+  padding: '14px 24px',
+  borderRadius: 'var(--r-12)',
+  marginBottom: 'var(--s-16)',
+  border: '1px solid var(--border)',
 };
 
 const summaryItemStyle = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '2px'
+  gap: 2,
+};
+
+const tableContainerStyle = {
+  backgroundColor: 'var(--surface-2)',
+  borderRadius: 'var(--r-12)',
+  boxShadow: 'var(--shadow-sm)',
+  border: '1px solid var(--border)',
+  overflow: 'hidden',
 };
 
 const thStyle = {
-  textAlign: 'right',
-  padding: '15px',
-  color: '#6c757d',
-  fontSize: '0.85rem',
-  fontWeight: '600',
+  textAlign: 'start',
+  padding: '13px 15px',
+  color: 'var(--ink-4)',
+  fontSize: 'var(--fs-11)',
+  fontWeight: 600,
   cursor: 'pointer',
-  userSelect: 'none'
+  userSelect: 'none',
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
 };
 
 const trStyle = {
-  borderBottom: '1px solid #f1f1f1',
-  transition: 'background 0.2s'
+  borderBottom: '1px solid var(--border)',
+  transition: 'background-color 0.15s',
 };
 
 const tdStyle = {
-  padding: '15px',
-  fontSize: '0.95rem',
-  color: '#2c3e50'
+  padding: '14px 15px',
+  fontSize: 'var(--fs-14)',
+  color: 'var(--ink-2)',
 };
 
 const actionBtnStyle = {
   background: 'none',
   border: 'none',
   cursor: 'pointer',
-  padding: '5px',
-  borderRadius: '5px',
-  transition: 'background 0.1s'
+  padding: '4px 6px',
+  borderRadius: 'var(--r-6)',
+  transition: 'background 0.1s',
+  display: 'flex',
 };
 
 export default Transactions;

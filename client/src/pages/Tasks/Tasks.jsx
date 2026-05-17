@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { CheckSquare, Plus, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { getTasks, deleteTask, updateTask } from '../../services/api';
 import TaskModal from '../../components/TaskModal';
-import { PRIORITY_LABELS, PRIORITY_COLORS, isOverdue } from '../../utils/taskHelpers';
+import { PRIORITY_LABELS, isOverdue } from '../../utils/taskHelpers';
 import style from './Tasks.module.css'
 
 // --- Label & color maps (English slug → Hebrew display) ---
@@ -16,11 +16,19 @@ export const STATUS_LABELS = {
 };
 
 export const STATUS_COLORS = {
-  open:        { bg: '#F8FAFC', color: '#475569', border: '#E2E8F0' },
-  in_progress: { bg: '#DBEAFE', color: '#1D4ED8', border: '#BFDBFE' },
-  waiting:     { bg: '#FEF9C3', color: '#B45309', border: '#FDE68A' },
-  done:        { bg: '#ECFDF5', color: '#059669', border: '#A7F3D0' },
-  cancelled:   { bg: '#F3F4F6', color: '#9CA3AF', border: '#E5E7EB' },
+  open:        { bg: 'var(--surface-3)',   color: 'var(--ink-3)',   border: 'var(--border-strong)' },
+  in_progress: { bg: 'var(--info-soft)',   color: 'var(--info)',    border: 'rgba(90,200,255,0.25)' },
+  waiting:     { bg: 'var(--warn-soft)',   color: 'var(--warn)',    border: 'rgba(255,192,97,0.25)' },
+  done:        { bg: 'var(--pos-soft)',    color: 'var(--pos)',     border: 'rgba(74,222,154,0.25)' },
+  cancelled:   { bg: 'var(--surface-3)',   color: 'var(--ink-5)',   border: 'var(--border)' },
+};
+
+// Dark-friendly priority badge colors (overrides taskHelpers light values)
+const DARK_PRIORITY_COLORS = {
+  urgent: { bg: 'var(--neg-soft)',     color: 'var(--neg)' },
+  high:   { bg: 'var(--warn-soft)',    color: 'var(--warn)' },
+  medium: { bg: 'var(--primary-soft)', color: 'var(--primary-hi)' },
+  low:    { bg: 'var(--surface-3)',    color: 'var(--ink-3)' },
 };
 
 export const CATEGORY_LABELS = {
@@ -165,7 +173,7 @@ const Tasks = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', marginTop: 80, color: '#64748B', fontSize: 16 }}>
+      <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--ink-4)', fontSize: 16 }}>
         טוען משימות...
       </div>
     );
@@ -176,11 +184,11 @@ const Tasks = () => {
       {/* Header */}
       <div className={style.header}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: '#1E293B', margin: 0 }}>יומן משימות</h1>
-          <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: 14 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>יומן משימות</h1>
+          <p style={{ margin: '4px 0 0 0', color: 'var(--ink-4)', fontSize: 14 }}>
             {tasks.length} משימות סה״כ
             {overdueCount > 0 && (
-              <span style={{ color: '#DC2626', marginRight: 8, fontWeight: 600 }}>
+              <span style={{ color: 'var(--neg)', marginInlineEnd: 8, fontWeight: 600 }}>
                 · {overdueCount} באיחור
               </span>
             )}
@@ -193,7 +201,7 @@ const Tasks = () => {
       </div>
 
       {/* Status Tabs */}
-      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid #F1F5F9' }}>
+      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid var(--border-strong)' }}>
         {STATUS_TABS.map(tab => {
           const active = filters.status === tab.value && !filters.overdue;
           return (
@@ -203,13 +211,13 @@ const Tasks = () => {
               style={{
                 padding: '10px 16px',
                 border: 'none',
-                borderBottom: active ? '2px solid #2563EB' : '2px solid transparent',
+                borderBottom: active ? '2px solid var(--primary-hi)' : '2px solid transparent',
                 marginBottom: -2,
                 background: 'none',
                 cursor: 'pointer',
                 fontSize: 14,
                 fontWeight: active ? 600 : 400,
-                color: active ? '#2563EB' : '#64748B',
+                color: active ? 'var(--primary-hi)' : 'var(--ink-4)',
                 transition: 'all 0.15s',
                 display: 'flex',
                 alignItems: 'center',
@@ -219,8 +227,8 @@ const Tasks = () => {
               {tab.label}
               <span style={{
                 fontSize: 11,
-                backgroundColor: active ? '#DBEAFE' : '#F1F5F9',
-                color: active ? '#1D4ED8' : '#94A3B8',
+                backgroundColor: active ? 'var(--primary-soft)' : 'var(--surface-3)',
+                color: active ? 'var(--primary-hi)' : 'var(--ink-4)',
                 padding: '1px 6px',
                 borderRadius: 9999,
                 fontWeight: 500,
@@ -236,13 +244,13 @@ const Tasks = () => {
             style={{
               padding: '10px 16px',
               border: 'none',
-              borderBottom: filters.overdue ? '2px solid #DC2626' : '2px solid transparent',
+              borderBottom: filters.overdue ? '2px solid var(--neg)' : '2px solid transparent',
               marginBottom: -2,
               background: 'none',
               cursor: 'pointer',
               fontSize: 14,
               fontWeight: filters.overdue ? 600 : 400,
-              color: filters.overdue ? '#DC2626' : '#94A3B8',
+              color: filters.overdue ? 'var(--neg)' : 'var(--ink-4)',
               transition: 'all 0.15s',
               display: 'flex',
               alignItems: 'center',
@@ -253,8 +261,8 @@ const Tasks = () => {
             באיחור
             <span style={{
               fontSize: 11,
-              backgroundColor: '#FEF2F2',
-              color: '#DC2626',
+              backgroundColor: 'var(--neg-soft)',
+              color: 'var(--neg)',
               padding: '1px 6px',
               borderRadius: 9999,
               fontWeight: 600,
@@ -293,12 +301,12 @@ const Tasks = () => {
             onClick={() => setFilters({ status: 'all', priority: 'all', category: 'all', search: '', overdue: false })}
             style={{
               padding: '8px 14px',
-              border: '1px solid #E2E8F0',
+              border: '1px solid var(--border)',
               borderRadius: 8,
-              background: 'white',
+              background: 'var(--surface-3)',
               cursor: 'pointer',
               fontSize: 13,
-              color: '#475569',
+              color: 'var(--ink-3)',
             }}
           >
             נקה סינון
@@ -311,12 +319,12 @@ const Tasks = () => {
         <div style={{
           textAlign: 'center',
           padding: '60px 32px',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--surface-2)',
           borderRadius: 16,
-          border: '1px solid #F1F5F9',
-          color: '#94A3B8',
+          border: '1px solid var(--border)',
+          color: 'var(--ink-4)',
         }}>
-          <CheckSquare size={40} color="#CBD5E1" style={{ marginBottom: 16 }} />
+          <CheckSquare size={40} color="#353B52" style={{ marginBottom: 16 }} />
           <p style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>אין משימות להצגה</p>
           <p style={{ fontSize: 14, margin: '8px 0 0 0' }}>
             {tasks.length === 0
@@ -358,16 +366,16 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
   const dimmed = done || cancelled;
 
   const statusCfg = STATUS_COLORS[task.status] || STATUS_COLORS.open;
-  const priorityCfg = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium;
+  const priorityCfg = DARK_PRIORITY_COLORS[task.priority] || DARK_PRIORITY_COLORS.medium;
 
-  let dueDateColor = '#64748B';
-  if (overdue) dueDateColor = '#DC2626';
-  else if (dueToday) dueDateColor = '#D97706';
+  let dueDateColor = 'var(--ink-4)';
+  if (overdue) dueDateColor = 'var(--neg)';
+  else if (dueToday) dueDateColor = 'var(--warn)';
 
   return (
     <div style={{
-      backgroundColor: 'white',
-      border: overdue ? '1px solid #FECACA' : '1px solid #F1F5F9',
+      backgroundColor: 'var(--surface-2)',
+      border: overdue ? '1px solid rgba(255,122,138,0.3)' : '1px solid var(--border)',
       borderRadius: 12,
       padding: '16px 20px',
       display: 'flex',
@@ -375,7 +383,7 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
       alignItems: 'flex-start',
       opacity: dimmed ? 0.6 : 1,
       transition: 'opacity 0.15s',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      boxShadow: 'var(--shadow-sm)',
     }}>
       {/* Done toggle */}
       <button
@@ -384,8 +392,8 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
         style={{
           width: 20, height: 20,
           borderRadius: '50%',
-          border: done ? 'none' : '2px solid #CBD5E1',
-          backgroundColor: done ? '#059669' : 'transparent',
+          border: done ? 'none' : '2px solid var(--ink-5)',
+          backgroundColor: done ? 'var(--pos)' : 'transparent',
           cursor: 'pointer',
           flexShrink: 0,
           marginTop: 3,
@@ -417,12 +425,12 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
           }}>
             {STATUS_LABELS[task.status]}
           </span>
-          <span style={{ fontSize: 11, color: '#94A3B8' }}>
+          <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>
             {CATEGORY_LABELS[task.category]}
           </span>
           {overdue && (
             <span style={{
-              fontSize: 11, color: '#DC2626', fontWeight: 600,
+              fontSize: 11, color: 'var(--neg)', fontWeight: 600,
               display: 'flex', alignItems: 'center', gap: 3,
             }}>
               <AlertCircle size={11} />
@@ -434,7 +442,7 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
         {/* Title */}
         <p style={{
           margin: 0, fontSize: 15, fontWeight: 600,
-          color: dimmed ? '#94A3B8' : '#1E293B',
+          color: dimmed ? 'var(--ink-4)' : 'var(--ink-1)',
           textDecoration: done ? 'line-through' : 'none',
         }}>
           {task.title}
@@ -443,7 +451,7 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
         {/* Notes snippet */}
         {task.notes && (
           <p style={{
-            margin: '4px 0 0 0', fontSize: 13, color: '#64748B',
+            margin: '4px 0 0 0', fontSize: 13, color: 'var(--ink-4)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {task.notes}
@@ -461,8 +469,8 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
           )}
           {task.transactions && (
             <span style={{
-              fontSize: 12, color: '#475569',
-              backgroundColor: '#F1F5F9',
+              fontSize: 12, color: 'var(--ink-3)',
+              backgroundColor: 'var(--surface-3)',
               padding: '2px 8px', borderRadius: 6,
             }}>
               תנועה: {task.transactions.description}
@@ -470,8 +478,8 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
           )}
           {task.loans && (
             <span style={{
-              fontSize: 12, color: '#475569',
-              backgroundColor: '#F1F5F9',
+              fontSize: 12, color: 'var(--ink-3)',
+              backgroundColor: 'var(--surface-3)',
               padding: '2px 8px', borderRadius: 6,
             }}>
               הלוואה: {task.loans.name}
@@ -482,10 +490,10 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
 
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        <button onClick={onEdit} title="עריכה" style={iconBtnStyle('#EFF6FF', '#2563EB')}>
+        <button onClick={onEdit} title="עריכה" style={iconBtnStyle('var(--primary-soft)', 'var(--primary-hi)')}>
           <Pencil size={14} />
         </button>
-        <button onClick={onDelete} title="מחיקה" style={iconBtnStyle('#FEF2F2', '#E11D48')}>
+        <button onClick={onDelete} title="מחיקה" style={iconBtnStyle('var(--neg-soft)', 'var(--neg)')}>
           <Trash2 size={14} />
         </button>
       </div>
@@ -497,18 +505,18 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
 
 const newBtnStyle = {
   display: 'flex', alignItems: 'center',
-  backgroundColor: '#2563EB', color: 'white',
+  background: 'var(--primary-grad)', color: 'var(--primary-ink)',
   border: 'none', borderRadius: 10,
   padding: '10px 20px', fontSize: 14, fontWeight: 600,
   cursor: 'pointer',
 };
 const filterSelectStyle = {
   padding: '8px 12px',
-  border: '1px solid #E2E8F0',
+  border: '1px solid var(--border)',
   borderRadius: 8,
   fontSize: 13,
-  color: '#475569',
-  backgroundColor: 'white',
+  color: 'var(--ink-2)',
+  backgroundColor: 'var(--surface-2)',
   outline: 'none',
 };
 const iconBtnStyle = (bg, color) => ({

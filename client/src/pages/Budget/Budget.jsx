@@ -115,9 +115,9 @@ const Budget = () => {
   };
 
   const getProgressColor = (percent) => {
-    if (percent > 100) return '#ef4444';
-    if (percent >= 70) return '#f59e0b';
-    return '#10b981';
+    if (percent > 100) return 'var(--neg)';
+    if (percent >= 70) return 'var(--warn)';
+    return 'var(--pos)';
   };
 
   const formatMonth = (monthStr) => {
@@ -131,8 +131,8 @@ const Budget = () => {
       {/* Header */}
       <div style={headerStyle}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '2rem', color: '#1e293b' }}>תקציב חודשי</h1>
-          <p style={{ color: '#64748b', marginTop: '5px' }}>{formatMonth(selectedMonth)}</p>
+          <h1 style={{ margin: 0, fontSize: '2rem', color: 'var(--ink-1)' }}>תקציב חודשי</h1>
+          <p style={{ color: 'var(--ink-4)', marginTop: '5px' }}>{formatMonth(selectedMonth)}</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <input
@@ -152,19 +152,19 @@ const Budget = () => {
         <SummaryCard
           title="תקציב החודש"
           value={summary.totalBudget}
-          color="#3b82f6"
+          color="var(--primary-hi)"
           icon={<TrendingUp size={24} />}
         />
         <SummaryCard
           title="בוצע בפועל"
           value={summary.totalSpent}
-          color="#f59e0b"
+          color="var(--warn)"
           icon={<TrendingDown size={24} />}
         />
         <SummaryCard
           title={summary.remaining >= 0 ? 'יתרה' : 'חריגה'}
           value={Math.abs(summary.remaining)}
-          color={summary.remaining >= 0 ? '#10b981' : '#ef4444'}
+          color={summary.remaining >= 0 ? 'var(--pos)' : 'var(--neg)'}
           icon={<AlertTriangle size={24} />}
         />
       </div>
@@ -172,7 +172,7 @@ const Budget = () => {
       {/* Budget Table */}
       <div style={tableContainerStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ margin: 0, fontSize: '1.3rem', color: '#1e293b' }}>פירוט תקציב</h2>
+          <h2 style={{ margin: 0, fontSize: '1.3rem', color: 'var(--ink-1)' }}>פירוט תקציב</h2>
           <button onClick={() => setShowAddRow(true)} style={addBtnStyle}>
             <Plus size={18} /> הוסף קטגוריה
           </button>
@@ -203,7 +203,7 @@ const Budget = () => {
         )}
 
         {loading ? (
-          <p style={{ textAlign: 'center', color: '#94a3b8' }}>...טוען</p>
+          <p style={{ textAlign: 'center', color: 'var(--ink-4)' }}>...טוען</p>
         ) : budgets.length === 0 ? (
           <div style={emptyStyle}>
             אין תקציב מוגדר לחודש זה. לחץ "הוסף קטגוריה" כדי להתחיל.
@@ -248,12 +248,14 @@ const Budget = () => {
                           <button onClick={() => setEditingId(null)} style={cancelBtnSmall}>X</button>
                         </div>
                       ) : (
-                        `₪${budget.toLocaleString()}`
+                        <span className="num">₪{budget.toLocaleString()}</span>
                       )}
                     </td>
-                    <td style={tdStyle}>₪{spent.toLocaleString()}</td>
-                    <td style={{ ...tdStyle, color: remaining >= 0 ? '#10b981' : '#ef4444', fontWeight: '600' }}>
-                      {remaining >= 0 ? `₪${remaining.toLocaleString()}` : `-₪${Math.abs(remaining).toLocaleString()}`}
+                    <td style={tdStyle}><span className="num">₪{spent.toLocaleString()}</span></td>
+                    <td style={{ ...tdStyle, color: remaining >= 0 ? 'var(--pos)' : 'var(--neg)', fontWeight: '600' }}>
+                      <span className="num">
+                        {remaining >= 0 ? `₪${remaining.toLocaleString()}` : `−₪${Math.abs(remaining).toLocaleString()}`}
+                      </span>
                     </td>
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -266,7 +268,7 @@ const Budget = () => {
                             transition: 'width 0.3s ease'
                           }} />
                         </div>
-                        <span style={{ fontSize: '0.8rem', color: '#64748b', minWidth: '35px' }}>{percent}%</span>
+                        <span className="num" style={{ fontSize: '0.8rem', color: 'var(--ink-4)', minWidth: '35px' }}>{percent}%</span>
                       </div>
                     </td>
                     <td style={tdStyle}>
@@ -276,14 +278,14 @@ const Budget = () => {
                           style={iconBtnStyle}
                           title="ערוך"
                         >
-                          <Pencil size={15} />
+                          <Pencil size={15} color="#9B82FF" />
                         </button>
                         <button
                           onClick={() => handleDelete(b.id)}
-                          style={{ ...iconBtnStyle, color: '#ef4444' }}
+                          style={iconBtnStyle}
                           title="מחק"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={15} color="#FF7A8A" />
                         </button>
                       </div>
                     </td>
@@ -298,19 +300,19 @@ const Budget = () => {
       {/* Insights */}
       {budgets.length > 0 && (
         <div style={insightsContainerStyle}>
-          <h2 style={{ margin: '0 0 20px', fontSize: '1.3rem', color: '#1e293b' }}>חריגות והמלצות</h2>
+          <h2 style={{ margin: '0 0 20px', fontSize: '1.3rem', color: 'var(--ink-1)' }}>חריגות והמלצות</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             {/* Over budget */}
             <div style={insightCardStyle}>
-              <h3 style={{ margin: '0 0 12px', color: '#ef4444', fontSize: '1rem' }}>חריגות מהתקציב</h3>
+              <h3 style={{ margin: '0 0 12px', color: 'var(--neg)', fontSize: '1rem' }}>חריגות מהתקציב</h3>
               {insights.overBudget.length === 0 ? (
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>אין חריגות - כל הכבוד!</p>
+                <p style={{ color: 'var(--ink-4)', fontSize: '0.9rem' }}>אין חריגות - כל הכבוד!</p>
               ) : (
                 insights.overBudget.map(b => (
                   <div key={b.id} style={insightRowStyle}>
                     <span>{b.categories?.icon} {b.categories?.name}</span>
-                    <span style={{ color: '#ef4444', fontWeight: '600' }}>
-                      -₪{Math.abs(b.diff).toLocaleString()}
+                    <span className="num" style={{ color: 'var(--neg)', fontWeight: '600' }}>
+                      −₪{Math.abs(b.diff).toLocaleString()}
                     </span>
                   </div>
                 ))
@@ -319,14 +321,14 @@ const Budget = () => {
 
             {/* Under utilized */}
             <div style={insightCardStyle}>
-              <h3 style={{ margin: '0 0 12px', color: '#10b981', fontSize: '1rem' }}>לא נוצלו</h3>
+              <h3 style={{ margin: '0 0 12px', color: 'var(--pos)', fontSize: '1rem' }}>לא נוצלו</h3>
               {insights.underUtilized.length === 0 ? (
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>כל התקציבים נוצלו</p>
+                <p style={{ color: 'var(--ink-4)', fontSize: '0.9rem' }}>כל התקציבים נוצלו</p>
               ) : (
                 insights.underUtilized.map(b => (
                   <div key={b.id} style={insightRowStyle}>
                     <span>{b.categories?.icon} {b.categories?.name}</span>
-                    <span style={{ color: '#10b981', fontWeight: '600' }}>
+                    <span className="num" style={{ color: 'var(--pos)', fontWeight: '600' }}>
                       ₪{b.diff.toLocaleString()} נשאר
                     </span>
                   </div>
@@ -352,20 +354,20 @@ const Budget = () => {
 // Summary Card Component
 const SummaryCard = ({ title, value, color, icon }) => (
   <div style={{
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    padding: '20px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-    border: '1px solid #e2e8f0'
+    backgroundColor: 'var(--surface-2)',
+    borderRadius: 'var(--r-12)',
+    padding: 'var(--s-20)',
+    boxShadow: 'var(--shadow-sm)',
+    border: '1px solid var(--border)',
   }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <div>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>{title}</p>
-        <p style={{ margin: '8px 0 0', fontSize: '1.6rem', fontWeight: 'bold', color }}>
+        <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: '0.9rem' }}>{title}</p>
+        <p className="num" style={{ margin: '8px 0 0', fontSize: '1.6rem', fontWeight: 'bold', color }}>
           ₪{value.toLocaleString()}
         </p>
       </div>
-      <div style={{ color, opacity: 0.3 }}>{icon}</div>
+      <div style={{ color, opacity: 0.5 }}>{icon}</div>
     </div>
   </div>
 );
@@ -392,10 +394,10 @@ const CopyBudgetModal = ({ currentMonth, onClose, onSuccess }) => {
   return (
     <div style={overlayStyle}>
       <div style={modalStyle}>
-        <h2 style={{ margin: '0 0 20px', fontSize: '1.3rem' }}>העתקת תקציב</h2>
+        <h2 style={{ margin: '0 0 20px', fontSize: '1.3rem', color: 'var(--ink-1)' }}>העתקת תקציב</h2>
         <div style={{ marginBottom: '15px' }}>
           <label style={labelStyle}>מחודש (מקור)</label>
-          <input type="month" value={currentMonth} disabled style={{ ...inputStyle, backgroundColor: '#f1f5f9' }} />
+          <input type="month" value={currentMonth} disabled style={{ ...inputStyle, backgroundColor: 'var(--surface-3)', opacity: 0.6 }} />
         </div>
         <div style={{ marginBottom: '20px' }}>
           <label style={labelStyle}>לחודש (יעד)</label>
@@ -415,9 +417,7 @@ const CopyBudgetModal = ({ currentMonth, onClose, onSuccess }) => {
 // --- Styles ---
 const pageStyle = {
   padding: '30px',
-  backgroundColor: '#f8fafc',
   minHeight: '100vh',
-  fontFamily: "'Segoe UI', sans-serif"
 };
 
 const headerStyle = {
@@ -429,24 +429,26 @@ const headerStyle = {
 
 const monthInputStyle = {
   padding: '10px 14px',
-  borderRadius: '8px',
-  border: '1px solid #d1d5db',
+  borderRadius: 'var(--r-8)',
+  border: '1px solid var(--border)',
   fontSize: '1rem',
-  cursor: 'pointer'
+  cursor: 'pointer',
+  backgroundColor: 'var(--surface-3)',
+  color: 'var(--ink-2)',
 };
 
 const copyBtnStyle = {
-  backgroundColor: '#6366f1',
-  color: 'white',
+  background: 'var(--primary-grad)',
+  color: 'var(--primary-ink)',
   border: 'none',
   padding: '10px 20px',
-  borderRadius: '8px',
+  borderRadius: 'var(--r-8)',
   cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
   gap: '8px',
   fontWeight: '600',
-  fontSize: '0.95rem'
+  fontSize: '0.95rem',
 };
 
 const summaryGridStyle = {
@@ -457,26 +459,26 @@ const summaryGridStyle = {
 };
 
 const tableContainerStyle = {
-  backgroundColor: '#fff',
-  borderRadius: '12px',
+  backgroundColor: 'var(--surface-2)',
+  borderRadius: 'var(--r-12)',
   padding: '24px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-  border: '1px solid #e2e8f0',
+  boxShadow: 'var(--shadow-sm)',
+  border: '1px solid var(--border)',
   marginBottom: '25px'
 };
 
 const addBtnStyle = {
-  backgroundColor: '#10b981',
-  color: 'white',
+  background: 'var(--primary-grad)',
+  color: 'var(--primary-ink)',
   border: 'none',
   padding: '8px 16px',
-  borderRadius: '8px',
+  borderRadius: 'var(--r-8)',
   cursor: 'pointer',
   display: 'flex',
   alignItems: 'center',
   gap: '6px',
   fontWeight: '600',
-  fontSize: '0.9rem'
+  fontSize: '0.9rem',
 };
 
 const addRowStyle = {
@@ -484,10 +486,10 @@ const addRowStyle = {
   gap: '10px',
   alignItems: 'center',
   padding: '12px',
-  backgroundColor: '#f8fafc',
-  borderRadius: '8px',
+  backgroundColor: 'var(--surface-3)',
+  borderRadius: 'var(--r-8)',
   marginBottom: '16px',
-  border: '1px dashed #cbd5e1'
+  border: '1px dashed var(--border-strong)',
 };
 
 const tableStyle = {
@@ -496,29 +498,31 @@ const tableStyle = {
 };
 
 const thStyle = {
-  textAlign: 'right',
+  textAlign: 'start',
   padding: '12px 10px',
-  borderBottom: '2px solid #e2e8f0',
-  color: '#64748b',
-  fontSize: '0.85rem',
-  fontWeight: '600'
+  borderBottom: '2px solid var(--border-strong)',
+  color: 'var(--ink-4)',
+  fontSize: 'var(--fs-11)',
+  fontWeight: '600',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
 };
 
 const trStyle = {
-  borderBottom: '1px solid #f1f5f9'
+  borderBottom: '1px solid var(--border)'
 };
 
 const tdStyle = {
   padding: '14px 10px',
   fontSize: '0.95rem',
-  color: '#334155'
+  color: 'var(--ink-2)'
 };
 
 const progressBgStyle = {
   flex: 1,
-  height: '8px',
-  backgroundColor: '#f1f5f9',
-  borderRadius: '4px',
+  height: '6px',
+  backgroundColor: 'var(--surface-3)',
+  borderRadius: 'var(--r-6)',
   overflow: 'hidden'
 };
 
@@ -526,87 +530,90 @@ const iconBtnStyle = {
   background: 'none',
   border: 'none',
   cursor: 'pointer',
-  color: '#64748b',
-  padding: '4px'
+  padding: '4px',
+  display: 'flex',
+  alignItems: 'center',
 };
 
 const inputStyle = {
   padding: '8px 12px',
-  borderRadius: '6px',
-  border: '1px solid #d1d5db',
+  borderRadius: 'var(--r-6)',
+  border: '1px solid var(--border)',
   fontSize: '0.95rem',
-  boxSizing: 'border-box'
+  boxSizing: 'border-box',
+  backgroundColor: 'var(--surface-3)',
+  color: 'var(--ink-1)',
 };
 
 const saveBtnStyle = {
-  backgroundColor: '#3b82f6',
-  color: 'white',
+  background: 'var(--primary-grad)',
+  color: 'var(--primary-ink)',
   border: 'none',
   padding: '8px 20px',
-  borderRadius: '6px',
+  borderRadius: 'var(--r-6)',
   cursor: 'pointer',
-  fontWeight: '600'
+  fontWeight: '600',
 };
 
 const saveBtnSmall = {
-  backgroundColor: '#10b981',
+  background: 'var(--primary)',
   color: 'white',
   border: 'none',
   padding: '4px 10px',
   borderRadius: '4px',
   cursor: 'pointer',
-  fontSize: '0.8rem'
+  fontSize: '0.8rem',
 };
 
 const cancelBtnStyle = {
-  backgroundColor: '#e2e8f0',
-  color: '#475569',
-  border: 'none',
+  backgroundColor: 'var(--surface-3)',
+  color: 'var(--ink-3)',
+  border: '1px solid var(--border)',
   padding: '8px 20px',
-  borderRadius: '6px',
+  borderRadius: 'var(--r-6)',
   cursor: 'pointer',
-  fontWeight: '600'
+  fontWeight: '600',
 };
 
 const cancelBtnSmall = {
-  backgroundColor: '#fee2e2',
-  color: '#ef4444',
+  backgroundColor: 'var(--neg-soft)',
+  color: 'var(--neg)',
   border: 'none',
   padding: '4px 8px',
   borderRadius: '4px',
   cursor: 'pointer',
-  fontSize: '0.8rem'
+  fontSize: '0.8rem',
 };
 
 const emptyStyle = {
   textAlign: 'center',
   padding: '40px',
-  color: '#94a3b8',
-  border: '2px dashed #e2e8f0',
-  borderRadius: '8px'
+  color: 'var(--ink-4)',
+  border: '2px dashed var(--border-strong)',
+  borderRadius: 'var(--r-8)',
 };
 
 const insightsContainerStyle = {
-  backgroundColor: '#fff',
-  borderRadius: '12px',
+  backgroundColor: 'var(--surface-2)',
+  borderRadius: 'var(--r-12)',
   padding: '24px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-  border: '1px solid #e2e8f0'
+  boxShadow: 'var(--shadow-sm)',
+  border: '1px solid var(--border)',
 };
 
 const insightCardStyle = {
-  backgroundColor: '#f8fafc',
-  borderRadius: '8px',
+  backgroundColor: 'var(--surface-3)',
+  borderRadius: 'var(--r-8)',
   padding: '16px',
-  border: '1px solid #e2e8f0'
+  border: '1px solid var(--border)',
 };
 
 const insightRowStyle = {
   display: 'flex',
   justifyContent: 'space-between',
   padding: '8px 0',
-  borderBottom: '1px solid #f1f5f9',
-  fontSize: '0.9rem'
+  borderBottom: '1px solid var(--border)',
+  fontSize: '0.9rem',
 };
 
 const overlayStyle = {
@@ -615,30 +622,32 @@ const overlayStyle = {
   left: 0,
   right: 0,
   bottom: 0,
-  backgroundColor: 'rgba(0,0,0,0.6)',
+  backgroundColor: 'rgba(0,0,0,0.7)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 9999,
-  backdropFilter: 'blur(4px)'
+  backdropFilter: 'blur(4px)',
 };
 
 const modalStyle = {
-  backgroundColor: 'white',
+  backgroundColor: 'var(--surface-elev)',
   padding: '30px',
-  borderRadius: '16px',
+  borderRadius: 'var(--r-16)',
   width: '400px',
   maxWidth: '90%',
-  boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-  textAlign: 'right'
+  boxShadow: 'var(--shadow-md)',
+  border: '1px solid var(--border-strong)',
+  textAlign: 'right',
+  color: 'var(--ink-1)',
 };
 
 const labelStyle = {
   display: 'block',
   fontSize: '0.9rem',
   fontWeight: '600',
-  color: '#374151',
-  marginBottom: '6px'
+  color: 'var(--ink-2)',
+  marginBottom: '6px',
 };
 
 export default Budget;
