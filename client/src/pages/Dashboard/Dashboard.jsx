@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { getTransactions, getAllLoans, getBudgetsByMonth, getCategories, getTasks } from '../../services/api';
 import { isOverdue, PRIORITY_LABELS, PRIORITY_COLORS } from '../../utils/taskHelpers';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank, Bell, Plus } from 'lucide-react';
 import { calculateSummaryStats, filterTransactionsByMonth, prepareMonthlyChartData } from '../../utils/dashboardHelpers';
+
+const HEBREW_MONTHS_FULL = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 /*
   Dark-theme priority badge backgrounds, local to Dashboard.
@@ -25,6 +27,12 @@ const Dashboard = () => {
   const [categories, setCategories] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -46,14 +54,26 @@ const Dashboard = () => {
         console.error('Error fetching dashboard data', error);
       } finally {
         setLoading(false);
+        setLastUpdated(new Date());
       }
     };
     fetchData();
   }, []);
 
-  const monthlyTransactions = useMemo(() => filterTransactionsByMonth(transactions), [transactions]);
+  const monthlyTransactions = useMemo(() => filterTransactionsByMonth(transactions, selectedMonth), [transactions, selectedMonth]);
   const stats = useMemo(() => calculateSummaryStats(monthlyTransactions), [monthlyTransactions]);
   const chartData = useMemo(() => prepareMonthlyChartData(transactions, 6), [transactions]);
+
+  const monthOptions = useMemo(() => {
+    const now = new Date();
+    const options = [];
+    for (let i = 0; i < 12; i++) {
+      options.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+    }
+    return options;
+  }, []);
+
+  const selectedMonthLabel = `${HEBREW_MONTHS_FULL[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`;
 
   // Calculate budget progress - spending per category this month
   const budgetProgress = useMemo(() => {
@@ -100,6 +120,138 @@ const Dashboard = () => {
 
   return (
     <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-32)' }}>
+
+      {/* ─── Dashboard command header ─── */}
+      <header style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--s-16)',
+        paddingBottom: 'var(--s-24)',
+        borderBottom: '1px solid var(--border)',
+        flexWrap: 'wrap',
+      }}>
+
+        {/* Right: brand identity mark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-10)', flexShrink: 0 }}>
+          <div style={{
+            height: 36, width: 36, flexShrink: 0,
+            background: 'var(--primary-grad)',
+            borderRadius: 'var(--r-8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 16px rgba(124,92,255,0.28)',
+          }}>
+            <Wallet size={17} color="white" />
+          </div>
+          <span style={{ fontSize: 'var(--fs-16)', fontWeight: 700, color: 'var(--ink-1)', letterSpacing: '-0.02em' }}>
+            פיננסים.
+          </span>
+        </div>
+
+        {/* Center: title + LIVE badge + subtitle */}
+        <div style={{ textAlign: 'center', flex: '1 1 auto', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--s-8)', flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0, fontSize: 'var(--fs-20)', fontWeight: 700, color: 'var(--ink-1)', letterSpacing: '-0.015em' }}>
+              סקירה כללית
+            </h2>
+            {/* LIVE badge */}
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.07em',
+              color: 'var(--pos)', background: 'var(--pos-soft)',
+              border: '1px solid rgba(74,222,154,0.35)',
+              padding: '2px 8px', borderRadius: 9999,
+              textTransform: 'uppercase',
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                backgroundColor: 'var(--pos)',
+                boxShadow: '0 0 6px var(--pos)',
+              }} />
+              Live
+            </span>
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-13)', color: 'var(--ink-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {selectedMonthLabel}
+            {lastUpdated && (
+              <span> · עודכן {lastUpdated.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
+            )}
+          </p>
+        </div>
+
+        {/* Left: actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-8)', flexShrink: 0, flexWrap: 'wrap' }}>
+
+          {/* Month selector */}
+          <select
+            value={`${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`}
+            onChange={(e) => {
+              const [yr, mo] = e.target.value.split('-');
+              setSelectedMonth(new Date(Number(yr), Number(mo) - 1, 1));
+            }}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-8)',
+              fontSize: 'var(--fs-13)',
+              backgroundColor: 'var(--surface-3)',
+              color: 'var(--ink-2)',
+              cursor: 'pointer',
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          >
+            {monthOptions.map(d => {
+              const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+              return (
+                <option key={val} value={val}>
+                  {HEBREW_MONTHS_FULL[d.getMonth()]} {d.getFullYear()}
+                </option>
+              );
+            })}
+          </select>
+
+          {/* Notifications */}
+          <button
+            title="התראות"
+            style={{
+              width: 38, height: 38, flexShrink: 0,
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-8)',
+              backgroundColor: 'var(--surface-3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--ink-3)',
+              cursor: 'pointer',
+              transition: 'background-color 0.15s, color 0.15s',
+            }}
+            className="btn-hover"
+          >
+            {/* #8B90A6 ≈ --ink-3 hex (Lucide color requires hex) */}
+            <Bell size={16} color="#8B90A6" />
+          </button>
+
+          {/* New transaction */}
+          <Link
+            to="/add"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 'var(--s-6)',
+              padding: '9px 16px',
+              background: 'var(--primary-grad)',
+              color: 'var(--primary-ink)',
+              borderRadius: 'var(--r-8)',
+              fontSize: 'var(--fs-14)', fontWeight: 600,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 0 16px rgba(124,92,255,0.25)',
+              transition: 'opacity 0.15s',
+            }}
+          >
+            <Plus size={16} />
+            תנועה חדשה
+          </Link>
+        </div>
+      </header>
+
       {/* Summary Cards */}
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--s-24)' }}>
         <SummaryCard
