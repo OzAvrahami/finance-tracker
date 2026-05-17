@@ -4,10 +4,10 @@ import { getShoppingLists, getShoppingListTypes, createShoppingList, deleteShopp
 import ShoppingListDetail from './ShoppingListDetail';
 
 const STATUS_CONFIG = {
-  draft:       { bg: '#F1F5F9', text: '#64748B', label: 'טיוטה' },
-  active:      { bg: '#EFF6FF', text: '#2563EB', label: 'פעילה' },
-  checked_out: { bg: '#ECFDF5', text: '#059669', label: 'שולמה' },
-  archived:    { bg: '#F8FAFC', text: '#94A3B8', label: 'ארכיון' },
+  draft:       { bg: 'var(--surface-3)',  text: 'var(--ink-4)',   label: 'טיוטה' },
+  active:      { bg: 'var(--info-soft)',  text: 'var(--info)',    label: 'פעילה' },
+  checked_out: { bg: 'var(--pos-soft)',   text: 'var(--pos)',     label: 'שולמה' },
+  archived:    { bg: 'var(--surface-3)',  text: 'var(--ink-4)',   label: 'ארכיון' },
 };
 
 const ShoppingLists = () => {
@@ -87,7 +87,7 @@ const ShoppingLists = () => {
   }
 
   if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: 80, color: '#64748B' }}>טוען רשימות...</div>;
+    return <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--ink-4)' }}>טוען רשימות...</div>;
   }
 
   return (
@@ -95,7 +95,7 @@ const ShoppingLists = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <p style={{ color: '#64748B', marginTop: 4, fontSize: 14 }}>ניהול רשימות הקנייה שלך</p>
+          <p style={{ color: 'var(--ink-4)', marginTop: 4, fontSize: 14 }}>ניהול רשימות הקנייה שלך</p>
         </div>
         <button onClick={() => setShowCreateModal(true)} style={addBtnStyle}>
           <Plus size={20} /> רשימה חדשה
@@ -104,7 +104,7 @@ const ShoppingLists = () => {
 
       {/* Error banner */}
       {error && (
-        <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#B91C1C', fontSize: 14 }}>
+        <div style={{ backgroundColor: 'var(--neg-soft)', border: '1px solid var(--neg)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: 'var(--neg)', fontSize: 14 }}>
           {error}
         </div>
       )}
@@ -129,8 +129,8 @@ const ShoppingLists = () => {
               fontSize: 14,
               fontWeight: 500,
               transition: 'all 0.2s',
-              backgroundColor: statusFilter === f.key ? '#2563EB' : '#F1F5F9',
-              color: statusFilter === f.key ? 'white' : '#475569',
+              backgroundColor: statusFilter === f.key ? 'var(--primary)' : 'var(--surface-3)',
+              color: statusFilter === f.key ? 'var(--primary-ink)' : 'var(--ink-3)',
             }}
           >
             {f.label}
@@ -151,17 +151,18 @@ const ShoppingLists = () => {
                 key={list.id}
                 onClick={() => setSelectedListId(list.id)}
                 style={{ ...cardStyle, cursor: 'pointer', transition: 'box-shadow 0.2s', position: 'relative' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
               >
                 {/* Header row */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <ShoppingCart size={20} color="#2563EB" />
-                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#1E293B' }}>{list.title}</h3>
+                    {/* #9B82FF = --primary-hi (Lucide color prop requires hex) */}
+                    <ShoppingCart size={20} color="#9B82FF" />
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--ink-1)' }}>{list.title}</h3>
                   </div>
                   {(list.status === 'draft' || list.status === 'active') && (
-                    <button onClick={(e) => handleDelete(e, list.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4 }}>
+                    <button onClick={(e) => handleDelete(e, list.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)', padding: 4 }}>
                       <Trash2 size={16} />
                     </button>
                   )}
@@ -170,24 +171,24 @@ const ShoppingLists = () => {
                 {/* Badges */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                   {typeName && (
-                    <span style={{ ...badgeStyle, backgroundColor: '#F8FAFC', color: '#475569' }}>{typeName}</span>
+                    <span style={{ ...badgeStyle, backgroundColor: 'var(--surface-3)', color: 'var(--ink-3)' }}>{typeName}</span>
                   )}
                   <span style={{ ...badgeStyle, backgroundColor: status.bg, color: status.text }}>{status.label}</span>
                 </div>
 
                 {/* Progress */}
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748B', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--ink-3)', marginBottom: 6 }}>
                     <span>{list.purchased_count}/{list.item_count} פריטים</span>
                     <span>{pct}%</span>
                   </div>
-                  <div style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 9999, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', backgroundColor: pct === 100 ? '#059669' : '#3B82F6', width: `${pct}%`, borderRadius: 9999, transition: 'width 0.3s' }} />
+                  <div style={{ height: 8, backgroundColor: 'var(--surface-3)', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', backgroundColor: pct === 100 ? 'var(--pos)' : 'var(--primary-hi)', width: `${pct}%`, borderRadius: 9999, transition: 'width 0.3s' }} />
                   </div>
                 </div>
 
                 {/* Date */}
-                <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 8 }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 8 }}>
                   עודכן: {new Date(list.updated_at).toLocaleDateString('he-IL')}
                 </div>
               </div>
@@ -195,7 +196,7 @@ const ShoppingLists = () => {
           })}
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: 60, color: '#94A3B8', border: '2px dashed #E2E8F0', borderRadius: 12 }}>
+        <div style={{ textAlign: 'center', padding: 60, color: 'var(--ink-4)', border: '2px dashed var(--border)', borderRadius: 12 }}>
           <ShoppingCart size={40} style={{ marginBottom: 12 }} />
           <p>אין רשימות {statusFilter !== 'all' ? `בסטטוס "${STATUS_CONFIG[statusFilter]?.label}"` : 'עדיין'}.</p>
           <p>לחץ על "רשימה חדשה" כדי להתחיל.</p>
@@ -230,8 +231,8 @@ const CreateListModal = ({ listTypes, onClose, onCreate }) => {
     <div style={overlayStyle}>
       <div style={modalStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#1E293B' }}>רשימה חדשה</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+          <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: 'var(--ink-1)' }}>רשימה חדשה</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}>
             <X size={20} />
           </button>
         </div>
@@ -256,7 +257,7 @@ const CreateListModal = ({ listTypes, onClose, onCreate }) => {
             </select>
           </div>
           <button type="submit" style={{
-            width: '100%', padding: 14, backgroundColor: '#2563EB', color: 'white',
+            width: '100%', padding: 14, background: 'var(--primary-grad)', color: 'var(--primary-ink)',
             border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 16, cursor: 'pointer',
           }}>
             צור רשימה
@@ -269,31 +270,31 @@ const CreateListModal = ({ listTypes, onClose, onCreate }) => {
 
 // --- Styles ---
 const cardStyle = {
-  backgroundColor: 'white', padding: 20, borderRadius: 16,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #F1F5F9',
+  backgroundColor: 'var(--surface-2)', padding: 20, borderRadius: 16,
+  boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)',
 };
 const badgeStyle = {
   display: 'inline-flex', alignItems: 'center', padding: '2px 10px',
   borderRadius: 9999, fontSize: 12, fontWeight: 500,
 };
 const addBtnStyle = {
-  backgroundColor: '#2563EB', color: 'white', border: 'none', padding: '12px 24px',
+  background: 'var(--primary-grad)', color: 'var(--primary-ink)', border: 'none', padding: '12px 24px',
   borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-  fontWeight: 600, fontSize: '1rem', boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
+  fontWeight: 600, fontSize: '1rem',
 };
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-  backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
   zIndex: 9999, backdropFilter: 'blur(4px)',
 };
 const modalStyle = {
-  backgroundColor: 'white', padding: 30, borderRadius: 16, width: 450, maxWidth: '90%',
-  boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', textAlign: 'right',
+  backgroundColor: 'var(--surface-elev)', padding: 30, borderRadius: 16, width: 450, maxWidth: '90%',
+  boxShadow: 'var(--shadow-md)', border: '1px solid var(--border-strong)', textAlign: 'right',
 };
-const labelStyle = { display: 'block', fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 6 };
+const labelStyle = { display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 };
 const inputStyle = {
-  width: '100%', padding: 10, border: '1px solid #D1D5DB', borderRadius: 8,
-  fontSize: 16, boxSizing: 'border-box',
+  width: '100%', padding: 10, border: '1px solid var(--border)', borderRadius: 8,
+  fontSize: 16, boxSizing: 'border-box', backgroundColor: 'var(--surface-3)', color: 'var(--ink-1)',
 };
 
 export default ShoppingLists;

@@ -48,13 +48,13 @@ const LegoCollection = () => {
     : sets.filter(s => s.status === filterStatus);
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center', fontSize: '1.2rem', color: '#666' }}>טוען אוסף... 🧱</div>;
+    return <div style={{ padding: '40px', textAlign: 'center', fontSize: '1.2rem', color: 'var(--ink-3)' }}>טוען אוסף... 🧱</div>;
   }
 
   return (
     <div dir="rtl">
       <div style={{ marginBottom: 24 }}>
-        <p style={{ color: '#64748B', marginTop: 4, fontSize: 14 }}>ניהול מלאי, סטטוס בנייה ומעקב שווי</p>
+        <p style={{ color: 'var(--ink-4)', marginTop: 4, fontSize: 14 }}>ניהול מלאי, סטטוס בנייה ומעקב שווי</p>
       </div>
 
       <StatsDashboard stats={stats} />
@@ -67,7 +67,7 @@ const LegoCollection = () => {
           ))}
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '50px', color: '#999', fontSize: '1.1rem' }}>
+        <div style={{ textAlign: 'center', padding: '50px', color: 'var(--ink-4)', fontSize: '1.1rem' }}>
           לא נמצאו סטים תואמים לסינון
         </div>
       )}

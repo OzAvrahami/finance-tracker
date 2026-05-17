@@ -10,6 +10,12 @@ const SetCard = ({ set, onStatusChange, onBrandChange }) => {
   const setNumberForImage = /-\d+$/.test(raw) ? raw : `${raw}-1`;
   const imageUrl = `https://images.brickset.com/sets/images/${setNumberForImage}.jpg`;
 
+  const statusBg = set.status === 'New'
+    ? 'var(--info-soft)'
+    : set.status === 'Built'
+    ? 'var(--pos-soft)'
+    : 'var(--warn-soft)';
+
   return (
     <div style={cardStyle}>
       <div style={imageContainerStyle}>
@@ -20,7 +26,7 @@ const SetCard = ({ set, onStatusChange, onBrandChange }) => {
           loading="lazy"
           onError={(e) => {
             e.currentTarget.onerror = null;
-            e.currentTarget.src = 'https://via.placeholder.com/400x300/f0f2f5/aaaaaa?text=No+Image';
+            e.currentTarget.src = 'https://via.placeholder.com/400x300/1B1F2E/5A607A?text=No+Image';
           }}
         />
       </div>
@@ -34,20 +40,20 @@ const SetCard = ({ set, onStatusChange, onBrandChange }) => {
           </div>
         </div>
 
-        <h3 style={{ margin: '0 0 15px 0', fontSize: '1.1rem', height: '45px', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.3' }}>
+        <h3 style={{ margin: '0 0 15px 0', fontSize: '1.1rem', height: '45px', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.3', color: 'var(--ink-1)' }}>
           {set.name}
         </h3>
 
-        <div style={{ background: '#f8f9fa', padding: '12px', borderRadius: '8px', marginBottom: '15px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: '#666' }}>
+        <div style={{ background: 'var(--surface-3)', padding: '12px', borderRadius: '8px', marginBottom: '15px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: 'var(--ink-3)' }}>
             <span>שולם:</span>
-            <span style={{ fontWeight: 'bold', color: '#1a1a2e', fontSize: '1.1rem' }}>
+            <span style={{ fontWeight: 'bold', color: 'var(--ink-1)', fontSize: '1.1rem' }}>
               ₪{paid.toLocaleString()}
             </span>
           </div>
 
           {orig > paid && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#999', marginTop: '5px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--ink-4)', marginTop: '5px' }}>
               <span>מחיר שוק:</span>
               <span style={{ textDecoration: 'line-through' }}>₪{orig.toLocaleString()}</span>
             </div>
@@ -64,9 +70,9 @@ const SetCard = ({ set, onStatusChange, onBrandChange }) => {
               width: '100%',
               padding: '10px',
               borderRadius: '8px',
-              border: '1px solid #eee',
-              background: set.status === 'New' ? '#e3f2fd' : set.status === 'Built' ? '#e8f5e9' : '#fff3e0',
-              color: '#333',
+              border: '1px solid var(--border)',
+              background: statusBg,
+              color: 'var(--ink-1)',
               cursor: 'pointer',
               fontWeight: '500',
             }}
@@ -83,9 +89,9 @@ const SetCard = ({ set, onStatusChange, onBrandChange }) => {
               width: '100%',
               padding: '10px',
               borderRadius: '8px',
-              border: '1px solid #eee',
-              background: '#fafafa',
-              color: '#333',
+              border: '1px solid var(--border)',
+              background: 'var(--surface-3)',
+              color: 'var(--ink-1)',
               cursor: 'pointer',
               fontWeight: '500',
             }}
@@ -102,11 +108,11 @@ const SetCard = ({ set, onStatusChange, onBrandChange }) => {
 
 // --- Styles ---
 const cardStyle = {
-  background: 'white',
+  background: 'var(--surface-2)',
   borderRadius: '16px',
   overflow: 'hidden',
-  boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
-  border: '1px solid rgba(0,0,0,0.03)',
+  boxShadow: 'var(--shadow-md)',
+  border: '1px solid var(--border)',
   transition: 'transform 0.2s, box-shadow 0.2s',
   display: 'flex',
   flexDirection: 'column',
@@ -118,9 +124,9 @@ const imageContainerStyle = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: '#fff',
+  backgroundColor: 'var(--surface-3)',
   padding: '10px',
-  borderBottom: '1px solid #f0f0f0',
+  borderBottom: '1px solid var(--border)',
 };
 
 const imageStyle = {
@@ -130,17 +136,17 @@ const imageStyle = {
 };
 
 const setNumberBadge = {
-  background: '#f1f3f5',
+  background: 'var(--surface-3)',
   padding: '4px 8px',
   borderRadius: '6px',
   fontSize: '0.8rem',
   fontWeight: 'bold',
-  color: '#555',
+  color: 'var(--ink-3)',
 };
 
 const themeBadge = {
-  background: '#fff0f6',
-  color: '#c026d3',
+  background: 'var(--primary-soft)',
+  color: 'var(--primary-hi)',
   padding: '4px 8px',
   borderRadius: '6px',
   fontSize: '0.8rem',
@@ -148,8 +154,8 @@ const themeBadge = {
 };
 
 const brandBadge = {
-  background: '#fffbeb',
-  color: '#d97706',
+  background: 'var(--warn-soft)',
+  color: 'var(--warn)',
   padding: '4px 8px',
   borderRadius: '6px',
   fontSize: '0.8rem',
@@ -158,8 +164,8 @@ const brandBadge = {
 
 const dealBadge = {
   marginTop: '10px',
-  background: '#d1fae5',
-  color: '#059669',
+  background: 'var(--pos-soft)',
+  color: 'var(--pos)',
   padding: '6px',
   borderRadius: '6px',
   fontSize: '0.85rem',

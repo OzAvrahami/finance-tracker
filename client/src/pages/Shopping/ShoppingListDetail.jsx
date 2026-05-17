@@ -8,10 +8,10 @@ import {
 } from '../../services/api';
 
 const STATUS_CONFIG = {
-  draft:       { bg: '#F1F5F9', text: '#64748B', label: 'טיוטה' },
-  active:      { bg: '#EFF6FF', text: '#2563EB', label: 'פעילה' },
-  checked_out: { bg: '#ECFDF5', text: '#059669', label: 'שולמה' },
-  archived:    { bg: '#F8FAFC', text: '#94A3B8', label: 'ארכיון' },
+  draft:       { bg: 'var(--surface-3)',  text: 'var(--ink-4)',   label: 'טיוטה' },
+  active:      { bg: 'var(--info-soft)',  text: 'var(--info)',    label: 'פעילה' },
+  checked_out: { bg: 'var(--pos-soft)',   text: 'var(--pos)',     label: 'שולמה' },
+  archived:    { bg: 'var(--surface-3)',  text: 'var(--ink-4)',   label: 'ארכיון' },
 };
 
 const ShoppingListDetail = ({ listId, onBack }) => {
@@ -223,9 +223,9 @@ const ShoppingListDetail = ({ listId, onBack }) => {
     }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', marginTop: 80, color: '#64748B' }}>טוען רשימה...</div>;
-  if (error) return <div style={{ textAlign: 'center', marginTop: 80, color: '#E11D48' }}>{error}</div>;
-  if (!list) return <div style={{ textAlign: 'center', marginTop: 80, color: '#E11D48' }}>רשימה לא נמצאה</div>;
+  if (loading) return <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--ink-4)' }}>טוען רשימה...</div>;
+  if (error) return <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--neg)' }}>{error}</div>;
+  if (!list) return <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--neg)' }}>רשימה לא נמצאה</div>;
 
   const status = STATUS_CONFIG[list.status] || STATUS_CONFIG.draft;
   const isEditable = list.status === 'draft' || list.status === 'active';
@@ -235,20 +235,20 @@ const ShoppingListDetail = ({ listId, onBack }) => {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4 }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 4 }}>
             <ChevronRight size={24} />
           </button>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1E293B' }}>{list.title}</h2>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--ink-1)' }}>{list.title}</h2>
           <span style={{ ...badgeStyle, backgroundColor: status.bg, color: status.text }}>{status.label}</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {list.status === 'draft' && (
-            <button onClick={handleActivate} style={{ ...actionBtnStyle, backgroundColor: '#2563EB', color: 'white' }}>
+            <button onClick={handleActivate} style={{ ...actionBtnStyle, background: 'var(--primary-grad)', color: 'var(--primary-ink)' }}>
               הפעל רשימה
             </button>
           )}
           {list.status === 'active' && (
-            <button onClick={openCheckout} style={{ ...actionBtnStyle, backgroundColor: '#059669', color: 'white' }}>
+            <button onClick={openCheckout} style={{ ...actionBtnStyle, backgroundColor: 'var(--pos)', color: 'white' }}>
               <Check size={16} /> סיום וחיוב
             </button>
           )}
@@ -258,16 +258,16 @@ const ShoppingListDetail = ({ listId, onBack }) => {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         <div style={statCardStyle}>
-          <div style={{ fontSize: 13, color: '#64748B', marginBottom: 4 }}>פריטים</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#1E293B' }}>{stats.purchased}/{stats.total}</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-4)', marginBottom: 4 }}>פריטים</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink-1)' }}>{stats.purchased}/{stats.total}</div>
         </div>
         <div style={statCardStyle}>
-          <div style={{ fontSize: 13, color: '#64748B', marginBottom: 4 }}>עלות משוערת</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#1E293B' }} dir="ltr">₪{stats.estimatedCost.toLocaleString()}</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-4)', marginBottom: 4 }}>עלות משוערת</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink-1)' }} dir="ltr">₪{stats.estimatedCost.toLocaleString()}</div>
         </div>
         <div style={statCardStyle}>
-          <div style={{ fontSize: 13, color: '#64748B', marginBottom: 4 }}>נקנה בפועל</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#059669' }} dir="ltr">₪{stats.purchasedCost.toLocaleString()}</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-4)', marginBottom: 4 }}>נקנה בפועל</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--pos)' }} dir="ltr">₪{stats.purchasedCost.toLocaleString()}</div>
         </div>
       </div>
 
@@ -275,14 +275,14 @@ const ShoppingListDetail = ({ listId, onBack }) => {
       {isEditable && (
         <div style={{ marginBottom: 24 }}>
           {!showAddForm ? (
-            <button onClick={() => setShowAddForm(true)} style={{ ...actionBtnStyle, backgroundColor: '#EFF6FF', color: '#2563EB', width: '100%', justifyContent: 'center' }}>
+            <button onClick={() => setShowAddForm(true)} style={{ ...actionBtnStyle, backgroundColor: 'var(--primary-soft)', color: 'var(--primary-hi)', width: '100%', justifyContent: 'center' }}>
               <Plus size={18} /> הוסף פריט
             </button>
           ) : (
             <div style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#1E293B' }}>הוספת פריט</h3>
-                <button onClick={() => setShowAddForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--ink-1)' }}>הוספת פריט</h3>
+                <button onClick={() => setShowAddForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}>
                   <X size={18} />
                 </button>
               </div>
@@ -291,13 +291,13 @@ const ShoppingListDetail = ({ listId, onBack }) => {
               <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                 <button
                   onClick={() => setIsCustomItem(false)}
-                  style={{ ...pillStyle, backgroundColor: !isCustomItem ? '#2563EB' : '#F1F5F9', color: !isCustomItem ? 'white' : '#475569' }}
+                  style={{ ...pillStyle, backgroundColor: !isCustomItem ? 'var(--primary)' : 'var(--surface-3)', color: !isCustomItem ? 'var(--primary-ink)' : 'var(--ink-3)' }}
                 >
                   <Package size={14} /> מהקטלוג
                 </button>
                 <button
                   onClick={() => setIsCustomItem(true)}
-                  style={{ ...pillStyle, backgroundColor: isCustomItem ? '#2563EB' : '#F1F5F9', color: isCustomItem ? 'white' : '#475569' }}
+                  style={{ ...pillStyle, backgroundColor: isCustomItem ? 'var(--primary)' : 'var(--surface-3)', color: isCustomItem ? 'var(--primary-ink)' : 'var(--ink-3)' }}
                 >
                   פריט מותאם
                 </button>
@@ -318,7 +318,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
                       type="button"
                       onClick={() => setShowNewCategoryModal(true)}
                       title="קטגוריה חדשה"
-                      style={{ padding: '0 10px', border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', cursor: 'pointer', fontWeight: 700, fontSize: 18, color: '#2563EB', flexShrink: 0 }}
+                      style={{ padding: '0 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-3)', cursor: 'pointer', fontWeight: 700, fontSize: 18, color: 'var(--primary-hi)', flexShrink: 0 }}
                     >+</button>
                   </div>
                 </div>
@@ -366,7 +366,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
                 </div>
               </div>
 
-              <button onClick={handleAddItem} style={{ ...actionBtnStyle, backgroundColor: '#2563EB', color: 'white', marginTop: 16, width: '100%', justifyContent: 'center' }}>
+              <button onClick={handleAddItem} style={{ ...actionBtnStyle, background: 'var(--primary-grad)', color: 'var(--primary-ink)', marginTop: 16, width: '100%', justifyContent: 'center' }}>
                 <Plus size={16} /> הוסף
               </button>
             </div>
@@ -379,8 +379,8 @@ const ShoppingListDetail = ({ listId, onBack }) => {
         Object.values(groupedItems).map(group => (
           <div key={group.name} style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#475569' }}>{group.icon} {group.name}</span>
-              <span style={{ fontSize: 12, color: '#94A3B8' }}>({group.items.length})</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-3)' }}>{group.icon} {group.name}</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>({group.items.length})</span>
             </div>
             <div style={cardStyle}>
               {group.items.map((item, idx) => {
@@ -391,8 +391,8 @@ const ShoppingListDetail = ({ listId, onBack }) => {
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '12px 0',
-                      borderTop: idx > 0 ? '1px solid #F1F5F9' : 'none',
-                      backgroundColor: item.is_purchased ? '#F0FDF4' : 'transparent',
+                      borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
+                      backgroundColor: item.is_purchased ? 'var(--pos-soft)' : 'transparent',
                       borderRadius: item.is_purchased ? 8 : 0,
                       paddingLeft: 8, paddingRight: 8,
                       margin: item.is_purchased ? '2px 0' : 0,
@@ -402,8 +402,8 @@ const ShoppingListDetail = ({ listId, onBack }) => {
                       {isEditable && (
                         <button onClick={() => handleToggle(item.id)} style={{
                           width: 22, height: 22, borderRadius: 6,
-                          border: item.is_purchased ? 'none' : '2px solid #CBD5E1',
-                          backgroundColor: item.is_purchased ? '#059669' : 'white',
+                          border: item.is_purchased ? 'none' : '2px solid var(--border)',
+                          backgroundColor: item.is_purchased ? 'var(--pos)' : 'var(--surface-3)',
                           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                           flexShrink: 0,
                         }}>
@@ -412,27 +412,27 @@ const ShoppingListDetail = ({ listId, onBack }) => {
                       )}
                       <div style={{ flex: 1 }}>
                         <span style={{
-                          fontWeight: 500, color: item.is_purchased ? '#94A3B8' : '#1E293B',
+                          fontWeight: 500, color: item.is_purchased ? 'var(--ink-4)' : 'var(--ink-1)',
                           textDecoration: item.is_purchased ? 'line-through' : 'none',
                         }}>
                           {itemName}
                         </span>
                         {item.notes && (
-                          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{item.notes}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>{item.notes}</div>
                         )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <span style={{ fontSize: 13, color: '#64748B', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 13, color: 'var(--ink-3)', whiteSpace: 'nowrap' }}>
                         {item.quantity || 1} {item.unit || 'יח׳'}
                       </span>
                       {item.price && (
-                        <span style={{ fontSize: 13, fontWeight: 600, color: item.is_purchased ? '#94A3B8' : '#1E293B', whiteSpace: 'nowrap' }} dir="ltr">
+                        <span style={{ fontSize: 13, fontWeight: 600, color: item.is_purchased ? 'var(--ink-4)' : 'var(--ink-1)', whiteSpace: 'nowrap' }} dir="ltr">
                           ₪{Number(item.price).toLocaleString()}
                         </span>
                       )}
                       {isEditable && (
-                        <button onClick={() => handleRemoveItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#CBD5E1', padding: 2 }}>
+                        <button onClick={() => handleRemoveItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-5)', padding: 2 }}>
                           <Trash2 size={15} />
                         </button>
                       )}
@@ -444,7 +444,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
           </div>
         ))
       ) : (
-        <div style={{ textAlign: 'center', padding: 48, color: '#94A3B8', border: '2px dashed #E2E8F0', borderRadius: 12 }}>
+        <div style={{ textAlign: 'center', padding: 48, color: 'var(--ink-4)', border: '2px dashed var(--border)', borderRadius: 12 }}>
           <ShoppingBag size={36} style={{ marginBottom: 8 }} />
           <p>הרשימה ריקה. הוסף פריטים כדי להתחיל.</p>
         </div>
@@ -455,8 +455,8 @@ const ShoppingListDetail = ({ listId, onBack }) => {
         <div style={overlayStyle}>
           <div style={{ ...modalStyle, width: 340 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1E293B' }}>קטגוריה חדשה</h3>
-              <button onClick={() => setShowNewCategoryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--ink-1)' }}>קטגוריה חדשה</h3>
+              <button onClick={() => setShowNewCategoryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}>
                 <X size={18} />
               </button>
             </div>
@@ -470,8 +470,8 @@ const ShoppingListDetail = ({ listId, onBack }) => {
               onKeyDown={e => e.key === 'Enter' && handleSaveNewCategory()}
             />
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowNewCategoryModal(false)} style={{ padding: '8px 16px', border: '1px solid #E2E8F0', borderRadius: 8, background: 'white', cursor: 'pointer', color: '#475569' }}>ביטול</button>
-              <button onClick={handleSaveNewCategory} style={{ padding: '8px 16px', border: 'none', borderRadius: 8, background: '#2563EB', cursor: 'pointer', color: 'white', fontWeight: 600 }}>שמור</button>
+              <button onClick={() => setShowNewCategoryModal(false)} style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-3)', cursor: 'pointer', color: 'var(--ink-3)' }}>ביטול</button>
+              <button onClick={handleSaveNewCategory} style={{ padding: '8px 16px', border: 'none', borderRadius: 8, background: 'var(--primary-grad)', cursor: 'pointer', color: 'var(--primary-ink)', fontWeight: 600 }}>שמור</button>
             </div>
           </div>
         </div>
@@ -482,17 +482,17 @@ const ShoppingListDetail = ({ listId, onBack }) => {
         <div style={overlayStyle}>
           <div style={modalStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#1E293B' }}>סיום וחיוב</h2>
-              <button onClick={() => setShowCheckout(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+              <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: 'var(--ink-1)' }}>סיום וחיוב</h2>
+              <button onClick={() => setShowCheckout(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}>
                 <X size={20} />
               </button>
             </div>
 
             {/* Summary */}
-            <div style={{ textAlign: 'center', padding: 16, backgroundColor: '#EFF6FF', borderRadius: 12, border: '1px solid #DBEAFE', marginBottom: 20 }}>
-              <p style={{ fontSize: 14, color: '#1D4ED8', margin: '0 0 4px 0', fontWeight: 500 }}>סכום לחיוב (פריטים שנקנו)</p>
-              <p style={{ fontSize: 28, fontWeight: 700, color: '#1E293B', margin: 0 }} dir="ltr">₪{stats.purchasedCost.toLocaleString()}</p>
-              <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0 0' }}>{stats.purchased} פריטים מתוך {stats.total}</p>
+            <div style={{ textAlign: 'center', padding: 16, backgroundColor: 'var(--primary-soft)', borderRadius: 12, border: '1px solid rgba(155,130,255,0.25)', marginBottom: 20 }}>
+              <p style={{ fontSize: 14, color: 'var(--primary-hi)', margin: '0 0 4px 0', fontWeight: 500 }}>סכום לחיוב (פריטים שנקנו)</p>
+              <p style={{ fontSize: 28, fontWeight: 700, color: 'var(--ink-1)', margin: 0 }} dir="ltr">₪{stats.purchasedCost.toLocaleString()}</p>
+              <p style={{ fontSize: 12, color: 'var(--ink-4)', margin: '4px 0 0 0' }}>{stats.purchased} פריטים מתוך {stats.total}</p>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -516,7 +516,7 @@ const ShoppingListDetail = ({ listId, onBack }) => {
             </div>
 
             <button onClick={handleCheckout} style={{
-              width: '100%', padding: 14, backgroundColor: '#059669', color: 'white',
+              width: '100%', padding: 14, backgroundColor: 'var(--pos)', color: 'white',
               border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 16, cursor: 'pointer',
             }}>
               סיים וצור תנועה
@@ -530,12 +530,12 @@ const ShoppingListDetail = ({ listId, onBack }) => {
 
 // --- Styles ---
 const cardStyle = {
-  backgroundColor: 'white', padding: 16, borderRadius: 16,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #F1F5F9',
+  backgroundColor: 'var(--surface-2)', padding: 16, borderRadius: 16,
+  border: '1px solid var(--border)',
 };
 const statCardStyle = {
-  backgroundColor: 'white', padding: 16, borderRadius: 12,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #F1F5F9',
+  backgroundColor: 'var(--surface-2)', padding: 16, borderRadius: 12,
+  border: '1px solid var(--border)',
   textAlign: 'center',
 };
 const badgeStyle = {
@@ -550,19 +550,19 @@ const pillStyle = {
   padding: '6px 14px', borderRadius: 9999, border: 'none', cursor: 'pointer',
   fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6,
 };
-const formLabelStyle = { display: 'block', fontSize: 13, fontWeight: 500, color: '#475569', marginBottom: 4 };
+const formLabelStyle = { display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--ink-3)', marginBottom: 4 };
 const formInputStyle = {
-  width: '100%', padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 8,
-  fontSize: 14, boxSizing: 'border-box',
+  width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8,
+  fontSize: 14, boxSizing: 'border-box', backgroundColor: 'var(--surface-3)', color: 'var(--ink-1)',
 };
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-  backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
   zIndex: 9999, backdropFilter: 'blur(4px)',
 };
 const modalStyle = {
-  backgroundColor: 'white', padding: 30, borderRadius: 16, width: 450, maxWidth: '90%',
-  boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', textAlign: 'right',
+  backgroundColor: 'var(--surface-elev)', padding: 30, borderRadius: 16, width: 450, maxWidth: '90%',
+  boxShadow: 'var(--shadow-md)', border: '1px solid var(--border-strong)', textAlign: 'right',
 };
 
 export default ShoppingListDetail;

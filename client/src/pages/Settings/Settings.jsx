@@ -14,12 +14,12 @@ const Settings = () => {
     <div dir="rtl">
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#1E293B', margin: 0 }}>הגדרות</h1>
-        <p style={{ color: '#64748B', marginTop: 4, fontSize: 14, marginBottom: 0 }}>ניהול נתוני המערכת</p>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>הגדרות</h1>
+        <p style={{ color: 'var(--ink-4)', marginTop: 4, fontSize: 14, marginBottom: 0 }}>ניהול נתוני המערכת</p>
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '2px solid #F1F5F9', marginBottom: 24 }}>
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--border-strong)', marginBottom: 24 }}>
         {TABS.map(tab => (
           <button
             key={tab.key}
@@ -31,8 +31,8 @@ const Settings = () => {
               cursor: 'pointer',
               fontSize: 15,
               fontWeight: activeTab === tab.key ? 700 : 500,
-              color: activeTab === tab.key ? '#2563EB' : '#64748B',
-              borderBottom: `2px solid ${activeTab === tab.key ? '#2563EB' : 'transparent'}`,
+              color: activeTab === tab.key ? 'var(--primary-hi)' : 'var(--ink-4)',
+              borderBottom: `2px solid ${activeTab === tab.key ? 'var(--primary-hi)' : 'transparent'}`,
               marginBottom: -2,
               whiteSpace: 'nowrap',
             }}

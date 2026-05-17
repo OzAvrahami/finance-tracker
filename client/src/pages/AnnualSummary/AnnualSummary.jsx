@@ -15,12 +15,12 @@ const fmt = (n) =>
 
 const KpiCard = ({ title, value, color, subtitle, badge, badgeColor }) => (
   <div style={kpiCardStyle}>
-    <div style={{ fontSize: 13, color: '#64748B', marginBottom: 8, fontWeight: 500 }}>
+    <div style={{ fontSize: 13, color: 'var(--ink-4)', marginBottom: 8, fontWeight: 500 }}>
       {title}
     </div>
     <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
     {subtitle && (
-      <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>{subtitle}</div>
+      <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 4 }}>{subtitle}</div>
     )}
     {badge && (
       <span style={{
@@ -38,9 +38,9 @@ const InsightCard = ({ icon, title, value, sub, color }) => (
   <div style={insightCardStyle}>
     <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B', marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: color || '#1E293B' }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-4)', marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: color || 'var(--ink-1)' }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>{sub}</div>}
     </div>
   </div>
 );
@@ -92,15 +92,15 @@ const AnnualSummary = () => {
   const renderHeader = () => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
       <div>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#1E293B', margin: 0 }}>סיכום שנתי</h2>
-        <p style={{ color: '#64748B', fontSize: 13, marginTop: 4, marginBottom: 0 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>סיכום שנתי</h2>
+        <p style={{ color: 'var(--ink-4)', fontSize: 13, marginTop: 4, marginBottom: 0 }}>
           סקירת תקציב והוצאות לשנה הנבחרת
         </p>
       </div>
       <select
         value={selectedYear}
         onChange={e => setSelectedYear(Number(e.target.value))}
-        style={{ padding: '8px 16px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 15, cursor: 'pointer', background: 'white' }}
+        style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 15, cursor: 'pointer', background: 'var(--surface-3)', color: 'var(--ink-1)' }}
       >
         {years.map(y => <option key={y} value={y}>{y}</option>)}
       </select>
@@ -111,7 +111,7 @@ const AnnualSummary = () => {
     return (
       <div dir="rtl">
         {renderHeader()}
-        <div style={{ textAlign: 'center', padding: 64, color: '#64748B' }}>טוען סיכום שנתי...</div>
+        <div style={{ textAlign: 'center', padding: 64, color: 'var(--ink-4)' }}>טוען סיכום שנתי...</div>
       </div>
     );
   }
@@ -131,7 +131,7 @@ const AnnualSummary = () => {
     return (
       <div dir="rtl">
         {renderHeader()}
-        <div style={{ textAlign: 'center', padding: 64, color: '#94A3B8', border: '2px dashed #E2E8F0', borderRadius: 12 }}>
+        <div style={{ textAlign: 'center', padding: 64, color: 'var(--ink-4)', border: '2px dashed var(--border)', borderRadius: 12 }}>
           <Calendar size={40} style={{ marginBottom: 12 }} />
           <p style={{ margin: '0 0 6px', fontSize: 16 }}>אין נתונים לשנת {selectedYear}</p>
           <p style={{ margin: 0, fontSize: 13 }}>הגדר תקציבים חודשיים והוסף עסקאות כדי לראות את הסיכום השנתי.</p>
@@ -157,14 +157,14 @@ const AnnualSummary = () => {
         title: 'תקציב ממוצע לחודש נותר',
         value: fmt(s.allowance_per_remaining_month),
         sub: 'כדי לעמוד בתקציב השנתי',
-        color: s.allowance_per_remaining_month >= 0 ? '#2563EB' : '#DC2626',
+        color: s.allowance_per_remaining_month >= 0 ? 'var(--primary-hi)' : 'var(--neg)',
       }
     : {
         icon: '🔮',
         title: 'תחזית סוף שנה',
         value: s.months_with_data > 0 ? fmt(s.projected_year_end) : 'אין מספיק נתונים',
         sub: s.months_with_data > 0 ? `לפי ממוצע של ${fmt(s.monthly_average)} לחודש` : undefined,
-        color: '#6366F1',
+        color: 'var(--primary-hi)',
       };
 
   return (
@@ -176,34 +176,34 @@ const AnnualSummary = () => {
         <KpiCard
           title="תקציב שנתי"
           value={fmt(s.yearly_planned)}
-          color="#2563EB"
+          color="var(--primary-hi)"
         />
         <KpiCard
           title="הוצאות בפועל"
           value={fmt(s.yearly_actual)}
-          color="#F59E0B"
+          color="var(--warn)"
         />
         <KpiCard
           title={isUnder ? 'יתרה' : 'חריגה'}
           value={fmt(Math.abs(s.remaining))}
-          color={isUnder ? '#10B981' : '#EF4444'}
+          color={isUnder ? 'var(--pos)' : 'var(--neg)'}
           badge={isUnder ? 'מתחת לתקציב' : 'מעל לתקציב'}
-          badgeColor={isUnder ? '#10B981' : '#EF4444'}
+          badgeColor={isUnder ? 'var(--pos)' : 'var(--neg)'}
         />
         <KpiCard
           title="הוצאות מתוקצבות"
           value={fmt(s.budgeted_expenses)}
-          color="#6366F1"
+          color="var(--primary-hi)"
         />
         <KpiCard
           title="הוצאות לא מתוקצבות"
           value={fmt(s.non_budgeted_expenses)}
-          color="#F97316"
+          color="var(--warn)"
         />
         <KpiCard
           title="ממוצע חודשי"
           value={fmt(s.monthly_average)}
-          color="#0EA5E9"
+          color="var(--info)"
           subtitle={`מבוסס על ${s.months_with_data} חודשים עם הוצאות`}
         />
       </div>
@@ -226,7 +226,7 @@ const AnnualSummary = () => {
               ? `מתחת לתקציב ב-${fmt(s.remaining)}`
               : `חריגה מהתקציב ב-${fmt(Math.abs(s.remaining))}`
           }
-          color={isUnder ? '#059669' : '#DC2626'}
+          color={isUnder ? 'var(--pos)' : 'var(--neg)'}
         />
         <InsightCard
           icon="📅"
@@ -236,7 +236,7 @@ const AnnualSummary = () => {
               ? `${insights.mostExpensiveMonth.label}: ${fmt(insights.mostExpensiveMonth.actual)}`
               : 'אין נתונים'
           }
-          color="#F59E0B"
+          color="var(--warn)"
         />
         <InsightCard
           icon="📊"
@@ -246,7 +246,7 @@ const AnnualSummary = () => {
               ? `${insights.biggestOverrun.icon || ''} ${insights.biggestOverrun.name}: חריגה של ${fmt(Math.abs(insights.biggestOverrun.diff))}`
               : 'כל הקטגוריות בטווח התקציב'
           }
-          color={insights.biggestOverrun ? '#DC2626' : '#059669'}
+          color={insights.biggestOverrun ? 'var(--neg)' : 'var(--pos)'}
         />
         <InsightCard
           icon={insight4.icon}
@@ -262,26 +262,30 @@ const AnnualSummary = () => {
         <h3 style={sectionTitleStyle}>פירוט חודשי — תקציב מול בפועל</h3>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={chartData} barCategoryGap="30%" barGap={4}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+            {/* #353B52 = --ink-5 */}
+            <CartesianGrid strokeDasharray="3 3" stroke="#353B52" vertical={false} />
+            {/* #5A607A = --ink-4 */}
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 12, fill: '#64748B' }}
+              tick={{ fontSize: 12, fill: '#5A607A' }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              tick={{ fontSize: 11, fill: '#64748B' }}
+              tick={{ fontSize: 11, fill: '#5A607A' }}
               axisLine={false}
               tickLine={false}
               tickFormatter={v => v >= 1000 ? `₪${(v / 1000).toFixed(0)}k` : `₪${v}`}
             />
             <Tooltip
               formatter={(value, name) => [fmt(value), name]}
-              contentStyle={{ direction: 'rtl', fontSize: 13 }}
+              contentStyle={{ direction: 'rtl', fontSize: 13, backgroundColor: '#1F2333', border: '1px solid rgba(255,255,255,0.12)', color: '#F4F5FB' }}
             />
             <Legend wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
-            <Bar dataKey="תקציב" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={28} />
-            <Bar dataKey="בפועל" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            {/* #9B82FF = --primary-hi */}
+            <Bar dataKey="תקציב" fill="#9B82FF" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            {/* #FFC061 = --warn */}
+            <Bar dataKey="בפועל" fill="#FFC061" radius={[4, 4, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -302,7 +306,7 @@ const AnnualSummary = () => {
 
           {data.categories.map((cat, idx) => {
             const isOver   = cat.diff < 0;
-            const barColor = cat.pct_used > 100 ? '#EF4444' : cat.pct_used > 70 ? '#F59E0B' : '#10B981';
+            const barColor = cat.pct_used > 100 ? 'var(--neg)' : cat.pct_used > 70 ? 'var(--warn)' : 'var(--pos)';
             const pct      = Math.min(cat.pct_used, 100);
             return (
               <div
@@ -310,25 +314,25 @@ const AnnualSummary = () => {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '12px 0',
-                  borderTop: '1px solid #F8FAFC',
+                  borderTop: '1px solid var(--border)',
                 }}
               >
                 <div style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                   <span style={{ fontSize: 18, flexShrink: 0 }}>{cat.icon || '🏷️'}</span>
-                  <span style={{ fontWeight: 500, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontWeight: 500, color: 'var(--ink-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {cat.name}
                   </span>
                 </div>
                 <div style={colStyle}>{fmt(cat.planned)}</div>
                 <div style={colStyle}>{fmt(cat.actual)}</div>
-                <div style={{ ...colStyle, fontWeight: 600, color: isOver ? '#DC2626' : '#059669' }}>
+                <div style={{ ...colStyle, fontWeight: 600, color: isOver ? 'var(--neg)' : 'var(--pos)' }}>
                   {isOver ? `-${fmt(Math.abs(cat.diff))}` : `+${fmt(cat.diff)}`}
                 </div>
                 <div style={{ width: 90, flexShrink: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: barColor, marginBottom: 3 }}>
                     {cat.pct_used}%
                   </div>
-                  <div style={{ height: 4, background: '#F1F5F9', borderRadius: 9999, overflow: 'hidden' }}>
+                  <div style={{ height: 4, background: 'var(--surface-3)', borderRadius: 9999, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 9999 }} />
                   </div>
                 </div>
@@ -343,7 +347,7 @@ const AnnualSummary = () => {
         <div style={{ ...sectionCardStyle, marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>הוצאות לא מתוקצבות</h3>
-            <span style={{ fontSize: 20, fontWeight: 700, color: '#F97316' }}>
+            <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--warn)' }}>
               {fmt(data.non_budgeted.total)}
             </span>
           </div>
@@ -352,18 +356,18 @@ const AnnualSummary = () => {
               <div
                 key={item.category_id ?? idx}
                 style={{
-                  background: '#F8FAFC', borderRadius: 10, padding: '10px 14px',
+                  background: 'var(--surface-3)', borderRadius: 10, padding: '10px 14px',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  border: '1px solid #F1F5F9',
+                  border: '1px solid var(--border)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                   <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon || '🏷️'}</span>
-                  <span style={{ fontSize: 13, color: '#374151', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item.name}
                   </span>
                 </div>
-                <span style={{ fontWeight: 700, color: '#F97316', fontSize: 13, flexShrink: 0, marginRight: 8 }}>
+                <span style={{ fontWeight: 700, color: 'var(--warn)', fontSize: 13, flexShrink: 0, marginRight: 8 }}>
                   {fmt(item.total)}
                 </span>
               </div>
@@ -378,43 +382,43 @@ const AnnualSummary = () => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const kpiCardStyle = {
-  background: 'white', borderRadius: 16, padding: 20,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #F1F5F9',
+  background: 'var(--surface-2)', borderRadius: 16, padding: 20,
+  border: '1px solid var(--border)',
 };
 
 const insightCardStyle = {
-  background: 'white', borderRadius: 12, padding: 20,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #F1F5F9',
+  background: 'var(--surface-2)', borderRadius: 12, padding: 20,
+  border: '1px solid var(--border)',
   display: 'flex', gap: 14, alignItems: 'flex-start',
 };
 
 const sectionCardStyle = {
-  background: 'white', borderRadius: 16, padding: 24,
-  marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #F1F5F9',
+  background: 'var(--surface-2)', borderRadius: 16, padding: 24,
+  marginBottom: 24, border: '1px solid var(--border)',
 };
 
 const sectionTitleStyle = {
-  margin: '0 0 20px', fontSize: 16, fontWeight: 700, color: '#1E293B',
+  margin: '0 0 20px', fontSize: 16, fontWeight: 700, color: 'var(--ink-1)',
 };
 
 const errorBannerStyle = {
-  background: '#FEF2F2', border: '1px solid #FECACA',
-  borderRadius: 8, padding: '12px 16px', color: '#B91C1C', fontSize: 13,
+  background: 'var(--neg-soft)', border: '1px solid var(--neg)',
+  borderRadius: 8, padding: '12px 16px', color: 'var(--neg)', fontSize: 13,
 };
 
 const warningBannerStyle = {
   display: 'flex', alignItems: 'center', gap: 8,
-  background: '#FEFCE8', border: '1px solid #FEF08A',
+  background: 'var(--warn-soft)', border: '1px solid var(--warn)',
   borderRadius: 8, padding: '10px 14px', marginBottom: 20,
-  color: '#854D0E', fontSize: 13,
+  color: 'var(--warn)', fontSize: 13,
 };
 
 const tableHeaderStyle = {
   display: 'flex', alignItems: 'center', gap: 12,
-  padding: '0 0 10px', borderBottom: '2px solid #F1F5F9', marginBottom: 4,
-  fontSize: 12, fontWeight: 600, color: '#64748B',
+  padding: '0 0 10px', borderBottom: '2px solid var(--border)', marginBottom: 4,
+  fontSize: 12, fontWeight: 600, color: 'var(--ink-4)',
 };
 
-const colStyle = { width: 100, flexShrink: 0, color: '#475569', fontSize: 14 };
+const colStyle = { width: 100, flexShrink: 0, color: 'var(--ink-3)', fontSize: 14 };
 
 export default AnnualSummary;

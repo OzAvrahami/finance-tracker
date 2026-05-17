@@ -8,8 +8,8 @@ import {
 } from '../../services/api';
 
 const TYPE_CONFIG = {
-  expense: { label: 'הוצאה', bg: '#FFF7ED', color: '#C2410C' },
-  income:  { label: 'הכנסה', bg: '#F0FDF4', color: '#16A34A' },
+  expense: { label: 'הוצאה', bg: 'var(--neg-soft)', color: 'var(--neg)' },
+  income:  { label: 'הכנסה', bg: 'var(--pos-soft)', color: 'var(--pos)' },
 };
 
 const CategoriesTab = () => {
@@ -137,7 +137,7 @@ const CategoriesTab = () => {
   const displayed     = showInactive ? categories : categories.filter(c => c.is_active);
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: 48, color: '#64748B' }}>טוען קטגוריות...</div>;
+    return <div style={{ textAlign: 'center', padding: 48, color: 'var(--ink-4)' }}>טוען קטגוריות...</div>;
   }
 
   return (
@@ -150,7 +150,7 @@ const CategoriesTab = () => {
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 14, color: '#64748B' }}>
+          <span style={{ fontSize: 14, color: 'var(--ink-4)' }}>
             {activeCount} פעילות
             {inactiveCount > 0 && ` · ${inactiveCount} מושבתות`}
           </span>
@@ -159,9 +159,9 @@ const CategoriesTab = () => {
               onClick={() => setShowInactive(v => !v)}
               style={{
                 ...ghostBtnStyle,
-                backgroundColor: showInactive ? '#EFF6FF' : '#F8FAFC',
-                color: showInactive ? '#2563EB' : '#64748B',
-                borderColor: showInactive ? '#BFDBFE' : '#E2E8F0',
+                backgroundColor: showInactive ? 'var(--primary-soft)' : 'var(--surface-3)',
+                color: showInactive ? 'var(--primary-hi)' : 'var(--ink-4)',
+                borderColor: showInactive ? 'var(--primary-hi)' : 'var(--border)',
               }}
             >
               {showInactive ? 'הסתר מושבתות' : 'הצג מושבתות'}
@@ -175,7 +175,7 @@ const CategoriesTab = () => {
 
       {/* Empty state */}
       {displayed.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 48, color: '#94A3B8', border: '2px dashed #E2E8F0', borderRadius: 12 }}>
+        <div style={{ textAlign: 'center', padding: 48, color: 'var(--ink-4)', border: '2px dashed var(--border)', borderRadius: 12 }}>
           <Tag size={36} style={{ marginBottom: 10 }} />
           <p style={{ margin: '0 0 6px' }}>
             {categories.length === 0 ? 'אין קטגוריות עדיין.' : 'אין קטגוריות פעילות.'}
@@ -196,7 +196,7 @@ const CategoriesTab = () => {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '13px 16px',
-                  borderTop: idx > 0 ? '1px solid #F1F5F9' : 'none',
+                  borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
                   opacity: cat.is_active ? 1 : 0.55,
                   transition: 'opacity 0.2s',
                 }}
@@ -207,11 +207,11 @@ const CategoriesTab = () => {
                     {cat.icon || '🏷️'}
                   </span>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: '#1E293B' }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ink-1)' }}>
                       {cat.name}
                     </div>
                     {kwCount > 0 && (
-                      <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                      <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>
                         {kwCount} מילות מפתח
                       </div>
                     )}
@@ -224,7 +224,7 @@ const CategoriesTab = () => {
                     {typeConf.label}
                   </span>
                   {!cat.is_active && (
-                    <span style={{ ...badgeStyle, background: '#F1F5F9', color: '#94A3B8' }}>
+                    <span style={{ ...badgeStyle, background: 'var(--surface-3)', color: 'var(--ink-4)' }}>
                       מושבתת
                     </span>
                   )}
@@ -234,7 +234,7 @@ const CategoriesTab = () => {
                   {cat.is_active ? (
                     <button
                       onClick={() => handleDeactivate(cat)}
-                      style={{ ...iconBtnStyle, color: '#EF4444' }}
+                      style={{ ...iconBtnStyle, color: 'var(--neg)' }}
                       title="השבתה"
                     >
                       <X size={14} />
@@ -242,7 +242,7 @@ const CategoriesTab = () => {
                   ) : (
                     <button
                       onClick={() => handleReactivate(cat)}
-                      style={{ ...iconBtnStyle, color: '#059669', fontSize: 16 }}
+                      style={{ ...iconBtnStyle, color: 'var(--pos)', fontSize: 16 }}
                       title="הפעלה מחדש"
                     >
                       ✓
@@ -261,10 +261,10 @@ const CategoriesTab = () => {
           <div style={modalStyle}>
             {/* Modal header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#1E293B' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--ink-1)' }}>
                 {editingCategory ? 'עריכת קטגוריה' : 'קטגוריה חדשה'}
               </h2>
-              <button onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 4 }}>
+              <button onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)', padding: 4 }}>
                 <X size={20} />
               </button>
             </div>
@@ -361,13 +361,13 @@ const CategoriesTab = () => {
 
 // --- Styles ---
 const errorBannerStyle = {
-  background: '#FEF2F2', border: '1px solid #FECACA',
+  background: 'var(--neg-soft)', border: '1px solid var(--neg)',
   borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-  color: '#B91C1C', fontSize: 13,
+  color: 'var(--neg)', fontSize: 13,
 };
 const listCardStyle = {
-  background: 'white', borderRadius: 16,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #F1F5F9',
+  background: 'var(--surface-2)', borderRadius: 16,
+  border: '1px solid var(--border)',
   overflow: 'hidden',
 };
 const badgeStyle = {
@@ -377,10 +377,9 @@ const badgeStyle = {
 };
 const addBtnStyle = {
   display: 'flex', alignItems: 'center', gap: 8,
-  backgroundColor: '#2563EB', color: 'white',
+  background: 'var(--primary-grad)', color: 'var(--primary-ink)',
   border: 'none', borderRadius: 8, padding: '10px 20px',
   cursor: 'pointer', fontWeight: 600, fontSize: 14,
-  boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
 };
 const ghostBtnStyle = {
   display: 'inline-flex', alignItems: 'center',
@@ -391,36 +390,37 @@ const ghostBtnStyle = {
 const iconBtnStyle = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   width: 32, height: 32, borderRadius: 8,
-  border: 'none', background: '#F8FAFC',
-  cursor: 'pointer', color: '#64748B',
+  border: 'none', background: 'var(--surface-3)',
+  cursor: 'pointer', color: 'var(--ink-4)',
 };
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-  backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+  backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   zIndex: 9999,
 };
 const modalStyle = {
-  backgroundColor: 'white', padding: 28, borderRadius: 16,
+  backgroundColor: 'var(--surface-elev)', padding: 28, borderRadius: 16,
   width: 480, maxWidth: '90%',
-  boxShadow: '0 20px 25px -5px rgba(0,0,0,0.12)',
+  boxShadow: 'var(--shadow-md)', border: '1px solid var(--border-strong)',
   textAlign: 'right',
 };
 const fieldStyle = { marginBottom: 14 };
-const labelStyle = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 };
-const hintStyle  = { fontSize: 12, color: '#94A3B8', margin: '4px 0 0' };
+const labelStyle = { display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 };
+const hintStyle  = { fontSize: 12, color: 'var(--ink-4)', margin: '4px 0 0' };
 const inputStyle = {
   width: '100%', padding: '9px 12px',
-  border: '1px solid #E2E8F0', borderRadius: 8,
+  border: '1px solid var(--border)', borderRadius: 8,
   fontSize: 14, boxSizing: 'border-box',
+  backgroundColor: 'var(--surface-3)', color: 'var(--ink-1)',
 };
 const cancelBtnStyle = {
-  padding: '10px 20px', border: '1px solid #E2E8F0', borderRadius: 8,
-  background: 'white', cursor: 'pointer', color: '#475569', fontSize: 14,
+  padding: '10px 20px', border: '1px solid var(--border)', borderRadius: 8,
+  background: 'var(--surface-3)', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 14,
 };
 const saveBtnStyle = {
   padding: '10px 24px', border: 'none', borderRadius: 8,
-  background: '#2563EB', color: 'white',
+  background: 'var(--primary-grad)', color: 'var(--primary-ink)',
   cursor: 'pointer', fontWeight: 600, fontSize: 14,
 };
 

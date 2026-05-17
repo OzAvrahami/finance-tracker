@@ -4,15 +4,15 @@ import { STATUS_OPTIONS } from '../../utils/legoHelpers';
 const CollectionFilters = ({ filterStatus, onFilterChange }) => (
   <div style={{
     marginBottom: '30px',
-    background: 'white',
+    background: 'var(--surface-2)',
     padding: '15px',
     borderRadius: '10px',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
+    border: '1px solid var(--border)',
     display: 'flex',
     alignItems: 'center',
     gap: '15px',
   }}>
-    <span style={{ fontWeight: 'bold', color: '#555' }}>סינון מהיר:</span>
+    <span style={{ fontWeight: 'bold', color: 'var(--ink-3)' }}>סינון מהיר:</span>
     {STATUS_OPTIONS.map(({ key, label }) => (
       <button
         key={key}
@@ -22,8 +22,8 @@ const CollectionFilters = ({ filterStatus, onFilterChange }) => (
           borderRadius: '20px',
           border: 'none',
           cursor: 'pointer',
-          background: filterStatus === key ? '#1a1a2e' : '#f1f3f5',
-          color: filterStatus === key ? 'white' : '#555',
+          background: filterStatus === key ? 'var(--primary)' : 'var(--surface-3)',
+          color: filterStatus === key ? 'var(--primary-ink)' : 'var(--ink-3)',
           fontWeight: '500',
           transition: 'all 0.2s',
         }}

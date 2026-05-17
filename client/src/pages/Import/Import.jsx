@@ -15,8 +15,8 @@ const Import = () => {
   const [step, setStep] = useState(1);
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  
-  const [targetRowId, setTargetRowId] = useState(null); 
+
+  const [targetRowId, setTargetRowId] = useState(null);
 
   const navigate = useNavigate();
 
@@ -46,7 +46,7 @@ const Import = () => {
         ...row,
         category_id: row.suggested_category ? row.suggested_category.id : ''
       }));
-      
+
       setPreviewData(dataWithCategories);
       setStep(2);
     } catch (error) {
@@ -58,7 +58,7 @@ const Import = () => {
   };
 
   const handleCategoryChange = (rowId, newCatId) => {
-    setPreviewData(prev => prev.map(row => 
+    setPreviewData(prev => prev.map(row =>
       row.id === rowId ? { ...row, category_id: newCatId } : row
     ));
   };
@@ -79,7 +79,7 @@ const Import = () => {
 
       setNewCategoryName('');
       setShowNewCategoryModal(false);
-      
+
     } catch (error) {
       console.error("Failed to create category", error);
       alert("שגיאה ביצירת קטגוריה");
@@ -87,7 +87,7 @@ const Import = () => {
   };
 
   const openNewCategoryModal = (rowId) => {
-    setTargetRowId(rowId); 
+    setTargetRowId(rowId);
     setShowNewCategoryModal(true);
   };
 
@@ -124,11 +124,11 @@ const Import = () => {
     <div dir="rtl" style={{ padding: '30px', maxWidth: '1200px', margin: '0 auto' }}>
 
       <div style={{ marginBottom: '20px' }}>
-      <Link to="/add" style={{ 
-        display: 'inline-flex', 
-        alignItems: 'center', 
+      <Link to="/add" style={{
+        display: 'inline-flex',
+        alignItems: 'center',
         gap: '8px',
-        color: '#7f8c8d', // אפור נעים
+        color: 'var(--ink-4)',
         textDecoration: 'none',
         fontSize: '0.95rem',
         fontWeight: '500'
@@ -137,9 +137,9 @@ const Import = () => {
         חזרה להוספה ידנית
       </Link>
     </div>
-    
+
       <h1>אשף ייבוא עסקאות 🧙‍♂️</h1>
-      
+
       {step === 1 && (
         <div style={cardStyle}>
           <h3>שלב 1: העלאת קובץ</h3>
@@ -163,7 +163,7 @@ const Import = () => {
               ))}
             </select>
           </div>
-          
+
           <div style={{ marginBottom: '15px' }}>
             <input type="file" onChange={handleFileChange} accept=".csv,.xlsx,.xls" />
           </div>
@@ -178,11 +178,11 @@ const Import = () => {
         <div style={cardStyle}>
           <h3>שלב 2: אישור נתונים ({previewData.length} עסקאות)</h3>
           <p>אנא עבור על הרשימה. וודא שכל העסקאות מסווגות נכון.</p>
-          
+
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
               <thead>
-                <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #ddd' }}>
+                <tr style={{ background: 'var(--surface-3)', borderBottom: '2px solid var(--border-strong)' }}>
                   <th style={thStyle}>תאריך</th>
                   <th style={thStyle}>תיאור</th>
                   <th style={thStyle}>חיוב בפועל (₪)</th>
@@ -193,19 +193,19 @@ const Import = () => {
               </thead>
               <tbody>
                 {previewData.map((row) => (
-                  <tr key={row.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={tdStyle}>{row.transaction_date}</td>
                     <td style={tdStyle}>{row.description}</td>
                     <td style={tdStyle}>₪{(row.total_amount || 0 ).toFixed(2)}</td>
-                    
+
                     <td style={tdStyle}>
                       {row.currency !== 'ILS' && (
-                        <div style={{ fontSize: '0.85em', color: '#e67e22' }}>
+                        <div style={{ fontSize: '0.85em', color: 'var(--warn)' }}>
                           {row.original_amount} {row.currency} (שער: {row.exchange_rate})
                         </div>
                       )}
                       {row.installments_info && (
-                        <div style={{ fontSize: '0.85em', color: '#3498db' }}>
+                        <div style={{ fontSize: '0.85em', color: 'var(--info)' }}>
                           💳 {row.installments_info}
                         </div>
                       )}
@@ -223,7 +223,7 @@ const Import = () => {
                       {row.notes}
                     </td>
                     <td style={tdStyle}>
-                      <button onClick={() => handleDeleteRow(row.id)} style={{ color: 'red', cursor: 'pointer'}}>
+                      <button onClick={() => handleDeleteRow(row.id)} style={{ color: 'var(--neg)', cursor: 'pointer', background: 'none', border: 'none' }}>
                         🗑️ מחק
                       </button>
                     </td>
@@ -234,10 +234,10 @@ const Import = () => {
           </div>
 
           <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-            <button onClick={handleSaveToDB} disabled={loading} style={{...buttonStyle, background: '#2ecc71'}}>
+            <button onClick={handleSaveToDB} disabled={loading} style={{ ...buttonStyle, background: 'var(--primary-grad)' }}>
               {loading ? 'שומר...' : 'שמור עסקאות ב-DB 💾'}
             </button>
-            <button onClick={() => setStep(1)} style={{...buttonStyle, background: '#95a5a6'}}>
+            <button onClick={() => setStep(1)} style={{ ...buttonStyle, backgroundColor: 'var(--surface-3)', color: 'var(--ink-3)' }}>
               חזור אחורה
             </button>
           </div>
@@ -270,14 +270,14 @@ const Import = () => {
 };
 
 // --- Styles ---
-const cardStyle = { background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' };
-const inputStyle = { padding: '8px', borderRadius: '4px', border: '1px solid #ddd', width: '100%', maxWidth: '200px' };
-const buttonStyle = { padding: '10px 20px', background: '#3498db', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' };
+const cardStyle = { background: 'var(--surface-2)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' };
+const inputStyle = { padding: '8px', borderRadius: '4px', border: '1px solid var(--border)', width: '100%', maxWidth: '200px', backgroundColor: 'var(--surface-3)', color: 'var(--ink-1)' };
+const buttonStyle = { padding: '10px 20px', background: 'var(--primary-grad)', color: 'var(--primary-ink)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1rem' };
 const thStyle = { padding: '12px', textAlign: 'right', fontWeight: 'bold' };
 const tdStyle = { padding: '12px', verticalAlign: 'top' };
-const modalOverlayStyle = { position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 };
-const modalContentStyle = { backgroundColor: 'white', padding: '25px', borderRadius: '12px', width: '90%', maxWidth: '350px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' };
-const cancelBtnStyle = { padding: '8px 15px', backgroundColor: '#f3f4f6', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#374151' };
-const saveModalBtnStyle = { padding: '8px 15px', backgroundColor: '#4f46e5', border: 'none', borderRadius: '6px', cursor: 'pointer', color: 'white', fontWeight: 'bold' };
+const modalOverlayStyle = { position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' };
+const modalContentStyle = { backgroundColor: 'var(--surface-elev)', padding: '25px', borderRadius: '12px', width: '90%', maxWidth: '350px', boxShadow: 'var(--shadow-md)', border: '1px solid var(--border-strong)' };
+const cancelBtnStyle = { padding: '8px 15px', backgroundColor: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', color: 'var(--ink-2)' };
+const saveModalBtnStyle = { padding: '8px 15px', background: 'var(--primary-grad)', border: 'none', borderRadius: '6px', cursor: 'pointer', color: 'var(--primary-ink)', fontWeight: 'bold' };
 
 export default Import;
