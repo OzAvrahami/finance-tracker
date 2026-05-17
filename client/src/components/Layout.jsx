@@ -38,36 +38,38 @@ const Layout = () => {
   const userInitials = user?.email ? user.email.charAt(0).toUpperCase() : '?';
 
   return (
-    <div dir="rtl" style={{ minHeight: '100vh', display: 'flex' }}>
+    <div dir="rtl" style={{ minHeight: '100vh', display: 'flex', backgroundColor: 'var(--bg)' }}>
       {/* Sidebar */}
       <aside style={{
         width: 260,
-        backgroundColor: 'white',
-        borderLeft: '1px solid #F1F5F9',
+        backgroundColor: 'var(--surface-1)',
+        borderInlineEnd: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
         position: 'fixed',
         top: 0,
-        right: 0,
+        right: 0,  /* kept physical: position:fixed is relative to viewport; <html> has no dir="rtl" yet */
         height: '100vh',
         zIndex: 20,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+        boxShadow: '0 0 20px rgba(0,0,0,0.4)',
       }}>
         {/* Logo */}
-        <div style={{ padding: 24, display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <div style={{ padding: 'var(--s-24)', display: 'flex', alignItems: 'center', gap: 'var(--s-12)', marginBottom: 'var(--s-24)' }}>
           <div style={{
             height: 32, width: 32,
-            backgroundColor: '#2563EB',
-            borderRadius: 8,
+            background: 'var(--primary-grad)',
+            borderRadius: 'var(--r-8)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 16px rgba(124,92,255,0.3)',
+            flexShrink: 0,
           }}>
-            <Wallet size={20} color="white" />
+            <Wallet size={18} color="white" />
           </div>
-          <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.025em', color: '#1E293B' }}>פיננסים.</span>
+          <span style={{ fontSize: 'var(--fs-20)', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--ink-1)' }}>פיננסים.</span>
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <nav style={{ flex: 1, paddingInline: 'var(--s-16)', display: 'flex', flexDirection: 'column', gap: 'var(--s-2)' }}>
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -79,17 +81,21 @@ const Layout = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 12,
-                  padding: '12px 16px',
-                  borderRadius: 12,
+                  gap: 'var(--s-12)',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--r-10)',
                   textDecoration: 'none',
                   fontWeight: 500,
-                  transition: 'all 0.2s',
-                  color: isActive ? '#1D4ED8' : '#475569',
-                  backgroundColor: isActive ? '#EFF6FF' : 'transparent',
+                  fontSize: 'var(--fs-14)',
+                  transition: 'background-color 0.15s, color 0.15s, border-color 0.15s',
+                  color: isActive ? 'var(--ink-1)' : 'var(--ink-3)',
+                  backgroundColor: isActive ? 'var(--primary-soft)' : 'transparent',
+                  border: isActive ? '1px solid rgba(124,92,255,0.25)' : '1px solid transparent',
                 }}
               >
-                <Icon size={20} />
+                <span style={{ color: isActive ? 'var(--primary-hi)' : 'inherit', display: 'flex', flexShrink: 0 }}>
+                  <Icon size={18} />
+                </span>
                 <span>{item.label}</span>
               </Link>
             );
@@ -97,63 +103,75 @@ const Layout = () => {
         </nav>
 
         {/* Bottom section */}
-        <div style={{ padding: 16, marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid #F1F5F9' }}>
+        <div style={{
+          padding: 'var(--s-16)',
+          marginTop: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--s-2)',
+          borderBlockStart: '1px solid var(--border)',
+        }}>
           <Link
             to="/settings"
             className="nav-item"
             style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '12px 16px', color: '#475569', borderRadius: 12,
-              fontWeight: 500, textDecoration: 'none', transition: 'all 0.2s',
+              display: 'flex', alignItems: 'center', gap: 'var(--s-12)',
+              padding: '10px 14px', color: 'var(--ink-3)', borderRadius: 'var(--r-10)',
+              fontWeight: 500, fontSize: 'var(--fs-14)', textDecoration: 'none',
+              transition: 'background-color 0.15s, color 0.15s',
+              border: '1px solid transparent',
             }}
           >
-            <Settings size={20} />
+            <Settings size={18} />
             <span>הגדרות</span>
           </Link>
           <button
             onClick={signOut}
             className="nav-item-red"
             style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '12px 16px', color: '#DC2626', borderRadius: 12,
-              fontWeight: 500, background: 'none', border: 'none',
-              cursor: 'pointer', fontSize: '1rem', marginTop: 8,
-              textAlign: 'right', width: '100%', transition: 'all 0.2s',
+              display: 'flex', alignItems: 'center', gap: 'var(--s-12)',
+              padding: '10px 14px', color: 'var(--neg)', borderRadius: 'var(--r-10)',
+              fontWeight: 500, fontSize: 'var(--fs-14)',
+              background: 'none', border: '1px solid transparent',
+              cursor: 'pointer', marginTop: 'var(--s-4)',
+              textAlign: 'start', width: '100%',
+              transition: 'background-color 0.15s, color 0.15s',
             }}
           >
-            <LogOut size={20} />
+            <LogOut size={18} />
             <span>התנתק</span>
           </button>
         </div>
       </aside>
 
       {/* Main */}
-      <main style={{ flex: 1, marginRight: 260, overflowY: 'auto' }}>
-        {/* Header */}
+      <main style={{ flex: 1, marginInlineStart: 260, overflowY: 'auto' }}>
+        {/* Header / Top bar */}
         <header style={{
-          backgroundColor: 'white',
-          borderBottom: '1px solid #F1F5F9',
-          padding: '20px 32px',
+          backgroundColor: 'var(--surface-1)',
+          borderBlockEnd: '1px solid var(--border)',
+          padding: '18px 28px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           position: 'sticky', top: 0, zIndex: 10,
         }}>
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1E293B', margin: 0 }}>{currentTitle}</h1>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <h1 style={{ fontSize: 'var(--fs-20)', fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.015em' }}>
+            {currentTitle}
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-16)' }}>
             <div style={{
-              height: 40, width: 40,
-              backgroundColor: '#DBEAFE', borderRadius: '50%',
+              height: 36, width: 36,
+              backgroundColor: 'var(--surface-3)',
+              borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#1D4ED8', fontWeight: 700,
-              border: '2px solid white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              color: 'var(--primary-hi)', fontWeight: 700, fontSize: 'var(--fs-13)',
+              border: '1px solid var(--border-strong)',
             }}>
               {userInitials}
             </div>
           </div>
         </header>
 
-        <div style={{ padding: 32, maxWidth: 1280, margin: '0 auto' }}>
+        <div style={{ padding: 'var(--s-32)', maxWidth: 1280, margin: '0 auto' }}>
           <Outlet />
         </div>
       </main>
