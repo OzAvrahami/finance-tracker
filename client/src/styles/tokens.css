@@ -1,0 +1,182 @@
+/* =============================================================
+   Nocturne Design Tokens
+   Source of truth for all color, spacing, radius, typography,
+   and shadow values. Reference these variables everywhere —
+   never use hardcoded color values outside this file.
+   ============================================================= */
+
+:root {
+  /* -----------------------------------------------------------
+     Surfaces — cool near-black, blue undertone (never warm)
+     ----------------------------------------------------------- */
+  --bg:           #07080C;
+  --surface-1:    #0E1019;   /* sidebar, topbar */
+  --surface-2:    #141721;   /* cards */
+  --surface-3:    #1B1F2E;   /* chips, wells, hover */
+  --surface-elev: #1F2333;   /* dropdowns, popovers, modals */
+
+  /* -----------------------------------------------------------
+     Borders — low-alpha white for glass feel
+     ----------------------------------------------------------- */
+  --border:        rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --border-bright: rgba(255, 255, 255, 0.18);
+
+  /* -----------------------------------------------------------
+     Ink — cool whites only
+     ----------------------------------------------------------- */
+  --ink-1: #F4F5FB;   /* hero numbers, headlines */
+  --ink-2: #C8CBD9;   /* body */
+  --ink-3: #8B90A6;   /* labels, captions */
+  --ink-4: #5A607A;   /* axis ticks, tertiary */
+  --ink-5: #353B52;   /* placeholders, dim icons */
+
+  /* -----------------------------------------------------------
+     Primary: Iris
+     ----------------------------------------------------------- */
+  --primary:      #7C5CFF;
+  --primary-hi:   #9B82FF;
+  --primary-lo:   #5538E0;
+  --primary-soft: rgba(124, 92, 255, 0.14);
+  --primary-glow: rgba(124, 92, 255, 0.45);
+  --primary-ink:  #FFFFFF;
+  --primary-grad: linear-gradient(135deg, #9B82FF 0%, #5538E0 100%);
+
+  /* -----------------------------------------------------------
+     Semantic — softened
+     ----------------------------------------------------------- */
+  --pos:      #4ADE9A;
+  --pos-soft: rgba(74, 222, 154, 0.12);
+
+  --neg:      #FF7A8A;   /* coral — NOT alarm red */
+  --neg-soft: rgba(255, 122, 138, 0.12);
+
+  --warn:      #FFC061;
+  --warn-soft: rgba(255, 192, 97, 0.12);
+
+  --info:      #5AC8FF;
+  --info-soft: rgba(90, 200, 255, 0.12);
+
+  /* Destructive (separate from --neg) */
+  --danger: #E25467;
+
+  /* -----------------------------------------------------------
+     Category accent dots (≤6px use only)
+     ----------------------------------------------------------- */
+  --cat-iris:  #8B7AFF;
+  --cat-mint:  #4ADE9A;
+  --cat-coral: #FF7A8A;
+  --cat-cyan:  #5AC8FF;
+  --cat-amber: #FFC061;
+  --cat-rose:  #FF8FBC;
+
+  /* -----------------------------------------------------------
+     Shadows — blue-tinted
+     ----------------------------------------------------------- */
+  --shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
+  --shadow-md:   0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
+  --shadow-glow: 0 0 0 1px var(--primary-glow), 0 8px 32px rgba(124, 92, 255, 0.25);
+
+  /* -----------------------------------------------------------
+     Spacing scale (4-based)
+     ----------------------------------------------------------- */
+  --s-2:  2px;
+  --s-4:  4px;
+  --s-6:  6px;
+  --s-8:  8px;
+  --s-12: 12px;
+  --s-14: 14px;
+  --s-16: 16px;
+  --s-20: 20px;
+  --s-24: 24px;
+  --s-28: 28px;
+  --s-32: 32px;
+  --s-40: 40px;
+  --s-48: 48px;
+  --s-64: 64px;
+
+  /* -----------------------------------------------------------
+     Border radii
+     ----------------------------------------------------------- */
+  --r-6:  6px;
+  --r-8:  8px;
+  --r-10: 10px;
+  --r-12: 12px;
+  --r-14: 14px;
+  --r-16: 16px;
+  --r-20: 20px;
+  --r-24: 24px;
+
+  /* -----------------------------------------------------------
+     Typography — families
+     ----------------------------------------------------------- */
+  --font-ui:  "Inter", "Heebo", -apple-system, BlinkMacSystemFont,
+              "Segoe UI", system-ui, sans-serif;
+  --font-num: "Inter", system-ui, sans-serif;
+
+  /* -----------------------------------------------------------
+     Typography — size scale
+     ----------------------------------------------------------- */
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-18: 18px;
+  --fs-20: 20px;
+  --fs-24: 24px;
+  --fs-32: 32px;
+  --fs-40: 40px;
+  --fs-44: 44px;
+  --fs-56: 56px;
+
+  /* -----------------------------------------------------------
+     Responsive breakpoints (reference in JS via getComputedStyle
+     or media queries — CSS custom properties can't be used
+     directly inside @media, but kept here for documentation)
+     ----------------------------------------------------------- */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+}
+
+/* =============================================================
+   Numeric / monetary value utility
+   Apply to every money figure, percentage, date, and counter.
+   ============================================================= */
+.num,
+[data-num] {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  letter-spacing: -0.015em;
+}
+
+/* =============================================================
+   Hero gradient text
+   Reserved for: Hero KPI value, page-title display variant only.
+   ============================================================= */
+.text-hero-grad {
+  background: linear-gradient(180deg, #FFFFFF 0%, #BFC2DA 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* =============================================================
+   Reduced-motion safety
+   Any transition or animation added during the redesign should
+   be wrapped in a :not(.reduce-motion) check or declared here.
+   ============================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
