@@ -5,6 +5,7 @@ import { isOverdue, PRIORITY_LABELS, PRIORITY_COLORS } from '../../utils/taskHel
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank, Bell, Plus } from 'lucide-react';
 import { calculateSummaryStats, filterTransactionsByMonth, prepareMonthlyChartData } from '../../utils/dashboardHelpers';
+import { Card, MoneyAmount, LiveChip, IconButton, CardHeader, ProgressBar, KPIHero, KPICard } from '../../components/ui';
 
 const HEBREW_MONTHS_FULL = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -119,16 +120,20 @@ const Dashboard = () => {
   }
 
   return (
-    <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-32)' }}>
+    <div dir="rtl" style={{ display: 'flex', flexDirection: 'column' }}>
 
       {/* ─── Dashboard command header ─── */}
       <header style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        backgroundColor: 'var(--surface-1)',
+        borderBlockEnd: '1px solid var(--border)',
+        padding: '18px 28px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 'var(--s-16)',
-        paddingBottom: 'var(--s-24)',
-        borderBottom: '1px solid var(--border)',
         flexWrap: 'wrap',
       }}>
 
@@ -154,22 +159,7 @@ const Dashboard = () => {
             <h2 style={{ margin: 0, fontSize: 'var(--fs-20)', fontWeight: 700, color: 'var(--ink-1)', letterSpacing: '-0.015em' }}>
               סקירה כללית
             </h2>
-            {/* LIVE badge */}
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.07em',
-              color: 'var(--pos)', background: 'var(--pos-soft)',
-              border: '1px solid rgba(74,222,154,0.35)',
-              padding: '2px 8px', borderRadius: 9999,
-              textTransform: 'uppercase',
-            }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                backgroundColor: 'var(--pos)',
-                boxShadow: '0 0 6px var(--pos)',
-              }} />
-              Live
-            </span>
+            <LiveChip />
           </div>
           <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-13)', color: 'var(--ink-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedMonthLabel}
@@ -182,7 +172,7 @@ const Dashboard = () => {
         {/* Left: actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-8)', flexShrink: 0, flexWrap: 'wrap' }}>
 
-          {/* Month selector */}
+          {/* Month selector — unchanged */}
           <select
             value={`${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`}
             onChange={(e) => {
@@ -212,30 +202,18 @@ const Dashboard = () => {
           </select>
 
           {/* Notifications */}
-          <button
-            title="התראות"
-            style={{
-              width: 38, height: 38, flexShrink: 0,
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--r-8)',
-              backgroundColor: 'var(--surface-3)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--ink-3)',
-              cursor: 'pointer',
-              transition: 'background-color 0.15s, color 0.15s',
-            }}
-            className="btn-hover"
-          >
-            {/* #8B90A6 ≈ --ink-3 hex (Lucide color requires hex) */}
+          <IconButton size={38} title="התראות">
+            {/* #8B90A6 ≈ --ink-3 hex; Lucide color prop does not accept CSS variables */}
             <Bell size={16} color="#8B90A6" />
-          </button>
+          </IconButton>
 
-          {/* New transaction */}
+          {/* New transaction — Link styled via ui-btn-primary class to match PrimaryButton */}
           <Link
             to="/add"
+            className="ui-btn-primary"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 'var(--s-6)',
-              padding: '9px 16px',
+              padding: '9px 18px',
               background: 'var(--primary-grad)',
               color: 'var(--primary-ink)',
               borderRadius: 'var(--r-8)',
@@ -243,7 +221,6 @@ const Dashboard = () => {
               textDecoration: 'none',
               whiteSpace: 'nowrap',
               boxShadow: '0 0 16px rgba(124,92,255,0.25)',
-              transition: 'opacity 0.15s',
             }}
           >
             <Plus size={16} />
@@ -252,363 +229,297 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Summary Cards */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--s-24)' }}>
-        <SummaryCard
-          title="יתרה נוכחית"
-          value={stats.balance}
-          icon={<Wallet size={20} />}
-          iconBg="var(--primary-soft)"
-          iconColor="var(--primary-hi)"
-        />
-        <SummaryCard
-          title="הכנסות החודש"
-          value={stats.income}
-          icon={<TrendingUp size={20} />}
-          iconBg="var(--pos-soft)"
-          iconColor="var(--pos)"
-          valueColor="var(--pos)"
-        />
-        <SummaryCard
-          title="הוצאות החודש"
-          value={stats.expenses}
-          icon={<TrendingDown size={20} />}
-          iconBg="var(--neg-soft)"
-          iconColor="var(--neg)"
-          valueColor="var(--neg)"
-        />
-        <SummaryCard
-          title="נטו לחיסכון"
-          value={stats.balance}
-          icon={<PiggyBank size={20} />}
-          iconBg="var(--info-soft)"
-          iconColor="var(--info)"
-        />
-      </section>
+      {/* ─── Content ─── */}
+      <div style={{ padding: 'var(--s-32)', maxWidth: 1280, margin: '0 auto', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 'var(--s-32)' }}>
 
-      {/* Chart + Loans */}
-      <section style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--s-24)' }}>
-        {/* Chart */}
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-24)' }}>
-            <h2 style={cardTitleStyle}>מגמת הכנסות והוצאות</h2>
-            <span style={{
-              fontSize: 'var(--fs-12)', color: 'var(--ink-4)',
-              backgroundColor: 'var(--surface-3)', padding: '4px 10px',
-              borderRadius: 'var(--r-6)', border: '1px solid var(--border)',
-            }}>
-              6 חודשים אחרונים
-            </span>
-          </div>
-          <div style={{ width: '100%', height: 280 }}>
-            {chartData.some(d => d.income > 0 || d.expenses > 0) ? (
-              <ResponsiveContainer>
-                {/*
-                  Recharts SVG props (fill, stroke, tick.fill) do not resolve CSS variables —
-                  raw hex values are used directly from tokens.css:
-                    income fill:   #9B82FF  (--primary-hi)
-                    expense fill:  #1B1F2E  (--surface-3)
-                    expense stroke: rgba(255,255,255,0.12) (--border-strong)
-                    grid stroke:   #353B52  (--ink-5)
-                    axis tick:     #5A607A  (--ink-4)
-                    tooltip bg:    #1F2333  (--surface-elev)
-                */}
-                <BarChart data={chartData} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#353B52" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#5A607A', fontSize: 12 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#5A607A', fontSize: 12 }}
-                    tickFormatter={v => `₪${(v / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value) => `₪${value.toLocaleString()}`}
-                    contentStyle={{
-                      backgroundColor: '#1F2333',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      borderRadius: 8,
-                      color: '#F4F5FB',
-                    }}
-                    itemStyle={{ color: '#C8CBD9' }}
-                    labelStyle={{ color: '#8B90A6', marginBottom: 4 }}
-                    cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                  />
-                  <Bar dataKey="income" name="הכנסות" fill="#9B82FF" radius={[4, 4, 0, 0]} barSize={14} />
-                  <Bar dataKey="expenses" name="הוצאות" fill="#1B1F2E" stroke="rgba(255,255,255,0.12)" strokeWidth={1} radius={[4, 4, 0, 0]} barSize={14} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ink-4)' }}>
-                אין מספיק נתונים להצגה
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Summary Cards */}
+        <section style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 'var(--s-24)' }}>
+          <KPIHero label="יתרה נוכחית"  value={stats.balance}  icon={<Wallet size={14} />} />
+          <KPICard label="הכנסות החודש" value={stats.income}   icon={<TrendingUp size={13} />}  accent="mint"  valueColor="var(--pos)" />
+          <KPICard label="הוצאות החודש" value={stats.expenses} icon={<TrendingDown size={13} />} accent="coral" valueColor="var(--neg)" />
+          <KPICard label="נטו לחיסכון"  value={stats.balance}  icon={<PiggyBank size={13} />}   accent="cyan" />
+        </section>
 
-        {/* Loan Status */}
-        <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-24)' }}>
-            <h2 style={cardTitleStyle}>סטטוס הלוואות</h2>
-            {/* #5A607A = --ink-4; Lucide color prop does not accept CSS variables */}
-            <DollarSign size={20} color="#5A607A" />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-20)', flex: 1 }}>
-            {/* Total debt summary */}
-            <div style={{
-              textAlign: 'center', padding: 'var(--s-16)',
-              backgroundColor: 'var(--surface-3)', borderRadius: 'var(--r-12)',
-              border: '1px solid var(--border-strong)',
-            }}>
-              <p style={{ fontSize: 'var(--fs-13)', color: 'var(--ink-3)', margin: '0 0 4px 0', fontWeight: 500 }}>יתרת חוב כוללת</p>
-              <p className="num" style={{ fontSize: 'var(--fs-24)', fontWeight: 700, color: 'var(--ink-1)', margin: 0 }} dir="ltr">
-                ₪{totalDebt.toLocaleString()}
-              </p>
+        {/* Chart + Loans */}
+        <section style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--s-24)' }}>
+
+          {/* Trend chart */}
+          <Card>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-24)' }}>
+              <h2 style={{ fontSize: 'var(--fs-16)', fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>מגמת הכנסות והוצאות</h2>
+              <span style={{
+                fontSize: 'var(--fs-12)', color: 'var(--ink-4)',
+                backgroundColor: 'var(--surface-3)', padding: '4px 10px',
+                borderRadius: 'var(--r-6)', border: '1px solid var(--border)',
+              }}>
+                6 חודשים אחרונים
+              </span>
             </div>
-
-            {loans.length > 0 ? loans.slice(0, 3).map(loan => {
-              const original = Number(loan.original_amount) || 1;
-              const current = Number(loan.current_balance) || 0;
-              const paid = original - current;
-              const pct = Math.round((paid / original) * 100);
-              return (
-                <div key={loan.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-14)', marginBottom: 'var(--s-8)' }}>
-                    <span style={{ fontWeight: 500, color: 'var(--ink-2)' }}>{loan.name}</span>
-                    <span className="num" style={{ color: 'var(--ink-1)' }} dir="ltr">₪{Number(loan.monthly_payment).toLocaleString()} / חודש</span>
-                  </div>
-                  <div style={{ height: 6, backgroundColor: 'var(--surface-3)', borderRadius: 9999, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                    <div style={{ height: '100%', backgroundColor: 'var(--primary)', width: `${pct}%`, borderRadius: 9999 }} />
-                  </div>
-                  <p style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-4)', margin: '6px 0 0 0', textAlign: 'left' }}>שולמו {pct}% מהקרן</p>
+            <div style={{ width: '100%', height: 280 }}>
+              {chartData.some(d => d.income > 0 || d.expenses > 0) ? (
+                <ResponsiveContainer>
+                  {/*
+                    Recharts SVG props (fill, stroke, tick.fill) do not resolve CSS variables —
+                    raw hex values are used directly from tokens.css:
+                      income fill:    #9B82FF  (--primary-hi)
+                      expense fill:   #1B1F2E  (--surface-3)
+                      expense stroke: rgba(255,255,255,0.12) (--border-strong)
+                      grid stroke:    #353B52  (--ink-5)
+                      axis tick:      #5A607A  (--ink-4)
+                      tooltip bg:     #1F2333  (--surface-elev)
+                  */}
+                  <BarChart data={chartData} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#353B52" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#5A607A', fontSize: 12 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#5A607A', fontSize: 12 }}
+                      tickFormatter={v => `₪${(v / 1000).toFixed(0)}k`}
+                    />
+                    <Tooltip
+                      formatter={(value) => `₪${value.toLocaleString()}`}
+                      contentStyle={{
+                        backgroundColor: '#1F2333',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        borderRadius: 8,
+                        color: '#F4F5FB',
+                      }}
+                      itemStyle={{ color: '#C8CBD9' }}
+                      labelStyle={{ color: '#8B90A6', marginBottom: 4 }}
+                      cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                    />
+                    <Bar dataKey="income" name="הכנסות" fill="#9B82FF" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="expenses" name="הוצאות" fill="#1B1F2E" stroke="rgba(255,255,255,0.12)" strokeWidth={1} radius={[4, 4, 0, 0]} barSize={14} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ink-4)' }}>
+                  אין מספיק נתונים להצגה
                 </div>
-              );
-            }) : (
-              <p style={{ color: 'var(--ink-4)', textAlign: 'center', marginTop: 'var(--s-16)' }}>אין הלוואות פעילות</p>
-            )}
-          </div>
-        </div>
-      </section>
+              )}
+            </div>
+          </Card>
 
-      {/* Task Summary Widget */}
-      <section>
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-20)' }}>
-            <h2 style={cardTitleStyle}>משימות פתוחות</h2>
-            <Link to="/tasks" style={{ fontSize: 'var(--fs-14)', color: 'var(--primary-hi)', fontWeight: 500, textDecoration: 'none' }}>
-              לכל המשימות →
-            </Link>
-          </div>
-          {openTasks.length === 0 ? (
-            <p style={{ color: 'var(--ink-4)', textAlign: 'center', padding: '12px 0', margin: 0 }}>אין משימות פתוחות</p>
-          ) : (
-            <div style={{ display: 'flex', gap: 'var(--s-24)', alignItems: 'flex-start' }}>
-              {/* Stat pills */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-8)', flexShrink: 0 }}>
-                <div style={{
-                  padding: '12px 20px', backgroundColor: 'var(--primary-soft)',
-                  borderRadius: 'var(--r-12)', textAlign: 'center', minWidth: 72,
-                  border: '1px solid rgba(124,92,255,0.2)',
-                }}>
-                  <div className="num" style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink-1)' }}>{openTasks.length}</div>
-                  <div style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-3)', marginTop: 2 }}>פתוחות</div>
-                </div>
-                {overdueTaskCount > 0 && (
-                  <div style={{
-                    padding: '12px 20px', backgroundColor: 'var(--neg-soft)',
-                    borderRadius: 'var(--r-12)', textAlign: 'center', minWidth: 72,
-                    border: '1px solid rgba(255,122,138,0.2)',
-                  }}>
-                    <div className="num" style={{ fontSize: 22, fontWeight: 700, color: 'var(--neg)' }}>{overdueTaskCount}</div>
-                    <div style={{ fontSize: 'var(--fs-12)', color: 'var(--neg)', marginTop: 2 }}>באיחור</div>
-                  </div>
-                )}
+          {/* Loan Status */}
+          <Card style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-24)' }}>
+              <h2 style={{ fontSize: 'var(--fs-16)', fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>סטטוס הלוואות</h2>
+              {/* #5A607A = --ink-4; Lucide color prop does not accept CSS variables */}
+              <DollarSign size={20} color="#5A607A" />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-20)', flex: 1 }}>
+              {/* Total debt summary */}
+              <div style={{
+                textAlign: 'center', padding: 'var(--s-16)',
+                backgroundColor: 'var(--surface-3)', borderRadius: 'var(--r-12)',
+                border: '1px solid var(--border-strong)',
+              }}>
+                <p style={{ fontSize: 'var(--fs-13)', color: 'var(--ink-3)', margin: '0 0 4px 0', fontWeight: 500 }}>יתרת חוב כוללת</p>
+                <p className="num" style={{ fontSize: 'var(--fs-24)', fontWeight: 700, color: 'var(--ink-1)', margin: 0 }} dir="ltr">
+                  ₪{totalDebt.toLocaleString()}
+                </p>
               </div>
-              {/* Top tasks */}
-              <div style={{ flex: 1 }}>
-                {topDashTasks.map((task, i) => {
-                  const overdue = isOverdue(task);
-                  const dotColor = PRIORITY_COLORS[task.priority]?.color || 'var(--ink-5)';
-                  return (
-                    <div key={task.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '9px 0',
-                      borderBottom: i < topDashTasks.length - 1 ? '1px solid var(--border)' : 'none',
-                    }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, backgroundColor: dotColor }} />
-                      <span style={{ flex: 1, fontSize: 'var(--fs-14)', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {task.title}
-                      </span>
-                      <span style={{
-                        fontSize: 'var(--fs-11)', fontWeight: 500, padding: '1px 7px', borderRadius: 9999, flexShrink: 0,
-                        backgroundColor: DARK_PRIORITY_BG[task.priority] || 'var(--surface-3)',
-                        color: PRIORITY_COLORS[task.priority]?.color || 'var(--ink-3)',
-                      }}>
-                        {PRIORITY_LABELS[task.priority]}
-                      </span>
-                      {task.due_date && (
-                        <span style={{ fontSize: 'var(--fs-12)', color: overdue ? 'var(--neg)' : 'var(--ink-4)', whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400, marginRight: 4 }}>
-                          {task.due_date}
-                        </span>
-                      )}
+
+              {loans.length > 0 ? loans.slice(0, 3).map(loan => {
+                const original = Number(loan.original_amount) || 1;
+                const current  = Number(loan.current_balance) || 0;
+                const paid     = original - current;
+                const pct      = Math.round((paid / original) * 100);
+                return (
+                  <div key={loan.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--fs-14)', marginBottom: 'var(--s-8)' }}>
+                      <span style={{ fontWeight: 500, color: 'var(--ink-2)' }}>{loan.name}</span>
+                      <span className="num" style={{ color: 'var(--ink-1)' }} dir="ltr">₪{Number(loan.monthly_payment).toLocaleString()} / חודש</span>
                     </div>
-                  );
-                })}
-              </div>
+                    <ProgressBar value={pct} tone="primary" />
+                    <p style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-4)', margin: '6px 0 0 0', textAlign: 'start' }}>שולמו {pct}% מהקרן</p>
+                  </div>
+                );
+              }) : (
+                <p style={{ color: 'var(--ink-4)', textAlign: 'center', marginTop: 'var(--s-16)' }}>אין הלוואות פעילות</p>
+              )}
             </div>
-          )}
-        </div>
-      </section>
+          </Card>
+        </section>
 
-      {/* Recent Transactions + Budget */}
-      <section style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 'var(--s-24)', alignItems: 'start' }}>
-        {/* Recent Transactions */}
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-24)' }}>
-            <h2 style={cardTitleStyle}>תנועות אחרונות</h2>
-            <Link to="/transactions" style={{ fontSize: 'var(--fs-14)', color: 'var(--primary-hi)', fontWeight: 500, textDecoration: 'none' }}>
-              לכל התנועות
-            </Link>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse' }}>
-              <thead style={{ fontSize: 'var(--fs-11)', color: 'var(--ink-4)', borderBottom: '1px solid var(--border)' }}>
-                <tr>
-                  <th style={{ paddingBottom: 12, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>תאריך</th>
-                  <th style={{ paddingBottom: 12, fontWeight: 500, paddingRight: 16, letterSpacing: '0.06em', textTransform: 'uppercase' }}>תיאור</th>
-                  <th style={{ paddingBottom: 12, fontWeight: 500, paddingRight: 16, letterSpacing: '0.06em', textTransform: 'uppercase' }}>קטגוריה</th>
-                  <th style={{ paddingBottom: 12, fontWeight: 500, textAlign: 'left', paddingLeft: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>סכום</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.slice(0, 5).map(t => {
-                  const isIncome = t.movement_type === 'income';
-                  const catName = t.categories?.name || 'כללי';
-                  return (
-                    <tr key={t.id} className="tr-hover" style={{ transition: 'background-color 0.15s', borderTop: '1px solid var(--border)' }}>
-                      <td style={{ padding: '14px 0', fontSize: 'var(--fs-13)', color: 'var(--ink-4)', whiteSpace: 'nowrap' }}>
-                        {new Date(t.transaction_date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td style={{ padding: '14px 16px 14px 0', fontWeight: 500, color: 'var(--ink-2)', fontSize: 'var(--fs-14)' }}>
-                        {t.description}
-                      </td>
-                      <td style={{ padding: '14px 16px 14px 0' }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          padding: '2px 8px', borderRadius: 'var(--r-6)',
-                          fontSize: 'var(--fs-12)', fontWeight: 500,
-                          backgroundColor: 'var(--surface-3)',
-                          color: 'var(--ink-3)',
-                          border: '1px solid var(--border)',
-                        }}>
-                          {t.categories?.icon} {catName}
+        {/* Task Summary Widget */}
+        <section>
+          <Card>
+            <CardHeader title="משימות פתוחות" action={{ to: '/tasks', label: 'לכל המשימות →' }} />
+            {openTasks.length === 0 ? (
+              <p style={{ color: 'var(--ink-4)', textAlign: 'center', padding: '12px 0', margin: 0 }}>אין משימות פתוחות</p>
+            ) : (
+              <div style={{ display: 'flex', gap: 'var(--s-24)', alignItems: 'flex-start' }}>
+                {/* Stat pills */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-8)', flexShrink: 0 }}>
+                  <div style={{
+                    padding: '12px 20px', backgroundColor: 'var(--primary-soft)',
+                    borderRadius: 'var(--r-12)', textAlign: 'center', minWidth: 72,
+                    border: '1px solid rgba(124,92,255,0.2)',
+                  }}>
+                    <div className="num" style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink-1)' }}>{openTasks.length}</div>
+                    <div style={{ fontSize: 'var(--fs-12)', color: 'var(--ink-3)', marginTop: 2 }}>פתוחות</div>
+                  </div>
+                  {overdueTaskCount > 0 && (
+                    <div style={{
+                      padding: '12px 20px', backgroundColor: 'var(--neg-soft)',
+                      borderRadius: 'var(--r-12)', textAlign: 'center', minWidth: 72,
+                      border: '1px solid rgba(255,122,138,0.2)',
+                    }}>
+                      <div className="num" style={{ fontSize: 22, fontWeight: 700, color: 'var(--neg)' }}>{overdueTaskCount}</div>
+                      <div style={{ fontSize: 'var(--fs-12)', color: 'var(--neg)', marginTop: 2 }}>באיחור</div>
+                    </div>
+                  )}
+                </div>
+                {/* Top tasks */}
+                <div style={{ flex: 1 }}>
+                  {topDashTasks.map((task, i) => {
+                    const overdue  = isOverdue(task);
+                    const dotColor = PRIORITY_COLORS[task.priority]?.color || 'var(--ink-5)';
+                    return (
+                      <div key={task.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '9px 0',
+                        borderBottom: i < topDashTasks.length - 1 ? '1px solid var(--border)' : 'none',
+                      }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, backgroundColor: dotColor }} />
+                        <span style={{ flex: 1, fontSize: 'var(--fs-14)', color: 'var(--ink-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {task.title}
                         </span>
-                      </td>
-                      <td className="num" style={{
-                        padding: '14px 0 14px 8px', textAlign: 'left', fontWeight: 700,
-                        fontSize: 'var(--fs-14)',
-                        color: isIncome ? 'var(--pos)' : 'var(--neg)',
-                      }} dir="ltr">
-                        {isIncome ? '+' : '−'}₪{Number(t.total_amount).toLocaleString()}
+                        <span style={{
+                          fontSize: 'var(--fs-11)', fontWeight: 500, padding: '1px 7px', borderRadius: 9999, flexShrink: 0,
+                          backgroundColor: DARK_PRIORITY_BG[task.priority] || 'var(--surface-3)',
+                          color: PRIORITY_COLORS[task.priority]?.color || 'var(--ink-3)',
+                        }}>
+                          {PRIORITY_LABELS[task.priority]}
+                        </span>
+                        {task.due_date && (
+                          <span style={{ fontSize: 'var(--fs-12)', color: overdue ? 'var(--neg)' : 'var(--ink-4)', whiteSpace: 'nowrap', fontWeight: overdue ? 600 : 400, marginInlineEnd: 4 }}>
+                            {task.due_date}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </Card>
+        </section>
+
+        {/* Recent Transactions + Budget */}
+        <section style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 'var(--s-24)', alignItems: 'start' }}>
+
+          {/* Recent Transactions */}
+          <Card>
+            <CardHeader
+              title="תנועות אחרונות"
+              action={{ to: '/transactions', label: 'לכל התנועות' }}
+              style={{ marginBottom: 'var(--s-24)' }}
+            />
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', textAlign: 'right', borderCollapse: 'collapse' }}>
+                <thead style={{ fontSize: 'var(--fs-11)', color: 'var(--ink-4)', borderBottom: '1px solid var(--border)' }}>
+                  <tr>
+                    <th style={{ paddingBottom: 12, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase' }}>תאריך</th>
+                    <th style={{ paddingBottom: 12, fontWeight: 500, paddingRight: 16, letterSpacing: '0.06em', textTransform: 'uppercase' }}>תיאור</th>
+                    <th style={{ paddingBottom: 12, fontWeight: 500, paddingRight: 16, letterSpacing: '0.06em', textTransform: 'uppercase' }}>קטגוריה</th>
+                    <th style={{ paddingBottom: 12, fontWeight: 500, textAlign: 'left', paddingLeft: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>סכום</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.slice(0, 5).map(t => {
+                    const isIncome = t.movement_type === 'income';
+                    const catName  = t.categories?.name || 'כללי';
+                    return (
+                      <tr key={t.id} className="tr-hover" style={{ transition: 'background-color 0.15s', borderTop: '1px solid var(--border)' }}>
+                        <td style={{ padding: '14px 0', fontSize: 'var(--fs-13)', color: 'var(--ink-4)', whiteSpace: 'nowrap' }}>
+                          {new Date(t.transaction_date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td style={{ padding: '14px 16px 14px 0', fontWeight: 500, color: 'var(--ink-2)', fontSize: 'var(--fs-14)' }}>
+                          {t.description}
+                        </td>
+                        <td style={{ padding: '14px 16px 14px 0' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '2px 8px', borderRadius: 'var(--r-6)',
+                            fontSize: 'var(--fs-12)', fontWeight: 500,
+                            backgroundColor: 'var(--surface-3)',
+                            color: 'var(--ink-3)',
+                            border: '1px solid var(--border)',
+                          }}>
+                            {t.categories?.icon} {catName}
+                          </span>
+                        </td>
+                        <td className="num" style={{
+                          padding: '14px 0 14px 8px', textAlign: 'left', fontWeight: 700,
+                          fontSize: 'var(--fs-14)',
+                          color: isIncome ? 'var(--pos)' : 'var(--neg)',
+                        }} dir="ltr">
+                          {isIncome ? '+' : '−'}₪{Number(t.total_amount).toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {transactions.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-4)' }}>
+                        אין תנועות עדיין
                       </td>
                     </tr>
-                  );
-                })}
-                {transactions.length === 0 && (
-                  <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-4)' }}>
-                      אין תנועות עדיין
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
 
-        {/* Budget Progress */}
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-24)' }}>
-            <h2 style={cardTitleStyle}>מצב תקציב חודשי</h2>
-            <Link to="/budget" style={{ fontSize: 'var(--fs-14)', color: 'var(--primary-hi)', fontWeight: 500, textDecoration: 'none' }}>
-              לתקציב המלא
-            </Link>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-20)' }}>
-            {budgetProgress.length > 0 ? budgetProgress.slice(0, 4).map(b => {
-              const barColor     = b.pct >= 100 ? 'var(--neg)'  : b.pct >= 85 ? 'var(--warn)'  : 'var(--pos)';
-              const hintColor    = b.pct >= 100 ? 'var(--neg)'  : b.pct >= 85 ? 'var(--warn)'  : 'var(--ink-4)';
-              const amountColor  = b.pct >= 100 ? 'var(--neg)'  : b.pct >= 85 ? 'var(--warn)'  : 'var(--ink-2)';
-              return (
-                <div key={b.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--s-8)', alignItems: 'baseline' }}>
-                    <span style={{ fontWeight: 500, color: 'var(--ink-2)', display: 'flex', alignItems: 'center', gap: 'var(--s-6)', fontSize: 'var(--fs-14)' }}>
-                      {b.icon} {b.name}
-                    </span>
-                    <span style={{ fontSize: 'var(--fs-13)', color: 'var(--ink-3)' }}>
-                      <span className="num" style={{ fontWeight: 700, color: amountColor }} dir="ltr">₪{b.spent.toLocaleString()}</span>
-                      {' '}מתוך{' '}
-                      <span className="num" dir="ltr">₪{b.budget.toLocaleString()}</span>
-                    </span>
+          {/* Budget Progress */}
+          <Card>
+            <CardHeader
+              title="מצב תקציב חודשי"
+              action={{ to: '/budget', label: 'לתקציב המלא' }}
+              style={{ marginBottom: 'var(--s-24)' }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-20)' }}>
+              {budgetProgress.length > 0 ? budgetProgress.slice(0, 4).map(b => {
+                const barTone    = b.pct >= 100 ? 'neg'         : b.pct >= 85 ? 'warn'         : 'pos';
+                const hintColor  = b.pct >= 100 ? 'var(--neg)'  : b.pct >= 85 ? 'var(--warn)'  : 'var(--ink-4)';
+                const amountColor = b.pct >= 100 ? 'var(--neg)' : b.pct >= 85 ? 'var(--warn)'  : 'var(--ink-2)';
+                return (
+                  <div key={b.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--s-8)', alignItems: 'baseline' }}>
+                      <span style={{ fontWeight: 500, color: 'var(--ink-2)', display: 'flex', alignItems: 'center', gap: 'var(--s-6)', fontSize: 'var(--fs-14)' }}>
+                        {b.icon} {b.name}
+                      </span>
+                      <span style={{ fontSize: 'var(--fs-13)', color: 'var(--ink-3)' }}>
+                        <span className="num" style={{ fontWeight: 700, color: amountColor }} dir="ltr">₪{b.spent.toLocaleString()}</span>
+                        {' '}מתוך{' '}
+                        <span className="num" dir="ltr">₪{b.budget.toLocaleString()}</span>
+                      </span>
+                    </div>
+                    <ProgressBar value={b.pct} tone={barTone} />
+                    <p style={{ fontSize: 'var(--fs-12)', color: hintColor, fontWeight: b.pct >= 85 ? 500 : 400, margin: '5px 0 0 0', textAlign: 'start', paddingInlineStart: 4 }}>
+                      {b.remaining >= 0 ? `נותרו ₪${b.remaining.toLocaleString()}` : `חריגה של ₪${Math.abs(b.remaining).toLocaleString()}`}
+                    </p>
                   </div>
-                  <div style={{ height: 6, backgroundColor: 'var(--surface-3)', borderRadius: 9999, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                    <div style={{ height: '100%', backgroundColor: barColor, width: `${b.pct}%`, borderRadius: 9999 }} />
-                  </div>
-                  <p style={{ fontSize: 'var(--fs-12)', color: hintColor, fontWeight: b.pct >= 85 ? 500 : 400, margin: '5px 0 0 0', textAlign: 'left', paddingLeft: 4 }}>
-                    {b.remaining >= 0 ? `נותרו ₪${b.remaining.toLocaleString()}` : `חריגה של ₪${Math.abs(b.remaining).toLocaleString()}`}
-                  </p>
-                </div>
-              );
-            }) : (
-              <p style={{ color: 'var(--ink-4)', textAlign: 'center' }}>לא הוגדר תקציב לחודש זה</p>
-            )}
-          </div>
-        </div>
-      </section>
+                );
+              }) : (
+                <p style={{ color: 'var(--ink-4)', textAlign: 'center' }}>לא הוגדר תקציב לחודש זה</p>
+              )}
+            </div>
+          </Card>
+        </section>
+
+      </div>{/* end content wrapper */}
     </div>
   );
 };
 
-// --- Sub-components ---
-
-const SummaryCard = ({ title, value, icon, iconBg, iconColor, valueColor = 'var(--ink-1)' }) => (
-  <div style={{
-    backgroundColor: 'var(--surface-2)',
-    padding: 'var(--s-24)',
-    borderRadius: 'var(--r-16)',
-    boxShadow: 'var(--shadow-sm)',
-    border: '1px solid var(--border)',
-  }}>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-16)' }}>
-      <h3 style={{ color: 'var(--ink-3)', fontSize: 'var(--fs-13)', fontWeight: 500, margin: 0 }}>{title}</h3>
-      <div style={{
-        padding: 'var(--s-8)', backgroundColor: iconBg, borderRadius: 'var(--r-8)',
-        color: iconColor, display: 'flex', border: '1px solid var(--border)',
-      }}>
-        {icon}
-      </div>
-    </div>
-    <span className="num" style={{ fontSize: 'var(--fs-32)', fontWeight: 700, color: valueColor }} dir="ltr">
-      ₪{value.toLocaleString()}
-    </span>
-  </div>
-);
-
-// --- Styles ---
-const cardStyle = {
-  backgroundColor: 'var(--surface-2)',
-  padding: 'var(--s-24)',
-  borderRadius: 'var(--r-16)',
-  boxShadow: 'var(--shadow-sm)',
-  border: '1px solid var(--border)',
-};
-const cardTitleStyle = {
-  fontSize: 'var(--fs-16)', fontWeight: 700, color: 'var(--ink-1)', margin: 0,
-};
 
 export default Dashboard;

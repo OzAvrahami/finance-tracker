@@ -32,3 +32,61 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 button:focus-visible, a:focus-visible { outline: 2px solid var(--primary-hi); outline-offset: 2px; }
 input:disabled, select:disabled, textarea:disabled, button:disabled { background-color: var(--surface-3) !important; color: var(--ink-5) !important; cursor: not-allowed; opacity: 0.6; }
 input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 1000px var(--surface-3) inset !important; -webkit-text-fill-color: var(--ink-1) !important; caret-color: var(--ink-1); }
+
+/* ── UI Primitive classes ──────────────────────────────────────────────────── */
+
+/* Glass card: sheen overlay + corner iris glow via pseudo-elements */
+.ui-glass { position: relative; overflow: hidden; }
+.ui-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.ui-glass::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle at 100% 0%, rgba(124,92,255,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Skeleton shimmer */
+@keyframes ui-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.ui-skeleton {
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-elev) 50%, var(--surface-3) 75%);
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.4s ease infinite;
+}
+
+/* Primary button: lift + glow on hover */
+.ui-btn-primary { transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
+.ui-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px rgba(124,92,255,0.45), 0 4px 12px rgba(0,0,0,0.3);
+}
+.ui-btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+/* Secondary / ghost button: surface lift on hover */
+.ui-btn-secondary { transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+.ui-btn-secondary:hover:not(:disabled) {
+  background-color: var(--surface-3);
+  border-color: var(--border-bright);
+  color: var(--ink-1);
+}
+
+/* Icon button: subtle surface lift on hover */
+.ui-icon-btn { transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+.ui-icon-btn:hover:not(:disabled) {
+  background-color: var(--surface-elev);
+  border-color: var(--border-strong);
+  color: var(--ink-2);
+}

@@ -13,7 +13,8 @@
   --surface-1:    #0E1019;   /* sidebar, topbar */
   --surface-2:    #141721;   /* cards */
   --surface-3:    #1B1F2E;   /* chips, wells, hover */
-  --surface-elev: #1F2333;   /* dropdowns, popovers, modals */
+  --surface-elev:  #1F2333;   /* dropdowns, popovers, modals */
+  --surface-2-glass: rgba(20, 23, 33, 0.50); /* glass cards — needs backdrop-filter */
 
   /* -----------------------------------------------------------
      Borders — low-alpha white for glass feel
@@ -40,13 +41,15 @@
   --primary-soft: rgba(124, 92, 255, 0.14);
   --primary-glow: rgba(124, 92, 255, 0.45);
   --primary-ink:  #FFFFFF;
-  --primary-grad: linear-gradient(135deg, #9B82FF 0%, #5538E0 100%);
+  --primary-grad:   linear-gradient(135deg, #9B82FF 0%, #5538E0 100%);
+  --primary-grad-r: linear-gradient(135deg, #6F4DFF 0%, #B89BFF 100%); /* RTL reverse */
 
   /* -----------------------------------------------------------
      Semantic — softened
      ----------------------------------------------------------- */
   --pos:      #4ADE9A;
   --pos-soft: rgba(74, 222, 154, 0.12);
+  --pos-glow: rgba(74, 222, 154, 0.35);
 
   --neg:      #FF7A8A;   /* coral — NOT alarm red */
   --neg-soft: rgba(255, 122, 138, 0.12);

@@ -36,6 +36,7 @@ const Layout = () => {
 
   const currentTitle = pageTitle[location.pathname] || 'פיננסים';
   const userInitials = user?.email ? user.email.charAt(0).toUpperCase() : '?';
+  const isDashboard = location.pathname === '/';
 
   return (
     <div dir="rtl" style={{ minHeight: '100vh', display: 'flex', backgroundColor: 'var(--bg)' }}>
@@ -146,34 +147,39 @@ const Layout = () => {
 
       {/* Main */}
       <main style={{ flex: 1, marginInlineStart: 260, overflowY: 'auto' }}>
-        {/* Header / Top bar */}
-        <header style={{
-          backgroundColor: 'var(--surface-1)',
-          borderBlockEnd: '1px solid var(--border)',
-          padding: '18px 28px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          position: 'sticky', top: 0, zIndex: 10,
-        }}>
-          <h1 style={{ fontSize: 'var(--fs-20)', fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.015em' }}>
-            {currentTitle}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-16)' }}>
-            <div style={{
-              height: 36, width: 36,
-              backgroundColor: 'var(--surface-3)',
-              borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--primary-hi)', fontWeight: 700, fontSize: 'var(--fs-13)',
-              border: '1px solid var(--border-strong)',
-            }}>
-              {userInitials}
+        {!isDashboard && (
+          <header style={{
+            backgroundColor: 'var(--surface-1)',
+            borderBlockEnd: '1px solid var(--border)',
+            padding: '18px 28px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            position: 'sticky', top: 0, zIndex: 10,
+          }}>
+            <h1 style={{ fontSize: 'var(--fs-20)', fontWeight: 700, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.015em' }}>
+              {currentTitle}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-16)' }}>
+              <div style={{
+                height: 36, width: 36,
+                backgroundColor: 'var(--surface-3)',
+                borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--primary-hi)', fontWeight: 700, fontSize: 'var(--fs-13)',
+                border: '1px solid var(--border-strong)',
+              }}>
+                {userInitials}
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
-        <div style={{ padding: 'var(--s-32)', maxWidth: 1280, margin: '0 auto' }}>
+        {isDashboard ? (
           <Outlet />
-        </div>
+        ) : (
+          <div style={{ padding: 'var(--s-32)', maxWidth: 1280, margin: '0 auto' }}>
+            <Outlet />
+          </div>
+        )}
       </main>
     </div>
   );
