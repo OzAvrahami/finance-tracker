@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import CategoriesTab from './CategoriesTab';
 import PaymentSourcesTab from './PaymentSourcesTab';
+import ShoppingSettingsTab from './ShoppingSettingsTab';
 
 const TABS = [
   { key: 'categories',      label: 'קטגוריות' },
   { key: 'payment-sources', label: 'מקורות תשלום' },
+  { key: 'shopping',        label: 'הגדרות קניות' },
 ];
 
 const Settings = () => {
@@ -43,8 +45,9 @@ const Settings = () => {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'categories' && <CategoriesTab />}
+      {activeTab === 'categories'      && <CategoriesTab />}
       {activeTab === 'payment-sources' && <PaymentSourcesTab />}
+      {activeTab === 'shopping'        && <ShoppingSettingsTab />}
     </div>
   );
 };

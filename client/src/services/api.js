@@ -96,6 +96,22 @@ export const createSettingsPaymentSource = (data)    => api.post('/settings/paym
 export const updateSettingsPaymentSource = (id, data) => api.put(`/settings/payment-sources/${id}`, data);
 export const deleteSettingsPaymentSource = (id)      => api.delete(`/settings/payment-sources/${id}`);
 
+// Settings — Shopping List Types
+export const getAdminShoppingListTypes         = ()        => api.get('/settings/shopping/list-types');
+export const createAdminShoppingListType       = (data)    => api.post('/settings/shopping/list-types', data);
+export const updateAdminShoppingListType       = (id, data) => api.put(`/settings/shopping/list-types/${id}`, data);
+export const deleteAdminShoppingListType       = (id)      => api.delete(`/settings/shopping/list-types/${id}`);
+
+// Settings — Shopping Catalog Categories
+export const getAdminShoppingCatalogCategories    = ()        => api.get('/settings/shopping/catalog-categories');
+export const createAdminShoppingCatalogCategory   = (data)    => api.post('/settings/shopping/catalog-categories', data);
+export const updateAdminShoppingCatalogCategory   = (id, data) => api.put(`/settings/shopping/catalog-categories/${id}`, data);
+export const deleteAdminShoppingCatalogCategory   = (id)      => api.delete(`/settings/shopping/catalog-categories/${id}`);
+
+// Settings — Shopping Mapping
+export const getAdminListTypeCategoryLinks  = (listTypeId)        => api.get(`/settings/shopping/list-types/${listTypeId}/categories`);
+export const setAdminListTypeCategoryLinks  = (listTypeId, data)  => api.put(`/settings/shopping/list-types/${listTypeId}/categories`, data);
+
 // Tasks
 export const getTasks = (params) => api.get('/tasks', { params });
 export const createTask = (data) => api.post('/tasks', data);
