@@ -18,7 +18,7 @@ const schema = z.object({
   external_id: z.string().max(255).optional(),
   dry_run: z.boolean().optional(),
 });
-//
+
 async function createTransaction(req, res) {
   console.log("Incoming transaction body:", JSON.stringify(req.body, null, 2));
 
