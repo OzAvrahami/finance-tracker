@@ -430,7 +430,7 @@ const CatalogCategoriesSection = () => {
               key={item.id}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 16px',
+                padding: '13px 16px',
                 borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
                 opacity: item.is_active ? 1 : 0.55,
                 transition: 'opacity 0.2s',
@@ -442,7 +442,7 @@ const CatalogCategoriesSection = () => {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontWeight: 600, fontSize: 14, color: 'var(--ink-1)',
+                    fontWeight: 600, fontSize: 15, color: 'var(--ink-1)',
                     overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                   }}>
                     {item.name}
@@ -665,25 +665,32 @@ const MappingSection = () => {
                     opacity: cat.is_active ? 1 : 0.55,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 20, width: 28, textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 20, width: 28, textAlign: 'center', flexShrink: 0, lineHeight: 1 }}>
                       {cat.icon || '🛒'}
                     </span>
-                    <span style={{ fontSize: 15, color: 'var(--ink-1)', fontWeight: 500 }}>
-                      {cat.name}
-                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: 600, fontSize: 15, color: 'var(--ink-1)',
+                        overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                      }}>
+                        {cat.name}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     {!cat.is_active && (
-                      <span style={{ ...badgeStyle, background: 'var(--surface-3)', color: 'var(--ink-4)', fontSize: 11 }}>
+                      <span style={{ ...badgeStyle, background: 'var(--surface-3)', color: 'var(--ink-4)' }}>
                         מושבתת
                       </span>
                     )}
+                    <input
+                      type="checkbox"
+                      checked={checkedIds.has(cat.id)}
+                      onChange={() => toggleCategory(cat.id)}
+                      style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }}
+                    />
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={checkedIds.has(cat.id)}
-                    onChange={() => toggleCategory(cat.id)}
-                    style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }}
-                  />
                 </label>
               ))}
             </div>
