@@ -430,17 +430,24 @@ const CatalogCategoriesSection = () => {
               key={item.id}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '13px 16px',
+                padding: '10px 16px',
                 borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
                 opacity: item.is_active ? 1 : 0.55,
                 transition: 'opacity 0.2s',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 22, width: 32, textAlign: 'center', flexShrink: 0, lineHeight: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 20, width: 28, textAlign: 'center', flexShrink: 0, lineHeight: 1 }}>
                   {item.icon || '🛒'}
                 </span>
-                <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ink-1)' }}>{item.name}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontWeight: 600, fontSize: 14, color: 'var(--ink-1)',
+                    overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                  }}>
+                    {item.name}
+                  </div>
+                </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
