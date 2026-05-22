@@ -83,6 +83,7 @@ export const checkoutShoppingList = (listId, data) => api.post(`/shopping/lists/
 
 // Annual Summary
 export const getAnnualBudgetSummary = (year) => api.get('/budgets/annual-summary', { params: { year } });
+export const getMonthlyCategoryBreakdown = (year) => api.get('/budgets/monthly-category-breakdown', { params: { year } });
 
 // Settings — Categories
 export const getSettingsCategories = () => api.get('/settings/categories');

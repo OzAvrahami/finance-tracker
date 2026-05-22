@@ -312,6 +312,173 @@ exports.getAnnualSummary = async (req, res) => {
   }
 };
 
+// GET /api/budgets/monthly-category-breakdown?year=YYYY
+exports.getMonthlyCategoryBreakdown = async (req, res) => {
+  try {
+    const { year } = req.query;
+    if (!year || !/^\d{4}$/.test(year)) {
+      return res.status(400).json({ error: 'year must be a 4-digit integer' });
+    }
+
+    const startMonth = `${year}-01`;
+    const endMonth   = `${year}-12`;
+    const startDate  = `${year}-01-01`;
+    const endDate    = `${year}-12-31`;
+
+    const MONTH_LABELS = [
+      '', 'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+      'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+    ];
+
+    const months = [];
+    const monthLabels = [];
+    for (let m = 1; m <= 12; m++) {
+      const ms = `${year}-${String(m).padStart(2, '0')}`;
+      months.push(ms);
+      monthLabels.push(MONTH_LABELS[m]);
+    }
+
+    // 1. All budget rows for the year
+    const { data: budgets, error: budgetError } = await supabase
+      .from('budgets')
+      .select('category_id, month, amount, categories(name, icon)')
+      .gte('month', startMonth)
+      .lte('month', endMonth);
+    if (budgetError) throw budgetError;
+
+    // 2. All expense transactions for the year
+    const { data: transactions, error: transError } = await supabase
+      .from('transactions')
+      .select('transaction_date, total_amount, category_id, categories(name, icon)')
+      .eq('movement_type', 'expense')
+      .gte('transaction_date', startDate)
+      .lte('transaction_date', endDate);
+    if (transError) throw transError;
+
+    // Build budget map: budgetMap[catKey][month] = amount
+    // catKey is String(category_id)
+    const budgetMap = {};
+    const catMeta   = {}; // catKey -> { name, icon, is_budgeted_any_month }
+
+    for (const b of budgets) {
+      const key = b.category_id != null ? String(b.category_id) : '__null__';
+      if (!budgetMap[key]) budgetMap[key] = {};
+      budgetMap[key][b.month] = (budgetMap[key][b.month] || 0) + Number(b.amount);
+      if (!catMeta[key]) {
+        catMeta[key] = {
+          category_id: b.category_id,
+          name: b.categories?.name || 'ללא שם',
+          icon: b.categories?.icon || null,
+          is_budgeted_any_month: true,
+        };
+      }
+    }
+
+    // Build actual map: actualMap[catKey][month] = amount
+    // Expense transactions with null category_id OR missing joined category → '__null__' key
+    const actualMap = {};
+
+    for (const t of transactions) {
+      const amount = Number(t.total_amount);
+      const txMonth = t.transaction_date.slice(0, 7);
+
+      // A transaction is "uncategorized" if category_id is null OR joined category is missing
+      const isCategorized = t.category_id != null && t.categories != null;
+      const key = isCategorized ? String(t.category_id) : '__null__';
+
+      if (!actualMap[key]) actualMap[key] = {};
+      actualMap[key][txMonth] = (actualMap[key][txMonth] || 0) + amount;
+
+      // Register meta for categories that only appear in transactions (unbudgeted)
+      if (!catMeta[key]) {
+        catMeta[key] = {
+          category_id: isCategorized ? t.category_id : null,
+          name: isCategorized ? (t.categories?.name || 'ללא שם') : 'ללא קטגוריה',
+          icon: isCategorized ? (t.categories?.icon || null) : null,
+          is_budgeted_any_month: false,
+        };
+      }
+    }
+
+    // Ensure the '__null__' row is always named correctly
+    if (catMeta['__null__']) {
+      catMeta['__null__'].name = 'ללא קטגוריה';
+      catMeta['__null__'].icon = null;
+    }
+
+    // Collect all category keys: union of budgeted + actual
+    const allKeys = new Set([...Object.keys(budgetMap), ...Object.keys(actualMap)]);
+
+    // Build per-category rows
+    const rows = [];
+    for (const key of allKeys) {
+      const meta = catMeta[key];
+      const monthCells = {};
+      let yearlyPlanned = 0;
+      let yearlyActual  = 0;
+      let hasAnyPlanned = false;
+
+      for (const m of months) {
+        const planned = budgetMap[key]?.[m] ?? null;
+        const actual  = actualMap[key]?.[m] ?? 0;
+        const diff    = planned !== null ? planned - actual : null;
+
+        monthCells[m] = { planned, actual, diff };
+
+        if (planned !== null) { yearlyPlanned += planned; hasAnyPlanned = true; }
+        yearlyActual += actual;
+      }
+
+      rows.push({
+        category_id: meta.category_id,
+        name: meta.name,
+        icon: meta.icon,
+        is_budgeted_any_month: meta.is_budgeted_any_month,
+        months: monthCells,
+        yearly: {
+          planned: hasAnyPlanned ? yearlyPlanned : null,
+          actual: yearlyActual,
+          diff: hasAnyPlanned ? yearlyPlanned - yearlyActual : null,
+        },
+      });
+    }
+
+    // Sort: budgeted first (by yearly actual desc), then unbudgeted (by yearly actual desc),
+    // '__null__' (ללא קטגוריה) always last
+    rows.sort((a, b) => {
+      const aIsNull = a.category_id === null;
+      const bIsNull = b.category_id === null;
+      if (aIsNull && !bIsNull) return 1;
+      if (!aIsNull && bIsNull) return -1;
+      if (a.is_budgeted_any_month !== b.is_budgeted_any_month) {
+        return a.is_budgeted_any_month ? -1 : 1;
+      }
+      return b.yearly.actual - a.yearly.actual;
+    });
+
+    // Build totals row: planned = sum of budgeted categories; actual = ALL actual
+    const totals = { months: {}, yearly: { planned: 0, actual: 0, diff: 0 } };
+    for (const m of months) {
+      let mPlanned = 0;
+      let mActual  = 0;
+      for (const row of rows) {
+        const cell = row.months[m];
+        if (cell.planned !== null) mPlanned += cell.planned;
+        mActual += cell.actual;
+      }
+      totals.months[m] = { planned: mPlanned, actual: mActual, diff: mPlanned - mActual };
+      totals.yearly.planned += mPlanned;
+      totals.yearly.actual  += mActual;
+    }
+    totals.yearly.diff = totals.yearly.planned - totals.yearly.actual;
+
+    res.json({ year: parseInt(year, 10), months, monthLabels, rows, totals });
+  } catch (error) {
+    console.error('getMonthlyCategoryBreakdown Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // DELETE /api/budgets/:id
 exports.deleteBudget = async (req, res) => {
   try {

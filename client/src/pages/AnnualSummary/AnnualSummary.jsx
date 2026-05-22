@@ -4,7 +4,8 @@ import {
   ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
 import { AlertTriangle, Calendar } from 'lucide-react';
-import { getAnnualBudgetSummary } from '../../services/api';
+import { getAnnualBudgetSummary, getMonthlyCategoryBreakdown } from '../../services/api';
+import MonthlyBreakdownTable from './MonthlyBreakdownTable';
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -69,11 +70,23 @@ const AnnualSummary = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Drill-down state
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [breakdownData, setBreakdownData] = useState(null);
+  const [breakdownLoading, setBreakdownLoading] = useState(false);
+  const [breakdownError, setBreakdownError] = useState(null);
+  const [monthRange, setMonthRange] = useState('3');
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setData(null);
+    // Reset drill-down when year changes
+    setShowBreakdown(false);
+    setBreakdownData(null);
+    setBreakdownError(null);
+    setMonthRange('3');
 
     getAnnualBudgetSummary(selectedYear)
       .then(res => { if (!cancelled) setData(res.data); })
@@ -82,6 +95,18 @@ const AnnualSummary = () => {
 
     return () => { cancelled = true; };
   }, [selectedYear]);
+
+  const handleToggleBreakdown = () => {
+    if (!showBreakdown && !breakdownData) {
+      setBreakdownLoading(true);
+      setBreakdownError(null);
+      getMonthlyCategoryBreakdown(selectedYear)
+        .then(res => setBreakdownData(res.data))
+        .catch(() => setBreakdownError('שגיאה בטעינת הפירוט החודשי. נסה שנית.'))
+        .finally(() => setBreakdownLoading(false));
+    }
+    setShowBreakdown(v => !v);
+  };
 
   // Year range: 2022 → next year
   const years = [];
@@ -344,7 +369,7 @@ const AnnualSummary = () => {
 
       {/* ── Non-budgeted section ── */}
       {data.non_budgeted.total > 0 && (
-        <div style={{ ...sectionCardStyle, marginBottom: 0 }}>
+        <div style={sectionCardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>הוצאות לא מתוקצבות</h3>
             <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--warn)' }}>
@@ -375,6 +400,54 @@ const AnnualSummary = () => {
           </div>
         </div>
       )}
+
+      {/* ── Monthly breakdown drill-down ── */}
+      <div style={{ ...sectionCardStyle, marginBottom: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>פירוט תקציב חודשי לפי קטגוריה</h3>
+            {!showBreakdown && (
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-4)' }}>
+                ניתוח ביצועים לפי קטגוריה וחודש לאורך השנה
+              </p>
+            )}
+          </div>
+          <button
+            onClick={handleToggleBreakdown}
+            style={{
+              padding: '8px 18px',
+              borderRadius: 10,
+              border: '1px solid var(--border)',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              background: showBreakdown ? 'var(--surface-3)' : 'var(--primary-hi)',
+              color: showBreakdown ? 'var(--ink-2)' : '#fff',
+              flexShrink: 0,
+            }}
+          >
+            {showBreakdown ? 'הסתר פירוט חודשי לפי קטגוריה ▲' : 'הצג פירוט חודשי לפי קטגוריה ▼'}
+          </button>
+        </div>
+
+        {showBreakdown && (
+          <div style={{ marginTop: 20 }}>
+            {breakdownLoading && (
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--ink-4)' }}>טוען פירוט...</div>
+            )}
+            {breakdownError && (
+              <div style={errorBannerStyle}>{breakdownError}</div>
+            )}
+            {!breakdownLoading && !breakdownError && breakdownData && (
+              <MonthlyBreakdownTable
+                data={breakdownData}
+                monthRange={monthRange}
+                onMonthRangeChange={setMonthRange}
+              />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
