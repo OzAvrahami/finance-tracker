@@ -41,8 +41,11 @@ export const CATEGORY_LABELS = {
 
 const PRIORITY_WEIGHT = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+const COMPLETED_STATUSES = new Set(['done', 'cancelled']);
+
 const STATUS_TABS = [
   { value: 'all', label: 'הכל' },
+  { value: 'active', label: 'פעיל' },
   { value: 'open', label: STATUS_LABELS.open },
   { value: 'in_progress', label: STATUS_LABELS.in_progress },
   { value: 'waiting', label: STATUS_LABELS.waiting },
@@ -89,7 +92,7 @@ const Tasks = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [filters, setFilters] = useState({
-    status: 'all',
+    status: 'active',
     priority: 'all',
     category: 'all',
     search: '',
@@ -110,8 +113,11 @@ const Tasks = () => {
   useEffect(() => { fetchTasks(); }, []);
 
   const statusCounts = useMemo(() => {
-    const counts = { all: tasks.length, open: 0, in_progress: 0, waiting: 0, done: 0, cancelled: 0 };
-    tasks.forEach(t => { if (t.status in counts) counts[t.status]++; });
+    const counts = { all: tasks.length, active: 0, open: 0, in_progress: 0, waiting: 0, done: 0, cancelled: 0 };
+    tasks.forEach(t => {
+      if (t.status in counts) counts[t.status]++;
+      if (!COMPLETED_STATUSES.has(t.status)) counts.active++;
+    });
     return counts;
   }, [tasks]);
 
@@ -119,7 +125,11 @@ const Tasks = () => {
 
   const filteredTasks = useMemo(() => {
     let result = tasks;
-    if (filters.status !== 'all') result = result.filter(t => t.status === filters.status);
+    if (filters.status === 'active') {
+      result = result.filter(t => !COMPLETED_STATUSES.has(t.status));
+    } else if (filters.status !== 'all') {
+      result = result.filter(t => t.status === filters.status);
+    }
     if (filters.priority !== 'all') result = result.filter(t => t.priority === filters.priority);
     if (filters.category !== 'all') result = result.filter(t => t.category === filters.category);
     if (filters.search) {
@@ -129,6 +139,9 @@ const Tasks = () => {
     if (filters.overdue) result = result.filter(isOverdue);
 
     return [...result].sort((a, b) => {
+      const aComp = COMPLETED_STATUSES.has(a.status) ? 1 : 0;
+      const bComp = COMPLETED_STATUSES.has(b.status) ? 1 : 0;
+      if (aComp !== bComp) return aComp - bComp;
       const aOver = isOverdue(a) ? 0 : 1;
       const bOver = isOverdue(b) ? 0 : 1;
       if (aOver !== bOver) return aOver - bOver;
@@ -168,8 +181,8 @@ const Tasks = () => {
     }
   };
 
-  const hasActiveFilter = filters.status !== 'all' || filters.priority !== 'all' ||
-    filters.category !== 'all' || filters.search || filters.overdue;
+  const hasActiveFilter = filters.status !== 'active' ||
+    filters.priority !== 'all' || filters.category !== 'all' || filters.search || filters.overdue;
 
   if (loading) {
     return (
@@ -298,7 +311,7 @@ const Tasks = () => {
         />
         {hasActiveFilter && (
           <button
-            onClick={() => setFilters({ status: 'all', priority: 'all', category: 'all', search: '', overdue: false })}
+            onClick={() => setFilters({ status: 'active', priority: 'all', category: 'all', search: '', overdue: false })}
             style={{
               padding: '8px 14px',
               border: '1px solid var(--border)',
