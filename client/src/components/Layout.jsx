@@ -1,11 +1,13 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Home, CreditCard, PieChart, DollarSign, Settings, LogOut, Wallet, Package, Upload, ShoppingCart, CheckSquare, BarChart2 } from 'lucide-react';
+import { Home, CreditCard, PieChart, DollarSign, Settings, LogOut, Wallet, Package, Upload, ShoppingCart, CheckSquare, BarChart2, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const Layout = () => {
   const location = useLocation();
   const { signOut, user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
     { path: '/', label: 'דשבורד', icon: Home },
@@ -126,6 +128,21 @@ const Layout = () => {
             <Settings size={18} />
             <span>הגדרות</span>
           </Link>
+          <button
+            onClick={toggleTheme}
+            className="nav-item"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 'var(--s-12)',
+              padding: '10px 14px', color: 'var(--ink-3)', borderRadius: 'var(--r-10)',
+              fontWeight: 500, fontSize: 'var(--fs-14)',
+              background: 'none', border: '1px solid transparent',
+              cursor: 'pointer', textAlign: 'start', width: '100%',
+              transition: 'background-color 0.15s, color 0.15s',
+            }}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            <span>{theme === 'dark' ? 'מצב בהיר' : 'מצב כהה'}</span>
+          </button>
           <button
             onClick={signOut}
             className="nav-item-red"

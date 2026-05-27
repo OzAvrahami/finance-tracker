@@ -145,6 +145,69 @@
 }
 
 /* =============================================================
+   Light Theme — data-theme="light" overrides
+   Only surface, border, ink, semantic and shadow tokens change.
+   Spacing, radii, typography, and breakpoints are theme-neutral.
+   ============================================================= */
+:root[data-theme="light"] {
+  /* Surfaces */
+  --bg:              #F4F5FA;
+  --surface-1:       #FFFFFF;
+  --surface-2:       #ECEEF6;
+  --surface-3:       #E1E4F0;
+  --surface-elev:    #FFFFFF;
+  --surface-2-glass: rgba(236, 238, 246, 0.80);
+
+  /* Borders */
+  --border:        rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --border-bright: rgba(0, 0, 0, 0.20);
+
+  /* Ink */
+  --ink-1: #0D1020;
+  --ink-2: #2C3154;
+  --ink-3: #676D8C;
+  --ink-4: #9298B8;
+  --ink-5: #BCC1D8;
+
+  /* Primary — slightly darker for light-bg contrast */
+  --primary:      #5B3FD9;
+  --primary-hi:   #7C5CFF;
+  --primary-lo:   #4028C4;
+  --primary-soft: rgba(91, 63, 217, 0.08);
+  --primary-glow: rgba(91, 63, 217, 0.22);
+  --primary-ink:  #FFFFFF;
+  --primary-grad:   linear-gradient(135deg, #7C5CFF 0%, #4028C4 100%);
+  --primary-grad-r: linear-gradient(135deg, #4028C4 0%, #7C5CFF 100%);
+
+  /* Semantic — adjusted for sufficient contrast on light backgrounds */
+  --pos:      #16A35A;
+  --pos-soft: rgba(22, 163, 90, 0.10);
+  --pos-glow: rgba(22, 163, 90, 0.22);
+
+  --neg:      #D9546A;
+  --neg-soft: rgba(217, 84, 106, 0.10);
+
+  --warn:      #C4780E;
+  --warn-soft: rgba(196, 120, 14, 0.10);
+
+  --info:      #1E8FB8;
+  --info-soft: rgba(30, 143, 184, 0.10);
+
+  --danger: #C03452;
+
+  /* Shadows */
+  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.07), 0 0 0 1px var(--border);
+  --shadow-md:   0 4px 16px rgba(0, 0, 0, 0.10), 0 0 0 1px var(--border);
+  --shadow-glow: 0 0 0 1px var(--primary-glow), 0 8px 32px rgba(91, 63, 217, 0.14);
+}
+
+/* Hero gradient text — dark-on-light for light mode (white-on-dark is the default) */
+[data-theme="light"] .text-hero-grad {
+  background: linear-gradient(180deg, #1A1D2E 0%, #4A4F72 100%);
+}
+
+/* =============================================================
    Numeric / monetary value utility
    Apply to every money figure, percentage, date, and counter.
    ============================================================= */

@@ -287,30 +287,26 @@ const AnnualSummary = () => {
         <h3 style={sectionTitleStyle}>פירוט חודשי — תקציב מול בפועל</h3>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={chartData} barCategoryGap="30%" barGap={4}>
-            {/* #353B52 = --ink-5 */}
-            <CartesianGrid strokeDasharray="3 3" stroke="#353B52" vertical={false} />
-            {/* #5A607A = --ink-4 */}
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--ink-5)" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 12, fill: '#5A607A' }}
+              tick={{ fontSize: 12, fill: 'var(--ink-4)' }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              tick={{ fontSize: 11, fill: '#5A607A' }}
+              tick={{ fontSize: 11, fill: 'var(--ink-4)' }}
               axisLine={false}
               tickLine={false}
               tickFormatter={v => v >= 1000 ? `₪${(v / 1000).toFixed(0)}k` : `₪${v}`}
             />
             <Tooltip
               formatter={(value, name) => [fmt(value), name]}
-              contentStyle={{ direction: 'rtl', fontSize: 13, backgroundColor: '#1F2333', border: '1px solid rgba(255,255,255,0.12)', color: '#F4F5FB' }}
+              contentStyle={{ direction: 'rtl', fontSize: 13, backgroundColor: 'var(--surface-elev)', border: '1px solid var(--border-strong)', color: 'var(--ink-1)' }}
             />
             <Legend wrapperStyle={{ fontSize: 13, paddingTop: 12 }} />
-            {/* #9B82FF = --primary-hi */}
-            <Bar dataKey="תקציב" fill="#9B82FF" radius={[4, 4, 0, 0]} maxBarSize={28} />
-            {/* #FFC061 = --warn */}
-            <Bar dataKey="בפועל" fill="#FFC061" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="תקציב" fill="var(--primary-hi)" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="בפועל" fill="var(--warn)" radius={[4, 4, 0, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       </div>

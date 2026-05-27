@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { CheckSquare, Plus, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { getTasks, deleteTask, updateTask } from '../../services/api';
 import TaskModal from '../../components/TaskModal';
-import { PRIORITY_LABELS, isOverdue } from '../../utils/taskHelpers';
+import { PRIORITY_LABELS, PRIORITY_COLORS, isOverdue } from '../../utils/taskHelpers';
 import style from './Tasks.module.css'
 
 // --- Label & color maps (English slug → Hebrew display) ---
@@ -23,13 +23,6 @@ export const STATUS_COLORS = {
   cancelled:   { bg: 'var(--surface-3)',   color: 'var(--ink-5)',   border: 'var(--border)' },
 };
 
-// Dark-friendly priority badge colors (overrides taskHelpers light values)
-const DARK_PRIORITY_COLORS = {
-  urgent: { bg: 'var(--neg-soft)',     color: 'var(--neg)' },
-  high:   { bg: 'var(--warn-soft)',    color: 'var(--warn)' },
-  medium: { bg: 'var(--primary-soft)', color: 'var(--primary-hi)' },
-  low:    { bg: 'var(--surface-3)',    color: 'var(--ink-3)' },
-};
 
 export const CATEGORY_LABELS = {
   finance:  'פיננסי',
@@ -379,7 +372,7 @@ const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
   const dimmed = done || cancelled;
 
   const statusCfg = STATUS_COLORS[task.status] || STATUS_COLORS.open;
-  const priorityCfg = DARK_PRIORITY_COLORS[task.priority] || DARK_PRIORITY_COLORS.medium;
+  const priorityCfg = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium;
 
   let dueDateColor = 'var(--ink-4)';
   if (overdue) dueDateColor = 'var(--neg)';

@@ -6,10 +6,10 @@ export const PRIORITY_LABELS = {
 };
 
 export const PRIORITY_COLORS = {
-  low:    { bg: '#F9FAFB', color: '#6B7280' },
-  medium: { bg: '#EFF6FF', color: '#3B82F6' },
-  high:   { bg: '#FFF7ED', color: '#EA580C' },
-  urgent: { bg: '#FEF2F2', color: '#DC2626' },
+  low:    { bg: 'var(--surface-3)',    color: 'var(--ink-3)'      },
+  medium: { bg: 'var(--primary-soft)', color: 'var(--primary-hi)' },
+  high:   { bg: 'var(--warn-soft)',    color: 'var(--warn)'       },
+  urgent: { bg: 'var(--neg-soft)',     color: 'var(--neg)'        },
 };
 
 const todayStr = () => new Date().toISOString().split('T')[0];

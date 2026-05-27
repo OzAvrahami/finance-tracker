@@ -9,16 +9,11 @@ import { Card, MoneyAmount, LiveChip, IconButton, CardHeader, ProgressBar, KPIHe
 
 const HEBREW_MONTHS_FULL = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
-/*
-  Dark-theme priority badge backgrounds, local to Dashboard.
-  PRIORITY_COLORS in taskHelpers.js uses light backgrounds intended for the Tasks page.
-  These values shadow only the bg — text color still comes from PRIORITY_COLORS.
-*/
-const DARK_PRIORITY_BG = {
-  low:    'var(--surface-3)',
+// Dashboard uses --info-soft for medium priority to distinguish it from the iris accents on the same card.
+// Other priorities use the shared PRIORITY_COLORS bg values.
+const DASHBOARD_PRIORITY_BG = {
+  ...Object.fromEntries(Object.entries(PRIORITY_COLORS).map(([k, v]) => [k, v.bg])),
   medium: 'var(--info-soft)',
-  high:   'var(--warn-soft)',
-  urgent: 'var(--neg-soft)',
 };
 
 const Dashboard = () => {
@@ -203,8 +198,7 @@ const Dashboard = () => {
 
           {/* Notifications */}
           <IconButton size={38} title="התראות">
-            {/* #8B90A6 ≈ --ink-3 hex; Lucide color prop does not accept CSS variables */}
-            <Bell size={16} color="#8B90A6" />
+            <Bell size={16} color="var(--ink-3)" />
           </IconButton>
 
           {/* New transaction — Link styled via ui-btn-primary class to match PrimaryButton */}
@@ -258,44 +252,34 @@ const Dashboard = () => {
             <div style={{ width: '100%', height: 280 }}>
               {chartData.some(d => d.income > 0 || d.expenses > 0) ? (
                 <ResponsiveContainer>
-                  {/*
-                    Recharts SVG props (fill, stroke, tick.fill) do not resolve CSS variables —
-                    raw hex values are used directly from tokens.css:
-                      income fill:    #9B82FF  (--primary-hi)
-                      expense fill:   #1B1F2E  (--surface-3)
-                      expense stroke: rgba(255,255,255,0.12) (--border-strong)
-                      grid stroke:    #353B52  (--ink-5)
-                      axis tick:      #5A607A  (--ink-4)
-                      tooltip bg:     #1F2333  (--surface-elev)
-                  */}
                   <BarChart data={chartData} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#353B52" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--ink-5)" vertical={false} />
                     <XAxis
                       dataKey="name"
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fill: '#5A607A', fontSize: 12 }}
+                      tick={{ fill: 'var(--ink-4)', fontSize: 12 }}
                     />
                     <YAxis
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fill: '#5A607A', fontSize: 12 }}
+                      tick={{ fill: 'var(--ink-4)', fontSize: 12 }}
                       tickFormatter={v => `₪${(v / 1000).toFixed(0)}k`}
                     />
                     <Tooltip
                       formatter={(value) => `₪${value.toLocaleString()}`}
                       contentStyle={{
-                        backgroundColor: '#1F2333',
-                        border: '1px solid rgba(255,255,255,0.12)',
+                        backgroundColor: 'var(--surface-elev)',
+                        border: '1px solid var(--border-strong)',
                         borderRadius: 8,
-                        color: '#F4F5FB',
+                        color: 'var(--ink-1)',
                       }}
-                      itemStyle={{ color: '#C8CBD9' }}
-                      labelStyle={{ color: '#8B90A6', marginBottom: 4 }}
-                      cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                      itemStyle={{ color: 'var(--ink-2)' }}
+                      labelStyle={{ color: 'var(--ink-3)', marginBottom: 4 }}
+                      cursor={{ fill: 'var(--border)' }}
                     />
-                    <Bar dataKey="income" name="הכנסות" fill="#9B82FF" radius={[4, 4, 0, 0]} barSize={14} />
-                    <Bar dataKey="expenses" name="הוצאות" fill="#1B1F2E" stroke="rgba(255,255,255,0.12)" strokeWidth={1} radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="income" name="הכנסות" fill="var(--primary-hi)" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Bar dataKey="expenses" name="הוצאות" fill="var(--surface-3)" stroke="var(--border-strong)" strokeWidth={1} radius={[4, 4, 0, 0]} barSize={14} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -310,8 +294,7 @@ const Dashboard = () => {
           <Card style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--s-24)' }}>
               <h2 style={{ fontSize: 'var(--fs-16)', fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>סטטוס הלוואות</h2>
-              {/* #5A607A = --ink-4; Lucide color prop does not accept CSS variables */}
-              <DollarSign size={20} color="#5A607A" />
+              <DollarSign size={20} color="var(--ink-4)" />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-20)', flex: 1 }}>
               {/* Total debt summary */}
@@ -394,7 +377,7 @@ const Dashboard = () => {
                         </span>
                         <span style={{
                           fontSize: 'var(--fs-11)', fontWeight: 500, padding: '1px 7px', borderRadius: 9999, flexShrink: 0,
-                          backgroundColor: DARK_PRIORITY_BG[task.priority] || 'var(--surface-3)',
+                          backgroundColor: DASHBOARD_PRIORITY_BG[task.priority] || 'var(--surface-3)',
                           color: PRIORITY_COLORS[task.priority]?.color || 'var(--ink-3)',
                         }}>
                           {PRIORITY_LABELS[task.priority]}

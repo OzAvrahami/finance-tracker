@@ -32,29 +32,32 @@ const Login = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#f4f6f8',
-      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+      backgroundColor: 'var(--bg)',
+      fontFamily: 'var(--font-ui)',
     }}>
       <div style={{
-        backgroundColor: '#fff',
+        backgroundColor: 'var(--surface-1)',
         padding: '40px',
-        borderRadius: '12px',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+        borderRadius: 'var(--r-16)',
+        boxShadow: 'var(--shadow-md)',
         width: '100%',
-        maxWidth: '400px'
+        maxWidth: '400px',
+        border: '1px solid var(--border)',
       }}>
         <h1 style={{
           textAlign: 'center',
-          color: '#2c3e50',
+          color: 'var(--ink-1)',
           marginBottom: '30px',
-          fontSize: '1.8rem'
+          fontSize: 'var(--fs-24)',
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
         }}>
           MyFinance
         </h1>
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', color: '#6c757d' }}>
+            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--ink-3)', fontSize: 'var(--fs-14)', fontWeight: 500 }}>
               אימייל
             </label>
             <input
@@ -65,16 +68,18 @@ const Login = () => {
               style={{
                 width: '100%',
                 padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid #e9ecef',
-                fontSize: '1rem',
-                boxSizing: 'border-box'
+                borderRadius: 'var(--r-8)',
+                border: '1px solid var(--border-strong)',
+                fontSize: 'var(--fs-14)',
+                boxSizing: 'border-box',
+                backgroundColor: 'var(--surface-2)',
+                color: 'var(--ink-1)',
               }}
             />
           </div>
 
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', color: '#6c757d' }}>
+            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--ink-3)', fontSize: 'var(--fs-14)', fontWeight: 500 }}>
               סיסמה
             </label>
             <input
@@ -85,20 +90,25 @@ const Login = () => {
               style={{
                 width: '100%',
                 padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid #e9ecef',
-                fontSize: '1rem',
-                boxSizing: 'border-box'
+                borderRadius: 'var(--r-8)',
+                border: '1px solid var(--border-strong)',
+                fontSize: 'var(--fs-14)',
+                boxSizing: 'border-box',
+                backgroundColor: 'var(--surface-2)',
+                color: 'var(--ink-1)',
               }}
             />
           </div>
 
           {error && (
             <div style={{
-              color: '#e74c3c',
+              color: 'var(--neg)',
               marginBottom: '15px',
               textAlign: 'center',
-              fontSize: '0.9rem'
+              fontSize: 'var(--fs-13)',
+              backgroundColor: 'var(--neg-soft)',
+              borderRadius: 'var(--r-8)',
+              padding: '8px 12px',
             }}>
               {error}
             </div>
@@ -107,17 +117,18 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
+            className="ui-btn-primary"
             style={{
               width: '100%',
               padding: '12px',
-              backgroundColor: '#3498db',
-              color: '#fff',
+              background: 'var(--primary-grad)',
+              color: 'var(--primary-ink)',
               border: 'none',
-              borderRadius: '8px',
-              fontSize: '1rem',
-              fontWeight: 'bold',
+              borderRadius: 'var(--r-8)',
+              fontSize: 'var(--fs-14)',
+              fontWeight: 600,
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1
+              opacity: loading ? 0.7 : 1,
             }}
           >
             {loading ? 'מתחבר...' : 'התחברות'}
