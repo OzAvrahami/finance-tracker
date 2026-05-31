@@ -4,11 +4,13 @@ import { sortBySetNumber, calculateStats } from '../../utils/legoHelpers';
 import StatsDashboard from '../../components/lego/StatsDashboard';
 import CollectionFilters from '../../components/lego/CollectionFilters';
 import SetCard from '../../components/lego/SetCard';
+import AddLegoSetModal from '../../components/lego/AddLegoSetModal';
 
 const LegoCollection = () => {
   const [sets, setSets] = useState([]);
   const [filterStatus, setFilterStatus] = useState('All');
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const loadSets = async () => {
     try {
@@ -51,11 +53,21 @@ const LegoCollection = () => {
     return <div style={{ padding: '40px', textAlign: 'center', fontSize: '1.2rem', color: 'var(--ink-3)' }}>טוען אוסף... 🧱</div>;
   }
 
+  const handleSetAdded = () => {
+    setShowAddModal(false);
+    loadSets();
+  };
+
   return (
     <div dir="rtl">
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <p style={{ color: 'var(--ink-4)', marginTop: 4, fontSize: 14 }}>ניהול מלאי, סטטוס בנייה ומעקב שווי</p>
+        <button onClick={() => setShowAddModal(true)} style={addBtnStyle}>
+          + הוסף סט לגו
+        </button>
       </div>
+
+      <AddLegoSetModal show={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleSetAdded} />
 
       <StatsDashboard stats={stats} />
       <CollectionFilters filterStatus={filterStatus} onFilterChange={setFilterStatus} />
@@ -73,6 +85,19 @@ const LegoCollection = () => {
       )}
     </div>
   );
+};
+
+const addBtnStyle = {
+  background: 'var(--primary-grad)',
+  color: 'var(--primary-ink)',
+  border: 'none',
+  borderRadius: 'var(--r-8)',
+  padding: '9px 18px',
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
+  boxShadow: '0 0 16px rgba(124,92,255,0.25)',
+  whiteSpace: 'nowrap',
 };
 
 export default LegoCollection;

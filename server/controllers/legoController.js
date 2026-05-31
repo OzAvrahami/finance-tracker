@@ -13,12 +13,34 @@ exports.getAllSets = async (req, res) => {
 };
 
 exports.addSet = async (req, res) => {
+    const { set_number, name, theme, brand, status, pieces, purchase_price, original_price, market_value, purchase_date } = req.body;
+
+    if (!set_number || !String(set_number).trim()) {
+        return res.status(400).json({ error: 'מספר סט הוא שדה חובה' });
+    }
+    if (!name || !String(name).trim()) {
+        return res.status(400).json({ error: 'שם הסט הוא שדה חובה' });
+    }
+
+    const payload = {
+        set_number: String(set_number).trim(),
+        name: String(name).trim(),
+        theme: theme ? String(theme).trim() : null,
+        brand: brand || 'LEGO',
+        status: status || 'New',
+        pieces: pieces !== '' && pieces != null ? Number(pieces) : null,
+        purchase_price: purchase_price !== '' && purchase_price != null ? Number(purchase_price) : null,
+        original_price: original_price !== '' && original_price != null ? Number(original_price) : null,
+        market_value: market_value !== '' && market_value != null ? Number(market_value) : null,
+        purchase_date: purchase_date || null,
+    };
+
     try {
-        const { data, error } = await supabase.from('lego_set').insert([req.body]).select();
+        const { data, error } = await supabase.from('lego_sets').insert([payload]).select();
         if (error) throw error;
-        res.status(200).json(data);
+        res.status(201).json(data);
     } catch (error) {
-        res.status(400).json({ error: error.message});
+        res.status(400).json({ error: error.message });
     }
 };
 
