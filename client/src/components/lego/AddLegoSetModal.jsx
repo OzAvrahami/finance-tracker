@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { addLegoSet } from '../../services/api';
+import { addLegoSet, getLegoSetDetails } from '../../services/api';
 import { BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
 
 const DEFAULT_FORM = {
@@ -19,11 +19,46 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupError, setLookupError] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
+    if (name === 'set_number') setLookupError(null);
+  };
+
+  const resetForm = () => {
+    setForm({ ...DEFAULT_FORM });
+    setErrors({});
+    setLookupError(null);
+    setLookingUp(false);
+  };
+
+  const handleClose = () => {
+    if (saving) return;
+    resetForm();
+    onClose();
+  };
+
+  const handleSetNumberBlur = async () => {
+    if (!form.set_number.trim()) return;
+    setLookingUp(true);
+    setLookupError(null);
+    try {
+      const res = await getLegoSetDetails(form.set_number.trim());
+      setForm(prev => ({
+        ...prev,
+        name:   !prev.name   ? (res.data.name  ?? prev.name)   : prev.name,
+        theme:  !prev.theme  ? (res.data.theme ?? prev.theme)  : prev.theme,
+        pieces: !prev.pieces ? (res.data.parts ?? prev.pieces) : prev.pieces,
+      }));
+    } catch {
+      setLookupError('סט לא נמצא');
+    } finally {
+      setLookingUp(false);
+    }
   };
 
   const validate = () => {
@@ -57,8 +92,7 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
         purchase_date: form.purchase_date || null,
       };
       await addLegoSet(payload);
-      setForm(DEFAULT_FORM);
-      setErrors({});
+      resetForm();
       onSave();
     } catch (err) {
       console.error('AddLegoSetModal save error:', err);
@@ -69,7 +103,7 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
   };
 
   const handleOverlayClick = () => {
-    if (!saving) onClose();
+    if (!saving) handleClose();
   };
 
   if (!show) return null;
@@ -83,7 +117,7 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
           <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>
             הוספת סט לגו
           </h2>
-          <button onClick={onClose} disabled={saving} style={closeBtnStyle}>✕</button>
+          <button onClick={handleClose} disabled={saving} style={closeBtnStyle}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -97,10 +131,23 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
                 name="set_number"
                 value={form.set_number}
                 onChange={handleChange}
+                onBlur={handleSetNumberBlur}
                 placeholder="לדוגמה: 10278-1"
-                style={errors.set_number ? { ...inputStyle, borderColor: 'var(--neg)' } : inputStyle}
+                style={
+                  errors.set_number || lookupError
+                    ? { ...inputStyle, borderColor: 'var(--neg)' }
+                    : lookingUp
+                    ? { ...inputStyle, borderColor: 'var(--ink-4)' }
+                    : inputStyle
+                }
               />
               {errors.set_number && <span style={errorStyle}>{errors.set_number}</span>}
+              {lookingUp && (
+                <span style={{ ...errorStyle, color: 'var(--ink-4)' }}>מחפש...</span>
+              )}
+              {lookupError && !lookingUp && (
+                <span style={errorStyle}>{lookupError}</span>
+              )}
             </div>
             <div>
               <label style={labelStyle}>
@@ -225,7 +272,7 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
             <button type="submit" disabled={saving} style={saveBtnStyle}>
               {saving ? 'שומר...' : 'הוסף סט'}
             </button>
-            <button type="button" onClick={onClose} disabled={saving} style={cancelBtnStyle}>
+            <button type="button" onClick={handleClose} disabled={saving} style={cancelBtnStyle}>
               ביטול
             </button>
           </div>
