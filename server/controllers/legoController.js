@@ -9,7 +9,6 @@ exports.getAllSets = async (req, res) => {
     } catch (error) {
         res.status(400).json({ error: error.message});
     }
-
 };
 
 exports.addSet = async (req, res) => {
@@ -36,6 +35,13 @@ exports.addSet = async (req, res) => {
     };
 
     try {
+        const { data: existing } = await supabase
+            .from('lego_sets')
+            .select('id')
+            .eq('set_number', payload.set_number)
+            .maybeSingle();
+        if (existing) return res.status(409).json({ error: 'הסט כבר קיים באוסף' });
+
         const { data, error } = await supabase.from('lego_sets').insert([payload]).select();
         if (error) throw error;
         res.status(201).json(data);
@@ -47,6 +53,15 @@ exports.addSet = async (req, res) => {
 exports.updateSet = async (req, res) => {
     try {
         const { id } = req.params;
+        if (req.body.set_number) {
+            const { data: existing } = await supabase
+                .from('lego_sets')
+                .select('id')
+                .eq('set_number', String(req.body.set_number).trim())
+                .neq('id', id)
+                .maybeSingle();
+            if (existing) return res.status(409).json({ error: 'הסט כבר קיים באוסף' });
+        }
         const { data, error } = await supabase
             .from('lego_sets')
             .update(req.body)
@@ -59,6 +74,17 @@ exports.updateSet = async (req, res) => {
     }
 };
 
+exports.deleteSet = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase.from('lego_sets').delete().eq('id', id);
+        if (error) throw error;
+        res.status(200).json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
 exports.getThemes = async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -68,7 +94,7 @@ exports.getThemes = async (req, res) => {
     if (error) throw error;
 
     const uniqueThemes = [...new Set(data.map(item => item.theme).filter(Boolean))];
-    
+
     res.json(uniqueThemes);
   } catch (error) {
     res.status(400).json({ error: error.message });

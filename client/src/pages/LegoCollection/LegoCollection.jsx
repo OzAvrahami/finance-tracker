@@ -9,8 +9,10 @@ import AddLegoSetModal from '../../components/lego/AddLegoSetModal';
 const LegoCollection = () => {
   const [sets, setSets] = useState([]);
   const [filterStatus, setFilterStatus] = useState('All');
+  const [filterTheme, setFilterTheme] = useState('All');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingSet, setEditingSet] = useState(null);
 
   const loadSets = async () => {
     try {
@@ -43,20 +45,32 @@ const LegoCollection = () => {
     }
   };
 
+  const handleEditSet = (set) => setEditingSet(set);
+
+  const handleModalClose = () => {
+    setShowAddModal(false);
+    setEditingSet(null);
+  };
+
+  const handleSaved = () => {
+    setShowAddModal(false);
+    setEditingSet(null);
+    loadSets();
+  };
+
   const stats = useMemo(() => calculateStats(sets), [sets]);
 
-  const filteredSets = filterStatus === 'All'
-    ? sets
-    : sets.filter(s => s.status === filterStatus);
+  const themes = useMemo(() =>
+    [...new Set(sets.map(s => s.theme).filter(Boolean))].sort(),
+  [sets]);
+
+  const filteredSets = sets
+    .filter(s => filterStatus === 'All' || s.status === filterStatus)
+    .filter(s => filterTheme === 'All' || s.theme === filterTheme);
 
   if (loading) {
     return <div style={{ padding: '40px', textAlign: 'center', fontSize: '1.2rem', color: 'var(--ink-3)' }}>טוען אוסף... 🧱</div>;
   }
-
-  const handleSetAdded = () => {
-    setShowAddModal(false);
-    loadSets();
-  };
 
   return (
     <div dir="rtl">
@@ -67,15 +81,33 @@ const LegoCollection = () => {
         </button>
       </div>
 
-      <AddLegoSetModal show={showAddModal} onClose={() => setShowAddModal(false)} onSave={handleSetAdded} />
+      <AddLegoSetModal
+        show={showAddModal || !!editingSet}
+        initialData={editingSet}
+        existingSets={sets}
+        onClose={handleModalClose}
+        onSave={handleSaved}
+      />
 
       <StatsDashboard stats={stats} />
-      <CollectionFilters filterStatus={filterStatus} onFilterChange={setFilterStatus} />
+      <CollectionFilters
+        filterStatus={filterStatus}
+        onFilterChange={setFilterStatus}
+        filterTheme={filterTheme}
+        onThemeFilterChange={setFilterTheme}
+        themes={themes}
+      />
 
       {filteredSets.length > 0 ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '25px' }}>
           {filteredSets.map(set => (
-            <SetCard key={set.id} set={set} onStatusChange={handleStatusChange} onBrandChange={handleBrandChange} />
+            <SetCard
+              key={set.id}
+              set={set}
+              onStatusChange={handleStatusChange}
+              onBrandChange={handleBrandChange}
+              onEdit={handleEditSet}
+            />
           ))}
         </div>
       ) : (

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { addLegoSet, getLegoSetDetails } from '../../services/api';
+import React, { useState, useEffect } from 'react';
+import { addLegoSet, updateLegoSet, deleteLegoSet, getLegoSetDetails } from '../../services/api';
 import { BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
 
 const DEFAULT_FORM = {
@@ -15,12 +15,36 @@ const DEFAULT_FORM = {
   purchase_date: '',
 };
 
-const AddLegoSetModal = ({ show, onClose, onSave }) => {
-  const [form, setForm] = useState(DEFAULT_FORM);
+const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSets = [] }) => {
+  const [form, setForm] = useState({ ...DEFAULT_FORM });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [errors, setErrors] = useState({});
   const [lookingUp, setLookingUp] = useState(false);
   const [lookupError, setLookupError] = useState(null);
+
+  const isEditMode = Boolean(initialData);
+
+  // Populate form from initialData when opening in edit mode
+  useEffect(() => {
+    if (show && initialData) {
+      setForm({
+        set_number: initialData.set_number || '',
+        name: initialData.name || '',
+        theme: initialData.theme || '',
+        brand: initialData.brand || 'LEGO',
+        status: initialData.status || 'New',
+        pieces: initialData.pieces ?? '',
+        purchase_price: initialData.purchase_price ?? '',
+        original_price: initialData.original_price ?? '',
+        market_value: initialData.market_value ?? '',
+        purchase_date: initialData.purchase_date || '',
+      });
+      setErrors({});
+      setLookupError(null);
+      setLookingUp(false);
+    }
+  }, [show, initialData]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -34,20 +58,37 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
     setErrors({});
     setLookupError(null);
     setLookingUp(false);
+    setDeleting(false);
   };
 
   const handleClose = () => {
-    if (saving) return;
+    if (saving || deleting) return;
     resetForm();
     onClose();
   };
 
+  const isDuplicateSetNumber = (trimmed) =>
+    existingSets.some(s =>
+      s.set_number === trimmed && (!initialData || s.id !== initialData.id)
+    );
+
   const handleSetNumberBlur = async () => {
-    if (!form.set_number.trim()) return;
+    const trimmed = form.set_number.trim();
+    if (!trimmed) return;
+
+    // Duplicate check takes priority — skip Rebrickable if already in collection
+    if (isDuplicateSetNumber(trimmed)) {
+      setLookupError('הסט כבר קיים באוסף');
+      return;
+    }
+
+    // In edit mode, skip Rebrickable if set_number is unchanged
+    if (isEditMode && trimmed === initialData.set_number) return;
+
     setLookingUp(true);
     setLookupError(null);
     try {
-      const res = await getLegoSetDetails(form.set_number.trim());
+      const res = await getLegoSetDetails(trimmed);
       setForm(prev => ({
         ...prev,
         name:   !prev.name   ? (res.data.name  ?? prev.name)   : prev.name,
@@ -63,7 +104,11 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
 
   const validate = () => {
     const next = {};
-    if (!form.set_number.trim()) next.set_number = 'שדה חובה';
+    if (!form.set_number.trim()) {
+      next.set_number = 'שדה חובה';
+    } else if (isDuplicateSetNumber(form.set_number.trim())) {
+      next.set_number = 'הסט כבר קיים באוסף';
+    }
     if (!form.name.trim()) next.name = 'שדה חובה';
     return next;
   };
@@ -91,33 +136,56 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
         market_value: numOrNull(form.market_value),
         purchase_date: form.purchase_date || null,
       };
-      await addLegoSet(payload);
+      if (isEditMode) {
+        await updateLegoSet(initialData.id, payload);
+      } else {
+        await addLegoSet(payload);
+      }
       resetForm();
       onSave();
     } catch (err) {
       console.error('AddLegoSetModal save error:', err);
-      alert('שגיאה בשמירת הסט. נסה שנית.');
+      if (err.response?.status === 409) {
+        setErrors(prev => ({ ...prev, set_number: 'הסט כבר קיים באוסף' }));
+      } else {
+        alert('שגיאה בשמירת הסט. נסה שנית.');
+      }
     } finally {
       setSaving(false);
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm('למחוק את הסט לצמיתות?')) return;
+    setDeleting(true);
+    try {
+      await deleteLegoSet(initialData.id);
+      resetForm();
+      onSave();
+    } catch (err) {
+      console.error('AddLegoSetModal delete error:', err);
+      alert('שגיאה במחיקת הסט. נסה שנית.');
+      setDeleting(false);
+    }
+  };
+
   const handleOverlayClick = () => {
-    if (!saving) handleClose();
+    if (!saving && !deleting) handleClose();
   };
 
   if (!show) return null;
 
   const statusForForm = STATUS_OPTIONS.filter(o => o.key !== 'All');
+  const busy = saving || deleting;
 
   return (
     <div style={overlayStyle} onClick={handleOverlayClick}>
       <div style={modalStyle} onClick={e => e.stopPropagation()} dir="rtl">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>
-            הוספת סט לגו
+            {isEditMode ? 'עריכת סט לגו' : 'הוספת סט לגו'}
           </h2>
-          <button onClick={handleClose} disabled={saving} style={closeBtnStyle}>✕</button>
+          <button onClick={handleClose} disabled={busy} style={closeBtnStyle}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -267,14 +335,26 @@ const AddLegoSetModal = ({ show, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-start', marginTop: 8 }}>
-            <button type="submit" disabled={saving} style={saveBtnStyle}>
-              {saving ? 'שומר...' : 'הוסף סט'}
-            </button>
-            <button type="button" onClick={handleClose} disabled={saving} style={cancelBtnStyle}>
-              ביטול
-            </button>
+          {/* Actions: save+cancel on right (RTL start), delete on left (RTL end) */}
+          <div style={{
+            display: 'flex',
+            justifyContent: isEditMode ? 'space-between' : 'flex-start',
+            alignItems: 'center',
+            marginTop: 8,
+          }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="submit" disabled={busy} style={saveBtnStyle}>
+                {saving ? 'שומר...' : isEditMode ? 'שמור שינויים' : 'הוסף סט'}
+              </button>
+              <button type="button" onClick={handleClose} disabled={busy} style={cancelBtnStyle}>
+                ביטול
+              </button>
+            </div>
+            {isEditMode && (
+              <button type="button" onClick={handleDelete} disabled={busy} style={deleteBtnStyle}>
+                {deleting ? 'מוחק...' : 'מחק סט'}
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -350,6 +430,17 @@ const cancelBtnStyle = {
   border: '1px solid var(--border-strong)',
   borderRadius: 'var(--r-8)',
   padding: '10px 24px',
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const deleteBtnStyle = {
+  backgroundColor: 'transparent',
+  color: 'var(--neg)',
+  border: '1px solid var(--neg)',
+  borderRadius: 'var(--r-8)',
+  padding: '10px 20px',
   fontSize: 14,
   fontWeight: 600,
   cursor: 'pointer',

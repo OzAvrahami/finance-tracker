@@ -1,7 +1,7 @@
 import React from 'react';
 import { BRAND_OPTIONS } from '../../utils/legoHelpers';
 
-const SetCard = ({ set, onStatusChange, onBrandChange }) => {
+const SetCard = ({ set, onStatusChange, onBrandChange, onEdit }) => {
   const orig = Number(set.original_price) || 0;
   const paid = Number(set.purchase_price) || 0;
   const discountPercent = orig > paid ? Math.round(((orig - paid) / orig) * 100) : 0;
@@ -100,6 +100,23 @@ const SetCard = ({ set, onStatusChange, onBrandChange }) => {
               <option key={b} value={b}>{b}</option>
             ))}
           </select>
+
+          <button
+            onClick={() => onEdit(set)}
+            style={{
+              width: '100%',
+              padding: '8px',
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              background: 'transparent',
+              color: 'var(--ink-4)',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '0.85rem',
+            }}
+          >
+            ערוך פרטים
+          </button>
         </div>
       </div>
     </div>

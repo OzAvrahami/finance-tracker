@@ -10,4 +10,6 @@ router.put('/:id', legoController.updateSet);
 
 router.get('/themes', legoController.getThemes);
 
+router.delete('/:id', legoController.deleteSet);
+
 module.exports = router;
