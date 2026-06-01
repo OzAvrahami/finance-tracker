@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { addLegoSet, updateLegoSet, deleteLegoSet, getLegoSetDetails } from '../../services/api';
 import { BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
 
+const ACQUISITION_OPTIONS = [
+  { key: 'purchased', label: 'נרכש' },
+  { key: 'gift',      label: 'מתנה' },
+  { key: 'trade',     label: 'החלפה' },
+  { key: 'other',     label: 'אחר' },
+];
+
 const DEFAULT_FORM = {
   set_number: '',
   name: '',
@@ -9,10 +16,11 @@ const DEFAULT_FORM = {
   brand: 'LEGO',
   status: 'New',
   pieces: '',
+  acquisition_type: 'purchased',
+  purchase_date: '',
   purchase_price: '',
   original_price: '',
   market_value: '',
-  purchase_date: '',
 };
 
 const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSets = [] }) => {
@@ -35,10 +43,11 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
         brand: initialData.brand || 'LEGO',
         status: initialData.status || 'New',
         pieces: initialData.pieces ?? '',
+        acquisition_type: initialData.acquisition_type || 'purchased',
+        purchase_date: initialData.purchase_date || '',
         purchase_price: initialData.purchase_price ?? '',
         original_price: initialData.original_price ?? '',
         market_value: initialData.market_value ?? '',
-        purchase_date: initialData.purchase_date || '',
       });
       setErrors({});
       setLookupError(null);
@@ -72,7 +81,7 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
       s.set_number === trimmed && (!initialData || s.id !== initialData.id)
     );
 
-  const handleSetNumberBlur = async () => {
+  const runLookup = async () => {
     const trimmed = form.set_number.trim();
     if (!trimmed) return;
 
@@ -130,6 +139,7 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
         theme: form.theme.trim() || null,
         brand: form.brand,
         status: form.status,
+        acquisition_type: form.acquisition_type,
         pieces: numOrNull(form.pieces),
         purchase_price: numOrNull(form.purchase_price),
         original_price: numOrNull(form.original_price),
@@ -189,32 +199,48 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* set_number + name */}
+          {/* ===== Section 1: פרטי הסט ===== */}
+          <div style={sectionTitleStyle}>פרטי הסט</div>
+
+          {/* set_number (with lookup button) + name */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>
                 מספר סט <span style={{ color: 'var(--neg)' }}>*</span>
               </label>
-              <input
-                name="set_number"
-                value={form.set_number}
-                onChange={handleChange}
-                onBlur={handleSetNumberBlur}
-                placeholder="לדוגמה: 10278-1"
-                style={
-                  errors.set_number || lookupError
-                    ? { ...inputStyle, borderColor: 'var(--neg)' }
-                    : lookingUp
-                    ? { ...inputStyle, borderColor: 'var(--ink-4)' }
-                    : inputStyle
-                }
-              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  name="set_number"
+                  value={form.set_number}
+                  onChange={handleChange}
+                  onBlur={runLookup}
+                  placeholder="לדוגמה: 10278-1"
+                  style={
+                    errors.set_number || lookupError
+                      ? { ...inputStyle, borderColor: 'var(--neg)' }
+                      : lookingUp
+                      ? { ...inputStyle, borderColor: 'var(--ink-4)' }
+                      : inputStyle
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={runLookup}
+                  disabled={busy || lookingUp || !form.set_number.trim()}
+                  style={lookupBtnStyle}
+                >
+                  טען פרטי סט
+                </button>
+              </div>
               {errors.set_number && <span style={errorStyle}>{errors.set_number}</span>}
               {lookingUp && (
                 <span style={{ ...errorStyle, color: 'var(--ink-4)' }}>מחפש...</span>
               )}
               {lookupError && !lookingUp && (
                 <span style={errorStyle}>{lookupError}</span>
+              )}
+              {!errors.set_number && !lookingUp && !lookupError && (
+                <span style={hintStyle}>הקלד מספר סט וטען פרטים אוטומטית</span>
               )}
             </div>
             <div>
@@ -232,7 +258,7 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
             </div>
           </div>
 
-          {/* theme + brand */}
+          {/* theme + pieces */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={labelStyle}>ערכת נושא</label>
@@ -243,26 +269,6 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
                 placeholder="לדוגמה: City"
                 style={inputStyle}
               />
-            </div>
-            <div>
-              <label style={labelStyle}>מותג</label>
-              <select name="brand" value={form.brand} onChange={handleChange} style={inputStyle}>
-                {BRAND_OPTIONS.map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* status + pieces */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>סטטוס</label>
-              <select name="status" value={form.status} onChange={handleChange} style={inputStyle}>
-                {statusForForm.map(o => (
-                  <option key={o.key} value={o.key}>{o.label}</option>
-                ))}
-              </select>
             </div>
             <div>
               <label style={labelStyle}>מספר חלקים</label>
@@ -278,53 +284,46 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
             </div>
           </div>
 
-          {/* purchase_price + original_price */}
+          {/* brand + status */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={labelStyle}>מחיר קנייה (₪)</label>
-              <input
-                type="number"
-                name="purchase_price"
-                value={form.purchase_price}
-                onChange={handleChange}
-                placeholder="0"
-                min="0"
-                step="0.01"
-                style={inputStyle}
-              />
+              <label style={labelStyle}>מותג</label>
+              <select name="brand" value={form.brand} onChange={handleChange} style={inputStyle}>
+                {BRAND_OPTIONS.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label style={labelStyle}>מחיר מחירון (₪)</label>
-              <input
-                type="number"
-                name="original_price"
-                value={form.original_price}
-                onChange={handleChange}
-                placeholder="0"
-                min="0"
-                step="0.01"
-                style={inputStyle}
-              />
+              <label style={labelStyle}>סטטוס</label>
+              <select name="status" value={form.status} onChange={handleChange} style={inputStyle}>
+                {statusForForm.map(o => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* market_value + purchase_date */}
+          {/* ===== Section 2: רכישה ושווי ===== */}
+          <div style={{ ...sectionTitleStyle, marginTop: 8 }}>רכישה ושווי</div>
+
+          {/* acquisition_type + purchase_date */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label style={labelStyle}>שווי שוק (₪)</label>
-              <input
-                type="number"
-                name="market_value"
-                value={form.market_value}
+              <label style={labelStyle}>אופן קבלה</label>
+              <select
+                name="acquisition_type"
+                value={form.acquisition_type}
                 onChange={handleChange}
-                placeholder="0"
-                min="0"
-                step="0.01"
                 style={inputStyle}
-              />
+              >
+                {ACQUISITION_OPTIONS.map(o => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label style={labelStyle}>תאריך רכישה</label>
+              <label style={labelStyle}>תאריך כניסה לאוסף</label>
               <input
                 type="date"
                 name="purchase_date"
@@ -333,6 +332,57 @@ const AddLegoSetModal = ({ show, onClose, onSave, initialData = null, existingSe
                 style={{ ...inputStyle, direction: 'ltr' }}
               />
             </div>
+          </div>
+
+          {/* purchase_price + original_price */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>מחיר ששולם (₪)</label>
+              <input
+                type="number"
+                name="purchase_price"
+                value={form.purchase_price}
+                onChange={handleChange}
+                placeholder="אופציונלי"
+                min="0"
+                step="0.01"
+                style={inputStyle}
+              />
+              {form.acquisition_type === 'gift' && (
+                <span style={hintStyle}>בדרך כלל נשאר ריק עבור מתנה</span>
+              )}
+            </div>
+            <div>
+              <label style={labelStyle}>מחיר מחירון (₪)</label>
+              <input
+                type="number"
+                name="original_price"
+                value={form.original_price}
+                onChange={handleChange}
+                placeholder="אופציונלי"
+                min="0"
+                step="0.01"
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          {/* market_value */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>שווי שוק (₪)</label>
+              <input
+                type="number"
+                name="market_value"
+                value={form.market_value}
+                onChange={handleChange}
+                placeholder="אופציונלי"
+                min="0"
+                step="0.01"
+                style={inputStyle}
+              />
+            </div>
+            <div />
           </div>
 
           {/* Actions: save+cancel on right (RTL start), delete on left (RTL end) */}
@@ -410,6 +460,34 @@ const errorStyle = {
   fontSize: 12,
   color: 'var(--neg)',
   marginTop: 4,
+};
+
+const hintStyle = {
+  display: 'block',
+  fontSize: 12,
+  color: 'var(--ink-4)',
+  marginTop: 4,
+};
+
+const sectionTitleStyle = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: 'var(--ink-2)',
+  paddingBottom: 6,
+  borderBottom: '1px solid var(--border)',
+};
+
+const lookupBtnStyle = {
+  flexShrink: 0,
+  whiteSpace: 'nowrap',
+  backgroundColor: 'var(--surface-3)',
+  color: 'var(--ink-2)',
+  border: '1px solid var(--border-strong)',
+  borderRadius: 'var(--r-8)',
+  padding: '0 12px',
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: 'pointer',
 };
 
 const saveBtnStyle = {

@@ -154,6 +154,7 @@ CREATE TABLE IF NOT EXISTS lego_sets (
   original_price  NUMERIC DEFAULT 0,
   status          TEXT DEFAULT 'New',
   brand           TEXT DEFAULT 'LEGO',
+  acquisition_type TEXT NOT NULL DEFAULT 'purchased', -- purchased | gift | trade | other (validated in legoController.js)
   purchase_date   DATE,
   transaction_id  INTEGER REFERENCES transactions(id),
   created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
