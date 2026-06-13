@@ -4,7 +4,7 @@ import {
   Search, Filter, Download, Edit, Trash2,
   ArrowUpDown, Calendar, ChevronDown, PlusCircle
 } from 'lucide-react';
-import { getTransactions, deleteTransaction, getCategories } from '../../services/api';
+import { getTransactions, deleteTransaction, getCategories, getPaymentSources } from '../../services/api';
 
 const formatLocalDate = (date) => {
   const year = date.getFullYear();
@@ -17,11 +17,13 @@ const Transactions = () => {
   // --- State ניהול נתונים ---
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [paymentSources, setPaymentSources] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // --- State פילטרים ומיון ---
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedPaymentSources, setSelectedPaymentSources] = useState('all');
   const [dateRange, setDateRange] = useState(() => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -47,9 +49,10 @@ const Transactions = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [transRes, catsRes] = await Promise.all([getTransactions(), getCategories()]);
+      const [transRes, catsRes, psRes] = await Promise.all([getTransactions(), getCategories(), getPaymentSources()]);
       setTransactions(transRes.data);
       setCategories(catsRes.data);
+      setPaymentSources(psRes.data);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -74,6 +77,10 @@ const Transactions = () => {
 
     if (selectedCategory !== 'all') {
       data = data.filter(t => t.category_id === parseInt(selectedCategory));
+    }
+
+    if (selectedPaymentSources !== 'all') {
+      data = data.filter(t => t.payment_source_id === parseInt(selectedPaymentSources));
     }
 
     if (dateRange.start) {
@@ -101,7 +108,7 @@ const Transactions = () => {
     }
 
     return data;
-  }, [transactions, debouncedSearchText, selectedCategory, dateRange, sortConfig]);
+  }, [transactions, debouncedSearchText, selectedCategory, selectedPaymentSources, dateRange, sortConfig]);
 
   // --- לוגיקה חכמה: חישוב סיכומים ---
   const summary = useMemo(() => {
@@ -201,6 +208,17 @@ const Transactions = () => {
             <option value="all">כל הקטגוריות</option>
             {categories.map(c => (
               <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={selectedPaymentSources}
+            onChange={(e) => setSelectedPaymentSources(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="all">כל אמצעי התשלום</option>
+            {paymentSources.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
 
