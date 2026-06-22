@@ -91,7 +91,8 @@ const Transactions = () => {
       data = data.filter(t => new Date(t.transaction_date) <= new Date(dateRange.end));
     }
 
-    if (showUncategorizedOnly && t.category_id != null) {
+    if (showUncategorizedOnly) {
+      data = data.filter(t => t.category_id == null);
       return false;
     }
 
