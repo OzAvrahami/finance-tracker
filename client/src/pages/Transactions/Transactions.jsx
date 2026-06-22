@@ -93,7 +93,6 @@ const Transactions = () => {
 
     if (showUncategorizedOnly) {
       data = data.filter(t => t.category_id == null);
-      return false;
     }
 
     if (sortConfig.key) {
