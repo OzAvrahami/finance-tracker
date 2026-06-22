@@ -32,6 +32,7 @@ const Transactions = () => {
   });
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', direction: 'desc' });
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
+  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState('false');
 
   // --- טעינת נתונים ראשונית ---
   useEffect(() => {
@@ -90,6 +91,10 @@ const Transactions = () => {
       data = data.filter(t => new Date(t.transaction_date) <= new Date(dateRange.end));
     }
 
+    if (showUncategorizedOnly && t.category_id != null) {
+      return false;
+    }
+
     if (sortConfig.key) {
       data.sort((a, b) => {
         let aValue = a[sortConfig.key];
@@ -108,7 +113,7 @@ const Transactions = () => {
     }
 
     return data;
-  }, [transactions, debouncedSearchText, selectedCategory, selectedPaymentSources, dateRange, sortConfig]);
+  }, [transactions, debouncedSearchText, selectedCategory, selectedPaymentSources, dateRange, sortConfig, showUncategorizedOnly]);
 
   // --- לוגיקה חכמה: חישוב סיכומים ---
   const summary = useMemo(() => {
@@ -244,6 +249,7 @@ const Transactions = () => {
           <button onClick={() => setPresetDate('thisMonth')} style={quickBtnStyle}>החודש</button>
           <button onClick={() => setPresetDate('lastMonth')} style={quickBtnStyle}>חודש שעבר</button>
           <button onClick={() => setPresetDate('clear')} style={quickBtnStyle}>הכל</button>
+          <button onClick={() => setShowUncategorizedOnly((prev) => !prev)} className={showUncategorizedOnly ? 'filter-button active' : 'filter-button'}>ללא קטגוריה</button>
         </div>
       </div>
 
