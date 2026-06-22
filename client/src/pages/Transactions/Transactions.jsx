@@ -32,7 +32,7 @@ const Transactions = () => {
   });
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', direction: 'desc' });
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
-  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState('false');
+  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(false);
 
   // --- טעינת נתונים ראשונית ---
   useEffect(() => {
@@ -249,7 +249,17 @@ const Transactions = () => {
           <button onClick={() => setPresetDate('thisMonth')} style={quickBtnStyle}>החודש</button>
           <button onClick={() => setPresetDate('lastMonth')} style={quickBtnStyle}>חודש שעבר</button>
           <button onClick={() => setPresetDate('clear')} style={quickBtnStyle}>הכל</button>
-          <button onClick={() => setShowUncategorizedOnly((prev) => !prev)} className={showUncategorizedOnly ? 'filter-button active' : 'filter-button'}>ללא קטגוריה</button>
+        </div>
+
+        {/* שורה נפרדת: סינון לפי תנועות ללא קטגוריה */}
+        <div style={{ display: 'flex', width: '100%', flexBasis: '100%', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowUncategorizedOnly((prev) => !prev)}
+            style={showUncategorizedOnly ? uncategorizedBtnActiveStyle : uncategorizedBtnStyle}
+            aria-pressed={showUncategorizedOnly}
+          >
+            ללא קטגוריה
+          </button>
         </div>
       </div>
 
@@ -422,6 +432,25 @@ const quickBtnStyle = {
   fontSize: 'var(--fs-13)',
   cursor: 'pointer',
   fontWeight: 600,
+};
+
+const uncategorizedBtnStyle = {
+  backgroundColor: 'var(--surface-3)',
+  color: 'var(--ink-3)',
+  border: '1px solid var(--border)',
+  padding: '8px 16px',
+  borderRadius: 20,
+  fontSize: 'var(--fs-13)',
+  cursor: 'pointer',
+  fontWeight: 600,
+};
+
+const uncategorizedBtnActiveStyle = {
+  ...uncategorizedBtnStyle,
+  background: 'var(--primary-grad)',
+  color: 'var(--primary-ink)',
+  border: '1px solid rgba(255,255,255,0.12)',
+  boxShadow: '0 4px 12px rgba(124,92,255,0.3)',
 };
 
 const summaryBarStyle = {
