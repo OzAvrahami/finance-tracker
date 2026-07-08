@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Pencil, Trash2, Copy, Plus, TrendingDown, TrendingUp, AlertTriangle } from 'lucide-react';
 import { getBudgetsByMonth, upsertBudget, copyBudget, deleteBudget, getCategories } from '../../services/api';
+import { PageHeaderContext } from '../../context/PageHeaderContext';
 
 const Budget = () => {
   const currentMonth = new Date().toISOString().slice(0, 7); // '2026-02'
@@ -14,6 +15,14 @@ const Budget = () => {
   const [showAddRow, setShowAddRow] = useState(false);
   const [newCategoryId, setNewCategoryId] = useState('');
   const [newAmount, setNewAmount] = useState('');
+  const { setPageHeader } = useContext(PageHeaderContext);
+
+  useEffect(() => {
+    setPageHeader({
+      title: 'תקציב',
+      subtitles: 'מעקב תקציב חודשי לפי קטגוריה',
+    });
+  }, [setPageHeader]);
 
   useEffect(() => {
     fetchCategories();

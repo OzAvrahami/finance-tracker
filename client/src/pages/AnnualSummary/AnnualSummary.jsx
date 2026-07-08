@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
@@ -6,6 +6,7 @@ import {
 import { AlertTriangle, Calendar } from 'lucide-react';
 import { getAnnualBudgetSummary, getMonthlyCategoryBreakdown } from '../../services/api';
 import MonthlyBreakdownTable from './MonthlyBreakdownTable';
+import { PageHeaderContext } from '../../context/PageHeaderContext';
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -76,6 +77,15 @@ const AnnualSummary = () => {
   const [breakdownLoading, setBreakdownLoading] = useState(false);
   const [breakdownError, setBreakdownError] = useState(null);
   const [monthRange, setMonthRange] = useState('3');
+  
+  const { setPageHeader } = useContext(PageHeaderContext);
+
+  useEffect(() => {
+    setPageHeader({
+      title: 'דוחות וסיכום שנתי',
+      subtitle: 'ניתוח מגמות והשוואות שנתיות',
+    });
+  }, [setPageHeader]);
 
   useEffect(() => {
     let cancelled = false;

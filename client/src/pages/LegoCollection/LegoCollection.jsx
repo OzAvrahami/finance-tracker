@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useContext } from 'react';
 import { getLegoSets, updateLegoSet } from '../../services/api';
 import { sortBySetNumber, calculateStats } from '../../utils/legoHelpers';
 import StatsDashboard from '../../components/lego/StatsDashboard';
 import CollectionFilters from '../../components/lego/CollectionFilters';
 import SetCard from '../../components/lego/SetCard';
 import AddLegoSetModal from '../../components/lego/AddLegoSetModal';
+import { PageHeaderContext } from '../../context/PageHeaderContext';
 
 const LegoCollection = () => {
   const [sets, setSets] = useState([]);
@@ -13,6 +14,15 @@ const LegoCollection = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSet, setEditingSet] = useState(null);
+
+  const { setPageHeader } = useContext(PageHeaderContext)
+
+  useEffect(() => {
+    setPageHeader({
+      title: 'אוסף לגו',
+      subtitle: 'מעקב סטים ושווי האוסף',
+    });
+  }, [setPageHeader]);
 
   const loadSets = async () => {
     try {
