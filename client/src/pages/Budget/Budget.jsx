@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { Pencil, Trash2, Copy, Plus, TrendingDown, TrendingUp, AlertTriangle } from 'lucide-react';
 import { getBudgetsByMonth, upsertBudget, copyBudget, deleteBudget, getCategories } from '../../services/api';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
