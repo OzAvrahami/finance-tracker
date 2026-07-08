@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
