@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search, Filter, Download, Edit, Trash2,
-  ArrowUpDown, Calendar, ChevronDown, PlusCircle
+  ArrowUpDown, Calendar, ChevronDown, PlusCircle,
+  Subtitles
 } from 'lucide-react';
 import { getTransactions, deleteTransaction, getCategories, getPaymentSources } from '../../services/api';
+import { PageHeaderContext } from '../../context/PageHeaderContext';
 
 const formatLocalDate = (date) => {
   const year = date.getFullYear();
@@ -33,6 +35,15 @@ const Transactions = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', direction: 'desc' });
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
   const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(false);
+
+  const { setPageHeader } = useContext(PageHeaderContext);
+
+  useEffect(() => {
+    setPageHeader({
+      title: 'תנועות',
+      subtitles: 'כל ההכנסות וההוצאות שלך',
+    });
+  }, [setPageHeader]);
 
   // --- טעינת נתונים ראשונית ---
   useEffect(() => {
