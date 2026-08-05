@@ -20,7 +20,7 @@ const LegoCollection = () => {
   useEffect(() => {
     setPageHeader({
       title: 'אוסף לגו',
-      subtitle: 'מעקב סטים ושווי האוסף',
+      subtitles: 'מעקב סטים ושווי האוסף',
     });
   }, [setPageHeader]);
 

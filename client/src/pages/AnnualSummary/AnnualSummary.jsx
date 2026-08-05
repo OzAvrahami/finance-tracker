@@ -83,7 +83,7 @@ const AnnualSummary = () => {
   useEffect(() => {
     setPageHeader({
       title: 'דוחות וסיכום שנתי',
-      subtitle: 'ניתוח מגמות והשוואות שנתיות',
+      subtitles: 'ניתוח מגמות והשוואות שנתיות',
     });
   }, [setPageHeader]);
 

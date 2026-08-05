@@ -40,13 +40,86 @@ export const saveImportedTransactions = (transactions, paymentSourceId) => api.p
 
 // Transaction
 export const createTransaction = (data) => api.post('/transactions', data);
-export const getTransactions = () => api.get('/transactions');
+
+/**
+ * Fetches one filtered, keyset-paginated page of transactions.
+ *
+ * All filtering happens on the server. Passing no filters returns the newest
+ * page of the full history, not the whole table.
+ *
+ * @param {object} params
+ * @param {string} [params.from]              Inclusive start date, 'YYYY-MM-DD'.
+ * @param {string} [params.to]                Inclusive end date, 'YYYY-MM-DD'.
+ * @param {string|number} [params.categoryId] Category id, or 'all'/'' for no filter.
+ * @param {string|number} [params.paymentSourceId] Payment source id, or 'all'/'' for no filter.
+ * @param {boolean} [params.uncategorizedOnly]
+ * @param {string} [params.search]
+ * @param {number} [params.limit]
+ * @param {'transaction_date'|'description'|'total_amount'} [params.sortBy]
+ * @param {'asc'|'desc'} [params.sortDirection]
+ * @param {string|null} [params.cursor]       Opaque cursor from a previous response.
+ * @param {boolean} [params.includeTotals]    Ask for totals over the whole filtered set.
+ * @returns {Promise} axios response; `res.data` is
+ *   { data, pagination: { limit, hasMore, sortBy, sortDirection, nextCursor }, totals? }
+ */
+export const getTransactions = ({
+  from,
+  to,
+  categoryId,
+  paymentSourceId,
+  uncategorizedOnly,
+  search,
+  limit,
+  sortBy,
+  sortDirection,
+  cursor,
+  includeTotals,
+} = {}) => {
+  const query = new URLSearchParams();
+
+  // Date strings are passed through verbatim. They must stay 'YYYY-MM-DD' —
+  // running them through Date.toISOString() would shift them by the UTC offset
+  // and silently move a transaction into the neighbouring day.
+  if (from) query.set('from', from);
+  if (to) query.set('to', to);
+
+  // 'all' is the UI's "no filter" sentinel; omit it rather than sending it.
+  if (categoryId && categoryId !== 'all') query.set('categoryId', String(categoryId));
+  if (paymentSourceId && paymentSourceId !== 'all') query.set('paymentSourceId', String(paymentSourceId));
+
+  if (uncategorizedOnly) query.set('uncategorizedOnly', 'true');
+  if (search && search.trim()) query.set('search', search.trim());
+  if (limit) query.set('limit', String(limit));
+
+  // Sorting is applied by the database across the whole filtered set. The
+  // defaults are the server's, so they are omitted rather than restated.
+  if (sortBy && sortBy !== 'transaction_date') query.set('sortBy', sortBy);
+  if (sortDirection && sortDirection !== 'desc') query.set('sortDirection', sortDirection);
+
+  // The cursor is opaque: it is echoed back exactly as the server issued it.
+  // Do not parse it, rebuild it, or carry its parts in separate params — its
+  // contents (including a NUMERIC amount as a decimal string) are owned by
+  // server/utils/transactionQuery.js.
+  if (cursor) query.set('cursor', cursor);
+
+  if (includeTotals) query.set('includeTotals', 'true');
+
+  const qs = query.toString();
+  return api.get(qs ? `/transactions?${qs}` : '/transactions');
+};
 export const getTags = () => api.get('/transactions/tags');
 export const getCategories = () => api.get('/transactions/categories');
 export const getPaymentSources = () => api.get('/transactions/payment-sources');
 export const getTransactionById = (id) => api.get(`transactions/${id}`);
 export const updateTransaction = (id, data) => api.put(`transactions/${id}`, data);
 export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
+
+// Dashboard aggregates — totals are computed in PostgreSQL and returned as a
+// small bounded payload. The Dashboard must not sum transaction rows itself.
+export const getDashboardSummary = (from, to) =>
+  api.get('/dashboard/summary', { params: { from, to } });
+export const getDashboardMonthlySeries = (months = 6) =>
+  api.get('/dashboard/monthly-series', { params: { months } });
 
 // Loan
 export const getAllLoans = () => api.get('/loans');

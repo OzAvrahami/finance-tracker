@@ -24,6 +24,10 @@ const CATEGORY_OPTIONS = [
   { value: 'other', label: 'אחר' },
 ];
 
+// Size of the "link this task to a transaction" picker. Matches the 50 rows the
+// modal previously sliced client-side.
+const LINKABLE_TRANSACTIONS_LIMIT = 50;
+
 const DEFAULT_FORM = {
   title: '',
   notes: '',
@@ -47,10 +51,13 @@ const TaskModal = ({ show, task, onClose, onSave }) => {
     setLoadingEntities(true);
     Promise.all([
       getAllLoans().catch(() => ({ data: [] })),
-      getTransactions().catch(() => ({ data: [] })),
+      // The picker offers the most recent transactions to link a task to.
+      // Ask the server for exactly that page instead of downloading the whole
+      // history and slicing the newest 50 off the front in the browser.
+      getTransactions({ limit: LINKABLE_TRANSACTIONS_LIMIT }).catch(() => ({ data: { data: [] } })),
     ]).then(([loansRes, transRes]) => {
       setLoans(loansRes.data || []);
-      setTransactions((transRes.data || []).slice(0, 50));
+      setTransactions(transRes.data?.data || []);
     }).finally(() => setLoadingEntities(false));
   }, [show]);
 

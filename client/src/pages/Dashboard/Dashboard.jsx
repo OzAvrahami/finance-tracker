@@ -1,11 +1,22 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getTransactions, getAllLoans, getBudgetsByMonth, getCategories, getTasks } from '../../services/api';
+import {
+  getTransactions, getAllLoans, getBudgetsByMonth, getTasks,
+  getDashboardSummary, getDashboardMonthlySeries,
+} from '../../services/api';
 import { isOverdue, PRIORITY_LABELS, PRIORITY_COLORS } from '../../utils/taskHelpers';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank, Bell, Plus } from 'lucide-react';
-import { calculateSummaryStats, filterTransactionsByMonth, prepareMonthlyChartData } from '../../utils/dashboardHelpers';
+import { formatMonthKeyShort } from '../../utils/dashboardHelpers';
+import { getMonthRange } from '../../utils/dateRange';
 import { Card, MoneyAmount, LiveChip, IconButton, CardHeader, ProgressBar, KPIHero, KPICard } from '../../components/ui';
+
+// How many transactions the "recent activity" table shows. Requested from the
+// server with this limit instead of slicing a full download.
+const RECENT_TRANSACTIONS_LIMIT = 5;
+const TREND_MONTHS = 6;
+
+const EMPTY_STATS = { income: 0, expenses: 0, balance: 0, count: 0 };
 
 const HEBREW_MONTHS_FULL = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -17,11 +28,14 @@ const DASHBOARD_PRIORITY_BG = {
 };
 
 const Dashboard = () => {
-  const [transactions, setTransactions] = useState([]);
+  // Only the 5 rows the "recent activity" table renders — never the full table.
+  const [recentTransactions, setRecentTransactions] = useState([]);
   const [loans, setLoans] = useState([]);
   const [budgets, setBudgets] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [tasks, setTasks] = useState([]);
+  // Period totals and the trend series are computed in PostgreSQL.
+  const [stats, setStats] = useState(EMPTY_STATS);
+  const [monthlySeries, setMonthlySeries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
@@ -30,22 +44,29 @@ const Dashboard = () => {
   });
   const [lastUpdated, setLastUpdated] = useState(null);
 
+  // Month-independent data: loaded once.
+  //
+  // Budgets are fetched here, for the *current* calendar month, and are not
+  // refetched when the month picker changes. That is the long-standing
+  // behaviour and it is deliberately left alone: making budgets follow the
+  // selected month is a separate change, tracked as its own task, and does not
+  // belong in the pagination work.
   useEffect(() => {
     const fetchData = async () => {
       try {
         const currentMonth = new Date().toISOString().slice(0, 7);
-        const [transRes, loansRes, budgetsRes, catsRes, tasksRes] = await Promise.all([
-          getTransactions(),
+        const [recentRes, loansRes, budgetsRes, tasksRes, seriesRes] = await Promise.all([
+          getTransactions({ limit: RECENT_TRANSACTIONS_LIMIT }),
           getAllLoans().catch(() => ({ data: [] })),
           getBudgetsByMonth(currentMonth).catch(() => ({ data: [] })),
-          getCategories(),
           getTasks().catch(() => ({ data: [] })),
+          getDashboardMonthlySeries(TREND_MONTHS).catch(() => ({ data: [] })),
         ]);
-        setTransactions(transRes.data);
+        setRecentTransactions(recentRes.data.data);
         setLoans(loansRes.data);
         setBudgets(budgetsRes.data);
-        setCategories(catsRes.data);
         setTasks(tasksRes.data);
+        setMonthlySeries(seriesRes.data);
       } catch (error) {
         console.error('Error fetching dashboard data', error);
       } finally {
@@ -56,9 +77,35 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  const monthlyTransactions = useMemo(() => filterTransactionsByMonth(transactions, selectedMonth), [transactions, selectedMonth]);
-  const stats = useMemo(() => calculateSummaryStats(monthlyTransactions), [monthlyTransactions]);
-  const chartData = useMemo(() => prepareMonthlyChartData(transactions, 6), [transactions]);
+  // Month-scoped data: the KPI totals, refetched whenever the user picks a
+  // different month. Computed in PostgreSQL over the whole period rather than
+  // by summing a downloaded array.
+  useEffect(() => {
+    let cancelled = false;
+    const { start, end } = getMonthRange(selectedMonth);
+
+    getDashboardSummary(start, end)
+      .then((summaryRes) => {
+        if (cancelled) return;
+        setStats(summaryRes.data);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Error fetching dashboard summary', error);
+        setStats(EMPTY_STATS);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedMonth]);
+
+  const chartData = useMemo(
+    () => monthlySeries.map((row) => ({
+      name: formatMonthKeyShort(row.month),
+      income: row.income,
+      expenses: row.expenses,
+    })),
+    [monthlySeries]
+  );
 
   const monthOptions = useMemo(() => {
     const now = new Date();
@@ -71,26 +118,36 @@ const Dashboard = () => {
 
   const selectedMonthLabel = `${HEBREW_MONTHS_FULL[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`;
 
-  // Calculate budget progress - spending per category this month
+  // Budget progress — spending per category for the CURRENT calendar month,
+  // which is the month the budgets were fetched for. Note this does not follow
+  // the month picker above; changing it moves the KPI cards but not this card.
+  // Pre-existing behaviour, deliberately unchanged here — see the follow-up
+  // task for making budgets month-aware.
+  //
+  // `actual_spent` and the embedded category come straight from
+  // GET /api/budgets, which is the single owner of the budget-vs-spent rule.
+  // The Dashboard previously recomputed this from the downloaded transaction
+  // array, which both duplicated that rule and inherited the 1000-row
+  // truncation. The percentage/remaining presentation logic is unchanged.
   const budgetProgress = useMemo(() => {
     if (!budgets.length) return [];
-    const expenseByCategory = {};
-    monthlyTransactions.filter(t => t.movement_type === 'expense').forEach(t => {
-      const catId = t.category_id;
-      if (catId) {
-        expenseByCategory[catId] = (expenseByCategory[catId] || 0) + Number(t.total_amount);
-      }
-    });
 
     return budgets.map(b => {
-      const cat = categories.find(c => c.id === b.category_id);
-      const spent = expenseByCategory[b.category_id] || 0;
+      const spent = Number(b.actual_spent) || 0;
       const budget = Number(b.amount);
       const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
       const remaining = budget - spent;
-      return { id: b.id, name: cat?.name || 'כללי', icon: cat?.icon || '', spent, budget, pct, remaining };
+      return {
+        id: b.id,
+        name: b.categories?.name || 'כללי',
+        icon: b.categories?.icon || '',
+        spent,
+        budget,
+        pct,
+        remaining,
+      };
     }).sort((a, b) => b.pct - a.pct);
-  }, [budgets, monthlyTransactions, categories]);
+  }, [budgets]);
 
   // Calculate total loan debt
   const totalDebt = useMemo(() => loans.reduce((s, l) => s + (Number(l.current_balance) || 0), 0), [loans]);
@@ -417,7 +474,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.slice(0, 5).map(t => {
+                  {recentTransactions.map(t => {
                     const isIncome = t.movement_type === 'income';
                     const catName  = t.categories?.name || 'כללי';
                     return (
@@ -450,7 +507,7 @@ const Dashboard = () => {
                       </tr>
                     );
                   })}
-                  {transactions.length === 0 && (
+                  {recentTransactions.length === 0 && (
                     <tr>
                       <td colSpan={4} style={{ textAlign: 'center', padding: 32, color: 'var(--ink-4)' }}>
                         אין תנועות עדיין
