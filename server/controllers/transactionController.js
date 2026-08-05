@@ -1,5 +1,9 @@
 const supabase = require('../config/supabase');
 const axios = require('axios');
+const {
+  parseTransactionListQuery,
+  encodeCursor,
+} = require('../utils/transactionQuery');
 
 // Advances a YYYY-MM-DD date string by N months, clamping to the last valid day of the target month.
 // e.g. Jan 31 + 1 month → Feb 28 (not Feb 31)
@@ -223,31 +227,92 @@ exports.createTransaction = async (req, res) => {
   }
 };
 
-// Get all transactions (for History/Dashboard)
+// GET /api/transactions — filtered, keyset-paginated transaction list.
+//
+// Replaces the previous unbounded `select * order by transaction_date desc`.
+// That query had no limit, so PostgREST silently truncated it at db-max-rows
+// (1000) with error === null, hiding every transaction older than 2026-04-09
+// while ~2069 older rows existed. Filtering now happens in SQL (see
+// migrations/003) instead of in the browser over a partial array.
+//
+// Sorting is server-side across the whole filtered set. The table's clickable
+// columns used to sort in the browser over whatever rows happened to be loaded,
+// which answered the wrong question once the list stopped being complete.
+//
+// Response contract:
+//   {
+//     data: [ <transaction>, ... ],
+//     pagination: { limit, hasMore, sortBy, sortDirection, nextCursor: string | null },
+//     totals?: { count, income, expense }   // only when includeTotals=true
+//   }
+//
+// nextCursor is opaque. Clients must pass it back verbatim and must not parse
+// or construct it — its contents are owned by utils/transactionQuery.js.
 exports.getTransactions = async (req, res) => {
+  const parsed = parseTransactionListQuery(req.query);
+  if (!parsed.ok) {
+    return res.status(400).json({ error: parsed.error });
+  }
+  const query = parsed.value;
+  const cursor = query.cursor;
+
   try {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select(`
-        *,
-        categories (
-          name,
-          icon
-        ),
-        payment_sources (
-          id,
-          name,
-          method,
-          slug,
-          issuer,
-          last4
-        )
-      `)
-      .order('transaction_date', { ascending: false });
+    const { data, error } = await supabase.rpc('transactions_page', {
+      p_from: query.from,
+      p_to: query.to,
+      p_category_id: query.categoryId,
+      p_payment_source_id: query.paymentSourceId,
+      p_uncategorized_only: query.uncategorizedOnly,
+      p_search: query.search,
+      // The true page size. The +1 probe row that decides hasMore lives inside
+      // the SQL function, so it cannot leak into this response.
+      p_limit: query.limit,
+      p_sort_by: query.sortBy,
+      p_sort_direction: query.sortDirection,
+      p_cursor_id: cursor ? cursor.id : null,
+      p_cursor_date: cursor ? cursor.date : null,
+      // Sent as a decimal string; PostgreSQL casts it to numeric. Never a JS
+      // number — total_amount is NUMERIC and a double could move the boundary.
+      p_cursor_amount: cursor ? cursor.amount : null,
+      p_cursor_description: cursor ? cursor.description : null,
+      p_cursor_description_is_null: cursor ? cursor.descriptionIsNull : null,
+      p_include_totals: query.includeTotals,
+    });
 
     if (error) throw error;
-    res.status(200).json(data);
+
+    const rows = Array.isArray(data?.data) ? data.data : [];
+    const hasMore = data?.has_more === true;
+
+    const response = {
+      data: rows,
+      pagination: {
+        limit: query.limit,
+        hasMore,
+        sortBy: query.sortBy,
+        sortDirection: query.sortDirection,
+        // next_key is built in SQL from the last row actually returned, with
+        // total_amount rendered as text, so the cursor boundary is exact.
+        nextCursor: hasMore
+          ? encodeCursor(data?.next_key, query.sortBy, query.sortDirection)
+          : null,
+      },
+    };
+
+    // Totals are computed over the whole filtered set, not over the returned
+    // page. Summing a single page would understate the user's real totals.
+    if (query.includeTotals) {
+      const totals = data?.totals || {};
+      response.totals = {
+        count: Number(totals.count) || 0,
+        income: Number(totals.income) || 0,
+        expense: Number(totals.expense) || 0,
+      };
+    }
+
+    res.status(200).json(response);
   } catch (error) {
+    console.error('getTransactions Error:', error);
     res.status(400).json({ error: error.message });
   }
 };

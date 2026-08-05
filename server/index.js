@@ -9,6 +9,7 @@ const budgetRoutes = require('./routes/budgetRoutes');
 const shoppingRoutes = require('./routes/shoppingRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 const { requireAuth } = require('./middleware/auth');
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
@@ -108,6 +109,7 @@ app.use('/api/budgets', budgetRoutes);
 app.use('/api/shopping', shoppingRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => console.log(`Architecture is solid on port ${PORT}`));
