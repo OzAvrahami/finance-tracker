@@ -1,15 +1,15 @@
 import React from 'react';
 
 const cardBase = {
-  backgroundColor: 'var(--surface-2)',
-  borderRadius: 'var(--r-16)',
-  border: '1px solid var(--border)',
-  boxShadow: 'var(--shadow-sm)',
+  backgroundColor: 'var(--ft-surface-solid-secondary)',
+  borderRadius: 'var(--ft-radius-xl)',
+  border: '1px solid var(--ft-border)',
+  boxShadow: 'var(--ft-shadow)',
 };
 
 export const Card = ({ children, padding = 'var(--s-24)', style, className = '', ...props }) => (
   <div
-    className={className}
+    className={className.trim()}
     style={{ ...cardBase, padding, ...style }}
     {...props}
   >
@@ -19,12 +19,12 @@ export const Card = ({ children, padding = 'var(--s-24)', style, className = '',
 
 export const GlassCard = ({ children, padding = 'var(--s-24)', style, className = '', ...props }) => (
   <div
-    className={`ui-glass ${className}`}
+    className={`ui-glass ${className}`.trim()}
     style={{
       ...cardBase,
-      backgroundColor: 'var(--surface-2-glass)',
-      backdropFilter: 'blur(12px)',
-      WebkitBackdropFilter: 'blur(12px)',
+      backgroundColor: 'var(--ft-glass)',
+      backdropFilter: 'var(--ft-blur)',
+      WebkitBackdropFilter: 'var(--ft-blur)',
       padding,
       ...style,
     }}

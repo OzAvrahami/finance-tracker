@@ -13,61 +13,111 @@ const base = {
   gap: 'var(--s-6)',
   fontFamily: 'var(--font-ui)',
   fontWeight: 600,
-  borderRadius: 'var(--r-8)',
+  minHeight: 36,
+  borderRadius: 'var(--ft-radius-sm)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
   border: 'none',
   textDecoration: 'none',
 };
 
-export const PrimaryButton = ({ children, size = 'md', style, className = '', ...props }) => (
+const renderContent = (children, loading, loadingText) => (
+  <>
+    {loading && <span className="ui-button-spinner" aria-hidden="true" />}
+    {loading && loadingText ? loadingText : children}
+  </>
+);
+
+export const PrimaryButton = ({
+  children,
+  size = 'md',
+  style,
+  className = '',
+  loading = false,
+  loadingText,
+  fullWidth = false,
+  disabled = false,
+  ...props
+}) => (
   <button
-    className={`ui-btn-primary ${className}`}
+    {...props}
+    className={`ui-btn-primary ${className}`.trim()}
     style={{
       ...base,
       ...sizes[size],
-      background: 'var(--primary-grad)',
-      color: 'var(--primary-ink)',
-      boxShadow: '0 0 16px rgba(124,92,255,0.25)',
+      width: fullWidth ? '100%' : undefined,
+      background: 'var(--ft-primary-gradient)',
+      color: 'var(--ft-on-primary)',
+      boxShadow: '0 0 16px var(--ft-primary-weak)',
       ...style,
     }}
-    {...props}
+    disabled={disabled || loading}
+    aria-busy={loading || undefined}
+    data-loading={loading || undefined}
   >
-    {children}
+    {renderContent(children, loading, loadingText)}
   </button>
 );
 
-export const SecondaryButton = ({ children, size = 'md', style, className = '', ...props }) => (
+export const SecondaryButton = ({
+  children,
+  size = 'md',
+  style,
+  className = '',
+  loading = false,
+  loadingText,
+  fullWidth = false,
+  disabled = false,
+  ...props
+}) => (
   <button
-    className={`ui-btn-secondary ${className}`}
+    {...props}
+    className={`ui-btn-secondary ${className}`.trim()}
     style={{
       ...base,
       ...sizes[size],
+      width: fullWidth ? '100%' : undefined,
       background: 'transparent',
-      color: 'var(--ink-2)',
-      border: '1px solid var(--border-strong)',
+      color: 'var(--ft-text-muted)',
+      border: '1px solid var(--ft-border-strong)',
       ...style,
     }}
-    {...props}
+    disabled={disabled || loading}
+    aria-busy={loading || undefined}
+    data-loading={loading || undefined}
   >
-    {children}
+    {renderContent(children, loading, loadingText)}
   </button>
 );
 
-export const GhostButton = ({ children, size = 'md', style, className = '', ...props }) => (
+export const GhostButton = ({
+  children,
+  size = 'md',
+  style,
+  className = '',
+  loading = false,
+  loadingText,
+  fullWidth = false,
+  disabled = false,
+  ...props
+}) => (
   <button
-    className={`ui-btn-secondary ${className}`}
+    {...props}
+    className={`ui-btn-secondary ${className}`.trim()}
     style={{
       ...base,
       ...sizes[size],
+      width: fullWidth ? '100%' : undefined,
       background: 'transparent',
-      color: 'var(--ink-3)',
+      color: 'var(--ft-text-muted)',
       border: '1px solid transparent',
       ...style,
     }}
-    {...props}
+    disabled={disabled || loading}
+    aria-busy={loading || undefined}
+    data-loading={loading || undefined}
   >
-    {children}
+    {renderContent(children, loading, loadingText)}
   </button>
 );
 

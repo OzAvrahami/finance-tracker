@@ -5,6 +5,7 @@ export { default as Chip, DeltaChip, LiveChip, CategoryChip } from './Chip';
 export { default as ProgressBar } from './ProgressBar';
 export { default as Skeleton, SkeletonText, SkeletonCard } from './Skeleton';
 export { default as MoneyAmount } from './MoneyAmount';
+export { default as TechnicalValue } from './TechnicalValue';
 export { default as CardHeader } from './CardHeader';
 export { default as KPIHero } from './KPIHero';
 export { default as KPICard } from './KPICard';

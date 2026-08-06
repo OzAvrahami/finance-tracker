@@ -1,8 +1,17 @@
 import React from 'react';
 
-const Skeleton = ({ width, height = 16, borderRadius = 'var(--r-8)', style }) => (
+const Skeleton = ({
+  width,
+  height = 16,
+  borderRadius = 'var(--ft-radius-sm)',
+  style,
+  className = '',
+  ...props
+}) => (
   <div
-    className="ui-skeleton"
+    {...props}
+    className={`ui-skeleton ${className}`.trim()}
+    aria-hidden={props['aria-hidden'] ?? true}
     style={{ width: width ?? '100%', height, borderRadius, ...style }}
   />
 );
@@ -19,7 +28,7 @@ export const SkeletonText = ({ lines = 1, gap = 8 }) => (
 );
 
 export const SkeletonCard = ({ height = 120 }) => (
-  <Skeleton height={height} borderRadius="var(--r-16)" />
+  <Skeleton height={height} borderRadius="var(--ft-radius-xl)" />
 );
 
 export default Skeleton;

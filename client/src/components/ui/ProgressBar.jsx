@@ -2,34 +2,66 @@ import React from 'react';
 
 const fills = {
   primary: {
-    background: 'linear-gradient(90deg, var(--primary-lo), var(--primary-hi))',
-    boxShadow: '0 0 8px rgba(124,92,255,0.4)',
+    background: 'linear-gradient(90deg, var(--ft-primary-strong), var(--ft-primary-hover))',
+    boxShadow: '0 0 8px var(--ft-primary-glow)',
   },
-  pos:  { background: 'linear-gradient(90deg, #2DB574, var(--pos))' },
-  warn: { background: 'linear-gradient(90deg, #E09800, var(--warn))' },
-  neg:  { background: 'linear-gradient(90deg, #C93550, var(--neg))' },
+  pos: { background: 'var(--ft-positive)' },
+  warn: { background: 'var(--ft-warning)' },
+  neg: { background: 'var(--ft-negative)' },
 };
 
-const ProgressBar = ({ value, max = 100, tone = 'primary', height = 6, style }) => {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+const ProgressBar = ({
+  value,
+  min = 0,
+  max = 100,
+  tone = 'primary',
+  height = 6,
+  label,
+  style,
+  className = '',
+  ...props
+}) => {
+  const numericValue = Number(value);
+  const numericMin = Number(min);
+  const numericMax = Number(max);
+  const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
+  const safeMin = Number.isFinite(numericMin) ? numericMin : 0;
+  const safeMax = Number.isFinite(numericMax) && numericMax > safeMin ? numericMax : 100;
+  const rawPercent = ((safeValue - safeMin) / (safeMax - safeMin)) * 100;
+  const visualPercent = Math.min(Math.max(rawPercent, 0), 100);
   const fill = fills[tone] ?? fills.primary;
+  const accessibleName = props['aria-label']
+    || (props['aria-labelledby'] ? undefined : (label || 'התקדמות'));
 
   return (
-    <div style={{
-      height,
-      backgroundColor: 'var(--surface-3)',
-      borderRadius: 9999,
-      overflow: 'hidden',
-      border: '1px solid var(--border)',
-      ...style,
-    }}>
-      <div style={{
-        height: '100%',
-        width: `${pct}%`,
-        borderRadius: 9999,
-        transition: 'width 0.3s ease',
-        ...fill,
-      }} />
+    <div
+      {...props}
+      className={className.trim()}
+      role="progressbar"
+      aria-label={accessibleName}
+      aria-valuenow={safeValue}
+      aria-valuemin={safeMin}
+      aria-valuemax={safeMax}
+      style={{
+        height,
+        backgroundColor: 'var(--ft-track)',
+        borderRadius: 'var(--ft-radius-pill)',
+        overflow: 'hidden',
+        border: '1px solid var(--ft-border)',
+        ...style,
+      }}
+    >
+      <div
+        data-progress-fill
+        aria-hidden="true"
+        style={{
+          height: '100%',
+          width: `${visualPercent}%`,
+          borderRadius: 'var(--ft-radius-pill)',
+          transition: `width var(--ft-motion-slow) var(--ft-ease-standard)`,
+          ...fill,
+        }}
+      />
     </div>
   );
 };
