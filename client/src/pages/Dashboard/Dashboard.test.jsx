@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -159,5 +159,227 @@ describe('resilience', () => {
 
     // The page must come up rather than blocking on a failed total.
     expect(await screen.findByRole('combobox', { name: 'חודש לדשבורד' })).toBeInTheDocument();
+  });
+});
+
+describe('Finance v3 product truth', () => {
+  it('renders exactly the three supported selected-month metrics', async () => {
+    renderDashboard();
+
+    const kpis = await screen.findAllByTestId('dashboard-kpi');
+    expect(kpis).toHaveLength(3);
+    expect(within(kpis[0]).getByRole('heading', { name: 'הכנסות' })).toBeInTheDocument();
+    expect(within(kpis[1]).getByRole('heading', { name: 'הוצאות' })).toBeInTheDocument();
+    expect(within(kpis[2]).getByRole('heading', { name: 'מאזן החודש' })).toBeInTheDocument();
+    expect(within(kpis[0]).getByText('+₪12,000')).toHaveAttribute('dir', 'ltr');
+    expect(within(kpis[1]).getByText('−₪4,500')).toHaveAttribute('dir', 'ltr');
+    expect(within(kpis[2]).getByText('+₪7,500')).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('does not render unsupported or duplicate financial metrics', async () => {
+    renderDashboard();
+    await screen.findAllByTestId('dashboard-kpi');
+
+    expect(screen.queryByText('יתרה נוכחית')).not.toBeInTheDocument();
+    expect(screen.queryByText('נטו לחיסכון')).not.toBeInTheDocument();
+    expect(screen.queryByText(/שיעור חיסכון|יעד חיסכון|כל החשבונות/)).not.toBeInTheDocument();
+  });
+
+  it('uses the actual balance sign for negative and zero months', async () => {
+    getDashboardSummary.mockResolvedValueOnce({
+      data: { income: 500, expenses: 800, balance: -300, count: 2 },
+    });
+    const firstRender = renderDashboard();
+    expect(await screen.findByText('−₪300')).toHaveAttribute('dir', 'ltr');
+
+    firstRender.unmount();
+    getDashboardSummary.mockResolvedValueOnce({
+      data: { income: 0, expenses: 0, balance: 0, count: 0 },
+    });
+    renderDashboard();
+    const balanceCard = (await screen.findAllByTestId('dashboard-kpi'))[2];
+    expect(within(balanceCard).getByText('₪0')).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('does not recreate the shell-owned page heading or add action', async () => {
+    renderDashboard();
+    await screen.findByRole('heading', { name: 'החודש הנבחר' });
+
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /תנועה חדשה/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('mixed Dashboard periods', () => {
+  it('labels selected-month and independent widgets explicitly', async () => {
+    renderDashboard();
+
+    expect(await screen.findByText(/שלושת המדדים האלה/)).toBeInTheDocument();
+    expect(screen.getByText('תקופה נפרדת · לא לפי החודש הנבחר')).toBeInTheDocument();
+    expect(screen.getAllByText('נכון להיום')).toHaveLength(2);
+    expect(screen.getByText(/החודש הנוכחי ·/)).toBeInTheDocument();
+    expect(screen.getByText('ללא תלות בחודש הנבחר')).toBeInTheDocument();
+  });
+
+  it('keeps every independent request unchanged when the KPI month changes', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+    await waitFor(() => expect(getDashboardSummary).toHaveBeenCalledTimes(1));
+
+    const options = screen.getAllByRole('option');
+    await user.selectOptions(screen.getByRole('combobox'), options[1].value);
+    await waitFor(() => expect(getDashboardSummary).toHaveBeenCalledTimes(2));
+
+    expect(getDashboardMonthlySeries).toHaveBeenCalledTimes(1);
+    expect(getBudgetsByMonth).toHaveBeenCalledTimes(1);
+    expect(getTransactions).toHaveBeenCalledTimes(1);
+    expect(getAllLoans).toHaveBeenCalledTimes(1);
+    expect(getTasks).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Dashboard data states', () => {
+  it('starts with a composed loading state', () => {
+    getTransactions.mockReturnValue(new Promise(() => {}));
+    getAllLoans.mockReturnValue(new Promise(() => {}));
+    getBudgetsByMonth.mockReturnValue(new Promise(() => {}));
+    getTasks.mockReturnValue(new Promise(() => {}));
+    getDashboardSummary.mockReturnValue(new Promise(() => {}));
+    getDashboardMonthlySeries.mockReturnValue(new Promise(() => {}));
+
+    renderDashboard();
+    expect(screen.getByRole('status')).toHaveTextContent('טוען את לוח הבקרה');
+    expect(document.querySelectorAll('.ui-skeleton').length).toBeGreaterThan(3);
+  });
+
+  it('renders meaningful empty states for every empty widget', async () => {
+    getDashboardMonthlySeries.mockResolvedValue({ data: [] });
+    renderDashboard();
+
+    expect(await screen.findByText('אין נתוני מגמה')).toBeInTheDocument();
+    expect(screen.getByText('אין מטלות פתוחות')).toBeInTheDocument();
+    expect(screen.getByText('אין הלוואות פעילות')).toBeInTheDocument();
+    expect(screen.getByText('לא הוגדר תקציב לחודש זה')).toBeInTheDocument();
+    expect(screen.getByText('עוד לא נרשמו תנועות')).toBeInTheDocument();
+  });
+
+  it('keeps successful sections visible when a secondary request fails', async () => {
+    getTasks.mockRejectedValue(new Error('tasks unavailable'));
+    renderDashboard();
+
+    expect(await screen.findByText('המטלות לא נטענו')).toBeInTheDocument();
+    expect(screen.getByText('+₪12,000')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'הכנסות והוצאות' })).toBeInTheDocument();
+    expect(screen.queryByText('אין מטלות פתוחות')).not.toBeInTheDocument();
+  });
+
+  it('retries only the failed secondary section', async () => {
+    const user = userEvent.setup();
+    getTasks
+      .mockRejectedValueOnce(new Error('tasks unavailable'))
+      .mockResolvedValueOnce({
+        data: [{ id: 7, title: 'בדיקת חיוב', status: 'open', priority: 'high' }],
+      });
+    renderDashboard();
+
+    await user.click(await screen.findByRole('button', { name: 'ניסיון נוסף' }));
+    expect(await screen.findByText('בדיקת חיוב')).toBeInTheDocument();
+    expect(getTasks).toHaveBeenCalledTimes(2);
+    expect(getTransactions).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses a page-level error only when every Dashboard request fails', async () => {
+    const failure = new Error('dashboard unavailable');
+    getTransactions.mockRejectedValue(failure);
+    getAllLoans.mockRejectedValue(failure);
+    getBudgetsByMonth.mockRejectedValue(failure);
+    getTasks.mockRejectedValue(failure);
+    getDashboardSummary.mockRejectedValue(failure);
+    getDashboardMonthlySeries.mockRejectedValue(failure);
+
+    renderDashboard();
+    expect(await screen.findByText('טעינת לוח הבקרה נכשלה')).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard widget semantics', () => {
+  it('renders actual task status, priority, date, and current counts', async () => {
+    getTasks.mockResolvedValue({
+      data: [{
+        id: 1,
+        title: 'תשלום ארנונה',
+        status: 'in_progress',
+        priority: 'urgent',
+        due_date: '2099-08-10',
+      }],
+    });
+    renderDashboard();
+
+    expect(await screen.findByText('תשלום ארנונה')).toBeInTheDocument();
+    expect(screen.getByText('בתהליך')).toBeInTheDocument();
+    expect(screen.getByText('עדיפות דחוף')).toBeInTheDocument();
+    expect(screen.getByText('10.08.2099')).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByLabelText('סיכום מטלות נוכחי')).toHaveTextContent('1פתוחות0באיחור');
+  });
+
+  it('provides accessible loan and over-budget progress values', async () => {
+    getAllLoans.mockResolvedValue({
+      data: [{
+        id: 1,
+        name: 'הלוואת רכב',
+        original_amount: 100000,
+        current_balance: 60000,
+        monthly_payment: 1800,
+      }],
+    });
+    getBudgetsByMonth.mockResolvedValue({
+      data: [{
+        id: 2,
+        amount: 1000,
+        actual_spent: 1250,
+        categories: { name: 'פנאי', icon: '🎟️' },
+      }],
+    });
+    renderDashboard();
+
+    const loanProgress = await screen.findByRole('progressbar', { name: 'החזר קרן עבור הלוואת רכב' });
+    expect(loanProgress).toHaveAttribute('aria-valuenow', '40');
+    expect(loanProgress).toHaveAttribute('aria-valuetext', '40% מהקרן נפרעו');
+
+    const budgetProgressBar = screen.getByRole('progressbar', { name: 'ניצול התקציב עבור פנאי' });
+    expect(budgetProgressBar).toHaveAttribute('aria-valuenow', '125');
+    expect(budgetProgressBar).toHaveAttribute('aria-valuetext', '125% ניצול, חריגה');
+    expect(screen.getByText(/חריגה של ₪250/)).toBeInTheDocument();
+  });
+
+  it('renders at most five latest transactions with bidi-safe values and a meaningful link', async () => {
+    getTransactions.mockResolvedValue({
+      data: {
+        data: Array.from({ length: 6 }, (_, index) => ({
+          id: index + 1,
+          description: `תנועה ${index + 1}`,
+          transaction_date: `2026-08-0${index + 1}`,
+          total_amount: index + 10,
+          movement_type: index === 0 ? 'income' : 'expense',
+          categories: { name: 'כללי' },
+          payment_sources: { name: 'ויזה 4821' },
+        })),
+      },
+    });
+    renderDashboard();
+
+    const section = (await screen.findByRole('heading', { name: 'התנועות האחרונות' })).closest('section');
+    expect(within(section).getAllByRole('listitem')).toHaveLength(5);
+    expect(within(section).getByText('+₪10')).toHaveAttribute('dir', 'ltr');
+    expect(within(section).getAllByText(/2026/)[0]).toHaveAttribute('dir', 'ltr');
+    expect(within(section).getByRole('link', { name: 'לכל התנועות' })).toHaveAttribute('href', '/transactions');
+  });
+
+  it('provides textual chart context alongside the real series', async () => {
+    renderDashboard();
+
+    expect(await screen.findByRole('img', { name: 'הכנסות והוצאות בששת החודשים האחרונים' })).toBeInTheDocument();
+    expect(screen.getByText(/תרשים עמודות של הכנסות והוצאות בפועל/)).toBeInTheDocument();
+    expect(screen.getByText(/מרץ \(2026-03\): הכנסות 100, הוצאות 50/)).toBeInTheDocument();
   });
 });
