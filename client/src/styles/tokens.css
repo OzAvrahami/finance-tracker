@@ -86,6 +86,7 @@
   --ft-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 60px -28px rgba(0, 0, 0, 0.85);
   --ft-shadow-lg: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
   --ft-blur: blur(22px) saturate(1.5);
+  --ft-overlay-backdrop: rgba(3, 5, 12, 0.68);
   --ft-skeleton: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.1) 37%, rgba(255, 255, 255, 0.04) 63%);
   --ft-skeleton-rest: rgba(255, 255, 255, 0.075);
 }
@@ -144,6 +145,7 @@
   --ft-shadow: 0 1px 3px rgba(20, 22, 55, 0.05), 0 18px 40px -22px rgba(20, 22, 55, 0.22);
   --ft-shadow-lg: 0 30px 70px -25px rgba(20, 22, 55, 0.3);
   --ft-blur: blur(18px) saturate(1.3);
+  --ft-overlay-backdrop: rgba(19, 16, 38, 0.42);
   --ft-skeleton: linear-gradient(90deg, rgba(28, 27, 60, 0.05) 25%, rgba(28, 27, 60, 0.1) 37%, rgba(28, 27, 60, 0.05) 63%);
   --ft-skeleton-rest: rgba(28, 27, 60, 0.08);
 }
@@ -191,6 +193,8 @@
   --ft-motion-slow: 260ms;
   --ft-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ft-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --ft-blur-overlay: blur(6px);
+  --ft-on-warning: #15100a;
 
   /* ===========================================================
      Temporary legacy compatibility tokens

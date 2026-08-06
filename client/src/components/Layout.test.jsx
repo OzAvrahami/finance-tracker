@@ -144,6 +144,15 @@ describe('mobile More sheet', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it('preserves the existing mobile-session logout callback inside the pilot sheet', async () => {
+    const user = userEvent.setup();
+    renderShell('/');
+    await user.click(screen.getByRole('button', { name: 'עוד' }));
+    const dialog = screen.getByRole('dialog', { name: 'עוד בפיננסים.' });
+    await user.click(within(dialog).getByRole('button', { name: 'התנתקות' }));
+    expect(mocks.signOut).toHaveBeenCalledOnce();
+  });
 });
 
 describe('page header and shell controls', () => {
