@@ -1,15 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import {
   getTransactions, getAllLoans, getBudgetsByMonth, getTasks,
   getDashboardSummary, getDashboardMonthlySeries,
 } from '../../services/api';
 import { isOverdue, PRIORITY_LABELS, PRIORITY_COLORS } from '../../utils/taskHelpers';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank, Bell, Plus } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react';
 import { formatMonthKeyShort } from '../../utils/dashboardHelpers';
 import { getMonthRange } from '../../utils/dateRange';
-import { Card, MoneyAmount, LiveChip, IconButton, CardHeader, ProgressBar, KPIHero, KPICard } from '../../components/ui';
+import { Card, MoneyAmount, LiveChip, CardHeader, ProgressBar, KPIHero, KPICard } from '../../components/ui';
 
 // How many transactions the "recent activity" table shows. Requested from the
 // server with this limit instead of slicing a full download.
@@ -173,59 +172,20 @@ const Dashboard = () => {
 
   return (
     <div dir="rtl" style={{ display: 'flex', flexDirection: 'column' }}>
-
-      {/* ─── Dashboard command header ─── */}
-      <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-        backgroundColor: 'var(--surface-1)',
-        borderBlockEnd: '1px solid var(--border)',
-        padding: '18px 28px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 'var(--s-16)',
-        flexWrap: 'wrap',
-      }}>
-
-        {/* Right: brand identity mark */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-10)', flexShrink: 0 }}>
-          <div style={{
-            height: 36, width: 36, flexShrink: 0,
-            background: 'var(--primary-grad)',
-            borderRadius: 'var(--r-8)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 16px rgba(124,92,255,0.28)',
-          }}>
-            <Wallet size={17} color="white" />
-          </div>
-          <span style={{ fontSize: 'var(--fs-16)', fontWeight: 700, color: 'var(--ink-1)', letterSpacing: '-0.02em' }}>
-            פיננסים.
-          </span>
-        </div>
-
-        {/* Center: title + LIVE badge + subtitle */}
-        <div style={{ textAlign: 'center', flex: '1 1 auto', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--s-8)', flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 'var(--fs-20)', fontWeight: 700, color: 'var(--ink-1)', letterSpacing: '-0.015em' }}>
-              סקירה כללית
-            </h2>
+      {/* Dashboard-owned data controls remain in page content; the shell owns the only page title/action header. */}
+      <div style={{ padding: 'var(--s-32)', maxWidth: 1280, margin: '0 auto', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 'var(--s-32)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--s-12)', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-8)', minWidth: 0 }}>
             <LiveChip />
+            <span style={{ color: 'var(--ink-4)', fontSize: 'var(--fs-13)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedMonthLabel}
+              {lastUpdated && (
+                <span> · עודכן {lastUpdated.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
+              )}
+            </span>
           </div>
-          <p style={{ margin: '4px 0 0', fontSize: 'var(--fs-13)', color: 'var(--ink-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {selectedMonthLabel}
-            {lastUpdated && (
-              <span> · עודכן {lastUpdated.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
-            )}
-          </p>
-        </div>
-
-        {/* Left: actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-8)', flexShrink: 0, flexWrap: 'wrap' }}>
-
-          {/* Month selector — unchanged */}
           <select
+            aria-label="חודש לדשבורד"
             value={`${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`}
             onChange={(e) => {
               const [yr, mo] = e.target.value.split('-');
@@ -252,36 +212,7 @@ const Dashboard = () => {
               );
             })}
           </select>
-
-          {/* Notifications */}
-          <IconButton size={38} title="התראות">
-            <Bell size={16} color="var(--ink-3)" />
-          </IconButton>
-
-          {/* New transaction — Link styled via ui-btn-primary class to match PrimaryButton */}
-          <Link
-            to="/add"
-            className="ui-btn-primary"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 'var(--s-6)',
-              padding: '9px 18px',
-              background: 'var(--primary-grad)',
-              color: 'var(--primary-ink)',
-              borderRadius: 'var(--r-8)',
-              fontSize: 'var(--fs-14)', fontWeight: 600,
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-              boxShadow: '0 0 16px rgba(124,92,255,0.25)',
-            }}
-          >
-            <Plus size={16} />
-            תנועה חדשה
-          </Link>
         </div>
-      </header>
-
-      {/* ─── Content ─── */}
-      <div style={{ padding: 'var(--s-32)', maxWidth: 1280, margin: '0 auto', width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 'var(--s-32)' }}>
 
         {/* Summary Cards */}
         <section style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', gap: 'var(--s-24)' }}>

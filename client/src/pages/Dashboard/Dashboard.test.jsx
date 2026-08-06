@@ -158,6 +158,6 @@ describe('resilience', () => {
     renderDashboard();
 
     // The page must come up rather than blocking on a failed total.
-    expect(await screen.findByText('סקירה כללית')).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'חודש לדשבורד' })).toBeInTheDocument();
   });
 });
