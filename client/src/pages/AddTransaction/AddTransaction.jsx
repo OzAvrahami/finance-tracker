@@ -98,12 +98,15 @@ const AddTransaction = () => {
 
             <div style={rowStyle}>
               <div style={inputGroupStyle}>
-                <label style={labelStyle}>קטגוריה</label>
                 <CategoryCombobox
+                  label="קטגוריה"
                   categories={categories}
                   selectedCategoryId={transaction.category_id}
                   onSelect={(catId) => setTransaction(prev => ({ ...prev, category_id: catId }))}
-                  onOpenNewModal={() => setShowNewCategoryModal(true)}
+                  onOpenNewModal={(categoryName = '') => {
+                    setNewCategoryName(categoryName);
+                    setShowNewCategoryModal(true);
+                  }}
                 />
               </div>
 

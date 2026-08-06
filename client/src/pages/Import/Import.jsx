@@ -86,8 +86,9 @@ const Import = () => {
     }
   };
 
-  const openNewCategoryModal = (rowId) => {
+  const openNewCategoryModal = (rowId, categoryName = '') => {
     setTargetRowId(rowId);
+    setNewCategoryName(categoryName);
     setShowNewCategoryModal(true);
   };
 
@@ -213,10 +214,11 @@ const Import = () => {
 
                     <td style={{ ...tdStyle, minWidth: '200px' }}>
                       <CategoryCombobox
+                        ariaLabel={`קטגוריה עבור ${row.description || 'תנועה'}`}
                         categories={categories}
                         selectedCategoryId={row.category_id}
                         onSelect={(catId) => handleCategoryChange(row.id, catId)}
-                        onOpenNewModal={() => openNewCategoryModal(row.id)}
+                        onOpenNewModal={(categoryName) => openNewCategoryModal(row.id, categoryName)}
                       />
                     </td>
                     <td style={tdStyle}>
