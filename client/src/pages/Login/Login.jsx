@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { Lock, Mail } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { Alert, PrimaryButton, TextField } from '../../components/ui';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -55,84 +57,42 @@ const Login = () => {
           MyFinance
         </h1>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--ink-3)', fontSize: 'var(--fs-14)', fontWeight: 500 }}>
-              אימייל
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: 'var(--r-8)',
-                border: '1px solid var(--border-strong)',
-                fontSize: 'var(--fs-14)',
-                boxSizing: 'border-box',
-                backgroundColor: 'var(--surface-2)',
-                color: 'var(--ink-1)',
-              }}
-            />
-          </div>
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '20px' }}>
+          <TextField
+            type="email"
+            label="אימייל"
+            value={email}
+            onValueChange={setEmail}
+            autoComplete="email"
+            technicalLtr
+            leading={<Mail size={18} aria-hidden="true" />}
+            required
+          />
 
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '6px', color: 'var(--ink-3)', fontSize: 'var(--fs-14)', fontWeight: 500 }}>
-              סיסמה
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: 'var(--r-8)',
-                border: '1px solid var(--border-strong)',
-                fontSize: 'var(--fs-14)',
-                boxSizing: 'border-box',
-                backgroundColor: 'var(--surface-2)',
-                color: 'var(--ink-1)',
-              }}
-            />
-          </div>
+          <TextField
+            type="password"
+            label="סיסמה"
+            value={password}
+            onValueChange={setPassword}
+            autoComplete="current-password"
+            technicalLtr
+            leading={<Lock size={18} aria-hidden="true" />}
+            required
+          />
 
           {error && (
-            <div style={{
-              color: 'var(--neg)',
-              marginBottom: '15px',
-              textAlign: 'center',
-              fontSize: 'var(--fs-13)',
-              backgroundColor: 'var(--neg-soft)',
-              borderRadius: 'var(--r-8)',
-              padding: '8px 12px',
-            }}>
-              {error}
-            </div>
+            <Alert variant="error" urgent>{error}</Alert>
           )}
 
-          <button
+          <PrimaryButton
             type="submit"
-            disabled={loading}
-            className="ui-btn-primary"
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: 'var(--primary-grad)',
-              color: 'var(--primary-ink)',
-              border: 'none',
-              borderRadius: 'var(--r-8)',
-              fontSize: 'var(--fs-14)',
-              fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
-            }}
+            size="lg"
+            fullWidth
+            loading={loading}
+            loadingText="מתחבר..."
           >
-            {loading ? 'מתחבר...' : 'התחברות'}
-          </button>
+            התחברות
+          </PrimaryButton>
         </form>
       </div>
     </div>

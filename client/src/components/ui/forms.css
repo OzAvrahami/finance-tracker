@@ -1,0 +1,274 @@
+.ui-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--ft-space-2);
+  color: var(--ft-text-muted);
+}
+
+.ui-field--full { width: 100%; }
+
+.ui-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ft-space-1);
+  width: fit-content;
+  color: var(--ft-text-muted);
+  font-size: var(--ft-font-size-sm);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.ui-field-required { color: var(--ft-negative); }
+
+.ui-field-control {
+  display: flex;
+  min-width: 0;
+  min-height: 46px;
+  align-items: center;
+  gap: var(--ft-space-3);
+  padding: 10px 13px;
+  color: var(--ft-text-faint);
+  background: var(--ft-glass);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-control);
+  transition: border-color var(--ft-motion-fast), box-shadow var(--ft-motion-fast), background-color var(--ft-motion-fast);
+}
+
+.ui-field--compact .ui-field-control {
+  min-height: 40px;
+  padding: 7px 11px;
+}
+
+.ui-field-control:focus-within {
+  border-color: var(--ft-primary-border);
+  box-shadow: 0 0 0 3px var(--ft-primary-weak);
+}
+
+.ui-field.is-error .ui-field-control {
+  border-color: var(--ft-negative-border);
+}
+
+.ui-field.is-success .ui-field-control {
+  border-color: var(--ft-positive-border);
+}
+
+.ui-field.is-disabled .ui-field-control {
+  background: var(--ft-track);
+  opacity: 0.65;
+}
+
+.ui-field.is-readonly .ui-field-control {
+  background: var(--ft-surface-solid-secondary);
+  border-style: dashed;
+}
+
+.ui-field-leading,
+.ui-field-trailing,
+.ui-field-prefix,
+.ui-field-suffix {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--ft-text-faint);
+  font-size: var(--ft-font-size-label);
+  font-weight: 700;
+}
+
+.ui-field-input-slot {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+}
+
+.ui-field-input,
+.ui-field-textarea,
+.ui-field-select {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: var(--ft-text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-family: inherit;
+  font-size: var(--ft-font-size-label);
+  line-height: 1.5;
+  text-align: start;
+}
+
+.ui-field-input:focus,
+.ui-field-textarea:focus,
+.ui-field-select:focus {
+  border: 0 !important;
+  box-shadow: none;
+}
+
+.ui-field-input::placeholder,
+.ui-field-textarea::placeholder { color: var(--ft-text-faint); }
+
+.ui-field-input:disabled,
+.ui-field-textarea:disabled,
+.ui-field-select:disabled {
+  background: transparent !important;
+  opacity: 1;
+}
+
+.ui-field-input[type='search']::-webkit-search-cancel-button { display: none; }
+
+.ui-field-control--multiline {
+  align-items: flex-start;
+}
+
+.ui-field-textarea {
+  min-height: 88px;
+  unicode-bidi: plaintext;
+}
+
+.ui-field-select {
+  appearance: none;
+  cursor: pointer;
+}
+
+.ui-field-messages {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px var(--ft-space-3);
+  min-width: 0;
+  font-size: var(--ft-font-size-xs);
+  line-height: 1.45;
+}
+
+.ui-field-helper { color: var(--ft-text-faint); }
+.ui-field-error { color: var(--ft-negative); }
+.ui-field-success { color: var(--ft-positive); }
+.ui-field-meta { grid-column: 2; grid-row: 1 / span 2; color: var(--ft-text-faint); }
+.ui-field-count { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+
+.ui-field-spinner {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  border: 2px solid var(--ft-border-strong);
+  border-block-start-color: var(--ft-primary-hover);
+  border-radius: 50%;
+  animation: ui-field-spin 0.8s linear infinite;
+}
+
+.ui-field-control--unstyled {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.ui-field-control--unstyled:focus-within { box-shadow: none; }
+
+.ui-file-upload-content { width: 100%; min-width: 0; }
+
+.ui-file-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ui-file-dropzone {
+  display: flex;
+  min-height: 156px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ft-space-3);
+  padding: var(--ft-space-8);
+  color: var(--ft-text-muted);
+  background: var(--ft-glass);
+  border: 1.5px dashed var(--ft-border-strong);
+  border-radius: var(--ft-radius-lg);
+  text-align: center;
+  transition: color var(--ft-motion-fast), border-color var(--ft-motion-fast), background-color var(--ft-motion-fast);
+}
+
+.ui-file-dropzone.is-dragging {
+  color: var(--ft-primary-hover);
+  background: var(--ft-primary-weak);
+  border-color: var(--ft-primary-border);
+}
+
+.ui-file-accept,
+.ui-file-size { color: var(--ft-text-faint); font-size: var(--ft-font-size-xs); }
+
+.ui-file-select,
+.ui-file-remove {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ft-space-2);
+  color: var(--ft-text);
+  background: var(--ft-glass-hover);
+  border: 1px solid var(--ft-border-strong);
+  border-radius: var(--ft-radius-control);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ui-file-select { padding: 9px 14px; }
+.ui-file-remove { width: 44px; padding: 0; color: var(--ft-negative); }
+
+.ui-file-list {
+  display: flex;
+  margin: var(--ft-space-3) 0 0;
+  padding: 0;
+  flex-direction: column;
+  gap: var(--ft-space-2);
+  list-style: none;
+}
+
+.ui-file-list li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ft-space-3);
+  padding: var(--ft-space-3);
+  background: var(--ft-glass);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-control);
+}
+
+.ui-file-summary {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ui-file-summary bdi {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes ui-field-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 639.98px) {
+  .ui-field-control { min-height: 48px; }
+  .ui-file-dropzone { min-height: 140px; padding-inline: var(--ft-space-5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-field-control,
+  .ui-file-dropzone { transition: none; }
+  .ui-field-spinner { animation: none; border-color: var(--ft-primary-border); }
+}
