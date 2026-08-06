@@ -40,3 +40,6 @@ thumbs.db
 # files
 .gitignore
 CLAUDE.md
+
+# Local Claude Design references
+design-reference/finance-v2/
