@@ -1,125 +1,269 @@
 /* =============================================================
-   Nocturne Design Tokens
-   Source of truth for all color, spacing, radius, typography,
-   and shadow values. Reference these variables everywhere —
-   never use hardcoded color values outside this file.
+   Finance v3 design tokens
+
+   The --ft-* namespace is the canonical production token source.
+   Unprefixed aliases below are temporary compatibility values for
+   legacy pages and are intentionally kept visually stable until
+   those consumers migrate in later phases.
    ============================================================= */
 
-:root {
-  /* -----------------------------------------------------------
-     Surfaces — cool near-black, blue undertone (never warm)
-     ----------------------------------------------------------- */
-  --bg:           #07080C;
-  --surface-1:    #0E1019;   /* sidebar, topbar */
-  --surface-2:    #141721;   /* cards */
-  --surface-3:    #1B1F2E;   /* chips, wells, hover */
-  --surface-elev:  #1F2333;   /* dropdowns, popovers, modals */
-  --surface-2-glass: rgba(20, 23, 33, 0.50); /* glass cards — needs backdrop-filter */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
-  /* -----------------------------------------------------------
-     Borders — low-alpha white for glass feel
-     ----------------------------------------------------------- */
-  --border:        rgba(255, 255, 255, 0.06);
+  /* Page backgrounds */
+  --ft-bg: #06080f;
+  --ft-bg-secondary: #080b16;
+
+  /* Glass and solid elevated surfaces */
+  --ft-glass: rgba(255, 255, 255, 0.045);
+  --ft-glass-hover: rgba(255, 255, 255, 0.075);
+  --ft-glass-strong: rgba(255, 255, 255, 0.11);
+  --ft-glass-sheen: rgba(255, 255, 255, 0.04);
+  --ft-surface-solid: #0e1322;
+  --ft-surface-solid-secondary: #141a2c;
+
+  /* Text */
+  --ft-text: #eef1fb;
+  --ft-text-muted: #98a1bf;
+  --ft-text-faint: #5f6889;
+
+  /* Borders */
+  --ft-border: rgba(255, 255, 255, 0.085);
+  --ft-border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Primary violet identity */
+  --ft-primary: #8b5cf6;
+  --ft-primary-hover: #a78bfa;
+  --ft-primary-strong: #7c3aed;
+  --ft-primary-weak: rgba(139, 92, 246, 0.16);
+  --ft-primary-border: rgba(139, 92, 246, 0.36);
+  --ft-on-primary: #fff;
+  --ft-primary-gradient: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  --ft-primary-glow: rgba(139, 92, 246, 0.4);
+
+  /* Semantic colors */
+  --ft-positive: #34d399;
+  --ft-positive-weak: rgba(52, 211, 153, 0.14);
+  --ft-positive-border: rgba(52, 211, 153, 0.3);
+  --ft-negative: #fb7185;
+  --ft-negative-weak: rgba(251, 113, 133, 0.14);
+  --ft-negative-border: rgba(251, 113, 133, 0.3);
+  --ft-destructive: #fb7185;
+  --ft-destructive-strong: #e11d48;
+  --ft-warning: #fbbf24;
+  --ft-warning-weak: rgba(251, 191, 36, 0.14);
+  --ft-warning-border: rgba(251, 191, 36, 0.3);
+  --ft-info: #22d3ee;
+  --ft-info-weak: rgba(34, 211, 238, 0.14);
+  --ft-info-border: rgba(34, 211, 238, 0.3);
+  --ft-uncategorized: #8b95b5;
+  --ft-uncategorized-weak: rgba(139, 149, 181, 0.14);
+  --ft-uncategorized-border: rgba(139, 149, 181, 0.28);
+  --ft-track: rgba(255, 255, 255, 0.09);
+
+  /* Supporting accents and chart series */
+  --ft-cyan: #22d3ee;
+  --ft-mint: #34d399;
+  --ft-amber: #fbbf24;
+  --ft-blue: #60a5fa;
+  --ft-rose: #fb7185;
+  --ft-chart-1: var(--ft-primary);
+  --ft-chart-2: var(--ft-cyan);
+  --ft-chart-3: var(--ft-mint);
+  --ft-chart-4: var(--ft-amber);
+  --ft-chart-5: var(--ft-blue);
+  --ft-chart-6: var(--ft-rose);
+
+  /* Aurora */
+  --ft-aurora-1: rgba(124, 58, 237, 0.3);
+  --ft-aurora-2: rgba(34, 211, 238, 0.2);
+  --ft-aurora-3: rgba(52, 211, 153, 0.13);
+  --ft-aurora-4: rgba(96, 165, 250, 0.16);
+
+  /* Focus, elevation, blur, and loading */
+  --ft-focus: rgba(167, 139, 250, 0.55);
+  --ft-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+  --ft-shadow-lg: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
+  --ft-blur: blur(22px) saturate(1.5);
+  --ft-skeleton: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.1) 37%, rgba(255, 255, 255, 0.04) 63%);
+  --ft-skeleton-rest: rgba(255, 255, 255, 0.075);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ft-bg: #f3f2f9;
+  --ft-bg-secondary: #eeedf6;
+  --ft-glass: rgba(255, 255, 255, 0.72);
+  --ft-glass-hover: rgba(255, 255, 255, 0.88);
+  --ft-glass-strong: #fff;
+  --ft-glass-sheen: rgba(255, 255, 255, 0.32);
+  --ft-surface-solid: #fff;
+  --ft-surface-solid-secondary: #f7f7fc;
+  --ft-text: #16182a;
+  --ft-text-muted: #5b6178;
+  --ft-text-faint: #98a0b5;
+  --ft-border: rgba(28, 27, 60, 0.07);
+  --ft-border-strong: rgba(28, 27, 60, 0.13);
+  --ft-primary: #7c3aed;
+  --ft-primary-hover: #8b5cf6;
+  --ft-primary-strong: #6d28d9;
+  --ft-primary-weak: rgba(124, 58, 237, 0.1);
+  --ft-primary-border: rgba(124, 58, 237, 0.22);
+  --ft-primary-gradient: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  --ft-primary-glow: rgba(124, 58, 237, 0.3);
+  --ft-positive: #0f9d6a;
+  --ft-positive-weak: rgba(15, 157, 106, 0.1);
+  --ft-positive-border: rgba(15, 157, 106, 0.24);
+  --ft-negative: #e0436b;
+  --ft-negative-weak: rgba(224, 67, 107, 0.1);
+  --ft-negative-border: rgba(224, 67, 107, 0.24);
+  --ft-destructive: #e0436b;
+  --ft-destructive-strong: #be123c;
+  --ft-warning: #b8730a;
+  --ft-warning-weak: rgba(212, 136, 12, 0.12);
+  --ft-warning-border: rgba(212, 136, 12, 0.26);
+  --ft-info: #0891b2;
+  --ft-info-weak: rgba(8, 145, 178, 0.1);
+  --ft-info-border: rgba(8, 145, 178, 0.24);
+  --ft-uncategorized: #6b7488;
+  --ft-uncategorized-weak: rgba(107, 116, 136, 0.1);
+  --ft-uncategorized-border: rgba(107, 116, 136, 0.22);
+  --ft-track: rgba(28, 27, 60, 0.08);
+  --ft-cyan: #0891b2;
+  --ft-mint: #059669;
+  --ft-amber: #d97706;
+  --ft-blue: #2563eb;
+  --ft-rose: #e11d6f;
+  --ft-aurora-1: rgba(124, 58, 237, 0.16);
+  --ft-aurora-2: rgba(34, 211, 238, 0.13);
+  --ft-aurora-3: rgba(52, 211, 153, 0.1);
+  --ft-aurora-4: rgba(96, 165, 250, 0.13);
+  --ft-focus: rgba(124, 58, 237, 0.4);
+  --ft-shadow: 0 1px 3px rgba(20, 22, 55, 0.05), 0 18px 40px -22px rgba(20, 22, 55, 0.22);
+  --ft-shadow-lg: 0 30px 70px -25px rgba(20, 22, 55, 0.3);
+  --ft-blur: blur(18px) saturate(1.3);
+  --ft-skeleton: linear-gradient(90deg, rgba(28, 27, 60, 0.05) 25%, rgba(28, 27, 60, 0.1) 37%, rgba(28, 27, 60, 0.05) 63%);
+  --ft-skeleton-rest: rgba(28, 27, 60, 0.08);
+}
+
+:root {
+  /* Typography */
+  --ft-font-ui: "Heebo", "Segoe UI", Arial, system-ui, sans-serif;
+  --ft-font-numeric: "Heebo", "Segoe UI", Arial, system-ui, sans-serif;
+
+  --ft-font-size-xs: 11.5px;
+  --ft-font-size-sm: 12.5px;
+  --ft-font-size-label: 13.5px;
+  --ft-font-size-body: 15px;
+  --ft-font-size-subtitle: 16.5px;
+  --ft-font-size-title: 18px;
+  --ft-font-size-page-title: 24px;
+
+  /* Spacing */
+  --ft-space-1: 4px;
+  --ft-space-2: 6px;
+  --ft-space-3: 9px;
+  --ft-space-4: 12px;
+  --ft-space-5: 14px;
+  --ft-space-6: 16px;
+  --ft-space-7: 18px;
+  --ft-space-8: 22px;
+  --ft-space-9: 24px;
+  --ft-space-10: 30px;
+  --ft-space-11: 40px;
+  --ft-space-12: 48px;
+
+  /* Radii */
+  --ft-radius-sm: 9px;
+  --ft-radius-md: 11px;
+  --ft-radius-control: 13px;
+  --ft-radius-lg: 16px;
+  --ft-radius-card: 20px;
+  --ft-radius-xl: 22px;
+  --ft-radius-dialog: 26px;
+  --ft-radius-pill: 999px;
+
+  /* Motion */
+  --ft-motion-fast: 180ms;
+  --ft-motion-base: 220ms;
+  --ft-motion-slow: 260ms;
+  --ft-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ft-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ===========================================================
+     Temporary legacy compatibility tokens
+
+     Keep their established meanings stable. New Phase A code
+     uses --ft-*; legacy pages can migrate token-by-token later.
+     =========================================================== */
+  --bg: #07080c;
+  --surface-1: #0e1019;
+  --surface-2: #141721;
+  --surface-3: #1b1f2e;
+  --surface-elev: #1f2333;
+  --surface-2-glass: rgba(20, 23, 33, 0.5);
+  --border: rgba(255, 255, 255, 0.06);
   --border-strong: rgba(255, 255, 255, 0.12);
   --border-bright: rgba(255, 255, 255, 0.18);
-
-  /* -----------------------------------------------------------
-     Ink — cool whites only
-     ----------------------------------------------------------- */
-  --ink-1: #F4F5FB;   /* hero numbers, headlines */
-  --ink-2: #C8CBD9;   /* body */
-  --ink-3: #8B90A6;   /* labels, captions */
-  --ink-4: #5A607A;   /* axis ticks, tertiary */
-  --ink-5: #353B52;   /* placeholders, dim icons */
-
-  /* -----------------------------------------------------------
-     Primary: Iris
-     ----------------------------------------------------------- */
-  --primary:      #7C5CFF;
-  --primary-hi:   #9B82FF;
-  --primary-lo:   #5538E0;
+  --ink-1: #f4f5fb;
+  --ink-2: #c8cbd9;
+  --ink-3: #8b90a6;
+  --ink-4: #5a607a;
+  --ink-5: #353b52;
+  --primary: #7c5cff;
+  --primary-hi: #9b82ff;
+  --primary-lo: #5538e0;
   --primary-soft: rgba(124, 92, 255, 0.14);
   --primary-glow: rgba(124, 92, 255, 0.45);
-  --primary-ink:  #FFFFFF;
-  --primary-grad:   linear-gradient(135deg, #9B82FF 0%, #5538E0 100%);
-  --primary-grad-r: linear-gradient(135deg, #6F4DFF 0%, #B89BFF 100%); /* RTL reverse */
-
-  /* -----------------------------------------------------------
-     Semantic — softened
-     ----------------------------------------------------------- */
-  --pos:      #4ADE9A;
+  --primary-ink: #fff;
+  --primary-grad: linear-gradient(135deg, #9b82ff 0%, #5538e0 100%);
+  --primary-grad-r: linear-gradient(135deg, #6f4dff 0%, #b89bff 100%);
+  --pos: #4ade9a;
   --pos-soft: rgba(74, 222, 154, 0.12);
   --pos-glow: rgba(74, 222, 154, 0.35);
-
-  --neg:      #FF7A8A;   /* coral — NOT alarm red */
+  --neg: #ff7a8a;
   --neg-soft: rgba(255, 122, 138, 0.12);
-
-  --warn:      #FFC061;
+  --warn: #ffc061;
   --warn-soft: rgba(255, 192, 97, 0.12);
-
-  --info:      #5AC8FF;
+  --info: #5ac8ff;
   --info-soft: rgba(90, 200, 255, 0.12);
-
-  /* Destructive (separate from --neg) */
-  --danger: #E25467;
-
-  /* -----------------------------------------------------------
-     Category accent dots (≤6px use only)
-     ----------------------------------------------------------- */
-  --cat-iris:  #8B7AFF;
-  --cat-mint:  #4ADE9A;
-  --cat-coral: #FF7A8A;
-  --cat-cyan:  #5AC8FF;
-  --cat-amber: #FFC061;
-  --cat-rose:  #FF8FBC;
-
-  /* -----------------------------------------------------------
-     Shadows — blue-tinted
-     ----------------------------------------------------------- */
-  --shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
-  --shadow-md:   0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
+  --danger: #e25467;
+  --cat-iris: #8b7aff;
+  --cat-mint: #4ade9a;
+  --cat-coral: #ff7a8a;
+  --cat-cyan: #5ac8ff;
+  --cat-amber: #ffc061;
+  --cat-rose: #ff8fbc;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
   --shadow-glow: 0 0 0 1px var(--primary-glow), 0 8px 32px rgba(124, 92, 255, 0.25);
 
-  /* -----------------------------------------------------------
-     Spacing scale (4-based)
-     ----------------------------------------------------------- */
-  --s-2:  2px;
-  --s-4:  4px;
-  --s-6:  6px;
-  --s-8:  8px;
-  --s-12: 12px;
-  --s-14: 14px;
-  --s-16: 16px;
+  --s-2: 2px;
+  --s-4: var(--ft-space-1);
+  --s-6: var(--ft-space-2);
+  --s-8: 8px;
+  --s-12: var(--ft-space-4);
+  --s-14: var(--ft-space-5);
+  --s-16: var(--ft-space-6);
   --s-20: 20px;
-  --s-24: 24px;
+  --s-24: var(--ft-space-9);
   --s-28: 28px;
   --s-32: 32px;
-  --s-40: 40px;
-  --s-48: 48px;
+  --s-40: var(--ft-space-11);
+  --s-48: var(--ft-space-12);
   --s-64: 64px;
-
-  /* -----------------------------------------------------------
-     Border radii
-     ----------------------------------------------------------- */
-  --r-6:  6px;
-  --r-8:  8px;
+  --r-6: 6px;
+  --r-8: 8px;
   --r-10: 10px;
   --r-12: 12px;
   --r-14: 14px;
-  --r-16: 16px;
-  --r-20: 20px;
+  --r-16: var(--ft-radius-lg);
+  --r-20: var(--ft-radius-card);
   --r-24: 24px;
-
-  /* -----------------------------------------------------------
-     Typography — families
-     ----------------------------------------------------------- */
-  --font-ui:  "Inter", "Heebo", -apple-system, BlinkMacSystemFont,
-              "Segoe UI", system-ui, sans-serif;
-  --font-num: "Inter", system-ui, sans-serif;
-
-  /* -----------------------------------------------------------
-     Typography — size scale
-     ----------------------------------------------------------- */
+  --font-ui: var(--ft-font-ui);
+  --font-num: var(--ft-font-numeric);
   --fs-11: 11px;
   --fs-12: 12px;
   --fs-13: 13px;
@@ -132,85 +276,49 @@
   --fs-40: 40px;
   --fs-44: 44px;
   --fs-56: 56px;
-
-  /* -----------------------------------------------------------
-     Responsive breakpoints (reference in JS via getComputedStyle
-     or media queries — CSS custom properties can't be used
-     directly inside @media, but kept here for documentation)
-     ----------------------------------------------------------- */
   --bp-sm: 640px;
   --bp-md: 768px;
   --bp-lg: 1024px;
   --bp-xl: 1280px;
 }
 
-/* =============================================================
-   Light Theme — data-theme="light" overrides
-   Only surface, border, ink, semantic and shadow tokens change.
-   Spacing, radii, typography, and breakpoints are theme-neutral.
-   ============================================================= */
 :root[data-theme="light"] {
-  /* Surfaces */
-  --bg:              #F4F5FA;
-  --surface-1:       #FFFFFF;
-  --surface-2:       #ECEEF6;
-  --surface-3:       #E1E4F0;
-  --surface-elev:    #FFFFFF;
-  --surface-2-glass: rgba(236, 238, 246, 0.80);
-
-  /* Borders */
-  --border:        rgba(0, 0, 0, 0.07);
+  --bg: #f4f5fa;
+  --surface-1: #fff;
+  --surface-2: #eceef6;
+  --surface-3: #e1e4f0;
+  --surface-elev: #fff;
+  --surface-2-glass: rgba(236, 238, 246, 0.8);
+  --border: rgba(0, 0, 0, 0.07);
   --border-strong: rgba(0, 0, 0, 0.12);
-  --border-bright: rgba(0, 0, 0, 0.20);
-
-  /* Ink */
-  --ink-1: #0D1020;
-  --ink-2: #2C3154;
-  --ink-3: #676D8C;
-  --ink-4: #9298B8;
-  --ink-5: #BCC1D8;
-
-  /* Primary — slightly darker for light-bg contrast */
-  --primary:      #5B3FD9;
-  --primary-hi:   #7C5CFF;
-  --primary-lo:   #4028C4;
+  --border-bright: rgba(0, 0, 0, 0.2);
+  --ink-1: #0d1020;
+  --ink-2: #2c3154;
+  --ink-3: #676d8c;
+  --ink-4: #9298b8;
+  --ink-5: #bcc1d8;
+  --primary: #5b3fd9;
+  --primary-hi: #7c5cff;
+  --primary-lo: #4028c4;
   --primary-soft: rgba(91, 63, 217, 0.08);
   --primary-glow: rgba(91, 63, 217, 0.22);
-  --primary-ink:  #FFFFFF;
-  --primary-grad:   linear-gradient(135deg, #7C5CFF 0%, #4028C4 100%);
-  --primary-grad-r: linear-gradient(135deg, #4028C4 0%, #7C5CFF 100%);
-
-  /* Semantic — adjusted for sufficient contrast on light backgrounds */
-  --pos:      #16A35A;
-  --pos-soft: rgba(22, 163, 90, 0.10);
+  --primary-grad: linear-gradient(135deg, #7c5cff 0%, #4028c4 100%);
+  --primary-grad-r: linear-gradient(135deg, #4028c4 0%, #7c5cff 100%);
+  --pos: #16a35a;
+  --pos-soft: rgba(22, 163, 90, 0.1);
   --pos-glow: rgba(22, 163, 90, 0.22);
-
-  --neg:      #D9546A;
-  --neg-soft: rgba(217, 84, 106, 0.10);
-
-  --warn:      #C4780E;
-  --warn-soft: rgba(196, 120, 14, 0.10);
-
-  --info:      #1E8FB8;
-  --info-soft: rgba(30, 143, 184, 0.10);
-
-  --danger: #C03452;
-
-  /* Shadows */
-  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.07), 0 0 0 1px var(--border);
-  --shadow-md:   0 4px 16px rgba(0, 0, 0, 0.10), 0 0 0 1px var(--border);
+  --neg: #d9546a;
+  --neg-soft: rgba(217, 84, 106, 0.1);
+  --warn: #c4780e;
+  --warn-soft: rgba(196, 120, 14, 0.1);
+  --info: #1e8fb8;
+  --info-soft: rgba(30, 143, 184, 0.1);
+  --danger: #c03452;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.07), 0 0 0 1px var(--border);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1), 0 0 0 1px var(--border);
   --shadow-glow: 0 0 0 1px var(--primary-glow), 0 8px 32px rgba(91, 63, 217, 0.14);
 }
 
-/* Hero gradient text — dark-on-light for light mode (white-on-dark is the default) */
-[data-theme="light"] .text-hero-grad {
-  background: linear-gradient(180deg, #1A1D2E 0%, #4A4F72 100%);
-}
-
-/* =============================================================
-   Numeric / monetary value utility
-   Apply to every money figure, percentage, date, and counter.
-   ============================================================= */
 .num,
 [data-num] {
   font-family: var(--font-num);
@@ -219,23 +327,20 @@
   letter-spacing: -0.015em;
 }
 
-/* =============================================================
-   Hero gradient text
-   Reserved for: Hero KPI value, page-title display variant only.
-   ============================================================= */
 .text-hero-grad {
-  background: linear-gradient(180deg, #FFFFFF 0%, #BFC2DA 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
   color: transparent;
+  background: linear-gradient(180deg, #fff 0%, #bfc2da 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-/* =============================================================
-   Reduced-motion safety
-   Any transition or animation added during the redesign should
-   be wrapped in a :not(.reduce-motion) check or declared here.
-   ============================================================= */
+[data-theme="light"] .text-hero-grad {
+  background: linear-gradient(180deg, #1a1d2e 0%, #4a4f72 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
