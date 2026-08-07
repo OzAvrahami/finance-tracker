@@ -102,6 +102,20 @@ describe('responsive navigation surfaces', () => {
     expect(within(mobile).getByRole('link', { name: 'תנועות' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('link', { name: 'תנועה חדשה' })).not.toBeInTheDocument();
   });
+
+  it('shows the header add action on Transactions and hides it on add and edit routes', () => {
+    const { unmount } = renderShell('/transactions');
+    expect(within(screen.getByRole('banner')).getByRole('link', { name: 'תנועה חדשה' }))
+      .toHaveAttribute('href', '/add');
+
+    unmount();
+    const addRoute = renderShell('/add');
+    expect(screen.queryByRole('link', { name: 'תנועה חדשה' })).not.toBeInTheDocument();
+
+    addRoute.unmount();
+    renderShell('/edit-transaction/91');
+    expect(screen.queryByRole('link', { name: 'תנועה חדשה' })).not.toBeInTheDocument();
+  });
 });
 
 describe('mobile More sheet', () => {

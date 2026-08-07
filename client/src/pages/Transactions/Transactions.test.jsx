@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within, act } from '@testing-library/react';
+import { render, screen, waitFor, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -55,6 +55,16 @@ function page(
 /** A stand-in for a server-issued opaque cursor. */
 const CURSOR = (n = 1) => `opaque-cursor-token-${n}`;
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 const setPageHeader = vi.fn();
 
 function renderPage() {
@@ -79,9 +89,15 @@ const callArgs = (n) => getTransactions.mock.calls[n][0];
  */
 async function renderAndSettle() {
   const result = renderPage();
-  await screen.findByRole('button', { name: 'הכל' });
+  await waitFor(() => expect(getTransactions).toHaveBeenCalled());
+  await waitFor(() => expect(screen.queryByRole('status', { name: 'טוען תנועות' })).not.toBeInTheDocument());
   return result;
 }
+
+const transactionsTable = () => screen.getByRole('table', { name: 'תנועות שנטענו מתוך התוצאות המסוננות' });
+const tableText = (text) => within(transactionsTable()).getByText(text);
+const findTableText = async (text) => within(await screen.findByRole('table')).findByText(text);
+const summary = () => screen.getByRole('region', { name: 'סיכום מלא של התוצאות המסוננות' });
 
 function bodyRowIds() {
   const rows = screen.getAllByRole('row');
@@ -90,10 +106,12 @@ function bodyRowIds() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   getCategories.mockResolvedValue({ data: [{ id: 1, name: 'מזון', icon: '🍎' }] });
   getPaymentSources.mockResolvedValue({ data: [{ id: 10, name: 'ויזה' }] });
-  getTransactions.mockResolvedValue(page([]));
+  getTransactions.mockResolvedValue(
+    page([row(1, '2026-08-02')], { totals: { count: 1, income: 0, expense: 100 } })
+  );
 });
 
 describe('initial load', () => {
@@ -120,6 +138,19 @@ describe('initial load', () => {
     expect(params.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  it('uses the approved subtitle and shows the default period as non-removable context', async () => {
+    await renderAndSettle();
+
+    expect(setPageHeader).toHaveBeenCalledWith({
+      title: 'תנועות',
+      subtitle: 'ספר החשבונות המלא — סינון, מיון וטעינה מתגלגלת',
+    });
+    const filterContext = screen.getByLabelText('מסננים פעילים');
+    expect(within(filterContext).getByText(/^תקופה:/)).toBeInTheDocument();
+    expect(within(filterContext).queryByRole('button', { name: /הסרת המסנן.*תקופה/ }))
+      .not.toBeInTheDocument();
+  });
+
   it('asks for totals so the summary bar covers the whole filtered set', async () => {
     renderPage();
     await waitFor(() => expect(getTransactions).toHaveBeenCalled());
@@ -138,21 +169,22 @@ describe('initial load', () => {
     );
     renderPage();
 
-    expect(await screen.findByText('900')).toBeInTheDocument();
-    expect(screen.getByText('₪5,000')).toBeInTheDocument();
-    expect(screen.getByText('₪1,234')).toBeInTheDocument();
+    const totalsRegion = await screen.findByRole('region', { name: 'סיכום מלא של התוצאות המסוננות' });
+    expect(within(totalsRegion).getByText('900')).toBeInTheDocument();
+    expect(within(summary()).getByText('₪5,000')).toBeInTheDocument();
+    expect(within(summary()).getByText('₪1,234')).toBeInTheDocument();
   });
 
   it('shows the empty state when nothing matches', async () => {
     getTransactions.mockResolvedValue(page([], { totals: { count: 0, income: 0, expense: 0 } }));
     renderPage();
-    expect(await screen.findByText(/לא נמצאו תנועות/)).toBeInTheDocument();
+    expect(await screen.findByText('אין תנועות שמתאימות למסננים')).toBeInTheDocument();
   });
 
   it('shows an error state when the first page fails', async () => {
     getTransactions.mockRejectedValue(new Error('network down'));
     renderPage();
-    expect(await screen.findByText('שגיאה בטעינת התנועות')).toBeInTheDocument();
+    expect(await screen.findByText('טעינת התנועות נכשלה')).toBeInTheDocument();
   });
 });
 
@@ -207,7 +239,7 @@ describe('pagination', () => {
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
 
     expect(callArgs(2).cursor).toBe(CURSOR(2));
-    expect(await screen.findByText('27.11.2023')).toBeInTheDocument();
+    expect(await findTableText('27.11.2023')).toBeInTheDocument();
   });
 
   it('never renders a duplicate transaction id', async () => {
@@ -236,7 +268,7 @@ describe('pagination', () => {
     );
     renderPage();
 
-    expect(await screen.findByText('הוצגו כל התנועות')).toBeInTheDocument();
+    expect(await screen.findByText('הגעת לסוף ההיסטוריה')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'טען תנועות נוספות' })).not.toBeInTheDocument();
   });
 
@@ -255,7 +287,7 @@ describe('pagination', () => {
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'טען תנועות נוספות' }));
 
-    expect(await screen.findByText('שגיאה בטעינת תנועות נוספות')).toBeInTheDocument();
+    expect(await screen.findByText('טעינת המשך הרשימה נכשלה')).toBeInTheDocument();
     // The already-loaded page must survive a failed "load more".
     expect(bodyRowIds()).toHaveLength(1);
     expect(await screen.findByRole('button', { name: 'נסה שוב' })).toBeInTheDocument();
@@ -274,9 +306,9 @@ describe('filter changes', () => {
     );
 
     renderPage();
-    await screen.findByText('2.8.2026');
+    await findTableText('2.8.2026');
 
-    await user.click(screen.getByRole('button', { name: 'ללא קטגוריה' }));
+    await user.click(screen.getByRole('switch', { name: 'רק תנועות ללא קטגוריה' }));
 
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
     const params = callArgs(1);
@@ -290,7 +322,7 @@ describe('filter changes', () => {
     const user = userEvent.setup();
     await renderAndSettle();
 
-    await user.click(screen.getByRole('button', { name: 'הכל' }));
+    await user.click(screen.getByRole('button', { name: 'כל ההיסטוריה' }));
 
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
     const params = callArgs(1);
@@ -308,23 +340,24 @@ describe('filter changes', () => {
       .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
 
     renderPage();
-    await screen.findByText('2.8.2026');
+    await findTableText('2.8.2026');
 
-    await user.click(screen.getByRole('button', { name: 'ללא קטגוריה' }));
+    await user.click(screen.getByRole('switch', { name: 'רק תנועות ללא קטגוריה' }));
 
     // While the new filter is in flight the old row must already be gone.
-    await waitFor(() => expect(screen.queryByText('2.8.2026')).not.toBeInTheDocument());
-    expect(screen.getByText('טוען תנועות...')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
+    expect(screen.getByRole('status', { name: 'טוען תנועות' })).toBeInTheDocument();
 
     await act(async () => {
       resolveSecond(page([row(9, '2026-07-01')], { totals: { count: 1, income: 0, expense: 100 } }));
     });
-    expect(await screen.findByText('1.7.2026')).toBeInTheDocument();
+    expect(await findTableText('1.7.2026')).toBeInTheDocument();
   });
 });
 
 describe('column sorting', () => {
   const header = (name) => screen.getByRole('columnheader', { name: new RegExp(name) });
+  const sortButton = (name) => within(header(name)).getByRole('button');
 
   it('defaults to newest first, matching the previous behaviour', async () => {
     await renderAndSettle();
@@ -349,7 +382,7 @@ describe('column sorting', () => {
     const user = userEvent.setup();
     await renderAndSettle();
 
-    await user.click(header('סכום'));
+    await user.click(sortButton('סכום'));
 
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
     expect(callArgs(1).sortBy).toBe('total_amount');
@@ -361,23 +394,23 @@ describe('column sorting', () => {
     await renderAndSettle();
 
     // A newly chosen column starts ascending...
-    await user.click(header('תיאור'));
+    await user.click(sortButton('תיאור'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
     expect(callArgs(1)).toMatchObject({ sortBy: 'description', sortDirection: 'asc' });
 
     // ...clicking the active ascending column flips it to descending...
-    await user.click(header('תיאור'));
+    await user.click(sortButton('תיאור'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
     expect(callArgs(2)).toMatchObject({ sortBy: 'description', sortDirection: 'desc' });
 
     // ...and clicking it again returns to ascending. There is no third state.
-    await user.click(header('תיאור'));
+    await user.click(sortButton('תיאור'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(4));
     expect(callArgs(3)).toMatchObject({ sortBy: 'description', sortDirection: 'asc' });
 
     // Switching to a different column starts ascending again, even though the
     // previous column was descending.
-    await user.click(header('סכום'));
+    await user.click(sortButton('סכום'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(5));
     expect(callArgs(4)).toMatchObject({ sortBy: 'total_amount', sortDirection: 'asc' });
   });
@@ -386,13 +419,13 @@ describe('column sorting', () => {
     const user = userEvent.setup();
     await renderAndSettle();
 
-    await user.click(header('סכום'));
+    await user.click(sortButton('סכום'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
 
     expect(header('סכום')).toHaveAttribute('aria-sort', 'ascending');
     expect(header('תאריך')).toHaveAttribute('aria-sort', 'none');
 
-    await user.click(header('סכום'));
+    await user.click(sortButton('סכום'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
     expect(header('סכום')).toHaveAttribute('aria-sort', 'descending');
   });
@@ -421,7 +454,7 @@ describe('column sorting', () => {
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(bodyRowIds()).toHaveLength(4));
 
-    await user.click(header('סכום'));
+    await user.click(sortButton('סכום'));
 
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
     const params = callArgs(2);
@@ -447,7 +480,7 @@ describe('column sorting', () => {
     );
 
     await renderAndSettle();
-    await user.click(header('סכום'));
+    await user.click(sortButton('סכום'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
 
     await user.click(await screen.findByRole('button', { name: 'טען תנועות נוספות' }));
@@ -465,10 +498,10 @@ describe('column sorting', () => {
     const user = userEvent.setup();
     await renderAndSettle();
 
-    await user.click(screen.getByRole('button', { name: 'ללא קטגוריה' }));
+    await user.click(screen.getByRole('switch', { name: 'רק תנועות ללא קטגוריה' }));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
 
-    await user.click(header('תיאור'));
+    await user.click(sortButton('תיאור'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
 
     const params = callArgs(2);
@@ -481,7 +514,9 @@ describe('column sorting', () => {
     let resolveStale;
 
     getTransactions
-      .mockResolvedValueOnce(page([], { totals: { count: 0, income: 0, expense: 0 } }))
+      .mockResolvedValueOnce(
+        page([row(1, '2026-08-02')], { totals: { count: 1, income: 0, expense: 100 } })
+      )
       .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
       .mockResolvedValueOnce(
         page([row(42, '2026-07-01')], { totals: { count: 1, income: 0, expense: 100 } })
@@ -489,13 +524,13 @@ describe('column sorting', () => {
 
     await renderAndSettle();
 
-    await user.click(header('סכום'));
+    await user.click(sortButton('סכום'));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
 
-    await user.click(header('תיאור'));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'מיון הרשימה' }), 'description:asc');
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
 
-    expect(await screen.findByText('1.7.2026')).toBeInTheDocument();
+    expect(await findTableText('1.7.2026')).toBeInTheDocument();
 
     await act(async () => {
       resolveStale(
@@ -503,8 +538,8 @@ describe('column sorting', () => {
       );
     });
 
-    expect(screen.queryByText('1.1.2020')).not.toBeInTheDocument();
-    expect(screen.getByText('1.7.2026')).toBeInTheDocument();
+    expect(within(transactionsTable()).queryByText('1.1.2020')).not.toBeInTheDocument();
+    expect(tableText('1.7.2026')).toBeInTheDocument();
   });
 });
 
@@ -523,13 +558,13 @@ describe('stale response protection', () => {
 
     await renderAndSettle();
 
-    await user.click(screen.getByRole('button', { name: 'ללא קטגוריה' }));
+    await user.click(screen.getByRole('switch', { name: 'רק תנועות ללא קטגוריה' }));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
 
-    await user.click(screen.getByRole('button', { name: 'ללא קטגוריה' }));
+    await user.click(screen.getByRole('switch', { name: 'רק תנועות ללא קטגוריה' }));
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
 
-    expect(await screen.findByText('1.7.2026')).toBeInTheDocument();
+    expect(await findTableText('1.7.2026')).toBeInTheDocument();
 
     // The stale first request lands last, carrying data for a filter that is no
     // longer active. It must not overwrite the newer result.
@@ -539,8 +574,8 @@ describe('stale response protection', () => {
       );
     });
 
-    expect(screen.queryByText('1.1.2020')).not.toBeInTheDocument();
-    expect(screen.getByText('1.7.2026')).toBeInTheDocument();
+    expect(within(transactionsTable()).queryByText('1.1.2020')).not.toBeInTheDocument();
+    expect(tableText('1.7.2026')).toBeInTheDocument();
   });
 });
 
@@ -556,7 +591,7 @@ describe('search debounce', () => {
     const user = userEvent.setup();
     await renderAndSettle();
 
-    const input = screen.getByPlaceholderText('חיפוש לפי תיאור או סכום...');
+    const input = screen.getByRole('searchbox', { name: 'חיפוש תנועות' });
     await user.type(input, 'קפה');
 
     // Three keystrokes must not produce three requests.
@@ -573,7 +608,7 @@ describe('search debounce', () => {
     const user = userEvent.setup();
     await renderAndSettle();
 
-    await user.click(screen.getByRole('button', { name: 'חודש שעבר' }));
+    await user.click(screen.getByRole('button', { name: 'החודש הקודם' }));
 
     // No debounce on a discrete choice.
     await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
@@ -583,7 +618,6 @@ describe('search debounce', () => {
 describe('delete', () => {
   it('removes the row and keeps the totals consistent', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     deleteTransaction.mockResolvedValue({});
 
     getTransactions.mockResolvedValue(
@@ -593,15 +627,308 @@ describe('delete', () => {
     );
 
     renderPage();
-    await screen.findByText('2.8.2026');
+    const firstDate = await findTableText('2.8.2026');
 
-    await user.click(screen.getAllByTitle('מחק')[0]);
+    await user.click(within(firstDate.closest('tr')).getByRole('button', { name: /מחיקת התנועה/ }));
+    const dialog = screen.getByRole('dialog', { name: 'מחיקת תנועה' });
+    await user.click(within(dialog).getByRole('button', { name: 'מחיקת התנועה' }));
 
     await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(1));
-    await waitFor(() => expect(screen.queryByText('2.8.2026')).not.toBeInTheDocument());
+    await waitFor(() => expect(within(transactionsTable()).queryByText('2.8.2026')).not.toBeInTheDocument());
 
     // 350 - 250 = 100, and the count drops by one.
-    expect(screen.getByText('₪100')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(within(summary()).getByText('₪100')).toBeInTheDocument();
+    expect(within(summary()).getByText('1')).toBeInTheDocument();
+  });
+});
+
+describe('Finance v3 filter experience', () => {
+  it('preserves all approved date presets and their inclusive request bounds', async () => {
+    const user = userEvent.setup();
+    await renderAndSettle();
+
+    await user.click(screen.getByRole('button', { name: 'כל ההיסטוריה' }));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
+    expect(callArgs(1)).toMatchObject({ from: undefined, to: undefined });
+
+    await user.click(screen.getByRole('button', { name: 'החודש הקודם' }));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
+    const previousMonth = new Date();
+    previousMonth.setMonth(previousMonth.getMonth() - 1, 1);
+    const expectedPreviousMonth = {
+      from: `${previousMonth.getFullYear()}-${String(previousMonth.getMonth() + 1).padStart(2, '0')}-01`,
+      to: `${previousMonth.getFullYear()}-${String(previousMonth.getMonth() + 1).padStart(2, '0')}-${String(new Date(previousMonth.getFullYear(), previousMonth.getMonth() + 1, 0).getDate()).padStart(2, '0')}`,
+    };
+    expect(callArgs(2)).toMatchObject(expectedPreviousMonth);
+
+    await user.click(screen.getByRole('button', { name: 'החודש הנוכחי' }));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(4));
+    expect(callArgs(3).from).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(callArgs(3).to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('applies custom inclusive dates, category, and payment source without changing API parameters', async () => {
+    await renderAndSettle();
+
+    fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-07-03' } });
+    fireEvent.change(screen.getByLabelText('עד תאריך'), { target: { value: '2026-07-19' } });
+    fireEvent.change(screen.getByLabelText('קטגוריה'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('אמצעי תשלום'), { target: { value: '10' } });
+
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(5));
+    expect(callArgs(4)).toMatchObject({
+      from: '2026-07-03',
+      to: '2026-07-19',
+      categoryId: '1',
+      paymentSourceId: '10',
+    });
+    expect(screen.getByLabelText('מסננים פעילים')).toHaveTextContent('טווח:');
+  });
+
+  it('removes one active-filter chip without changing the others', async () => {
+    const user = userEvent.setup();
+    await renderAndSettle();
+
+    await user.selectOptions(screen.getByLabelText('קטגוריה'), '1');
+    await user.selectOptions(screen.getByLabelText('אמצעי תשלום'), '10');
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
+
+    await user.click(screen.getByRole('button', { name: 'הסרת המסנן קטגוריה מזון' }));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(4));
+    expect(callArgs(3)).toMatchObject({ categoryId: 'all', paymentSourceId: '10' });
+    expect(screen.getByLabelText('מסננים פעילים')).toHaveTextContent('אמצעי תשלום: ויזה');
+  });
+
+  it('reset restores current month, clears all filters, and restores the default sort', async () => {
+    const user = userEvent.setup();
+    await renderAndSettle();
+
+    await user.click(within(screen.getByRole('columnheader', { name: /סכום/ })).getByRole('button'));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
+    await user.selectOptions(screen.getByLabelText('קטגוריה'), '1');
+    await user.selectOptions(screen.getByLabelText('אמצעי תשלום'), '10');
+    await user.click(screen.getByRole('switch', { name: 'רק תנועות ללא קטגוריה' }));
+    await user.click(screen.getByRole('button', { name: 'כל ההיסטוריה' }));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(6));
+
+    await user.click(screen.getAllByRole('button', { name: 'איפוס' })[0]);
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(7));
+    const resetParams = callArgs(6);
+    expect(resetParams).toMatchObject({
+      categoryId: 'all',
+      paymentSourceId: 'all',
+      uncategorizedOnly: false,
+      search: '',
+      sortBy: 'transaction_date',
+      sortDirection: 'desc',
+    });
+    expect(resetParams.from).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(screen.getByRole('switch', { name: 'רק תנועות ללא קטגוריה' })).toHaveAttribute('aria-checked', 'false');
+    const resetContext = screen.getByLabelText('מסננים פעילים');
+    expect(within(resetContext).getByText(/^תקופה:/)).toBeInTheDocument();
+    expect(within(resetContext).queryByRole('button', { name: /הסרת המסנן/ })).not.toBeInTheDocument();
+  });
+
+  it('opens the mobile BottomSheet with the real immediate filters and active count', async () => {
+    const user = userEvent.setup();
+    await renderAndSettle();
+
+    const trigger = screen.getByRole('button', { name: 'מסננים' });
+    await user.click(trigger);
+    const sheet = screen.getByRole('dialog', { name: 'סינון תנועות' });
+    expect(within(sheet).getByLabelText('מתאריך')).toBeInTheDocument();
+    expect(within(sheet).getByLabelText('עד תאריך')).toBeInTheDocument();
+    expect(within(sheet).getByLabelText('קטגוריה')).toBeInTheDocument();
+    expect(within(sheet).getByLabelText('אמצעי תשלום')).toBeInTheDocument();
+    expect(within(sheet).getByRole('searchbox', { name: 'חיפוש תנועות' })).toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole('button', { name: 'החודש הקודם' }));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText('1 מסננים פעילים')).toBeInTheDocument();
+    await user.click(within(sheet).getByRole('button', { name: 'סיום' }));
+    expect(screen.queryByRole('dialog', { name: 'סינון תנועות' })).not.toBeInTheDocument();
+  });
+
+  it('does not expose unapproved filters or actions', async () => {
+    await renderAndSettle();
+    expect(screen.queryByRole('button', { name: /השנה/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ייצוא|פעולה קבוצתית/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+  });
+});
+
+describe('Finance v3 states and progressive loading', () => {
+  it('retries an initial failure without showing false totals', async () => {
+    const user = userEvent.setup();
+    getTransactions
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(page([row(9, '2026-08-04')], { totals: { count: 1, income: 0, expense: 100 } }));
+
+    renderPage();
+    expect(await screen.findByText('טעינת התנועות נכשלה')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'סיכום מלא של התוצאות המסוננות' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'נסה שוב' }));
+    expect(await findTableText('4.8.2026')).toBeInTheDocument();
+    expect(getTransactions).toHaveBeenCalledTimes(2);
+  });
+
+  it('distinguishes a truly empty all-history dataset from a filtered empty state', async () => {
+    const user = userEvent.setup();
+    getTransactions.mockResolvedValue(page([], { totals: { count: 0, income: 0, expense: 0 } }));
+    renderPage();
+    expect(await screen.findByText('אין תנועות שמתאימות למסננים')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'כל ההיסטוריה' }));
+    expect(await screen.findByText('אין תנועות במערכת')).toBeInTheDocument();
+  });
+
+  it('keeps rows visible while loading more and retries the same continuation after failure', async () => {
+    const user = userEvent.setup();
+    const append = deferred();
+    getTransactions
+      .mockResolvedValueOnce(page([row(1, '2026-08-02')], {
+        hasMore: true,
+        nextCursor: CURSOR(1),
+        totals: { count: 2, income: 0, expense: 200 },
+      }))
+      .mockImplementationOnce(() => append.promise)
+      .mockResolvedValueOnce(page([row(2, '2026-08-01')]));
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'טען תנועות נוספות' }));
+    expect(tableText('2.8.2026')).toBeInTheDocument();
+    expect(screen.getByText('טוען תנועות נוספות…')).toBeInTheDocument();
+
+    await act(async () => append.reject(new Error('append failed')));
+    expect(await screen.findByText('טעינת המשך הרשימה נכשלה')).toBeInTheDocument();
+    expect(tableText('2.8.2026')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'נסה שוב' }));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
+    expect(callArgs(2).cursor).toBe(CURSOR(1));
+    expect(await findTableText('1.8.2026')).toBeInTheDocument();
+  });
+});
+
+describe('Finance v3 responsive parity and sorting', () => {
+  it('renders the same fields and actions in the desktop table and mobile card list', async () => {
+    getTransactions.mockResolvedValue(page([
+      row(7, '2026-08-03', {
+        description: 'Coffee & קפה ארוך',
+        total_amount: '42.50',
+        notes: 'הערה מפורטת mixed note',
+      }),
+    ], { totals: { count: 1, income: 0, expense: 42.5 } }));
+
+    renderPage();
+    const table = await screen.findByRole('table');
+    const card = screen.getByRole('article', { name: 'תנועה: Coffee & קפה ארוך' });
+    for (const text of ['Coffee & קפה ארוך', 'מזון', 'ויזה', 'הערה מפורטת mixed note', '3.8.2026']) {
+      expect(within(table).getByText(text)).toBeInTheDocument();
+      expect(within(card).getByText(text, { exact: false })).toBeInTheDocument();
+    }
+    expect(within(table).getByRole('link', { name: /עריכת התנועה/ })).toHaveAttribute('href', '/edit-transaction/7');
+    expect(within(card).getByRole('link', { name: /עריכת התנועה/ })).toHaveAttribute('href', '/edit-transaction/7');
+    expect(within(table).getByRole('button', { name: /מחיקת התנועה/ })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /מחיקת התנועה/ })).toBeInTheDocument();
+  });
+
+  it('locks all desktop headers and values to the same seven-column table model', async () => {
+    renderPage();
+    const table = await screen.findByRole('table');
+    expect(table.querySelectorAll('colgroup col')).toHaveLength(7);
+    expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'תאריך', 'קטגוריה', 'תיאור', 'אמצעי תשלום', 'סכום', 'הערות', 'פעולות',
+    ]);
+
+    const cells = within(table).getAllByRole('row')[1].querySelectorAll('td');
+    expect(cells).toHaveLength(7);
+    expect(cells[0]).toHaveClass('transactions-table__date');
+    expect(cells[1]).toHaveClass('transactions-table__category');
+    expect(cells[2]).toHaveClass('transactions-table__description');
+    expect(cells[3]).toHaveClass('transactions-table__source');
+    expect(cells[4]).toHaveClass('transactions-table__amount');
+    expect(cells[4]).toHaveAttribute('dir', 'ltr');
+    expect(cells[5]).toHaveClass('transactions-table__notes');
+    expect(cells[6]).toHaveClass('transactions-table__actions-cell');
+  });
+
+  it('uses category_id null—not a missing joined label—for uncategorized treatment', async () => {
+    getTransactions.mockResolvedValue(page([
+      row(1, '2026-08-02', { category_id: null, categories: { name: 'should not win', icon: 'X' } }),
+      row(2, '2026-08-01', { category_id: 2, categories: null }),
+    ], { totals: { count: 2, income: 0, expense: 200 } }));
+    renderPage();
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('ללא קטגוריה')).toBeInTheDocument();
+    expect(within(table).getByText('קטגוריה לא זמינה')).toBeInTheDocument();
+    expect(within(table).getAllByRole('row')[1]).toHaveClass('is-uncategorized');
+    expect(within(table).getAllByRole('row')[2]).not.toHaveClass('is-uncategorized');
+  });
+
+  it('mobile sorting updates the same server sort state and restarts the cursor', async () => {
+    const user = userEvent.setup();
+    await renderAndSettle();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'מיון הרשימה' }), 'total_amount:desc');
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
+    expect(callArgs(1)).toMatchObject({ sortBy: 'total_amount', sortDirection: 'desc' });
+    expect(callArgs(1).cursor).toBeUndefined();
+    expect(callArgs(1).includeTotals).toBe(true);
+  });
+
+  it('supports date ascending and descending through the server-owned sort', async () => {
+    const user = userEvent.setup();
+    await renderAndSettle();
+    const dateHeader = screen.getByRole('columnheader', { name: /תאריך/ });
+    await user.click(within(dateHeader).getByRole('button'));
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(2));
+    expect(callArgs(1)).toMatchObject({ sortBy: 'transaction_date', sortDirection: 'asc' });
+    await user.selectOptions(screen.getByRole('combobox', { name: 'מיון הרשימה' }), 'transaction_date:desc');
+    await waitFor(() => expect(getTransactions).toHaveBeenCalledTimes(3));
+    expect(callArgs(2)).toMatchObject({ sortBy: 'transaction_date', sortDirection: 'desc' });
+  });
+});
+
+describe('Finance v3 delete confirmation', () => {
+  const openDeleteDialog = async (user) => {
+    const date = await findTableText('2.8.2026');
+    await user.click(within(date.closest('tr')).getByRole('button', { name: /מחיקת התנועה/ }));
+    return screen.getByRole('dialog', { name: 'מחיקת תנועה' });
+  };
+
+  it('cancels without calling the delete API', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const dialog = await openDeleteDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'ביטול' }));
+    expect(deleteTransaction).not.toHaveBeenCalled();
+    expect(tableText('2.8.2026')).toBeInTheDocument();
+  });
+
+  it('leaves the row and totals unchanged and shows feedback when deletion fails', async () => {
+    const user = userEvent.setup();
+    deleteTransaction.mockRejectedValue(new Error('denied'));
+    renderPage();
+    const dialog = await openDeleteDialog(user);
+    await user.click(within(dialog).getByRole('button', { name: 'מחיקת התנועה' }));
+
+    expect(await within(dialog).findByText('מחיקת התנועה נכשלה. הרשומה והסיכומים לא השתנו.')).toBeInTheDocument();
+    expect(tableText('2.8.2026')).toBeInTheDocument();
+    expect(within(summary()).getByText('1')).toBeInTheDocument();
+    expect(within(summary()).getByText('₪100')).toBeInTheDocument();
+  });
+
+  it('prevents duplicate confirmation while deletion is pending', async () => {
+    const user = userEvent.setup();
+    const deletion = deferred();
+    deleteTransaction.mockImplementation(() => deletion.promise);
+    renderPage();
+    const dialog = await openDeleteDialog(user);
+    const confirm = within(dialog).getByRole('button', { name: 'מחיקת התנועה' });
+    await user.click(confirm);
+    expect(confirm).toBeDisabled();
+    await user.click(confirm);
+    expect(deleteTransaction).toHaveBeenCalledTimes(1);
+    await act(async () => deletion.resolve({}));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'מחיקת תנועה' })).not.toBeInTheDocument());
   });
 });

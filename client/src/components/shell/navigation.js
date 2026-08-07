@@ -47,7 +47,7 @@ export const routeMetadata = [
     subtitle: 'תמונת מצב לפי תקופות — חודש נבחר, מגמה של חצי שנה ונתונים נכון להיום',
   },
   { key: 'add-transaction', path: '/add', title: 'הוספת תנועה', hideGlobalAdd: true },
-  { key: 'transactions', path: '/transactions', title: 'תנועות', hideGlobalAdd: true },
+  { key: 'transactions', path: '/transactions', title: 'תנועות' },
   { key: 'edit-transaction', prefix: '/edit-transaction/', title: 'עריכת תנועה', hideGlobalAdd: true },
   { key: 'budget', path: '/budget', title: 'תקציב חודשי' },
   { key: 'annual-summary', path: '/annual-summary', title: 'סיכום שנתי' },
