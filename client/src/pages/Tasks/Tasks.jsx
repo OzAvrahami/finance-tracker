@@ -1,49 +1,45 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { CheckSquare, Plus, Pencil, Trash2, AlertCircle } from 'lucide-react';
-import { getTasks, deleteTask, updateTask } from '../../services/api';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, FilterX, ListChecks, Plus, SearchX, X } from 'lucide-react';
+import { PageHeaderContext } from '../../context/PageHeaderContext';
+import { deleteTask, getTasks, updateTask } from '../../services/api';
 import TaskModal from '../../components/TaskModal';
-import { PRIORITY_LABELS, PRIORITY_COLORS, isOverdue } from '../../utils/taskHelpers';
-import style from './Tasks.module.css'
-
-// --- Label & color maps (English slug → Hebrew display) ---
-
-export const STATUS_LABELS = {
-  open: 'פתוח',
-  in_progress: 'בתהליך',
-  waiting: 'המתנה',
-  done: 'הושלם',
-  cancelled: 'בוטל',
-};
-
-export const STATUS_COLORS = {
-  open:        { bg: 'var(--surface-3)',   color: 'var(--ink-3)',   border: 'var(--border-strong)' },
-  in_progress: { bg: 'var(--info-soft)',   color: 'var(--info)',    border: 'rgba(90,200,255,0.25)' },
-  waiting:     { bg: 'var(--warn-soft)',   color: 'var(--warn)',    border: 'rgba(255,192,97,0.25)' },
-  done:        { bg: 'var(--pos-soft)',    color: 'var(--pos)',     border: 'rgba(74,222,154,0.25)' },
-  cancelled:   { bg: 'var(--surface-3)',   color: 'var(--ink-5)',   border: 'var(--border)' },
-};
-
-
-export const CATEGORY_LABELS = {
-  finance:  'פיננסי',
-  personal: 'אישי',
-  work:     'עבודה',
-  system:   'מערכת',
-  other:    'אחר',
-};
-
-const PRIORITY_WEIGHT = { urgent: 0, high: 1, medium: 2, low: 3 };
-
-const COMPLETED_STATUSES = new Set(['done', 'cancelled']);
+import {
+  Alert,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  PrimaryButton,
+  SearchField,
+  SecondaryButton,
+  Select,
+  Skeleton,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
+} from '../../components/ui';
+import {
+  CATEGORY_LABELS,
+  DEFAULT_TASK_FILTERS,
+  PRIORITY_LABELS,
+  STATUS_PLURAL_LABELS,
+  filterAndSortTasks,
+  getTaskStatusCounts,
+  hasNonDefaultTaskFilters,
+  isOverdue,
+} from '../../utils/taskHelpers';
+import TaskCard from './TaskCard';
+import styles from './Tasks.module.css';
 
 const STATUS_TABS = [
-  { value: 'all', label: 'הכל' },
-  { value: 'active', label: 'פעיל' },
-  { value: 'open', label: STATUS_LABELS.open },
-  { value: 'in_progress', label: STATUS_LABELS.in_progress },
-  { value: 'waiting', label: STATUS_LABELS.waiting },
-  { value: 'done', label: STATUS_LABELS.done },
-  { value: 'cancelled', label: STATUS_LABELS.cancelled },
+  { value: 'all', label: 'הכול' },
+  { value: 'active', label: 'פעילות' },
+  { value: 'open', label: 'פתוחות' },
+  { value: 'in_progress', label: 'בתהליך' },
+  { value: 'waiting', label: 'ממתינות' },
+  { value: 'done', label: 'הושלמו' },
+  { value: 'cancelled', label: 'בוטלו' },
 ];
 
 const PRIORITY_OPTIONS = [
@@ -56,480 +52,353 @@ const PRIORITY_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   { value: 'all', label: 'כל הקטגוריות' },
-  { value: 'finance', label: CATEGORY_LABELS.finance },
-  { value: 'personal', label: CATEGORY_LABELS.personal },
-  { value: 'work', label: CATEGORY_LABELS.work },
-  { value: 'system', label: CATEGORY_LABELS.system },
-  { value: 'other', label: CATEGORY_LABELS.other },
+  ...Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
-// --- Date helpers ---
+const createDefaultFilters = () => ({ ...DEFAULT_TASK_FILTERS });
 
-const todayStr = () => new Date().toISOString().split('T')[0];
-
-const isDueToday = (task) => {
-  if (!task.due_date || task.status === 'done' || task.status === 'cancelled') return false;
-  return task.due_date === todayStr();
-};
-
-const formatDate = (dateStr) =>
-  new Date(dateStr + 'T00:00:00').toLocaleDateString('he-IL', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
-
-// --- Main Page ---
+const TasksSkeleton = () => (
+  <div className={styles.tasksSkeleton} role="status" aria-label="טעינת מטלות">
+    <span className={styles.visuallyHidden}>טוען את רשימת המטלות</span>
+    <Skeleton height={128} borderRadius="var(--ft-radius-card)" aria-hidden="true" />
+    <div className={styles.taskGrid} aria-hidden="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <Skeleton key={index} height={184} borderRadius="var(--ft-radius-xl)" />
+      ))}
+    </div>
+  </div>
+);
 
 const Tasks = () => {
+  const { setPageHeader } = useContext(PageHeaderContext);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [filters, setFilters] = useState({
-    status: 'active',
-    priority: 'all',
-    category: 'all',
-    search: '',
-    overdue: false,
-  });
+  const [filters, setFilters] = useState(createDefaultFilters);
+  const [mutationError, setMutationError] = useState('');
+  const [pendingStatusId, setPendingStatusId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const dialogReturnFocusRef = useRef(null);
+  const deleteReturnFocusRef = useRef(null);
 
-  const fetchTasks = async () => {
+  const openNew = useCallback((event) => {
+    dialogReturnFocusRef.current = event?.currentTarget || null;
+    setEditingTask(null);
+    setMutationError('');
+    setShowModal(true);
+  }, []);
+
+  useEffect(() => {
+    setPageHeader({
+      title: 'מטלות',
+      subtitle: 'מעקב מטלות פיננסיות לפי סטטוס ועדיפות',
+      primaryAction: {
+        label: 'מטלה חדשה',
+        icon: Plus,
+        onClick: openNew,
+      },
+    });
+  }, [openNew, setPageHeader]);
+
+  const fetchTasks = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
+    setLoadError(false);
+
     try {
-      const res = await getTasks();
-      setTasks(res.data);
-    } catch (error) {
-      console.error('fetchTasks Error:', error);
+      const response = await getTasks();
+      setTasks(Array.isArray(response.data) ? response.data : []);
+      return true;
+    } catch {
+      if (showLoading) setLoadError(true);
+      return false;
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchTasks(); }, []);
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
 
-  const statusCounts = useMemo(() => {
-    const counts = { all: tasks.length, active: 0, open: 0, in_progress: 0, waiting: 0, done: 0, cancelled: 0 };
-    tasks.forEach(t => {
-      if (t.status in counts) counts[t.status]++;
-      if (!COMPLETED_STATUSES.has(t.status)) counts.active++;
-    });
-    return counts;
-  }, [tasks]);
-
+  const statusCounts = useMemo(() => getTaskStatusCounts(tasks), [tasks]);
   const overdueCount = useMemo(() => tasks.filter(isOverdue).length, [tasks]);
+  const filteredTasks = useMemo(() => filterAndSortTasks(tasks, filters), [filters, tasks]);
+  const hasActiveFilters = hasNonDefaultTaskFilters(filters);
 
-  const filteredTasks = useMemo(() => {
-    let result = tasks;
-    if (filters.status === 'active') {
-      result = result.filter(t => !COMPLETED_STATUSES.has(t.status));
-    } else if (filters.status !== 'all') {
-      result = result.filter(t => t.status === filters.status);
-    }
-    if (filters.priority !== 'all') result = result.filter(t => t.priority === filters.priority);
-    if (filters.category !== 'all') result = result.filter(t => t.category === filters.category);
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      result = result.filter(t => t.title.toLowerCase().includes(q));
-    }
-    if (filters.overdue) result = result.filter(isOverdue);
+  const updateFilter = (name, value) => {
+    setFilters((current) => ({ ...current, [name]: value }));
+  };
 
-    return [...result].sort((a, b) => {
-      const aComp = COMPLETED_STATUSES.has(a.status) ? 1 : 0;
-      const bComp = COMPLETED_STATUSES.has(b.status) ? 1 : 0;
-      if (aComp !== bComp) return aComp - bComp;
-      const aOver = isOverdue(a) ? 0 : 1;
-      const bOver = isOverdue(b) ? 0 : 1;
-      if (aOver !== bOver) return aOver - bOver;
-      const pa = PRIORITY_WEIGHT[a.priority] ?? 2;
-      const pb = PRIORITY_WEIGHT[b.priority] ?? 2;
-      if (pa !== pb) return pa - pb;
-      if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
-      if (a.due_date) return -1;
-      if (b.due_date) return 1;
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
-  }, [tasks, filters]);
+  const resetFilters = () => setFilters(createDefaultFilters());
 
-  const handleEdit = (task) => { setEditingTask(task); setShowModal(true); };
-  const handleNew = () => { setEditingTask(null); setShowModal(true); };
-  const handleModalClose = () => { setShowModal(false); setEditingTask(null); };
-  const handleModalSave = () => { setShowModal(false); setEditingTask(null); fetchTasks(); };
+  const openEdit = (task, event) => {
+    dialogReturnFocusRef.current = event.currentTarget;
+    setEditingTask(task);
+    setMutationError('');
+    setShowModal(true);
+  };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('למחוק משימה זו?')) return;
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingTask(null);
+  };
+
+  const handleModalSave = async () => {
+    closeModal();
+    await fetchTasks({ showLoading: false });
+  };
+
+  const requestDelete = (task, event) => {
+    deleteReturnFocusRef.current = event.currentTarget;
+    setDeleteTarget(task);
+  };
+
+  const confirmDelete = async () => {
+    await deleteTask(deleteTarget.id);
+    await fetchTasks({ showLoading: false });
+  };
+
+  const toggleStatus = async (task) => {
+    if (pendingStatusId !== null) return;
+    const nextStatus = task.status === 'done' ? 'open' : 'done';
+
+    setPendingStatusId(task.id);
+    setMutationError('');
     try {
-      await deleteTask(id);
-      fetchTasks();
-    } catch (error) {
-      console.error('deleteTask Error:', error);
-      alert('שגיאה במחיקת המשימה');
+      await updateTask(task.id, { status: nextStatus });
+      await fetchTasks({ showLoading: false });
+    } catch {
+      setMutationError('עדכון סטטוס המטלה נכשל. המטלה נשארה ללא שינוי.');
+    } finally {
+      setPendingStatusId(null);
     }
   };
 
-  const handleStatusToggle = async (task) => {
-    const next = task.status === 'done' ? 'open' : 'done';
-    try {
-      await updateTask(task.id, { status: next });
-      fetchTasks();
-    } catch (error) {
-      console.error('handleStatusToggle Error:', error);
+  const activeFilterChips = [
+    filters.status !== DEFAULT_TASK_FILTERS.status && {
+      key: 'status',
+      label: `סטטוס: ${filters.status === 'all' ? 'הכול' : STATUS_PLURAL_LABELS[filters.status]}`,
+      clear: () => updateFilter('status', DEFAULT_TASK_FILTERS.status),
+    },
+    filters.overdue && {
+      key: 'overdue',
+      label: 'באיחור בלבד',
+      clear: () => updateFilter('overdue', false),
+    },
+    filters.priority !== 'all' && {
+      key: 'priority',
+      label: `עדיפות: ${PRIORITY_LABELS[filters.priority]}`,
+      clear: () => updateFilter('priority', 'all'),
+    },
+    filters.category !== 'all' && {
+      key: 'category',
+      label: `קטגוריה: ${CATEGORY_LABELS[filters.category]}`,
+      clear: () => updateFilter('category', 'all'),
+    },
+    filters.search && {
+      key: 'search',
+      label: `חיפוש: ${filters.search}`,
+      clear: () => updateFilter('search', ''),
+    },
+  ].filter(Boolean);
+
+  const renderResults = () => {
+    if (tasks.length === 0) {
+      return (
+        <EmptyState
+          icon={ListChecks}
+          title="אין מטלות"
+          description="מטלות עוזרות לעקוב אחרי תשלומים, בירורים ומשימות תחזוקה פיננסיות."
+          primaryAction={(
+            <PrimaryButton type="button" onClick={openNew}>
+              <Plus size={16} aria-hidden="true" />
+              מטלה חדשה
+            </PrimaryButton>
+          )}
+        />
+      );
     }
-  };
 
-  const hasActiveFilter = filters.status !== 'active' ||
-    filters.priority !== 'all' || filters.category !== 'all' || filters.search || filters.overdue;
+    if (filteredTasks.length === 0) {
+      const defaultActiveEmpty = !hasActiveFilters && filters.status === 'active';
+      return (
+        <EmptyState
+          variant={defaultActiveEmpty ? 'dataset' : 'filtered'}
+          icon={defaultActiveEmpty ? ListChecks : SearchX}
+          title={defaultActiveEmpty ? 'הכול סגור' : 'אין מטלות שמתאימות למסננים'}
+          description={defaultActiveEmpty
+            ? 'אין כרגע מטלות פעילות. כל המטלות סומנו כהושלמו או בוטלו.'
+            : 'אפשר לנקות את המסננים ולראות שוב את המטלות הפעילות.'}
+          primaryAction={defaultActiveEmpty ? (
+            <SecondaryButton type="button" onClick={openNew}>
+              <Plus size={16} aria-hidden="true" />
+              מטלה חדשה
+            </SecondaryButton>
+          ) : (
+            <SecondaryButton type="button" onClick={resetFilters}>ניקוי מסננים</SecondaryButton>
+          )}
+        />
+      );
+    }
 
-  if (loading) {
     return (
-      <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--ink-4)', fontSize: 16 }}>
-        טוען משימות...
+      <div className={styles.taskGrid} aria-label="רשימת מטלות">
+        {filteredTasks.map((task) => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            pendingStatus={pendingStatusId === task.id}
+            onEdit={(event) => openEdit(task, event)}
+            onDelete={(event) => requestDelete(task, event)}
+            onStatusToggle={() => toggleStatus(task)}
+          />
+        ))}
       </div>
     );
-  }
+  };
 
   return (
-    <div dir="rtl" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Header */}
-      <div className={style.header}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--ink-1)', margin: 0 }}>יומן משימות</h1>
-          <p style={{ margin: '4px 0 0 0', color: 'var(--ink-4)', fontSize: 14 }}>
-            {tasks.length} משימות סה״כ
-            {overdueCount > 0 && (
-              <span style={{ color: 'var(--neg)', marginInlineEnd: 8, fontWeight: 600 }}>
-                · {overdueCount} באיחור
-              </span>
-            )}
-          </p>
-        </div>
-        <button onClick={handleNew} style={newBtnStyle}>
-          <Plus size={16} style={{ marginLeft: 6 }} />
-          משימה חדשה
-        </button>
-      </div>
+    <div className={styles.tasksPage} dir="rtl">
+      {loading && <TasksSkeleton />}
 
-      {/* Status Tabs */}
-      <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', borderBottom: '2px solid var(--border-strong)' }}>
-        {STATUS_TABS.map(tab => {
-          const active = filters.status === tab.value && !filters.overdue;
-          return (
-            <button
-              key={tab.value}
-              onClick={() => setFilters(f => ({ ...f, status: tab.value, overdue: false }))}
-              style={{
-                padding: '10px 16px',
-                border: 'none',
-                borderBottom: active ? '2px solid var(--primary-hi)' : '2px solid transparent',
-                marginBottom: -2,
-                background: 'none',
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: active ? 600 : 400,
-                color: active ? 'var(--primary-hi)' : 'var(--ink-4)',
-                transition: 'all 0.15s',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              {tab.label}
-              <span style={{
-                fontSize: 11,
-                backgroundColor: active ? 'var(--primary-soft)' : 'var(--surface-3)',
-                color: active ? 'var(--primary-hi)' : 'var(--ink-4)',
-                padding: '1px 6px',
-                borderRadius: 9999,
-                fontWeight: 500,
-              }}>
-                {statusCounts[tab.value] ?? 0}
-              </span>
-            </button>
-          );
-        })}
-        {overdueCount > 0 && (
-          <button
-            onClick={() => setFilters(f => ({ ...f, status: 'all', overdue: !f.overdue }))}
-            style={{
-              padding: '10px 16px',
-              border: 'none',
-              borderBottom: filters.overdue ? '2px solid var(--neg)' : '2px solid transparent',
-              marginBottom: -2,
-              background: 'none',
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: filters.overdue ? 600 : 400,
-              color: filters.overdue ? 'var(--neg)' : 'var(--ink-4)',
-              transition: 'all 0.15s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <AlertCircle size={13} />
-            באיחור
-            <span style={{
-              fontSize: 11,
-              backgroundColor: 'var(--neg-soft)',
-              color: 'var(--neg)',
-              padding: '1px 6px',
-              borderRadius: 9999,
-              fontWeight: 600,
-            }}>
-              {overdueCount}
-            </span>
-          </button>
-        )}
-      </div>
-
-      {/* Secondary Filters */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select
-          value={filters.priority}
-          onChange={e => setFilters(f => ({ ...f, priority: e.target.value }))}
-          style={filterSelectStyle}
-        >
-          {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <select
-          value={filters.category}
-          onChange={e => setFilters(f => ({ ...f, category: e.target.value }))}
-          style={filterSelectStyle}
-        >
-          {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <input
-          type="text"
-          placeholder="חיפוש לפי כותרת..."
-          value={filters.search}
-          onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-          style={{ ...filterSelectStyle, minWidth: 200, flex: 1 }}
+      {!loading && loadError && (
+        <ErrorState
+          level="page"
+          title="טעינת המטלות נכשלה"
+          description="לא ניתן להציג את רשימת המטלות כרגע."
+          retryLabel="נסה שוב"
+          onRetry={fetchTasks}
         />
-        {hasActiveFilter && (
-          <button
-            onClick={() => setFilters({ status: 'active', priority: 'all', category: 'all', search: '', overdue: false })}
-            style={{
-              padding: '8px 14px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: 'var(--surface-3)',
-              cursor: 'pointer',
-              fontSize: 13,
-              color: 'var(--ink-3)',
-            }}
-          >
-            נקה סינון
-          </button>
-        )}
-      </div>
+      )}
 
-      {/* Task List */}
-      {filteredTasks.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '60px 32px',
-          backgroundColor: 'var(--surface-2)',
-          borderRadius: 16,
-          border: '1px solid var(--border)',
-          color: 'var(--ink-4)',
-        }}>
-          <CheckSquare size={40} color="#353B52" style={{ marginBottom: 16 }} />
-          <p style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>אין משימות להצגה</p>
-          <p style={{ fontSize: 14, margin: '8px 0 0 0' }}>
-            {tasks.length === 0
-              ? 'לחץ על "משימה חדשה" כדי להתחיל'
-              : 'נסה לשנות את הסינון'}
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filteredTasks.map(task => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onEdit={() => handleEdit(task)}
-              onDelete={() => handleDelete(task.id)}
-              onStatusToggle={() => handleStatusToggle(task)}
-            />
+      {!loading && !loadError && (
+        <Tabs
+          value={filters.status}
+          onValueChange={(status) => setFilters((current) => ({ ...current, status, overdue: false }))}
+          className={styles.tasksTabs}
+        >
+          <section className={styles.filterPanel} aria-label="סינון מטלות">
+            <TabList className={styles.statusTabs} aria-label="סינון לפי סטטוס">
+              {STATUS_TABS.map((tab) => (
+                <Tab key={tab.value} value={tab.value} badge={statusCounts[tab.value]}>
+                  {tab.label}
+                </Tab>
+              ))}
+              {overdueCount > 0 && (
+                <button
+                  type="button"
+                  className={`${styles.overdueFilter}${filters.overdue ? ` ${styles.overdueFilterActive}` : ''}`}
+                  aria-pressed={filters.overdue}
+                  onClick={() => setFilters((current) => ({
+                    ...current,
+                    status: 'all',
+                    overdue: !current.overdue,
+                  }))}
+                >
+                  <AlertTriangle size={15} aria-hidden="true" />
+                  באיחור
+                  <span>{overdueCount}</span>
+                </button>
+              )}
+            </TabList>
+
+            <div className={styles.secondaryFilters}>
+              <SearchField
+                className={styles.searchField}
+                size="compact"
+                aria-label="חיפוש לפי כותרת"
+                placeholder="חיפוש בכותרת המטלה"
+                value={filters.search}
+                onValueChange={(value) => updateFilter('search', value)}
+              />
+              <Select
+                className={styles.filterSelect}
+                size="compact"
+                aria-label="עדיפות"
+                value={filters.priority}
+                onValueChange={(value) => updateFilter('priority', value)}
+              >
+                {PRIORITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+              <Select
+                className={styles.filterSelect}
+                size="compact"
+                aria-label="קטגוריית מטלה"
+                value={filters.category}
+                onValueChange={(value) => updateFilter('category', value)}
+              >
+                {CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+              {hasActiveFilters && (
+                <SecondaryButton type="button" size="sm" className={styles.resetButton} onClick={resetFilters}>
+                  <FilterX size={15} aria-hidden="true" />
+                  ניקוי מסננים
+                </SecondaryButton>
+              )}
+            </div>
+
+            {activeFilterChips.length > 0 && (
+              <div className={styles.activeFilters} aria-label="מסננים פעילים">
+                {activeFilterChips.map((chip) => (
+                  <span key={chip.key} className={styles.filterChip}>
+                    <span dir="auto">{chip.label}</span>
+                    <IconButton
+                      type="button"
+                      size={30}
+                      className={styles.removeFilter}
+                      aria-label={`הסרת המסנן ${chip.label}`}
+                      onClick={chip.clear}
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </IconButton>
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {mutationError && (
+            <Alert variant="error" urgent onDismiss={() => setMutationError('')}>
+              {mutationError}
+            </Alert>
+          )}
+
+          {STATUS_TABS.map((tab) => (
+            <TabPanel key={tab.value} value={tab.value} className={styles.resultsPanel}>
+              {filters.status === tab.value ? renderResults() : null}
+            </TabPanel>
           ))}
-        </div>
+        </Tabs>
       )}
 
       <TaskModal
         show={showModal}
         task={editingTask}
-        onClose={handleModalClose}
+        onClose={closeModal}
         onSave={handleModalSave}
+        returnFocusRef={dialogReturnFocusRef}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="מחיקת מטלה"
+        message={deleteTarget ? `למחוק את המטלה „${deleteTarget.title}”? לא ניתן לבטל פעולה זו.` : ''}
+        confirmLabel="מחיקת המטלה"
+        cancelLabel="ביטול"
+        variant="destructive"
+        errorMessage="מחיקת המטלה נכשלה. המטלה נשארה ברשימה."
+        returnFocusRef={deleteReturnFocusRef}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
       />
     </div>
   );
 };
-
-// --- TaskCard ---
-
-const TaskCard = ({ task, onEdit, onDelete, onStatusToggle }) => {
-  const overdue = isOverdue(task);
-  const dueToday = isDueToday(task);
-  const done = task.status === 'done';
-  const cancelled = task.status === 'cancelled';
-  const dimmed = done || cancelled;
-
-  const statusCfg = STATUS_COLORS[task.status] || STATUS_COLORS.open;
-  const priorityCfg = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium;
-
-  let dueDateColor = 'var(--ink-4)';
-  if (overdue) dueDateColor = 'var(--neg)';
-  else if (dueToday) dueDateColor = 'var(--warn)';
-
-  return (
-    <div style={{
-      backgroundColor: 'var(--surface-2)',
-      border: overdue ? '1px solid rgba(255,122,138,0.3)' : '1px solid var(--border)',
-      borderRadius: 12,
-      padding: '16px 20px',
-      display: 'flex',
-      gap: 14,
-      alignItems: 'flex-start',
-      opacity: dimmed ? 0.6 : 1,
-      transition: 'opacity 0.15s',
-      boxShadow: 'var(--shadow-sm)',
-    }}>
-      {/* Done toggle */}
-      <button
-        onClick={onStatusToggle}
-        title={done ? 'סמן כפתוח' : 'סמן כהושלם'}
-        style={{
-          width: 20, height: 20,
-          borderRadius: '50%',
-          border: done ? 'none' : '2px solid var(--ink-5)',
-          backgroundColor: done ? 'var(--pos)' : 'transparent',
-          cursor: 'pointer',
-          flexShrink: 0,
-          marginTop: 3,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'white',
-          fontSize: 11,
-          fontWeight: 700,
-        }}
-      >
-        {done ? '✓' : ''}
-      </button>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Badges row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-          <span style={{
-            fontSize: 11, fontWeight: 700,
-            padding: '2px 8px', borderRadius: 9999,
-            backgroundColor: priorityCfg.bg, color: priorityCfg.color,
-          }}>
-            {PRIORITY_LABELS[task.priority]}
-          </span>
-          <span style={{
-            fontSize: 11, fontWeight: 500,
-            padding: '2px 8px', borderRadius: 9999,
-            backgroundColor: statusCfg.bg, color: statusCfg.color,
-            border: `1px solid ${statusCfg.border}`,
-          }}>
-            {STATUS_LABELS[task.status]}
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>
-            {CATEGORY_LABELS[task.category]}
-          </span>
-          {overdue && (
-            <span style={{
-              fontSize: 11, color: 'var(--neg)', fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 3,
-            }}>
-              <AlertCircle size={11} />
-              באיחור
-            </span>
-          )}
-        </div>
-
-        {/* Title */}
-        <p style={{
-          margin: 0, fontSize: 15, fontWeight: 600,
-          color: dimmed ? 'var(--ink-4)' : 'var(--ink-1)',
-          textDecoration: done ? 'line-through' : 'none',
-        }}>
-          {task.title}
-        </p>
-
-        {/* Notes snippet */}
-        {task.notes && (
-          <p style={{
-            margin: '4px 0 0 0', fontSize: 13, color: 'var(--ink-4)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {task.notes}
-          </p>
-        )}
-
-        {/* Footer meta */}
-        <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {task.due_date && (
-            <span style={{ fontSize: 12, color: dueDateColor, fontWeight: overdue || dueToday ? 600 : 400 }}>
-              יעד: {formatDate(task.due_date)}
-              {overdue && ' · באיחור'}
-              {dueToday && ' · היום'}
-            </span>
-          )}
-          {task.transactions && (
-            <span style={{
-              fontSize: 12, color: 'var(--ink-3)',
-              backgroundColor: 'var(--surface-3)',
-              padding: '2px 8px', borderRadius: 6,
-            }}>
-              תנועה: {task.transactions.description}
-            </span>
-          )}
-          {task.loans && (
-            <span style={{
-              fontSize: 12, color: 'var(--ink-3)',
-              backgroundColor: 'var(--surface-3)',
-              padding: '2px 8px', borderRadius: 6,
-            }}>
-              הלוואה: {task.loans.name}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        <button onClick={onEdit} title="עריכה" style={iconBtnStyle('var(--primary-soft)', 'var(--primary-hi)')}>
-          <Pencil size={14} />
-        </button>
-        <button onClick={onDelete} title="מחיקה" style={iconBtnStyle('var(--neg-soft)', 'var(--neg)')}>
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// --- Styles ---
-
-const newBtnStyle = {
-  display: 'flex', alignItems: 'center',
-  background: 'var(--primary-grad)', color: 'var(--primary-ink)',
-  border: 'none', borderRadius: 10,
-  padding: '10px 20px', fontSize: 14, fontWeight: 600,
-  cursor: 'pointer',
-};
-const filterSelectStyle = {
-  padding: '8px 12px',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  fontSize: 13,
-  color: 'var(--ink-2)',
-  backgroundColor: 'var(--surface-2)',
-  outline: 'none',
-};
-const iconBtnStyle = (bg, color) => ({
-  backgroundColor: bg, color,
-  border: 'none', borderRadius: 8,
-  padding: '6px 8px', cursor: 'pointer',
-  display: 'flex', alignItems: 'center',
-});
 
 export default Tasks;

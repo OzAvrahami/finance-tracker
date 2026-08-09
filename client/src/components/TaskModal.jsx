@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { getAllLoans, getTransactions, createTask, updateTask } from '../services/api';
+import { useEffect, useRef, useState } from 'react';
+import { ListChecks } from 'lucide-react';
+import { createTask, getAllLoans, getTransactions, updateTask } from '../services/api';
+import {
+  Alert,
+  DateField,
+  Dialog,
+  PrimaryButton,
+  SecondaryButton,
+  Select,
+  TextArea,
+  TextField,
+} from './ui';
+import styles from '../pages/Tasks/Tasks.module.css';
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'פתוח' },
@@ -24,8 +36,6 @@ const CATEGORY_OPTIONS = [
   { value: 'other', label: 'אחר' },
 ];
 
-// Size of the "link this task to a transaction" picker. Matches the 50 rows the
-// modal previously sliced client-side.
 const LINKABLE_TRANSACTIONS_LIMIT = 50;
 
 const DEFAULT_FORM = {
@@ -39,272 +49,233 @@ const DEFAULT_FORM = {
   loan_id: '',
 };
 
-const TaskModal = ({ show, task, onClose, onSave }) => {
+const formatMoneyForOption = (value) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '₪0';
+  return `₪${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+};
+
+const TaskModal = ({ show, task, onClose, onSave, returnFocusRef }) => {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [loans, setLoans] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loadingEntities, setLoadingEntities] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const titleRef = useRef(null);
 
   useEffect(() => {
-    if (!show) return;
+    if (!show) return undefined;
+    let active = true;
     setLoadingEntities(true);
+
     Promise.all([
       getAllLoans().catch(() => ({ data: [] })),
-      // The picker offers the most recent transactions to link a task to.
-      // Ask the server for exactly that page instead of downloading the whole
-      // history and slicing the newest 50 off the front in the browser.
-      getTransactions({ limit: LINKABLE_TRANSACTIONS_LIMIT }).catch(() => ({ data: { data: [] } })),
-    ]).then(([loansRes, transRes]) => {
-      setLoans(loansRes.data || []);
-      setTransactions(transRes.data?.data || []);
-    }).finally(() => setLoadingEntities(false));
+      getTransactions({ limit: LINKABLE_TRANSACTIONS_LIMIT })
+        .catch(() => ({ data: { data: [] } })),
+    ]).then(([loansResponse, transactionsResponse]) => {
+      if (!active) return;
+      setLoans(loansResponse.data || []);
+      setTransactions(transactionsResponse.data?.data || []);
+    }).finally(() => {
+      if (active) setLoadingEntities(false);
+    });
+
+    return () => {
+      active = false;
+    };
   }, [show]);
 
   useEffect(() => {
-    if (task) {
-      setForm({
-        title: task.title || '',
-        notes: task.notes || '',
-        status: task.status || 'open',
-        priority: task.priority || 'medium',
-        category: task.category || 'personal',
-        due_date: task.due_date || '',
-        transaction_id: task.transaction_id ?? '',
-        loan_id: task.loan_id ?? '',
-      });
-    } else {
-      setForm(DEFAULT_FORM);
-    }
-  }, [task, show]);
+    if (!show) return;
+    setForm(task ? {
+      title: task.title || '',
+      notes: task.notes || '',
+      status: task.status || 'open',
+      priority: task.priority || 'medium',
+      category: task.category || 'personal',
+      due_date: task.due_date || '',
+      transaction_id: task.transaction_id ?? '',
+      loan_id: task.loan_id ?? '',
+    } : DEFAULT_FORM);
+    setSaveError('');
+    setSubmitted(false);
+  }, [show, task]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+  const updateField = (name, value) => {
+    setForm((current) => ({ ...current, [name]: value }));
+    setSaveError('');
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.title.trim()) return;
+  const handleClose = () => {
+    if (!saving) onClose();
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (saving) return;
+
+    setSubmitted(true);
+    if (!form.title.trim()) {
+      titleRef.current?.focus();
+      return;
+    }
+
+    const payload = {
+      ...form,
+      title: form.title.trim(),
+      due_date: form.due_date || null,
+      transaction_id: form.transaction_id ? Number(form.transaction_id) : null,
+      loan_id: form.loan_id ? Number(form.loan_id) : null,
+    };
+
     setSaving(true);
+    setSaveError('');
     try {
-      const payload = {
-        ...form,
-        title: form.title.trim(),
-        due_date: form.due_date || null,
-        transaction_id: form.transaction_id ? Number(form.transaction_id) : null,
-        loan_id: form.loan_id ? Number(form.loan_id) : null,
-      };
-      if (task) {
-        await updateTask(task.id, payload);
-      } else {
-        await createTask(payload);
-      }
-      onSave();
-    } catch (error) {
-      console.error('TaskModal save error:', error);
-      alert('שגיאה בשמירת המשימה');
+      if (task) await updateTask(task.id, payload);
+      else await createTask(payload);
+      await onSave();
+    } catch {
+      setSaveError('שמירת המטלה נכשלה. הפרטים נשמרו בטופס וניתן לנסות שוב.');
     } finally {
       setSaving(false);
     }
   };
 
-  if (!show) return null;
-
   return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={modalStyle} onClick={e => e.stopPropagation()} dir="rtl">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1E293B', margin: 0 }}>
-            {task ? 'עריכת משימה' : 'משימה חדשה'}
-          </h2>
-          <button onClick={onClose} style={closeBtnStyle}>✕</button>
+    <Dialog
+      open={show}
+      onClose={handleClose}
+      title={task ? 'עריכת מטלה' : 'מטלה חדשה'}
+      size="lg"
+      className={styles.taskDialog}
+      bodyClassName={styles.taskDialogBody}
+      footerClassName={styles.taskDialogFooter}
+      initialFocusRef={titleRef}
+      returnFocusRef={returnFocusRef}
+      closeDisabled={saving}
+      dismissOnBackdrop={!saving}
+      dismissOnEscape={!saving}
+      header={(
+        <span className={styles.taskDialogIcon} aria-hidden="true">
+          <ListChecks size={19} />
+        </span>
+      )}
+      footer={(
+        <>
+          <PrimaryButton
+            type="submit"
+            form="task-editor-form"
+            loading={saving}
+            loadingText="שומר…"
+          >
+            {task ? 'שמירת שינויים' : 'יצירת מטלה'}
+          </PrimaryButton>
+          <SecondaryButton type="button" disabled={saving} onClick={handleClose}>ביטול</SecondaryButton>
+        </>
+      )}
+    >
+      <form id="task-editor-form" className={styles.taskForm} noValidate onSubmit={handleSubmit}>
+        {saveError && <Alert variant="error" urgent>{saveError}</Alert>}
+
+        <TextField
+          ref={titleRef}
+          label="כותרת"
+          name="title"
+          required
+          value={form.title}
+          onValueChange={(value) => updateField('title', value)}
+          placeholder="למשל: לבדוק חיוב כפול בכאל"
+          error={submitted && !form.title.trim() ? 'יש להזין כותרת למטלה' : undefined}
+        />
+
+        <TextArea
+          label="הערות"
+          name="notes"
+          rows={3}
+          value={form.notes}
+          onValueChange={(value) => updateField('notes', value)}
+          placeholder="פרטים נוספים, מספר פנייה, מה צריך לבדוק"
+        />
+
+        <div className={styles.taskFormThreeColumns}>
+          <Select
+            label="סטטוס"
+            name="status"
+            value={form.status}
+            onValueChange={(value) => updateField('status', value)}
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </Select>
+          <Select
+            label="עדיפות"
+            name="priority"
+            value={form.priority}
+            onValueChange={(value) => updateField('priority', value)}
+          >
+            {PRIORITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </Select>
+          <Select
+            label="קטגוריית מטלה"
+            name="category"
+            value={form.category}
+            onValueChange={(value) => updateField('category', value)}
+          >
+            {CATEGORY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </Select>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Title */}
-          <div>
-            <label style={labelStyle}>
-              כותרת <span style={{ color: '#E11D48' }}>*</span>
-            </label>
-            <input
-              name="title"
-              value={form.title}
-              onChange={handleChange}
-              placeholder="תיאור המשימה..."
-              required
-              style={inputStyle}
-            />
-          </div>
+        <DateField
+          className={styles.taskDueField}
+          label="תאריך יעד"
+          name="due_date"
+          value={form.due_date}
+          onValueChange={(value) => updateField('due_date', value)}
+        />
 
-          {/* Notes */}
-          <div>
-            <label style={labelStyle}>הערות</label>
-            <textarea
-              name="notes"
-              value={form.notes}
-              onChange={handleChange}
-              placeholder="פרטים נוספים..."
-              rows={3}
-              style={{ ...inputStyle, resize: 'vertical' }}
-            />
-          </div>
+        <fieldset className={styles.taskLinksSection}>
+          <legend>קישורים אופציונליים</legend>
+          <Select
+            label="תנועה מקושרת"
+            name="transaction_id"
+            value={form.transaction_id}
+            loading={loadingEntities}
+            onValueChange={(value) => updateField('transaction_id', value)}
+            helperText="הרשימה כוללת את 50 התנועות האחרונות בלבד."
+          >
+            <option value="">ללא קישור</option>
+            {transactions.map((transaction) => (
+              <option key={transaction.id} value={transaction.id}>
+                {transaction.description} · {formatMoneyForOption(transaction.total_amount)} · {transaction.transaction_date}
+              </option>
+            ))}
+          </Select>
 
-          {/* Status + Priority */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>סטטוס</label>
-              <select name="status" value={form.status} onChange={handleChange} style={inputStyle}>
-                {STATUS_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>עדיפות</label>
-              <select name="priority" value={form.priority} onChange={handleChange} style={inputStyle}>
-                {PRIORITY_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Category + Due Date */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>קטגוריה</label>
-              <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
-                {CATEGORY_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>תאריך יעד</label>
-              <input
-                type="date"
-                name="due_date"
-                value={form.due_date}
-                onChange={handleChange}
-                style={{ ...inputStyle, direction: 'ltr' }}
-              />
-            </div>
-          </div>
-
-          {/* Link to Transaction */}
-          <div>
-            <label style={labelStyle}>קישור לתנועה (אופציונלי)</label>
-            <select
-              name="transaction_id"
-              value={form.transaction_id}
-              onChange={handleChange}
-              style={inputStyle}
-              disabled={loadingEntities}
-            >
-              <option value="">— ללא —</option>
-              {transactions.map(t => (
-                <option key={t.id} value={t.id}>
-                  {t.description} · ₪{Number(t.total_amount).toLocaleString()} · {t.transaction_date}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Link to Loan */}
-          <div>
-            <label style={labelStyle}>קישור להלוואה (אופציונלי)</label>
-            <select
-              name="loan_id"
-              value={form.loan_id}
-              onChange={handleChange}
-              style={inputStyle}
-              disabled={loadingEntities}
-            >
-              <option value="">— ללא —</option>
-              {loans.map(l => (
-                <option key={l.id} value={l.id}>
-                  {l.name} · ₪{Number(l.current_balance).toLocaleString()} יתרה
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-start', marginTop: 8 }}>
-            <button type="submit" disabled={saving} style={saveBtnStyle}>
-              {saving ? 'שומר...' : task ? 'עדכן משימה' : 'צור משימה'}
-            </button>
-            <button type="button" onClick={onClose} style={cancelBtnStyle}>ביטול</button>
-          </div>
-        </form>
-      </div>
-    </div>
+          <Select
+            label="הלוואה מקושרת"
+            name="loan_id"
+            value={form.loan_id}
+            loading={loadingEntities}
+            onValueChange={(value) => updateField('loan_id', value)}
+          >
+            <option value="">ללא קישור</option>
+            {loans.map((loan) => (
+              <option key={loan.id} value={loan.id}>
+                {loan.name} · {formatMoneyForOption(loan.current_balance)} יתרה
+              </option>
+            ))}
+          </Select>
+        </fieldset>
+      </form>
+    </Dialog>
   );
-};
-
-const overlayStyle = {
-  position: 'fixed', inset: 0,
-  backgroundColor: 'rgba(0,0,0,0.5)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  zIndex: 1000,
-};
-const modalStyle = {
-  backgroundColor: 'white',
-  borderRadius: 16,
-  padding: 32,
-  width: '100%',
-  maxWidth: 560,
-  maxHeight: '90vh',
-  overflowY: 'auto',
-  boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-};
-const labelStyle = {
-  display: 'block',
-  fontSize: 13,
-  fontWeight: 600,
-  color: '#475569',
-  marginBottom: 6,
-};
-const inputStyle = {
-  width: '100%',
-  padding: '10px 12px',
-  border: '1px solid #E2E8F0',
-  borderRadius: 8,
-  fontSize: 14,
-  color: '#1E293B',
-  backgroundColor: 'white',
-  boxSizing: 'border-box',
-  outline: 'none',
-};
-const saveBtnStyle = {
-  backgroundColor: '#2563EB',
-  color: 'white',
-  border: 'none',
-  borderRadius: 8,
-  padding: '10px 24px',
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
-};
-const cancelBtnStyle = {
-  backgroundColor: '#F1F5F9',
-  color: '#475569',
-  border: 'none',
-  borderRadius: 8,
-  padding: '10px 24px',
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
-};
-const closeBtnStyle = {
-  background: 'none',
-  border: 'none',
-  fontSize: 20,
-  color: '#94A3B8',
-  cursor: 'pointer',
-  padding: 4,
-  lineHeight: 1,
 };
 
 export default TaskModal;
