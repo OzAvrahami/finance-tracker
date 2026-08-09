@@ -1,27 +1,40 @@
-import React from 'react';
-import { inputStyle, modalOverlayStyle, modalContentStyle, cancelBtnStyle, saveModalBtnStyle } from './transactions/AddTransaction.styles';
+import { useRef } from 'react';
+import { Button, Dialog, SecondaryButton, TextField } from './ui';
 
 const NewCategoryModal = ({ show, newCategoryName, setNewCategoryName, onSave, onClose }) => {
-  if (!show) return null;
+  const inputRef = useRef(null);
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    onSave();
+  };
 
   return (
-    <div style={modalOverlayStyle}>
-      <div style={modalContentStyle}>
-        <h3 style={{ marginTop: 0 }}>קטגוריה חדשה ✨</h3>
-        <input
-          type="text"
-          placeholder="שם הקטגוריה..."
+    <Dialog
+      open={show}
+      onClose={onClose}
+      title="קטגוריה חדשה"
+      description="הקטגוריה תיבחר אוטומטית לאחר השמירה."
+      initialFocusRef={inputRef}
+      size="sm"
+      footer={(
+        <>
+          <SecondaryButton type="button" onClick={onClose}>ביטול</SecondaryButton>
+          <Button type="submit" form="new-category-form">שמירת קטגוריה</Button>
+        </>
+      )}
+    >
+      <form id="new-category-form" onSubmit={handleSubmit}>
+        <TextField
+          ref={inputRef}
+          label="שם הקטגוריה"
           value={newCategoryName}
-          onChange={(e) => setNewCategoryName(e.target.value)}
-          style={inputStyle}
-          autoFocus
+          onValueChange={setNewCategoryName}
+          placeholder="לדוגמה: לימודים"
+          required
         />
-        <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
-          <button type="button" onClick={onClose} style={cancelBtnStyle}>ביטול</button>
-          <button type="button" onClick={onSave} style={saveModalBtnStyle}>שמור</button>
-        </div>
-      </div>
-    </div>
+      </form>
+    </Dialog>
   );
 };
 

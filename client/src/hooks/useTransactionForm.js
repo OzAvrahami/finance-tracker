@@ -13,7 +13,7 @@ const useTransactionForm = () => {
   const { id } = useParams();
   const isEditMode = Boolean(id);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(id));
   const [items, setItems] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
   const [legoThemes, setLegoThemes] = useState([]);
@@ -72,11 +72,14 @@ const useTransactionForm = () => {
       }
     };
     fetchData();
+  // This request intentionally runs once; `id` is handled by the edit-loading effect below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load Transaction for Edit
   useEffect(() => {
     if (isEditMode) {
+      // Preserve the existing edit-route loading boundary while the request is in flight.
       setLoading(true);
       getTransactionById(id)
         .then(res => {
@@ -137,8 +140,11 @@ const useTransactionForm = () => {
 
   useEffect(() => {
     if (items.length > 0) {
+      // The existing item model owns the authoritative transaction total through this effect.
       setTransaction(prev => ({ ...prev, total_amount: calculateTotal() }));
     }
+  // Keeping the legacy dependency boundary avoids changing when totals are recalculated.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, transaction.global_discount]);
 
   // --- Helpers ---
@@ -271,7 +277,7 @@ const useTransactionForm = () => {
   };
 
   const handleSetNumberBlur = async (index, setNumber) => {
-    if (!setNumber || !isLegoCategory()) return;
+    if (!setNumber || !isLegoCategory()) return false;
 
     try {
         const res = await getLegoSetDetails(setNumber);
@@ -279,8 +285,10 @@ const useTransactionForm = () => {
         if (!newItems[index].item_name) newItems[index].item_name = res.data.name;
         if (!newItems[index].theme) newItems[index].theme = res.data.theme;
         setItems(newItems);
-    } catch (error) {
+        return true;
+    } catch {
         console.log("Set details not found");
+        return false;
     }
   };
 
