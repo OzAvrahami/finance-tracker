@@ -1,0 +1,220 @@
+import { Check, Pencil, Trash2, X } from 'lucide-react';
+import {
+  IconButton,
+  NumberField,
+  ProgressBar,
+  TechnicalValue,
+} from '../../components/ui';
+import BudgetMoneyAmount from './BudgetMoneyAmount';
+
+const BudgetProgress = ({ row }) => (
+  <div className="budget-progress">
+    <div className="budget-progress__meta">
+      <span>{row.statusLabel}</span>
+      <TechnicalValue>{row.percent}%</TechnicalValue>
+    </div>
+    <ProgressBar
+      value={row.percent}
+      max={Math.max(100, row.percent)}
+      tone={{ warning: 'warn', negative: 'neg' }[row.tone] || 'primary'}
+      height={7}
+      aria-label={`ניצול תקציב ${row.categoryName}`}
+      aria-valuetext={`${row.percent}% — ${row.statusLabel}`}
+    />
+  </div>
+);
+
+const BudgetEditor = ({ row, view, value, pending, error, onChange, onSave, onCancel }) => (
+  <div className="budget-inline-editor">
+    <NumberField
+      id={`budget-amount-${view}-${row.id}`}
+      label={`תקציב עבור ${row.categoryName}`}
+      className="budget-inline-editor__field"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      disabled={pending}
+      error={error}
+    />
+    <div className="budget-inline-editor__actions">
+      <IconButton
+        type="button"
+        size="sm"
+        aria-label={`שמירת תקציב עבור ${row.categoryName}`}
+        disabled={pending}
+        onClick={() => onSave(row)}
+      >
+        <Check size={15} aria-hidden="true" />
+      </IconButton>
+      <IconButton
+        type="button"
+        size="sm"
+        aria-label={`ביטול עריכת תקציב עבור ${row.categoryName}`}
+        disabled={pending}
+        onClick={onCancel}
+      >
+        <X size={15} aria-hidden="true" />
+      </IconButton>
+    </div>
+  </div>
+);
+
+const BudgetActions = ({ row, disabled, onEdit, onDelete }) => (
+  <div className="budget-row-actions">
+    <IconButton
+      type="button"
+      size="sm"
+      aria-label={`עריכת תקציב עבור ${row.categoryName}`}
+      disabled={disabled}
+      onClick={() => onEdit(row)}
+    >
+      <Pencil size={15} aria-hidden="true" />
+    </IconButton>
+    <IconButton
+      type="button"
+      size="sm"
+      className="budget-row-actions__delete"
+      aria-label={`מחיקת תקציב עבור ${row.categoryName}`}
+      disabled={disabled}
+      onClick={() => onDelete(row)}
+    >
+      <Trash2 size={15} aria-hidden="true" />
+    </IconButton>
+  </div>
+);
+
+const CategoryIdentity = ({ row }) => (
+  <div className="budget-category">
+    {row.categoryIcon && <span className="budget-category__icon" aria-hidden="true">{row.categoryIcon}</span>}
+    <span className="budget-category__name">{row.categoryName}</span>
+    <span className={`budget-status budget-status--${row.tone}`}>{row.statusLabel}</span>
+  </div>
+);
+
+const RemainingAmount = ({ row }) => (
+  <div className={`budget-remaining budget-remaining--${row.remaining < 0 ? 'negative' : 'positive'}`}>
+    <span className="budget-remaining__label">{row.remaining < 0 ? 'חריגה' : 'נותר'}</span>
+    <BudgetMoneyAmount value={row.remaining < 0 ? Math.abs(row.remaining) : row.remaining} />
+  </div>
+);
+
+const BudgetList = ({
+  rows,
+  editingId,
+  editAmount,
+  editPending,
+  editError,
+  onStartEdit,
+  onEditAmountChange,
+  onSaveEdit,
+  onCancelEdit,
+  onRequestDelete,
+}) => (
+  <section className="budget-list-region" aria-labelledby="budget-list-title">
+    <h2 id="budget-list-title" className="u-sr-only">פירוט התקציב</h2>
+
+    <div className="budget-table-wrap">
+      <table className="budget-table">
+        <caption className="u-sr-only">תקציבים לפי קטגוריית הוצאה</caption>
+        <colgroup>
+          <col className="budget-col-category" />
+          <col className="budget-col-planned" />
+          <col className="budget-col-actual" />
+          <col className="budget-col-remaining" />
+          <col className="budget-col-progress" />
+          <col className="budget-col-actions" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">קטגוריה</th>
+            <th scope="col">מתוכנן</th>
+            <th scope="col">בפועל</th>
+            <th scope="col">נותר / חריגה</th>
+            <th scope="col">ניצול</th>
+            <th scope="col"><span className="u-sr-only">פעולות</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const isEditing = editingId === row.id;
+            return (
+              <tr key={row.id} className={`budget-table__row budget-table__row--${row.tone}`}>
+                <td><CategoryIdentity row={row} /></td>
+                <td>
+                  {isEditing ? (
+                    <BudgetEditor
+                      row={row}
+                      view="desktop"
+                      value={editAmount}
+                      pending={editPending}
+                      error={editError}
+                      onChange={onEditAmountChange}
+                      onSave={onSaveEdit}
+                      onCancel={onCancelEdit}
+                    />
+                  ) : (
+                    <BudgetMoneyAmount value={row.planned} />
+                  )}
+                </td>
+                <td><span className="budget-actual-amount"><BudgetMoneyAmount value={row.actual} /></span></td>
+                <td><RemainingAmount row={row} /></td>
+                <td><BudgetProgress row={row} /></td>
+                <td>
+                  {!isEditing && (
+                    <BudgetActions
+                      row={row}
+                      disabled={editPending}
+                      onEdit={onStartEdit}
+                      onDelete={onRequestDelete}
+                    />
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="budget-mobile-list" role="list" aria-label="תקציבים לפי קטגוריית הוצאה">
+      {rows.map((row) => {
+        const isEditing = editingId === row.id;
+        return (
+          <article key={row.id} className={`budget-mobile-card budget-mobile-card--${row.tone}`} role="listitem">
+            <header className="budget-mobile-card__header">
+              <CategoryIdentity row={row} />
+              {!isEditing && (
+                <BudgetActions
+                  row={row}
+                  disabled={editPending}
+                  onEdit={onStartEdit}
+                  onDelete={onRequestDelete}
+                />
+              )}
+            </header>
+            {isEditing ? (
+              <BudgetEditor
+                row={row}
+                view="mobile"
+                value={editAmount}
+                pending={editPending}
+                error={editError}
+                onChange={onEditAmountChange}
+                onSave={onSaveEdit}
+                onCancel={onCancelEdit}
+              />
+            ) : (
+              <dl className="budget-mobile-card__amounts">
+                <div><dt>מתוכנן</dt><dd><BudgetMoneyAmount value={row.planned} /></dd></div>
+                <div><dt>בפועל</dt><dd className="budget-actual-amount"><BudgetMoneyAmount value={row.actual} /></dd></div>
+                <div><dt>{row.remaining < 0 ? 'חריגה' : 'נותר'}</dt><dd><RemainingAmount row={row} /></dd></div>
+              </dl>
+            )}
+            <BudgetProgress row={row} />
+          </article>
+        );
+      })}
+    </div>
+  </section>
+);
+
+export default BudgetList;
