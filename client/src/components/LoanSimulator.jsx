@@ -1,168 +1,152 @@
-import React, { useState, useMemo } from 'react';
-import { Calculator, TrendingDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Calculator, Coins, Info, Percent } from 'lucide-react';
+import {
+  Alert,
+  MoneyAmount,
+  NumberField,
+  PrimaryButton,
+  TechnicalValue,
+} from './ui';
 
 const LoanSimulator = ({ loans }) => {
   const [amountToPay, setAmountToPay] = useState('');
-  const CURRENT_PRIME = 6.0; // הנחת יסוד לחישובים
+  const [submittedEmpty, setSubmittedEmpty] = useState(false);
+  const currentPrime = 6.0;
+  const numericAmount = parseFloat(amountToPay);
+  const isInvalid = amountToPay !== '' && (!Number.isFinite(numericAmount) || numericAmount <= 0);
 
-  // המוח: מחשב איזו הלוואה הכי משתלם לסגור
   const recommendation = useMemo(() => {
-    if (!amountToPay || isNaN(amountToPay) || loans.length === 0) return null;
+    if (!amountToPay || Number.isNaN(Number(amountToPay)) || loans.length === 0) return null;
 
     const cash = parseFloat(amountToPay);
-
-    // 1. נרמול ומיון: יוצרים רשימה שמכילה את "הריבית האמיתית" לכל הלוואה
     const sortedLoans = loans
-      .map(loan => {
+      .map((loan) => {
         const margin = parseFloat(loan.prime_margin) || 0;
         const fixedRate = parseFloat(loan.interest_rate) || 0;
-        
-        // חישוב ריבית אפקטיבית (אם זה פריים או קבועה)
-        const effectiveRate = loan.interest_type === 'prime' 
-            ? (CURRENT_PRIME + margin) 
-            : fixedRate;
+        const effectiveRate = loan.interest_type === 'prime'
+          ? currentPrime + margin
+          : fixedRate;
 
         return { ...loan, effectiveRate };
       })
-      .filter(l => parseFloat(l.current_balance) > 0) // רק הלוואות פתוחות
-      .sort((a, b) => b.effectiveRate - a.effectiveRate); // מיון מהכי יקרה להכי זולה
+      .filter((loan) => parseFloat(loan.current_balance) > 0)
+      .sort((first, second) => second.effectiveRate - first.effectiveRate);
 
-    // 2. ההמלצה: ההלוואה הראשונה ברשימה
     const targetLoan = sortedLoans[0];
-    
     if (!targetLoan) return null;
 
-    // 3. חישוב חיסכון משוער (שנתי)
-    const paymentAmount = Math.min(cash, parseFloat(targetLoan.current_balance));
+    const balance = parseFloat(targetLoan.current_balance);
+    const paymentAmount = Math.min(cash, balance);
     const yearlySavings = (paymentAmount * targetLoan.effectiveRate) / 100;
 
     return {
       loanName: targetLoan.name,
+      lenderName: targetLoan.lender_name,
       loanRate: targetLoan.effectiveRate.toFixed(2),
-      balance: parseFloat(targetLoan.current_balance),
+      paymentAmount,
+      remainingBalance: Math.max(balance - paymentAmount, 0),
       yearlySavings: yearlySavings.toFixed(0),
-      isFullPayoff: cash >= parseFloat(targetLoan.current_balance)
+      isFullPayoff: cash >= balance,
     };
+  }, [amountToPay, currentPrime, loans]);
 
-  }, [amountToPay, loans]);
+  const handleAmountChange = (event) => {
+    setAmountToPay(event.target.value);
+    setSubmittedEmpty(false);
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    setSubmittedEmpty(amountToPay === '');
+  };
+
+  const hasSuitableLoan = loans.some((loan) => parseFloat(loan.current_balance) > 0);
+  const showNoLoan = amountToPay !== '' && !isInvalid && !hasSuitableLoan;
+  const showResult = recommendation && !isInvalid;
 
   return (
-    <div style={containerStyle}>
-      <div style={headerStyle}>
-        <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-            <div style={iconBox}><Calculator size={20} /></div>
-            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>סימולטור פירעון מוקדם</h3>
+    <section className="loan-simulator" aria-labelledby="loan-simulator-title">
+      <div className="loan-simulator__heading">
+        <span className="loan-simulator__icon" aria-hidden="true"><Calculator size={19} /></span>
+        <div>
+          <h2 id="loan-simulator-title">סימולטור פירעון מוקדם</h2>
+          <p>בודק את ההלוואות הקיימות וממליץ על זו עם הריבית האפקטיבית הגבוהה.</p>
         </div>
       </div>
 
-      {/* התיקון: הסגנון inputSection מוגדר עכשיו למטה */}
-      <div style={inputSection}>
-        <label style={{display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: '#4b5563'}}>
-          כמה כסף פנוי יש לך כרגע?
-        </label>
-        <div style={{display: 'flex', gap: '10px'}}>
-            <input 
-              type="number" 
-              placeholder="למשל: 20000" 
-              value={amountToPay}
-              onChange={(e) => setAmountToPay(e.target.value)}
-              style={inputStyle}
-            />
-        </div>
-      </div>
+      <form className="loan-simulator__controls" onSubmit={handleSubmit} noValidate>
+        <NumberField
+          id="loan-simulator-amount"
+          className="loan-simulator__field"
+          label="סכום לפירעון מוקדם"
+          placeholder="0"
+          min="0"
+          step="any"
+          value={amountToPay}
+          onChange={handleAmountChange}
+          error={isInvalid ? 'הסכום חייב להיות גדול מאפס' : undefined}
+          suffix="₪"
+        />
+        <PrimaryButton type="submit">
+          <Coins size={16} aria-hidden="true" />
+          חישוב חיסכון משוער
+        </PrimaryButton>
+        <p className="loan-simulator__context">מחושב לפי נתוני הריבית הקיימים במערכת</p>
+      </form>
 
-      {/* אזור התוצאה - מופיע רק אם יש המלצה */}
-      {recommendation && (
-        <div style={resultCard}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start'}}>
-                <div>
-                    <span style={{fontSize: '0.85rem', color: '#6b7280'}}>ההמלצה החכמה שלנו:</span>
-                    <div style={{fontSize: '1.3rem', fontWeight: 'bold', color: '#111827', marginTop: '5px'}}>
-                        סגור את "{recommendation.loanName}"
-                    </div>
-                    <div style={{fontSize: '0.9rem', color: '#ef4444', fontWeight: '600', marginTop: '2px'}}>
-                        ריבית נוכחית: {recommendation.loanRate}% (הכי יקרה שלך)
-                    </div>
-                </div>
-                {recommendation.isFullPayoff && (
-                    <div style={badgeStyle}>חיסול מלא! 🎉</div>
-                )}
-            </div>
+      {submittedEmpty && (
+        <Alert variant="warning" announce>יש להזין סכום לפירעון מוקדם.</Alert>
+      )}
 
-            <div style={savingsBox}>
-                <div style={{display: 'flex', alignItems: 'center', gap: '8px', color: '#059669'}}>
-                    <TrendingDown size={18} />
-                    <span style={{fontWeight: 'bold'}}>חיסכון משוער: ₪{recommendation.yearlySavings} לשנה</span>
-                </div>
-                <div style={{fontSize: '0.8rem', color: '#059669', marginTop: '4px', opacity: 0.9}}>
-                    (זה הכסף שלא תשלם לבנק אם תבצע את הפירעון עכשיו)
-                </div>
-            </div>
+      {!amountToPay && !submittedEmpty && (
+        <div className="loan-simulator__idle" role="status">
+          <Percent size={19} aria-hidden="true" />
+          <span>הזן סכום כדי לראות הערכת חיסכון בריבית לשנה.</span>
         </div>
       )}
-    </div>
+
+      {showNoLoan && (
+        <Alert variant="info" announce>לא נמצאה הלוואה פעילה שמתאימה לפירעון מוקדם.</Alert>
+      )}
+
+      {showResult && (
+        <div className="loan-simulator__result" role="status" aria-live="polite">
+          <div className="loan-simulator__recommendation">
+            <span className="loan-simulator__result-icon" aria-hidden="true"><Coins size={17} /></span>
+            <div>
+              <span>המלצה לפי הריבית האפקטיבית הגבוהה בתיק</span>
+              <strong>
+                {recommendation.loanName}
+                {recommendation.lenderName ? ` — ${recommendation.lenderName}` : ''}
+              </strong>
+            </div>
+            <TechnicalValue className="loan-simulator__rate">{recommendation.loanRate}%</TechnicalValue>
+          </div>
+
+          <dl className="loan-simulator__metrics">
+            <div>
+              <dt>סכום הפירעון</dt>
+              <dd><MoneyAmount value={recommendation.paymentAmount} maximumFractionDigits={2} /></dd>
+            </div>
+            <div className="is-positive">
+              <dt>חיסכון משוער בריבית · שנה</dt>
+              <dd><MoneyAmount value={recommendation.yearlySavings} maximumFractionDigits={2} /></dd>
+            </div>
+            <div>
+              <dt>יתרה לאחר הפירעון</dt>
+              <dd><MoneyAmount value={recommendation.remainingBalance} maximumFractionDigits={2} /></dd>
+            </div>
+          </dl>
+
+          <p className="loan-simulator__disclaimer">
+            <Info size={15} aria-hidden="true" />
+            זוהי הערכה המבוססת על נתוני ההלוואה והריבית הקיימים במערכת, ואינה התחייבות לתוצאה או תחליף ללוח סילוקין מהמלווה.
+          </p>
+          {recommendation.isFullPayoff && <span className="loan-simulator__payoff">הסכום מכסה את מלוא היתרה</span>}
+        </div>
+      )}
+    </section>
   );
-};
-
-// --- Styles ---
-const containerStyle = {
-  backgroundColor: 'white',
-  borderRadius: '16px',
-  padding: '24px',
-  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-  border: '1px solid #e2e8f0',
-  marginBottom: '30px'
-};
-
-const headerStyle = { marginBottom: '20px' };
-
-// הנה הסגנון שהיה חסר!
-const inputSection = {
-  marginBottom: '20px'
-};
-
-const iconBox = {
-  backgroundColor: '#f3e8ff',
-  color: '#9333ea',
-  padding: '8px',
-  borderRadius: '8px',
-  display: 'flex', alignItems: 'center', justifyContent: 'center'
-};
-
-const inputStyle = {
-  width: '100%',
-  padding: '12px',
-  fontSize: '1.1rem',
-  border: '2px solid #e5e7eb',
-  borderRadius: '10px',
-  outline: 'none',
-  transition: 'border-color 0.2s'
-};
-
-const resultCard = {
-  marginTop: '20px',
-  padding: '20px',
-  backgroundColor: '#f9fafb',
-  borderRadius: '12px',
-  border: '1px solid #f3f4f6',
-  animation: 'fadeIn 0.3s ease-in'
-};
-
-const badgeStyle = {
-  backgroundColor: '#d1fae5',
-  color: '#065f46',
-  padding: '4px 10px',
-  borderRadius: '20px',
-  fontSize: '0.8rem',
-  fontWeight: 'bold'
-};
-
-const savingsBox = {
-  marginTop: '15px',
-  padding: '12px',
-  backgroundColor: '#ecfdf5',
-  borderRadius: '8px',
-  border: '1px solid #a7f3d0'
 };
 
 export default LoanSimulator;

@@ -1,0 +1,304 @@
+import { useMemo, useState } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { PageHeaderContext } from '../../context/PageHeaderContext';
+import { createLoan, getAllLoans } from '../../services/api';
+import LoanSimulator from '../../components/LoanSimulator';
+import Loans from './Loans';
+
+vi.mock('../../services/api', () => ({
+  createLoan: vi.fn(),
+  getAllLoans: vi.fn(),
+}));
+
+const loan = (overrides = {}) => ({
+  id: 1,
+  name: 'הלוואת רכב',
+  lender_name: 'מימון ישיר',
+  loan_type: 'bank_loan',
+  amortization_type: 'spitzer',
+  interest_type: 'fixed',
+  original_amount: 120000,
+  current_balance: 74300,
+  monthly_payment: 1850,
+  interest_rate: 7.4,
+  prime_margin: 0,
+  total_installments: 60,
+  remaining_installments: 41,
+  start_date: '2023-03-15',
+  end_date: '2029-08-15',
+  ...overrides,
+});
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
+const HeaderHarness = ({ children }) => {
+  const [header, setHeader] = useState(null);
+  const contextValue = useMemo(() => ({ setPageHeader: setHeader }), []);
+
+  return (
+    <PageHeaderContext.Provider value={contextValue}>
+      {header?.primaryAction && (
+        <button type="button" onClick={header.primaryAction.onClick}>
+          {header.primaryAction.label}
+        </button>
+      )}
+      {children}
+    </PageHeaderContext.Provider>
+  );
+};
+
+const renderPage = () => render(<Loans />, { wrapper: HeaderHarness });
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  getAllLoans.mockResolvedValue({ data: [loan()] });
+  createLoan.mockResolvedValue({ data: {} });
+});
+
+describe('loans loading, summary, and cards', () => {
+  it('uses the shell heading, fetches loans, and renders the four real summary metrics', async () => {
+    renderPage();
+
+    expect(screen.getByLabelText('טעינת הלוואות')).toBeInTheDocument();
+    const summary = await screen.findByRole('region', { name: 'סיכום תיק ההלוואות' });
+
+    expect(getAllLoans).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הוספת הלוואה' })).toBeInTheDocument();
+    expect(within(summary).getByText('סך החוב הנוכחי')).toBeInTheDocument();
+    expect(within(summary).getByText('סך ההחזרים החודשיים')).toBeInTheDocument();
+    expect(within(summary).getByText('ההלוואה בריבית הגבוהה ביותר')).toBeInTheDocument();
+    expect(within(summary).getByText('מספר ההלוואות הפעילות')).toBeInTheDocument();
+    expect(within(summary).getByText('₪74,300')).toBeInTheDocument();
+    expect(within(summary).getByText('₪1,850')).toBeInTheDocument();
+    expect(within(summary).getByText('הלוואת רכב')).toBeInTheDocument();
+    expect(within(summary).getByText('1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /הצג עוד/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the real card data and accessible principal progress without unsupported actions', async () => {
+    renderPage();
+
+    const card = await screen.findByRole('article', { name: 'הלוואה: הלוואת רכב' });
+    expect(within(card).getByText('מימון ישיר', { exact: false })).toBeInTheDocument();
+    expect(within(card).getByText('₪74,300')).toBeInTheDocument();
+    expect(within(card).getByText('₪1,850')).toBeInTheDocument();
+    expect(within(card).getByText('41')).toBeInTheDocument();
+    expect(within(card).getByText('2023-03-15')).toBeInTheDocument();
+    expect(within(card).getByText('2029-08-15')).toBeInTheDocument();
+    expect(within(card).getByText('שפיצר')).toBeInTheDocument();
+    expect(within(card).getByText('ריבית קבועה', { exact: false })).toBeInTheDocument();
+
+    const progress = within(card).getByRole('progressbar');
+    expect(progress).toHaveAttribute('aria-valuenow', expect.stringMatching(/^38\.08/));
+    expect(progress).toHaveAttribute('aria-valuetext', '38% מהקרן נפרעה');
+    expect(screen.queryByRole('button', { name: /עריכת הלוואה|מחיקת הלוואה|רישום החזר|שינוי סטטוס/ })).not.toBeInTheDocument();
+  });
+
+  it('shows six loans by default, reveals every remaining loan, and collapses without another request', async () => {
+    getAllLoans.mockResolvedValue({
+      data: Array.from({ length: 8 }, (_, index) => loan({
+        id: index + 1,
+        name: `הלוואה ${index + 1}`,
+      })),
+    });
+    renderPage();
+
+    const portfolio = await screen.findByRole('region', { name: 'תיק ההלוואות' });
+    expect(within(portfolio).getAllByRole('article')).toHaveLength(6);
+    expect(within(portfolio).queryByRole('article', { name: 'הלוואה: הלוואה 7' })).not.toBeInTheDocument();
+
+    const showMore = screen.getByRole('button', { name: 'הצג עוד 2 הלוואות' });
+    expect(showMore).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(showMore);
+
+    expect(within(portfolio).getAllByRole('article')).toHaveLength(8);
+    expect(within(portfolio).getByRole('article', { name: 'הלוואה: הלוואה 8' })).toBeInTheDocument();
+    const showLess = screen.getByRole('button', { name: 'הצג פחות' });
+    expect(showLess).toHaveAttribute('aria-expanded', 'true');
+    expect(getAllLoans).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(showLess);
+    expect(within(portfolio).getAllByRole('article')).toHaveLength(6);
+    expect(within(portfolio).queryByRole('article', { name: 'הלוואה: הלוואה 8' })).not.toBeInTheDocument();
+    expect(getAllLoans).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses singular Hebrew wording when exactly one loan remains', async () => {
+    getAllLoans.mockResolvedValue({
+      data: Array.from({ length: 7 }, (_, index) => loan({
+        id: index + 1,
+        name: `הלוואה ${index + 1}`,
+      })),
+    });
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'הצג עוד 1 הלוואה' })).toBeInTheDocument();
+  });
+
+  it('formats money at the presentation boundary without leaking floating-point artifacts', async () => {
+    getAllLoans.mockResolvedValue({
+      data: [loan({ current_balance: 44723.07000000001, monthly_payment: 252.04999999999995 })],
+    });
+    renderPage();
+
+    expect((await screen.findAllByText('₪44,723.07')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('₪252.05').length).toBeGreaterThan(0);
+    expect(document.body).not.toHaveTextContent('44723.07000000001');
+    expect(document.body).not.toHaveTextContent('252.04999999999995');
+  });
+
+  it('renders a retryable load error and a true empty state', async () => {
+    getAllLoans.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({ data: [] });
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'טעינת ההלוואות נכשלה' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'נסה שוב' }));
+
+    expect(await screen.findByRole('heading', { name: 'לא נרשמו הלוואות' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'הוספת הלוואה' })).toHaveLength(2);
+  });
+});
+
+describe('create loan dialog', () => {
+  it('validates required fields and exposes the implemented conditional fields', async () => {
+    renderPage();
+    await screen.findByRole('article', { name: /הלוואה:/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
+    expect(within(dialog).getByText('חובה למלא שם הלוואה וסכום מקורי.')).toBeInTheDocument();
+    expect(createLoan).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'בלון' }));
+    expect(within(dialog).getByLabelText('סכום הבלון')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('חודשי גרייס')).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'גרייס' }));
+    expect(within(dialog).getByLabelText('חודשי גרייס')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('סכום הבלון')).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'פריים' }));
+    expect(within(dialog).getByLabelText('מרווח מעל הפריים')).toBeInTheDocument();
+    expect(within(dialog).getByText('מחושב לפי נתוני הריבית הקיימים במערכת')).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'צמודת מדד' }));
+    expect(within(dialog).getByLabelText('ריבית ריאלית מעל המדד')).toBeInTheDocument();
+  });
+
+  it('preserves the existing prime payload, defaults, dates, and grace values', async () => {
+    renderPage();
+    await screen.findByRole('article', { name: /הלוואה:/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
+    const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
+
+    await userEvent.type(within(dialog).getByLabelText(/שם ההלוואה/), 'הלוואת מבחן');
+    await userEvent.type(within(dialog).getByLabelText('מלווה'), 'בנק לדוגמה');
+    await userEvent.type(within(dialog).getByLabelText(/סכום מקורי/), '100000');
+    await userEvent.type(within(dialog).getByLabelText('החזר חודשי'), '1800');
+    await userEvent.type(within(dialog).getByLabelText('מספר תשלומים'), '60');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'גרייס' }));
+    await userEvent.type(within(dialog).getByLabelText('חודשי גרייס'), '3');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'פריים' }));
+    await userEvent.type(within(dialog).getByLabelText('מרווח מעל הפריים'), '1.5');
+    fireEvent.change(within(dialog).getByLabelText('תאריך תחילה'), { target: { value: '2026-08-09' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
+
+    await waitFor(() => expect(createLoan).toHaveBeenCalledTimes(1));
+    expect(createLoan).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'הלוואת מבחן',
+      lender_name: 'בנק לדוגמה',
+      loan_type: 'bank_loan',
+      amortization_type: 'grace',
+      interest_type: 'prime',
+      original_amount: 100000,
+      current_balance: 100000,
+      monthly_payment: 1800,
+      total_installments: 60,
+      remaining_installments: 0,
+      grace_months: 3,
+      balloon_amount: 0,
+      prime_margin: 1.5,
+      interest_rate: 7.5,
+      start_date: '2026-08-09',
+      end_date: null,
+    }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'הלוואה חדשה' })).not.toBeInTheDocument());
+    expect(getAllLoans).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains values on failure and prevents duplicate submission while saving', async () => {
+    const request = deferred();
+    createLoan.mockReturnValue(request.promise);
+    renderPage();
+    await screen.findByRole('article', { name: /הלוואה:/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
+    const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
+    const name = within(dialog).getByLabelText(/שם ההלוואה/);
+
+    await userEvent.type(name, 'הלוואה שנשמרת');
+    await userEvent.type(within(dialog).getByLabelText(/סכום מקורי/), '50000');
+    const submit = within(dialog).getByRole('button', { name: 'יצירת ההלוואה' });
+    await userEvent.click(submit);
+    expect(submit).toBeDisabled();
+    await userEvent.click(submit);
+    expect(createLoan).toHaveBeenCalledTimes(1);
+
+    request.reject({ response: { data: { error: 'שמירה נכשלה' } } });
+    expect(await within(dialog).findByText('שמירה נכשלה')).toBeInTheDocument();
+    expect(name).toHaveValue('הלוואה שנשמרת');
+    expect(screen.getByRole('dialog', { name: 'הלוואה חדשה' })).toBeInTheDocument();
+  });
+});
+
+describe('early repayment simulator', () => {
+  it('preserves the highest-effective-rate recommendation and labels the result as an estimate', async () => {
+    render(
+      <LoanSimulator loans={[
+        loan(),
+        loan({
+          id: 2,
+          name: 'הלוואת פריים',
+          lender_name: 'בנק אחר',
+          interest_type: 'prime',
+          interest_rate: 0,
+          prime_margin: 2,
+          current_balance: 10000,
+        }),
+      ]} />,
+    );
+
+    expect(screen.getByText('הזן סכום כדי לראות הערכת חיסכון בריבית לשנה.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'חישוב חיסכון משוער' }));
+    expect(screen.getByText('יש להזין סכום לפירעון מוקדם.')).toBeInTheDocument();
+
+    const input = screen.getByLabelText('סכום לפירעון מוקדם');
+    await userEvent.type(input, '-5');
+    expect(screen.getByText('הסכום חייב להיות גדול מאפס')).toBeInTheDocument();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '1000');
+    expect(screen.getByText('הלוואת פריים — בנק אחר')).toBeInTheDocument();
+    expect(screen.getByText('8.00%')).toBeInTheDocument();
+    expect(screen.getByText('₪80')).toBeInTheDocument();
+    expect(screen.getByText(/זוהי הערכה/)).toBeInTheDocument();
+    expect(screen.getByText('מחושב לפי נתוני הריבית הקיימים במערכת')).toBeInTheDocument();
+  });
+
+  it('shows a truthful no-suitable-loan state', async () => {
+    render(<LoanSimulator loans={[loan({ current_balance: 0 })]} />);
+    await userEvent.type(screen.getByLabelText('סכום לפירעון מוקדם'), '1000');
+    expect(screen.getByText('לא נמצאה הלוואה פעילה שמתאימה לפירעון מוקדם.')).toBeInTheDocument();
+  });
+});
