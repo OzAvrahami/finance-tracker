@@ -63,7 +63,7 @@ const renderForm = (path = '/add') => render(
 
 const settleInitialData = async () => {
   await waitFor(() => expect(getPaymentSources).toHaveBeenCalledTimes(1));
-  await waitFor(() => expect(screen.getByLabelText('אמצעי תשלום')).toHaveValue('10'));
+  await waitFor(() => expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('10'));
 };
 
 beforeEach(() => {
@@ -129,7 +129,7 @@ describe('AddTransaction characterization', () => {
     await user.click(screen.getByRole('radio', { name: 'הכנסה' }));
     await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'קניות סופר');
     fireEvent.change(screen.getByLabelText(/^תאריך התנועה/), { target: { value: '2026-08-08' } });
-    fireEvent.change(screen.getByLabelText('אמצעי תשלום'), { target: { value: '11' } });
+    fireEvent.change(screen.getByLabelText(/^אמצעי תשלום/), { target: { value: '11' } });
     fireEvent.change(screen.getByRole('spinbutton', { name: /^סכום$/ }), { target: { value: '123.45' } });
     fireEvent.change(screen.getByLabelText('מספר תשלומים'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('מטבע'), { target: { value: 'USD' } });
@@ -157,7 +157,7 @@ describe('AddTransaction characterization', () => {
       items: [],
     });
     expect(alert).toHaveBeenCalledWith(expect.stringContaining('נשמרה'));
-    expect(screen.getByLabelText('אמצעי תשלום')).toHaveValue('11');
+    expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('11');
   });
 
   it('preserves category selection and inline category creation', async () => {
@@ -281,7 +281,7 @@ describe('AddTransaction characterization', () => {
 
     expect(await screen.findByDisplayValue('עסקה קיימת')).toBeInTheDocument();
     expect(screen.getByText(/התנועה הזאת בלבד/)).toBeInTheDocument();
-    expect(screen.getByLabelText('אמצעי תשלום')).toHaveValue('10');
+    expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('10');
     expect(screen.getByLabelText('הערות')).toHaveValue('הערה קיימת');
     expect(screen.getByRole('textbox', { name: /^שם הפריט/ })).toHaveValue('פריט קיים');
     expect(screen.queryByRole('button', { name: /מחיק/ })).not.toBeInTheDocument();
@@ -308,6 +308,9 @@ describe('AddTransaction characterization', () => {
     await settleInitialData();
 
     await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'יישאר בטופס');
+    const categoryInput = screen.getByRole('combobox', { name: 'קטגוריה' });
+    await user.click(categoryInput);
+    await user.click(screen.getByRole('option', { name: /מזון/ }));
     fireEvent.change(screen.getByRole('spinbutton', { name: /^סכום$/ }), { target: { value: '55' } });
     const submit = screen.getByRole('button', { name: 'שמור תנועה' });
     await user.click(submit);
