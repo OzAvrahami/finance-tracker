@@ -1,193 +1,139 @@
-import React from 'react';
-import { BRAND_OPTIONS } from '../../utils/legoHelpers';
+import { useMemo, useState } from 'react';
+import { ImageOff, Pencil, Trash2 } from 'lucide-react';
+import { IconButton, MoneyAmount, TechnicalValue } from '../ui';
+import { BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
 
-const SetCard = ({ set, onStatusChange, onBrandChange, onEdit }) => {
-  const orig = Number(set.original_price) || 0;
-  const paid = Number(set.purchase_price) || 0;
-  const discountPercent = orig > paid ? Math.round(((orig - paid) / orig) * 100) : 0;
+const ACQUISITION_LABELS = {
+  purchased: 'נרכש',
+  gift: 'מתנה',
+  trade: 'החלפה',
+  other: 'אחר',
+};
 
-  const raw = String(set.set_number || '').trim();
-  const setNumberForImage = /-\d+$/.test(raw) ? raw : `${raw}-1`;
-  const imageUrl = `https://images.brickset.com/sets/images/${setNumberForImage}.jpg`;
+const STATUS_META = {
+  New: { label: 'חדש בקופסה', className: 'is-new' },
+  'In Progress': { label: 'בבנייה', className: 'is-progress' },
+  Built: { label: 'בנוי', className: 'is-built' },
+};
 
-  const statusBg = set.status === 'New'
-    ? 'var(--info-soft)'
-    : set.status === 'Built'
-    ? 'var(--pos-soft)'
-    : 'var(--warn-soft)';
+const MoneyOrDash = ({ value, className = '' }) => (
+  value !== null && value !== undefined && value !== '' ? (
+    <MoneyAmount
+      className={className}
+      value={value}
+      minimumFractionDigits={2}
+      maximumFractionDigits={2}
+    />
+  ) : <span className={`lego-money-empty ${className}`.trim()}>—</span>
+);
+
+const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, onDelete }) => {
+  const rawSetNumber = String(set.set_number || '').trim();
+  const imageUrl = useMemo(() => {
+    if (set.image_url) return set.image_url;
+    const normalized = /-\d+$/.test(rawSetNumber) ? rawSetNumber : `${rawSetNumber}-1`;
+    return `https://images.brickset.com/sets/images/${normalized}.jpg`;
+  }, [rawSetNumber, set.image_url]);
+  const [failedImageUrl, setFailedImageUrl] = useState('');
+  const imageFailed = failedImageUrl === imageUrl;
+
+  const status = STATUS_META[set.status] || { label: set.status || 'ללא סטטוס', className: 'is-neutral' };
+  const acquisition = ACQUISITION_LABELS[set.acquisition_type] || ACQUISITION_LABELS.other;
+  const titleId = `lego-set-${set.id}`;
 
   return (
-    <div style={cardStyle}>
-      <div style={imageContainerStyle}>
-        <img
-          src={imageUrl}
-          alt={set.name}
-          style={imageStyle}
-          loading="lazy"
-          onError={(e) => {
-            e.currentTarget.onerror = null;
-            e.currentTarget.src = 'https://via.placeholder.com/400x300/1B1F2E/5A607A?text=No+Image';
-          }}
-        />
+    <article className="lego-set-card ui-glass" aria-labelledby={titleId}>
+      <div className="lego-set-card__media">
+        {!imageFailed ? (
+          <img
+            src={imageUrl}
+            alt={`תמונת ${set.name || `סט ${rawSetNumber}`}`}
+            loading="lazy"
+            onError={() => setFailedImageUrl(imageUrl)}
+          />
+        ) : (
+          <div className="lego-set-card__fallback" role="img" aria-label={`אין תמונה זמינה עבור ${set.name || rawSetNumber}`}>
+            <ImageOff size={27} aria-hidden="true" />
+            <span>התמונה אינה זמינה</span>
+          </div>
+        )}
+        <span className={`lego-status-badge ${status.className}`}>{status.label}</span>
       </div>
 
-      <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px' }}>
-          <span style={setNumberBadge}>#{set.set_number}</span>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {set.theme && <span style={themeBadge}>{set.theme}</span>}
-            {set.brand && set.brand !== 'LEGO' && <span style={brandBadge}>{set.brand}</span>}
+      <div className="lego-set-card__body">
+        <header>
+          <h2 id={titleId} dir="auto" title={set.name}>{set.name}</h2>
+          <div className="lego-set-card__identity">
+            <TechnicalValue>#{rawSetNumber}</TechnicalValue>
+            {set.theme && <><span aria-hidden="true">·</span><span dir="auto">{set.theme}</span></>}
           </div>
-        </div>
+        </header>
 
-        <h3 style={{ margin: '0 0 15px 0', fontSize: '1.1rem', height: '45px', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.3', color: 'var(--ink-1)' }}>
-          {set.name}
-        </h3>
-
-        <div style={{ background: 'var(--surface-3)', padding: '12px', borderRadius: '8px', marginBottom: '15px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', color: 'var(--ink-3)' }}>
-            <span>שולם:</span>
-            <span style={{ fontWeight: 'bold', color: 'var(--ink-1)', fontSize: '1.1rem' }}>
-              ₪{paid.toLocaleString()}
-            </span>
-          </div>
-
-          {orig > paid && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--ink-4)', marginTop: '5px' }}>
-              <span>מחיר שוק:</span>
-              <span style={{ textDecoration: 'line-through' }}>₪{orig.toLocaleString()}</span>
-            </div>
+        <div className="lego-set-card__chips" aria-label="פרטי סט">
+          <TechnicalValue className="lego-meta-chip">{set.brand || 'LEGO'}</TechnicalValue>
+          {set.pieces !== null && set.pieces !== undefined && set.pieces !== '' && (
+            <span className="lego-meta-chip"><TechnicalValue>{set.pieces}</TechnicalValue> חלקים</span>
           )}
-
-          {discountPercent > 0 && <div style={dealBadge}>🔥 חסכת {discountPercent}%</div>}
+          <span className="lego-meta-chip">{acquisition}</span>
         </div>
 
-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <select
-            value={set.status}
-            onChange={(e) => onStatusChange(set.id, e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              background: statusBg,
-              color: 'var(--ink-1)',
-              cursor: 'pointer',
-              fontWeight: '500',
-            }}
-          >
-            <option value="New">📦 חדש בקופסה</option>
-            <option value="In Progress">🚧 בתהליך בנייה</option>
-            <option value="Built">✅ מורכב ומוצג</option>
-          </select>
+        <dl className="lego-set-card__finance">
+          <div>
+            <dt>שולם</dt>
+            <dd><MoneyOrDash value={set.purchase_price} className="is-paid" /></dd>
+          </div>
+          <div>
+            <dt>מחירון</dt>
+            <dd><MoneyOrDash value={set.original_price} /></dd>
+          </div>
+          <div>
+            <dt>שווי מוצג</dt>
+            <dd><MoneyOrDash value={set.market_value} className="is-value" /></dd>
+          </div>
+        </dl>
 
-          <select
-            value={set.brand || 'LEGO'}
-            onChange={(e) => onBrandChange(set.id, e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              background: 'var(--surface-3)',
-              color: 'var(--ink-1)',
-              cursor: 'pointer',
-              fontWeight: '500',
-            }}
-          >
-            {BRAND_OPTIONS.map(b => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
+        <footer className="lego-set-card__footer">
+          <span className="lego-acquisition-date">
+            {set.purchase_date ? <TechnicalValue>{set.purchase_date}</TechnicalValue> : 'תאריך לא צוין'}
+          </span>
+          <div className="lego-set-card__quick-actions">
+            <label className="lego-visually-hidden" htmlFor={`lego-status-${set.id}`}>עדכון סטטוס עבור {set.name}</label>
+            <select
+              id={`lego-status-${set.id}`}
+              className="lego-quick-select"
+              aria-label={`עדכון סטטוס עבור ${set.name}`}
+              value={set.status}
+              disabled={pending}
+              onChange={(event) => onStatusChange(set.id, event.target.value)}
+            >
+              {STATUS_OPTIONS.filter((option) => option.key !== 'All').map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
 
-          <button
-            onClick={() => onEdit(set)}
-            style={{
-              width: '100%',
-              padding: '8px',
-              borderRadius: '8px',
-              border: '1px solid var(--border)',
-              background: 'transparent',
-              color: 'var(--ink-4)',
-              cursor: 'pointer',
-              fontWeight: '500',
-              fontSize: '0.85rem',
-            }}
-          >
-            ערוך פרטים
-          </button>
-        </div>
+            <label className="lego-visually-hidden" htmlFor={`lego-brand-${set.id}`}>עדכון מותג עבור {set.name}</label>
+            <select
+              id={`lego-brand-${set.id}`}
+              className="lego-quick-select lego-quick-select--brand"
+              aria-label={`עדכון מותג עבור ${set.name}`}
+              value={set.brand || 'LEGO'}
+              disabled={pending}
+              onChange={(event) => onBrandChange(set.id, event.target.value)}
+            >
+              {BRAND_OPTIONS.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+            </select>
+
+            <IconButton type="button" size="touch" aria-label={`עריכת ${set.name}`} disabled={pending} onClick={(event) => onEdit(set, event)}>
+              <Pencil size={15} aria-hidden="true" />
+            </IconButton>
+            <IconButton type="button" size="touch" className="lego-delete-action" aria-label={`מחיקת ${set.name}`} disabled={pending} onClick={(event) => onDelete(set, event)}>
+              <Trash2 size={15} aria-hidden="true" />
+            </IconButton>
+          </div>
+        </footer>
       </div>
-    </div>
+    </article>
   );
-};
-
-// --- Styles ---
-const cardStyle = {
-  background: 'var(--surface-2)',
-  borderRadius: '16px',
-  overflow: 'hidden',
-  boxShadow: 'var(--shadow-md)',
-  border: '1px solid var(--border)',
-  transition: 'transform 0.2s, box-shadow 0.2s',
-  display: 'flex',
-  flexDirection: 'column',
-};
-
-const imageContainerStyle = {
-  height: '180px',
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  backgroundColor: 'var(--surface-3)',
-  padding: '10px',
-  borderBottom: '1px solid var(--border)',
-};
-
-const imageStyle = {
-  maxWidth: '100%',
-  maxHeight: '100%',
-  objectFit: 'contain',
-};
-
-const setNumberBadge = {
-  background: 'var(--surface-3)',
-  padding: '4px 8px',
-  borderRadius: '6px',
-  fontSize: '0.8rem',
-  fontWeight: 'bold',
-  color: 'var(--ink-3)',
-};
-
-const themeBadge = {
-  background: 'var(--primary-soft)',
-  color: 'var(--primary-hi)',
-  padding: '4px 8px',
-  borderRadius: '6px',
-  fontSize: '0.8rem',
-  fontWeight: '600',
-};
-
-const brandBadge = {
-  background: 'var(--warn-soft)',
-  color: 'var(--warn)',
-  padding: '4px 8px',
-  borderRadius: '6px',
-  fontSize: '0.8rem',
-  fontWeight: '600',
-};
-
-const dealBadge = {
-  marginTop: '10px',
-  background: 'var(--pos-soft)',
-  color: 'var(--pos)',
-  padding: '6px',
-  borderRadius: '6px',
-  fontSize: '0.85rem',
-  textAlign: 'center',
-  fontWeight: 'bold',
 };
 
 export default SetCard;

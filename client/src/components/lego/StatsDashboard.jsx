@@ -1,34 +1,64 @@
-import React from 'react';
+import { createElement } from 'react';
+import { Blocks, HandCoins, PiggyBank, WalletCards } from 'lucide-react';
+import { GlassCard, MoneyAmount, TechnicalValue } from '../ui';
 
-const StatCard = ({ title, value, color }) => (
-  <div style={{
-    background: 'var(--surface-2)',
-    padding: '20px',
-    borderRadius: '12px',
-    border: '1px solid var(--border)',
-    borderBottom: `4px solid ${color}`,
-  }}>
-    <h3 style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: 'var(--ink-4)' }}>{title}</h3>
-    <p style={{ margin: 0, fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--ink-1)' }}>{value}</p>
-  </div>
+const SUMMARY_ITEMS = [
+  {
+    key: 'totalSets',
+    label: 'מספר הסטים',
+    note: 'כל הסטים באוסף',
+    icon: Blocks,
+    tone: 'primary',
+    money: false,
+  },
+  {
+    key: 'totalValue',
+    label: 'שווי מוצג',
+    note: 'לפי הנתונים שהוזנו לאוסף',
+    icon: WalletCards,
+    tone: 'primary',
+    money: true,
+  },
+  {
+    key: 'totalPaid',
+    label: 'סך ששולם',
+    note: 'מחירי הרכישה המתועדים',
+    icon: HandCoins,
+    tone: 'expense',
+    money: true,
+  },
+  {
+    key: 'totalSaved',
+    label: 'חיסכון',
+    note: 'פער מול הערך המחושב הקיים',
+    icon: PiggyBank,
+    tone: 'positive',
+    money: true,
+  },
+];
+
+const StatsDashboard = ({ stats }) => (
+  <section className="lego-summary" aria-label="סיכום אוסף לגו">
+    {SUMMARY_ITEMS.map(({ key, label, note, icon: Icon, tone, money }) => (
+      <GlassCard key={key} className={`lego-summary-card is-${tone}`} padding="18px">
+        <div className="lego-summary-card__label">
+          <span className="lego-summary-card__icon" aria-hidden="true">{createElement(Icon, { size: 17 })}</span>
+          <span>{label}</span>
+        </div>
+        {money ? (
+          <MoneyAmount
+            className="lego-summary-card__value"
+            value={stats[key]}
+            minimumFractionDigits={2}
+            maximumFractionDigits={2}
+          />
+        ) : (
+          <TechnicalValue className="lego-summary-card__value">{stats[key]}</TechnicalValue>
+        )}
+        <p>{note}</p>
+      </GlassCard>
+    ))}
+  </section>
 );
-
-const StatsDashboard = ({ stats }) => {
-  const { totalSets, totalValue, totalPaid, totalSaved } = stats;
-
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '20px',
-      marginBottom: '40px',
-    }}>
-      <StatCard title="כמות סטים" value={totalSets} color="#5AC8FF" />
-      <StatCard title="שווי שוק מוערך" value={`₪${totalValue.toLocaleString()}`} color="#9B82FF" />
-      <StatCard title='סה"כ שולם' value={`₪${totalPaid.toLocaleString()}`} color="#7C5CFF" />
-      <StatCard title="חיסכון כולל" value={`₪${totalSaved.toLocaleString()}`} color="#4ADE9A" />
-    </div>
-  );
-};
 
 export default StatsDashboard;
