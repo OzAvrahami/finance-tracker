@@ -1,300 +1,439 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, X, ShoppingCart, Trash2 } from 'lucide-react';
-import { getShoppingLists, getShoppingListTypes, createShoppingList, deleteShoppingList } from '../../services/api';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, Plus, ShoppingCart, Tag, Trash2 } from 'lucide-react';
+import { PageHeaderContext } from '../../context/PageHeaderContext';
+import {
+  Alert,
+  ConfirmDialog,
+  Dialog,
+  EmptyState,
+  ErrorState,
+  GlassCard,
+  IconButton,
+  PrimaryButton,
+  ProgressBar,
+  SecondaryButton,
+  Select,
+  Skeleton,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
+  TechnicalValue,
+  TextField,
+} from '../../components/ui';
+import {
+  createShoppingList,
+  deleteShoppingList,
+  getShoppingLists,
+  getShoppingListTypes,
+} from '../../services/api';
 import ShoppingListDetail from './ShoppingListDetail';
+import { SHOPPING_STATUS } from './shoppingConstants';
+import './Shopping.css';
 
-const STATUS_CONFIG = {
-  draft:       { bg: 'var(--surface-3)',  text: 'var(--ink-4)',   label: 'טיוטה' },
-  active:      { bg: 'var(--info-soft)',  text: 'var(--info)',    label: 'פעילה' },
-  checked_out: { bg: 'var(--pos-soft)',   text: 'var(--pos)',     label: 'שולמה' },
-  archived:    { bg: 'var(--surface-3)',  text: 'var(--ink-4)',   label: 'ארכיון' },
+const STATUS_FILTERS = [
+  { value: 'all', label: 'הכול' },
+  { value: 'draft', label: 'טיוטה' },
+  { value: 'active', label: 'פעילות' },
+  { value: 'checked_out', label: 'הושלמו בקופה' },
+  { value: 'archived', label: 'בארכיון' },
+];
+
+const formatDate = (value) => {
+  if (!value) return 'לא ידוע';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString('he-IL');
+};
+
+const ShoppingOverviewSkeleton = () => (
+  <div className="shopping-skeleton" role="status" aria-label="טעינת רשימות קניות">
+    <span className="shopping-visually-hidden">טוען רשימות קניות</span>
+    <Skeleton height={68} borderRadius="var(--ft-radius-xl)" aria-hidden="true" />
+    <div className="shopping-list-grid" aria-hidden="true">
+      {Array.from({ length: 4 }, (_, index) => (
+        <Skeleton key={index} height={174} borderRadius="var(--ft-radius-xl)" />
+      ))}
+    </div>
+  </div>
+);
+
+const CreateShoppingListDialog = ({
+  open,
+  listTypes,
+  onClose,
+  onCreate,
+  returnFocusRef,
+}) => {
+  const titleRef = useRef(null);
+  const [title, setTitle] = useState('');
+  const [listTypeId, setListTypeId] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle('');
+    setListTypeId(listTypes[0]?.id ? String(listTypes[0].id) : '');
+    setTouched(false);
+    setPending(false);
+    setError('');
+  }, [listTypes, open]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (pending) return;
+    setTouched(true);
+    setError('');
+    if (!title.trim() || !listTypeId) return;
+
+    setPending(true);
+    try {
+      await onCreate(title.trim(), listTypeId);
+    } catch {
+      setError('יצירת הרשימה נכשלה. הפרטים נשמרו וניתן לנסות שוב.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const close = (reason) => {
+    if (!pending) onClose(reason);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={close}
+      title="רשימת קניות חדשה"
+      description="הרשימה תיפתח כטיוטה. אפשר להוסיף לה פריטים ולהפעיל אותה בהמשך."
+      size="sm"
+      className="shopping-dialog shopping-create-dialog"
+      initialFocusRef={titleRef}
+      returnFocusRef={returnFocusRef}
+      closeDisabled={pending}
+      footer={(
+        <>
+          <SecondaryButton type="button" disabled={pending} onClick={() => close('cancelled')}>
+            ביטול
+          </SecondaryButton>
+          <PrimaryButton
+            type="submit"
+            form="shopping-create-form"
+            loading={pending}
+            loadingText="יוצר רשימה…"
+          >
+            יצירת הרשימה
+          </PrimaryButton>
+        </>
+      )}
+    >
+      <form id="shopping-create-form" className="shopping-dialog-form" onSubmit={handleSubmit} noValidate>
+        {error && <Alert variant="error" urgent>{error}</Alert>}
+        <TextField
+          ref={titleRef}
+          id="shopping-list-title"
+          label="שם הרשימה"
+          required
+          placeholder="למשל: קניות שבועיות"
+          value={title}
+          onValueChange={setTitle}
+          error={touched && !title.trim() ? 'יש להזין שם לרשימה' : undefined}
+          disabled={pending}
+        />
+        <Select
+          id="shopping-list-type"
+          label="סוג רשימה"
+          required
+          helperText="סוג הרשימה קובע אילו קטגוריות קטלוג יהיו זמינות לפריטים שלה."
+          value={listTypeId}
+          onValueChange={setListTypeId}
+          error={touched && !listTypeId ? 'יש לבחור סוג רשימה' : undefined}
+          disabled={pending}
+        >
+          <option value="">בחירת סוג רשימה</option>
+          {listTypes.map((type) => (
+            <option key={type.id} value={type.id}>{type.name}</option>
+          ))}
+        </Select>
+      </form>
+    </Dialog>
+  );
+};
+
+const ShoppingListCard = ({ list, onOpen, onDelete }) => {
+  const status = SHOPPING_STATUS[list.status] || SHOPPING_STATUS.draft;
+  const total = Number(list.item_count) || 0;
+  const purchased = Number(list.purchased_count) || 0;
+  const percentage = total > 0 ? Math.round((purchased / total) * 100) : 0;
+  const canDelete = list.status === 'draft' || list.status === 'active';
+
+  return (
+    <GlassCard className="shopping-list-card" padding="var(--ft-space-7)">
+      <article aria-labelledby={`shopping-list-${list.id}`}>
+        <div className="shopping-list-card__header">
+          <div className="shopping-list-card__title-block">
+            <h3 id={`shopping-list-${list.id}`}>{list.title}</h3>
+            <div className="shopping-list-card__badges">
+              {list.shopping_list_types?.name && (
+                <span className="shopping-badge shopping-badge--type">
+                  <Tag size={13} aria-hidden="true" />
+                  {list.shopping_list_types.name}
+                </span>
+              )}
+              <span className={`shopping-badge shopping-status ${status.className}`}>{status.label}</span>
+            </div>
+          </div>
+          {canDelete && (
+            <IconButton
+              type="button"
+              size="touch"
+              className="shopping-card-delete"
+              aria-label={`מחיקת הרשימה ${list.title}`}
+              onClick={(event) => onDelete(list, event)}
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </IconButton>
+          )}
+        </div>
+
+        <div className="shopping-list-card__progress">
+          <div className="shopping-progress-label">
+            <span>{purchased} מתוך {total} פריטים</span>
+            <TechnicalValue>{percentage}%</TechnicalValue>
+          </div>
+          <ProgressBar
+            value={percentage}
+            tone={percentage === 100 ? 'pos' : 'primary'}
+            height={7}
+            aria-label={`התקדמות הרשימה ${list.title}`}
+          />
+        </div>
+
+        <div className="shopping-list-card__footer">
+          <span>עודכנה: <TechnicalValue>{formatDate(list.updated_at)}</TechnicalValue></span>
+          <SecondaryButton type="button" size="sm" onClick={() => onOpen(list.id)}>
+            פתיחה
+            <ChevronLeft size={15} aria-hidden="true" />
+          </SecondaryButton>
+        </div>
+      </article>
+    </GlassCard>
+  );
 };
 
 const ShoppingLists = () => {
+  const { setPageHeader } = useContext(PageHeaderContext);
+  const createReturnFocusRef = useRef(null);
+  const deleteReturnFocusRef = useRef(null);
   const [lists, setLists] = useState([]);
   const [listTypes, setListTypes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [mutationError, setMutationError] = useState('');
   const [selectedListId, setSelectedListId] = useState(null);
 
-  const fetchLists = async () => {
+  const openCreate = useCallback((event) => {
+    createReturnFocusRef.current = event?.currentTarget || null;
+    setMutationError('');
+    setShowCreateDialog(true);
+  }, []);
+
+  useEffect(() => {
+    if (selectedListId) return;
+    setPageHeader({
+      title: 'רשימות קניות',
+      subtitle: 'טיוטות, רשימות פעילות וסגירת קנייה',
+      primaryAction: {
+        label: 'רשימה חדשה',
+        icon: Plus,
+        onClick: openCreate,
+      },
+    });
+  }, [openCreate, selectedListId, setPageHeader]);
+
+  const loadShoppingData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
-      const res = await getShoppingLists();
-      setLists(res.data);
-    } catch (error) {
-      console.error('Error fetching shopping lists:', error);
+      const [listsResponse, typesResponse] = await Promise.all([
+        getShoppingLists(),
+        getShoppingListTypes(),
+      ]);
+      setLists(Array.isArray(listsResponse.data) ? listsResponse.data : []);
+      setListTypes(Array.isArray(typesResponse.data) ? typesResponse.data : []);
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const [listsRes, typesRes] = await Promise.all([
-          getShoppingLists(),
-          getShoppingListTypes(),
-        ]);
-        setLists(listsRes.data);
-        setListTypes(typesRes.data);
-      } catch (error) {
-        console.error('Error loading shopping data:', error);
-        setError('שגיאה בטעינת הרשימות. נסה לרענן את הדף.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
   }, []);
 
+  const refreshLists = useCallback(async () => {
+    try {
+      const response = await getShoppingLists();
+      setLists(Array.isArray(response.data) ? response.data : []);
+      return true;
+    } catch {
+      setMutationError('רענון רשימות הקניות נכשל. אפשר לנסות שוב.');
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    loadShoppingData();
+  }, [loadShoppingData]);
+
+  const counts = useMemo(() => STATUS_FILTERS.reduce((result, filter) => ({
+    ...result,
+    [filter.value]: filter.value === 'all'
+      ? lists.length
+      : lists.filter((list) => list.status === filter.value).length,
+  }), {}), [lists]);
+
+  const filteredLists = useMemo(() => (
+    statusFilter === 'all' ? lists : lists.filter((list) => list.status === statusFilter)
+  ), [lists, statusFilter]);
+
   const handleCreate = async (title, listTypeId) => {
-    try {
-      await createShoppingList({ title, list_type_id: listTypeId });
-      setShowCreateModal(false);
-      fetchLists();
-    } catch (error) {
-      console.error('Error creating list:', error);
-      alert('שגיאה ביצירת רשימה');
-    }
+    await createShoppingList({ title, list_type_id: listTypeId });
+    setShowCreateDialog(false);
+    await refreshLists();
   };
 
-  const handleDelete = async (e, listId) => {
-    e.stopPropagation();
-    if (!window.confirm('האם למחוק את הרשימה?')) return;
-    try {
-      await deleteShoppingList(listId);
-      fetchLists();
-    } catch (error) {
-      console.error('Error deleting list:', error);
-      alert('שגיאה במחיקת הרשימה');
-    }
+  const requestDelete = (list, event) => {
+    deleteReturnFocusRef.current = event.currentTarget;
+    setMutationError('');
+    setDeleteTarget(list);
   };
 
-  const filteredLists = statusFilter === 'all'
-    ? lists
-    : lists.filter(l => l.status === statusFilter);
+  const confirmDelete = async () => {
+    await deleteShoppingList(deleteTarget.id);
+    await refreshLists();
+  };
 
-  // Detail view
   if (selectedListId) {
     return (
       <ShoppingListDetail
         listId={selectedListId}
-        onBack={() => { setSelectedListId(null); fetchLists(); }}
+        listTypeName={lists.find((list) => list.id === selectedListId)?.shopping_list_types?.name || ''}
+        onBack={() => {
+          setSelectedListId(null);
+          refreshLists();
+        }}
       />
     );
   }
 
-  if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: 80, color: 'var(--ink-4)' }}>טוען רשימות...</div>;
-  }
-
   return (
-    <div dir="rtl">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <p style={{ color: 'var(--ink-4)', marginTop: 4, fontSize: 14 }}>ניהול רשימות הקנייה שלך</p>
-        </div>
-        <button onClick={() => setShowCreateModal(true)} style={addBtnStyle}>
-          <Plus size={20} /> רשימה חדשה
-        </button>
-      </div>
+    <div className="shopping-page" dir="rtl">
+      {loading && <ShoppingOverviewSkeleton />}
 
-      {/* Error banner */}
-      {error && (
-        <div style={{ backgroundColor: 'var(--neg-soft)', border: '1px solid var(--neg)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: 'var(--neg)', fontSize: 14 }}>
-          {error}
-        </div>
-      )}
-
-      {/* Status filter */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-        {[
-          { key: 'all', label: 'הכל' },
-          { key: 'draft', label: 'טיוטה' },
-          { key: 'active', label: 'פעילה' },
-          { key: 'checked_out', label: 'שולמה' },
-          { key: 'archived', label: 'ארכיון' },
-        ].map(f => (
-          <button
-            key={f.key}
-            onClick={() => setStatusFilter(f.key)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 9999,
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 500,
-              transition: 'all 0.2s',
-              backgroundColor: statusFilter === f.key ? 'var(--primary)' : 'var(--surface-3)',
-              color: statusFilter === f.key ? 'var(--primary-ink)' : 'var(--ink-3)',
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Cards grid */}
-      {filteredLists.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
-          {filteredLists.map(list => {
-            const status = STATUS_CONFIG[list.status] || STATUS_CONFIG.draft;
-            const typeName = list.shopping_list_types?.name || '';
-            const pct = list.item_count > 0 ? Math.round((list.purchased_count / list.item_count) * 100) : 0;
-
-            return (
-              <div
-                key={list.id}
-                onClick={() => setSelectedListId(list.id)}
-                style={{ ...cardStyle, cursor: 'pointer', transition: 'box-shadow 0.2s', position: 'relative' }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--shadow-sm)'}
-              >
-                {/* Header row */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {/* #9B82FF = --primary-hi (Lucide color prop requires hex) */}
-                    <ShoppingCart size={20} color="#9B82FF" />
-                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--ink-1)' }}>{list.title}</h3>
-                  </div>
-                  {(list.status === 'draft' || list.status === 'active') && (
-                    <button onClick={(e) => handleDelete(e, list.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)', padding: 4 }}>
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Badges */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                  {typeName && (
-                    <span style={{ ...badgeStyle, backgroundColor: 'var(--surface-3)', color: 'var(--ink-3)' }}>{typeName}</span>
-                  )}
-                  <span style={{ ...badgeStyle, backgroundColor: status.bg, color: status.text }}>{status.label}</span>
-                </div>
-
-                {/* Progress */}
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--ink-3)', marginBottom: 6 }}>
-                    <span>{list.purchased_count}/{list.item_count} פריטים</span>
-                    <span>{pct}%</span>
-                  </div>
-                  <div style={{ height: 8, backgroundColor: 'var(--surface-3)', borderRadius: 9999, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', backgroundColor: pct === 100 ? 'var(--pos)' : 'var(--primary-hi)', width: `${pct}%`, borderRadius: 9999, transition: 'width 0.3s' }} />
-                  </div>
-                </div>
-
-                {/* Date */}
-                <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 8 }}>
-                  עודכן: {new Date(list.updated_at).toLocaleDateString('he-IL')}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div style={{ textAlign: 'center', padding: 60, color: 'var(--ink-4)', border: '2px dashed var(--border)', borderRadius: 12 }}>
-          <ShoppingCart size={40} style={{ marginBottom: 12 }} />
-          <p>אין רשימות {statusFilter !== 'all' ? `בסטטוס "${STATUS_CONFIG[statusFilter]?.label}"` : 'עדיין'}.</p>
-          <p>לחץ על "רשימה חדשה" כדי להתחיל.</p>
-        </div>
-      )}
-
-      {/* Create Modal */}
-      {showCreateModal && (
-        <CreateListModal
-          listTypes={listTypes}
-          onClose={() => setShowCreateModal(false)}
-          onCreate={handleCreate}
+      {!loading && loadError && (
+        <ErrorState
+          level="page"
+          title="טעינת רשימות הקניות נכשלה"
+          description="לא ניתן להציג את הרשימות כרגע."
+          retryLabel="נסה שוב"
+          onRetry={loadShoppingData}
         />
       )}
-    </div>
-  );
-};
 
-// --- Create Modal ---
-const CreateListModal = ({ listTypes, onClose, onCreate }) => {
-  const [title, setTitle] = useState('');
-  const [listTypeId, setListTypeId] = useState(listTypes[0]?.id || '');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!title.trim()) return alert('נא להזין שם לרשימה');
-    if (!listTypeId) return alert('נא לבחור סוג רשימה');
-    onCreate(title, listTypeId);
-  };
-
-  return (
-    <div style={overlayStyle}>
-      <div style={modalStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: 'var(--ink-1)' }}>רשימה חדשה</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}>
-            <X size={20} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>שם הרשימה</label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="למשל: קניות שבועיות"
-              autoFocus
-              style={inputStyle}
-            />
-          </div>
-          <div style={{ marginBottom: 24 }}>
-            <label style={labelStyle}>סוג רשימה</label>
-            <select value={listTypeId} onChange={e => setListTypeId(e.target.value)} style={inputStyle}>
-              {listTypes.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+      {!loading && !loadError && (
+        <Tabs value={statusFilter} onValueChange={setStatusFilter} className="shopping-tabs">
+          <section className="shopping-filter-panel" aria-label="סינון רשימות קניות">
+            <TabList className="shopping-status-tabs" aria-label="סינון לפי סטטוס רשימה">
+              {STATUS_FILTERS.map((filter) => (
+                <Tab key={filter.value} value={filter.value} badge={counts[filter.value]}>
+                  {filter.label}
+                </Tab>
               ))}
-            </select>
-          </div>
-          <button type="submit" style={{
-            width: '100%', padding: 14, background: 'var(--primary-grad)', color: 'var(--primary-ink)',
-            border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 16, cursor: 'pointer',
-          }}>
-            צור רשימה
-          </button>
-        </form>
-      </div>
+            </TabList>
+          </section>
+
+          {mutationError && (
+            <Alert variant="error" urgent onDismiss={() => setMutationError('')}>
+              {mutationError}
+            </Alert>
+          )}
+
+          {STATUS_FILTERS.map((filter) => (
+            <TabPanel key={filter.value} value={filter.value} className="shopping-overview-results">
+              {statusFilter === filter.value && (
+                <>
+                  {lists.length === 0 && (
+                    <EmptyState
+                      icon={ShoppingCart}
+                      title="אין רשימות קניות"
+                      description="רשימה חדשה נפתחת כטיוטה. אחרי הוספת פריטים אפשר להפעיל אותה ולצאת לקנייה."
+                      primaryAction={(
+                        <PrimaryButton type="button" onClick={openCreate}>
+                          <Plus size={16} aria-hidden="true" />
+                          רשימה חדשה
+                        </PrimaryButton>
+                      )}
+                    />
+                  )}
+
+                  {lists.length > 0 && filteredLists.length === 0 && (
+                    <EmptyState
+                      variant="filtered"
+                      title="אין רשימות בסטטוס הזה"
+                      description="אפשר לעבור ללשונית ״הכול״ ולראות את כל הרשימות."
+                      primaryAction={(
+                        <SecondaryButton type="button" onClick={() => setStatusFilter('all')}>
+                          הצגת כל הרשימות
+                        </SecondaryButton>
+                      )}
+                    />
+                  )}
+
+                  {filteredLists.length > 0 && (
+                    <div className="shopping-list-grid" aria-label="רשימות קניות">
+                      {filteredLists.map((list) => (
+                        <ShoppingListCard
+                          key={list.id}
+                          list={list}
+                          onOpen={setSelectedListId}
+                          onDelete={requestDelete}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </TabPanel>
+          ))}
+        </Tabs>
+      )}
+
+      <CreateShoppingListDialog
+        open={showCreateDialog}
+        listTypes={listTypes}
+        onClose={() => setShowCreateDialog(false)}
+        onCreate={handleCreate}
+        returnFocusRef={createReturnFocusRef}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="מחיקת רשימת קניות"
+        message={deleteTarget
+          ? `הרשימה „${deleteTarget.title}” והפריטים שבה יימחקו. הפעולה אינה ניתנת לשחזור.`
+          : ''}
+        confirmLabel="מחיקת הרשימה"
+        cancelLabel="ביטול"
+        variant="destructive"
+        errorMessage="מחיקת הרשימה נכשלה. הרשימה נשארה ללא שינוי."
+        returnFocusRef={deleteReturnFocusRef}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
-};
-
-// --- Styles ---
-const cardStyle = {
-  backgroundColor: 'var(--surface-2)', padding: 20, borderRadius: 16,
-  boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)',
-};
-const badgeStyle = {
-  display: 'inline-flex', alignItems: 'center', padding: '2px 10px',
-  borderRadius: 9999, fontSize: 12, fontWeight: 500,
-};
-const addBtnStyle = {
-  background: 'var(--primary-grad)', color: 'var(--primary-ink)', border: 'none', padding: '12px 24px',
-  borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-  fontWeight: 600, fontSize: '1rem',
-};
-const overlayStyle = {
-  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-  backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-  zIndex: 9999, backdropFilter: 'blur(4px)',
-};
-const modalStyle = {
-  backgroundColor: 'var(--surface-elev)', padding: 30, borderRadius: 16, width: 450, maxWidth: '90%',
-  boxShadow: 'var(--shadow-md)', border: '1px solid var(--border-strong)', textAlign: 'right',
-};
-const labelStyle = { display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 };
-const inputStyle = {
-  width: '100%', padding: 10, border: '1px solid var(--border)', borderRadius: 8,
-  fontSize: 16, boxSizing: 'border-box', backgroundColor: 'var(--surface-3)', color: 'var(--ink-1)',
 };
 
 export default ShoppingLists;
