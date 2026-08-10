@@ -230,13 +230,16 @@
   min-height: 56px;
 }
 
-.transaction-amount-mode {
+.transaction-amount-mode.ui-segmented {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 
-.transaction-amount-mode__option {
+.transaction-amount-mode .ui-segmented-option {
   min-height: 32px;
   display: inline-flex;
   align-items: center;
@@ -251,7 +254,7 @@
   white-space: nowrap;
 }
 
-.transaction-amount-mode__option.is-active {
+.transaction-amount-mode .ui-segmented-option.is-selected {
   color: var(--ft-primary-hover);
   background: var(--ft-primary-weak);
   border-color: var(--ft-primary-border);

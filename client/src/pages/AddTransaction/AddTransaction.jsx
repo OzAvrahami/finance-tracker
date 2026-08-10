@@ -34,6 +34,11 @@ const movementOptions = [
   { value: 'income', label: 'הכנסה', icon: TrendingUp },
 ];
 
+const amountModeOptions = [
+  { value: 'direct', label: 'סכום אחיד' },
+  { value: 'items', label: 'פירוט פריטים' },
+];
+
 const AddTransaction = () => {
   const {
     loading,
@@ -54,6 +59,7 @@ const AddTransaction = () => {
     handleTransactionChange,
     handleItemChange,
     addItem,
+    clearItems,
     removeItem,
     handleSaveNewCategory,
     handleSubmit,
@@ -89,11 +95,23 @@ const AddTransaction = () => {
     ? Math.round((Number(transaction.total_amount) / installmentCount) * 100) / 100
     : null;
 
+  const handleAmountModeChange = (value) => {
+    if (value === 'items' && !hasItems) {
+      addItem();
+    } else if (value === 'direct' && hasItems) {
+      clearItems();
+    }
+  };
+
   const amountMode = (
-    <div className="transaction-amount-mode" aria-label="אופן הזנת הסכום">
-      <span className={`transaction-amount-mode__option${!hasItems ? ' is-active' : ''}`}>סכום אחד</span>
-      <span className={`transaction-amount-mode__option${hasItems ? ' is-active' : ''}`}>פירוט פריטים</span>
-    </div>
+    <SegmentedControl
+      className="transaction-amount-mode"
+      label="אופן הזנת הסכום"
+      value={hasItems ? 'items' : 'direct'}
+      options={amountModeOptions}
+      size="compact"
+      onValueChange={handleAmountModeChange}
+    />
   );
 
   return (

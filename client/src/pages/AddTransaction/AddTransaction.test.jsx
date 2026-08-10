@@ -160,6 +160,35 @@ describe('AddTransaction characterization', () => {
     expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('11');
   });
 
+  it('switches between direct and itemized amount modes without submitting the form', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await settleInitialData();
+
+    const directMode = screen.getByRole('radio', { name: 'סכום אחיד' });
+    const itemizedMode = screen.getByRole('radio', { name: 'פירוט פריטים' });
+
+    expect(directMode).toHaveAttribute('aria-checked', 'true');
+    expect(directMode).toHaveAttribute('type', 'button');
+    expect(itemizedMode).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('spinbutton', { name: /^סכום$/ })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /^שם הפריט/ })).not.toBeInTheDocument();
+
+    await user.click(itemizedMode);
+
+    expect(itemizedMode).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('textbox', { name: /^שם הפריט/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הוספת פריט' })).toBeInTheDocument();
+    expect(createTransaction).not.toHaveBeenCalled();
+
+    await user.click(directMode);
+
+    expect(directMode).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('spinbutton', { name: /^סכום$/ })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /^שם הפריט/ })).not.toBeInTheDocument();
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
   it('preserves category selection and inline category creation', async () => {
     const user = userEvent.setup();
     createCategory.mockResolvedValue({ data: { id: 9, name: 'לימודים' } });
@@ -186,7 +215,7 @@ describe('AddTransaction characterization', () => {
     renderForm();
     await settleInitialData();
 
-    await user.click(screen.getByRole('button', { name: 'הוספת פריט' }));
+    await user.click(screen.getByRole('radio', { name: 'פירוט פריטים' }));
     await user.click(screen.getByRole('button', { name: 'הוספת פריט' }));
     const itemCards = screen.getAllByRole('article');
 
@@ -246,6 +275,39 @@ describe('AddTransaction characterization', () => {
     await user.type(setInput, '00000-1');
     fireEvent.blur(setInput);
     await waitFor(() => expect(within(legoFields).getByText(/האימות.*נכשל/)).toBeInTheDocument());
+  });
+
+  it('uses the same interactive amount-mode control for an itemized edit', async () => {
+    const user = userEvent.setup();
+    getTransactionById.mockResolvedValue({
+      data: {
+        id: 42,
+        transaction_date: '2026-07-10',
+        description: 'עסקה קיימת',
+        total_amount: 90,
+        transaction_items: [{
+          id: 88,
+          item_name: 'פריט קיים',
+          quantity: 1,
+          price_per_unit: 90,
+          discount_type: 'amount',
+          discount_value: 0,
+        }],
+      },
+    });
+    renderForm('/edit-transaction/42');
+
+    expect(await screen.findByDisplayValue('פריט קיים')).toBeInTheDocument();
+    const directMode = screen.getByRole('radio', { name: 'סכום אחיד' });
+    const itemizedMode = screen.getByRole('radio', { name: 'פירוט פריטים' });
+    expect(itemizedMode).toHaveAttribute('aria-checked', 'true');
+
+    await user.click(directMode);
+    expect(screen.getByRole('spinbutton', { name: /^סכום$/ })).toBeInTheDocument();
+
+    await user.click(itemizedMode);
+    expect(screen.getByRole('textbox', { name: /^שם הפריט/ })).toBeInTheDocument();
+    expect(updateTransaction).not.toHaveBeenCalled();
   });
 
   it('loads and updates one existing transaction with its category, payment, items, notes, and navigation unchanged', async () => {

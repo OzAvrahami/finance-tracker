@@ -205,6 +205,8 @@ const useTransactionForm = () => {
 
   const addItem = () => setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', tags: '', discount_type: 'amount', discount_value: 0 }]);
 
+  const clearItems = () => setItems([]);
+
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
 
   const handleSaveNewCategory = async () => {
@@ -317,6 +319,7 @@ const useTransactionForm = () => {
     handleTransactionChange,
     handleItemChange,
     addItem,
+    clearItems,
     removeItem,
     handleSaveNewCategory,
     handleSubmit,
