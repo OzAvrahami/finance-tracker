@@ -32,6 +32,7 @@ const collection = [
     acquisition_type: 'purchased',
     purchase_date: '2025-02-14',
     purchase_price: 2400.1000000000004,
+    receipt_price: 2500.2,
     original_price: 2799.9,
     market_value: 2899.3500000000004,
   },
@@ -46,6 +47,7 @@ const collection = [
     acquisition_type: 'gift',
     purchase_date: null,
     purchase_price: null,
+    receipt_price: 0,
     original_price: 2999.95,
     market_value: null,
   },
@@ -121,6 +123,7 @@ describe('LEGO collection loading, summary, filters, and cards', () => {
     expect(within(card).getByText('נרכש')).toBeInTheDocument();
     expect(within(card).getByText('2025-02-14')).toHaveAttribute('dir', 'ltr');
     expect(within(card).getByText('₪2,400.10')).toBeInTheDocument();
+    expect(within(card).getByText('₪2,500.20')).toBeInTheDocument();
     expect(within(card).getByText('₪2,899.35')).toBeInTheDocument();
 
     fireEvent.error(within(card).getByRole('img', { name: /תמונת Venator/ }));
@@ -228,7 +231,8 @@ describe('LEGO add and edit dialog', () => {
     await userEvent.selectOptions(within(dialog).getByLabelText('אופן קבלה'), 'trade');
     await userEvent.type(within(dialog).getByLabelText('תאריך כניסה לאוסף'), '2026-08-10');
     await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '1500.25');
-    await userEvent.type(within(dialog).getByLabelText('מחיר מקורי / מחירון'), '1800');
+    await userEvent.type(within(dialog).getByLabelText('מחיר בקבלה'), '1600');
+    await userEvent.type(within(dialog).getByLabelText('מחיר לפני הנחת פריט'), '1800');
     await userEvent.type(within(dialog).getByLabelText('שווי מוצג'), '1900.5');
     await userEvent.click(within(dialog).getByRole('button', { name: 'הוספת הסט' }));
 
@@ -241,6 +245,7 @@ describe('LEGO add and edit dialog', () => {
       acquisition_type: 'trade',
       pieces: 7541,
       purchase_price: 1500.25,
+      receipt_price: 1600,
       original_price: 1800,
       market_value: 1900.5,
       purchase_date: '2026-08-10',
@@ -290,6 +295,7 @@ describe('LEGO add and edit dialog', () => {
 
     expect(within(dialog).getByLabelText(/מספר סט/)).toHaveValue('75367-1');
     expect(within(dialog).getByLabelText(/שם הסט/)).toHaveValue('Venator-Class Republic Attack Cruiser');
+    expect(within(dialog).getByLabelText('מחיר בקבלה')).toHaveValue(2500.2);
     await userEvent.clear(within(dialog).getByLabelText(/שם הסט/));
     await userEvent.type(within(dialog).getByLabelText(/שם הסט/), 'Venator Updated');
     await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת שינויים' }));
@@ -300,6 +306,30 @@ describe('LEGO add and edit dialog', () => {
       purchase_price: 2400.1000000000004,
     })));
     expect(screen.queryByText(/סנכרון תנועה|עדכון תנועה/)).not.toBeInTheDocument();
+  });
+
+  it('preserves explicit zero gift prices independently from market value', async () => {
+    renderPage();
+    await screen.findByRole('article', { name: /Venator-Class/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת סט' }));
+    const dialog = screen.getByRole('dialog', { name: 'הוספת סט לאוסף' });
+
+    await userEvent.type(within(dialog).getByLabelText(/מספר סט/), '40649-1');
+    await userEvent.type(within(dialog).getByLabelText(/שם הסט/), 'Teddy Bear GWP');
+    await userEvent.selectOptions(within(dialog).getByLabelText('אופן קבלה'), 'gift');
+    await userEvent.type(within(dialog).getByLabelText('מחיר לפני הנחת פריט'), '109.32');
+    await userEvent.type(within(dialog).getByLabelText('מחיר בקבלה'), '0');
+    await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '0');
+    await userEvent.type(within(dialog).getByLabelText('שווי מוצג'), '150');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'הוספת הסט' }));
+
+    await waitFor(() => expect(addLegoSet).toHaveBeenCalledWith(expect.objectContaining({
+      acquisition_type: 'gift',
+      original_price: 109.32,
+      receipt_price: 0,
+      purchase_price: 0,
+      market_value: 150,
+    })));
   });
 
   it('prevents duplicate add submission while the existing create request is pending', async () => {

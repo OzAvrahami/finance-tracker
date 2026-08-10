@@ -83,7 +83,11 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
             <dd><MoneyOrDash value={set.purchase_price} className="is-paid" /></dd>
           </div>
           <div>
-            <dt>מחירון</dt>
+            <dt>מחיר בקבלה</dt>
+            <dd><MoneyOrDash value={set.receipt_price} /></dd>
+          </div>
+          <div>
+            <dt>לפני הנחת פריט</dt>
             <dd><MoneyOrDash value={set.original_price} /></dd>
           </div>
           <div>

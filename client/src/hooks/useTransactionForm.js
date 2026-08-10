@@ -32,6 +32,7 @@ const useTransactionForm = () => {
     payment_source_id: '',
     total_amount: 0,
     global_discount: 0,
+    global_discount_source: '',
     tags: '',
     loan_id: '',
     original_amount: '',
@@ -95,6 +96,7 @@ const useTransactionForm = () => {
             payment_source_id: data.payment_source_id || '',
             total_amount: data.total_amount || 0,
             global_discount: data.global_discount || 0,
+            global_discount_source: data.global_discount_source || '',
             tags: data.tags || '',
             loan_id: data.loan_id || '',
             original_amount: data.original_amount || '',
@@ -203,7 +205,7 @@ const useTransactionForm = () => {
     setItems(newItems);
   };
 
-  const addItem = () => setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', tags: '', discount_type: 'amount', discount_value: 0 }]);
+  const addItem = () => setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', acquisition_type: 'purchased', tags: '', discount_type: 'amount', discount_value: 0 }]);
 
   const clearItems = () => setItems([]);
 
@@ -261,6 +263,7 @@ const useTransactionForm = () => {
         payment_source_id: transaction.payment_source_id,
         total_amount: 0,
         global_discount: 0,
+        global_discount_source: '',
         tags: '',
         loan_id: '',
         original_amount: '',

@@ -237,6 +237,63 @@ describe('AddTransaction characterization', () => {
     await waitFor(() => expect(amountSummary).toHaveTextContent('₪160'));
   });
 
+  it('previews the three-stage price and preserves the global discount source and LEGO acquisition type', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await settleInitialData();
+
+    await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'קניית לגו');
+    await user.click(screen.getByRole('radio', { name: 'פירוט פריטים' }));
+    const itemCard = screen.getByRole('article', { name: 'פריט 1' });
+    await user.type(within(itemCard).getByRole('textbox', { name: /^שם הפריט/ }), 'Sale set');
+    fireEvent.change(within(itemCard).getByLabelText('מחיר ליחידה'), { target: { value: '200' } });
+    fireEvent.change(within(itemCard).getByLabelText('ערך ההנחה'), { target: { value: '110' } });
+    fireEvent.change(screen.getByLabelText('הנחה על כל התנועה'), { target: { value: '20' } });
+
+    const acquisition = await screen.findByLabelText('אופן קבלה');
+    expect(acquisition).toHaveValue('purchased');
+    fireEvent.change(screen.getByLabelText('מקור ההנחה'), { target: { value: 'loyalty_points' } });
+
+    const breakdown = within(itemCard).getByLabelText('פירוט מחיר לפריט 1');
+    expect(breakdown).toHaveTextContent('₪90.00');
+    expect(breakdown).toHaveTextContent('₪70.00');
+    expect(breakdown).not.toHaveTextContent('000000000');
+
+    await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1));
+    expect(createTransaction.mock.calls[0][0]).toEqual(expect.objectContaining({
+      transaction: expect.objectContaining({
+        global_discount: '20',
+        global_discount_source: 'loyalty_points',
+      }),
+      items: [expect.objectContaining({ acquisition_type: 'purchased' })],
+    }));
+  });
+
+  it('allows a LEGO receipt line to be marked as a zero-cost gift', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await settleInitialData();
+
+    await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'קניית לגו');
+    await user.click(screen.getByRole('radio', { name: 'פירוט פריטים' }));
+    const itemCard = screen.getByRole('article', { name: 'פריט 1' });
+    await user.type(within(itemCard).getByRole('textbox', { name: /^שם הפריט/ }), 'Teddy Bear GWP');
+    fireEvent.change(within(itemCard).getByLabelText('מחיר ליחידה'), { target: { value: '109.32' } });
+    await user.click(within(itemCard).getByRole('button', { name: 'אחוזים' }));
+    fireEvent.change(within(itemCard).getByLabelText('ערך ההנחה'), { target: { value: '100' } });
+    fireEvent.change(await screen.findByLabelText('אופן קבלה'), { target: { value: 'gift' } });
+
+    await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1));
+    expect(createTransaction.mock.calls[0][0].items[0]).toEqual(expect.objectContaining({
+      price_per_unit: '109.32',
+      discount_type: 'percent',
+      discount_value: '100',
+      acquisition_type: 'gift',
+    }));
+  });
+
   it('shows loan context only for the existing category trigger and preserves the selected loan ID', async () => {
     const user = userEvent.setup();
     renderForm();

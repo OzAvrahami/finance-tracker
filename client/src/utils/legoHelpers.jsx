@@ -23,3 +23,10 @@ export const STATUS_OPTIONS = [
 ];
 
 export const BRAND_OPTIONS = ['LEGO', 'CaDA', 'Mould King', 'Cobi', 'Other'];
+
+export const ACQUISITION_OPTIONS = [
+  { key: 'purchased', label: 'נרכש' },
+  { key: 'gift', label: 'מתנה' },
+  { key: 'trade', label: 'החלפה' },
+  { key: 'other', label: 'אחר' },
+];

@@ -293,6 +293,30 @@
   background: var(--ft-glass-hover);
 }
 
+.transaction-item__pricing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-block-start: 8px;
+  padding-block-start: 8px;
+  border-block-start: 1px solid var(--ft-border);
+  color: var(--ft-text-muted);
+  font-size: 11.5px;
+}
+
+.transaction-item__pricing span,
+.transaction-item__pricing strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.transaction-item__pricing strong {
+  color: var(--ft-text);
+  font-weight: 750;
+}
+
 .transaction-item__title {
   position: absolute;
   width: 1px;
@@ -452,6 +476,10 @@
   grid-row: 1;
 }
 
+.transaction-totals__discount-source {
+  width: 100%;
+}
+
 .transaction-totals__final {
   padding-block-start: 9px;
   border-block-start: 1px solid var(--ft-border);
@@ -558,7 +586,7 @@
 
 .transaction-item__lego-metadata {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   width: 100%;
   margin-block-start: 12px;

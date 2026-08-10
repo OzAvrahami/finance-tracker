@@ -1,4 +1,11 @@
-import { MoneyAmount, NumberField } from '../../components/ui';
+import { Alert, MoneyAmount, NumberField, Select } from '../../components/ui';
+
+const GLOBAL_DISCOUNT_SOURCES = [
+  { value: 'loyalty_points', label: 'נקודות מועדון' },
+  { value: 'coupon', label: 'קופון' },
+  { value: 'store_credit', label: 'זיכוי חנות' },
+  { value: 'other', label: 'אחר' },
+];
 
 const calculateFinalUnitPrice = (price, discountType, discountValue) => {
   if (!price) return 0;
@@ -31,7 +38,14 @@ const SummaryRow = ({ label, value }) => (
   </div>
 );
 
-const TransactionTotals = ({ items, globalDiscount, total, onDiscountChange }) => {
+const TransactionTotals = ({
+  items,
+  globalDiscount,
+  globalDiscountSource,
+  total,
+  pricingPreview,
+  onDiscountChange,
+}) => {
   const { subtotal, itemDiscounts } = calculateItemValues(items);
   const discountedItemsTotal = subtotal - itemDiscounts;
 
@@ -52,6 +66,25 @@ const TransactionTotals = ({ items, globalDiscount, total, onDiscountChange }) =
         suffix="₪"
         size="compact"
       />
+      {Number(globalDiscount) > 0 && (
+        <Select
+          className="transaction-totals__discount-source"
+          name="global_discount_source"
+          label="מקור ההנחה"
+          value={globalDiscountSource}
+          onChange={onDiscountChange}
+          placeholder="ללא סיווג"
+          helperText="הסיווג אופציונלי ונשמר עם התנועה."
+          size="compact"
+        >
+          {GLOBAL_DISCOUNT_SOURCES.map((source) => (
+            <option key={source.value} value={source.value}>{source.label}</option>
+          ))}
+        </Select>
+      )}
+      {pricingPreview?.error && (
+        <Alert variant="warning">{pricingPreview.error}</Alert>
+      )}
       <div className="transaction-totals__final">
         <span>סכום התנועה</span>
         <MoneyAmount value={total} />

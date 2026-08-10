@@ -27,6 +27,7 @@ import {
 import TransactionFormSection from './TransactionFormSection';
 import TransactionFormSkeleton from './TransactionFormSkeleton';
 import TransactionTotals from './TransactionTotals';
+import { getTransactionPricingPreview } from '../../utils/transactionPricing';
 import './TransactionForm.css';
 
 const movementOptions = [
@@ -89,6 +90,7 @@ const AddTransaction = () => {
   const legoCategorySelected = isLegoCategory();
   const loanCategorySelected = isLoanCategory();
   const hasItems = items.length > 0;
+  const pricingPreview = getTransactionPricingPreview(items, transaction.global_discount);
   const hasContextFields = legoCategorySelected || loanCategorySelected;
   const installmentCount = Number(transaction.installment_count) || 1;
   const perInstallment = installmentCount > 1 && Number(transaction.total_amount) > 0
@@ -247,6 +249,7 @@ const AddTransaction = () => {
                   key={index}
                   item={item}
                   index={index}
+                  pricing={Number(transaction.global_discount) > 0 ? pricingPreview.items[index] : null}
                   onItemChange={handleItemChange}
                   onRemove={removeItem}
                 />
@@ -263,7 +266,9 @@ const AddTransaction = () => {
             <TransactionTotals
               items={items}
               globalDiscount={transaction.global_discount}
+              globalDiscountSource={transaction.global_discount_source}
               total={transaction.total_amount}
+              pricingPreview={pricingPreview}
               onDiscountChange={handleTransactionChange}
             />
           )}

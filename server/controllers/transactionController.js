@@ -4,6 +4,12 @@ const {
   parseTransactionListQuery,
   encodeCursor,
 } = require('../utils/transactionQuery');
+const {
+  buildTransactionPricing,
+  fromMinorUnits,
+  normalizeGlobalDiscountSource,
+  roundDivide,
+} = require('../utils/transactionPricing');
 
 // Advances a YYYY-MM-DD date string by N months, clamping to the last valid day of the target month.
 // e.g. Jan 31 + 1 month → Feb 28 (not Feb 31)
@@ -20,27 +26,19 @@ const advanceMonthClamped = (dateStr, months) => {
   return `${targetYear}-${mm}-${dd}`;
 };
 
-// Helper function to calculate price after discount
-const calculateFinalPrice = (price, type, value) => {
-  const basePrice = Number(price) || 0;
-  const discountValue = Number(value) || 0;
-  
-  if (!discountValue || discountValue === 0) return basePrice;
-
-  let discountAmount = 0;
-  if (type === 'percent') {
-    discountAmount = basePrice * (discountValue / 100);
-  } else {
-    discountAmount = discountValue; // Fixed amount
-  }
-
-  // Ensure price doesn't go below zero
-  return Math.max(0, basePrice - discountAmount);
-};
-
 exports.createTransaction = async (req, res) => {
   try {
     const { transaction, items } = req.body;
+    const transactionItems = Array.isArray(items) ? items : [];
+    const pricing = buildTransactionPricing(
+      transactionItems,
+      transaction.global_discount,
+      transactionItems.length > 0 ? transaction.total_amount : null,
+    );
+    const globalDiscountSource = normalizeGlobalDiscountSource(
+      transaction.global_discount_source,
+      pricing.globalDiscountCents,
+    );
 
     const installmentCount = Math.max(1, parseInt(transaction.installment_count) || 1);
     const fullAmount = Number(transaction.total_amount);
@@ -56,7 +54,8 @@ exports.createTransaction = async (req, res) => {
         movement_type: transaction.movement_type,
         category_id: transaction.category_id,
         total_amount: perAmount,
-        global_discount: Number(transaction.global_discount) || 0,
+        global_discount: fromMinorUnits(pricing.globalDiscountCents),
+        global_discount_source: globalDiscountSource,
         payment_source_id: transaction.payment_source_id || null,
         transaction_date: transaction.transaction_date,
         charge_date: transaction.charge_date || transaction.transaction_date,
@@ -90,31 +89,30 @@ exports.createTransaction = async (req, res) => {
 
     if (categoryName === 'Lego' || categoryName === 'לגו') {
       // Filter only items that have a set number
-      const legoItems = items.filter(item => item.set_number && item.set_number.trim() !== '');
+      const legoItems = pricing.items.filter(({ item }) => item.set_number && item.set_number.trim() !== '');
       
       if (legoItems.length > 0) {
-        console.log("Processing Lego Sets:", legoItems.map(i => i.set_number));
+        console.log("Processing Lego Sets:", legoItems.map(({ item }) => item.set_number));
         
         // Use Promise.all to handle multiple sets concurrently
-        await Promise.all(legoItems.map(async (item) => {
-          
-          const originalPrice = Number(item.price_per_unit);
-          // Calculate actual paid price for this specific set
-          const finalPaidPrice = calculateFinalPrice(
-            originalPrice, 
-            item.discount_type, 
-            Number(item.discount_value)
-          );
-
+        await Promise.all(legoItems.map(async (pricedItem) => {
+          const { item } = pricedItem;
+          // LEGO auto-creation still creates one collection record per line. For
+          // legacy quantity > 1 lines, retain the existing per-set/unit meaning.
+          const purchasePriceCents = pricedItem.quantity === 1n
+            ? pricedItem.actualLineCents
+            : roundDivide(pricedItem.actualLineCents, pricedItem.quantity);
           const { error } = await supabase.from('lego_sets').insert([{
             set_number: item.set_number,
             name: item.item_name,
             theme: item.theme || 'General',
-            purchase_price: finalPaidPrice, // Actual price paid
-            original_price: originalPrice,  // MSRP / Base price
+            original_price: fromMinorUnits(pricedItem.originalUnitCents),
+            receipt_price: fromMinorUnits(pricedItem.receiptUnitCents),
+            purchase_price: fromMinorUnits(purchasePriceCents),
+            acquisition_type: pricedItem.acquisitionType,
             purchase_date: transaction.transaction_date,
             status: 'New',
-            transaction_id: transaction.id,
+            transaction_id: transactionId,
             brand: item.brand || 'LEGO'
           }]);
           
@@ -124,20 +122,14 @@ exports.createTransaction = async (req, res) => {
     }
 
     // 3. Insert Transaction Items
-    if (items && items.length > 0) {
-      const itemsToInsert = items.map(item => {
-        // Calculate final price per line item for the DB record
-        const lineFinalPrice = calculateFinalPrice(
-            item.price_per_unit, 
-            item.discount_type, 
-            item.discount_value
-        );
-
+    if (pricing.items.length > 0) {
+      const itemsToInsert = pricing.items.map(pricedItem => {
+        const { item } = pricedItem;
         return {
             transaction_id: transactionId,
             item_name: item.item_name,
-            quantity: Number(item.quantity) || 1,
-            price_per_unit: Number(item.price_per_unit) || 0,
+            quantity: Number(pricedItem.quantity),
+            price_per_unit: fromMinorUnits(pricedItem.originalUnitCents),
             
             // Lego specific fields
             set_number: item.set_number || null,
@@ -146,7 +138,9 @@ exports.createTransaction = async (req, res) => {
             // Discount fields
             discount_type: item.discount_type || 'amount',
             discount_value: Number(item.discount_value) || 0,
-            final_price: lineFinalPrice,
+            final_price: fromMinorUnits(pricedItem.receiptUnitCents),
+            allocated_global_discount: fromMinorUnits(pricedItem.allocatedGlobalDiscountCents),
+            acquisition_type: pricedItem.acquisitionType,
 
             tags: item.tags || '' // Item specific tags
         };
@@ -387,6 +381,16 @@ exports.updateTransaction = async (req, res) => {
   try {
     const { id } = req.params;
     const { transaction, items } = req.body;
+    const transactionItems = Array.isArray(items) ? items : [];
+    const pricing = buildTransactionPricing(
+      transactionItems,
+      transaction.global_discount,
+      transactionItems.length > 0 ? transaction.total_amount : null,
+    );
+    const globalDiscountSource = normalizeGlobalDiscountSource(
+      transaction.global_discount_source,
+      pricing.globalDiscountCents,
+    );
 
     // A. Update the main transaction details
     const { error: transError } = await supabase
@@ -396,7 +400,8 @@ exports.updateTransaction = async (req, res) => {
         movement_type: transaction.movement_type,
         category_id: transaction.category_id,
         total_amount: transaction.total_amount,
-        global_discount: Number(transaction.global_discount) || 0,
+        global_discount: fromMinorUnits(pricing.globalDiscountCents),
+        global_discount_source: globalDiscountSource,
         payment_source_id: transaction.payment_source_id || null,
         transaction_date: transaction.transaction_date,
         charge_date: transaction.charge_date || transaction.transaction_date,
@@ -419,20 +424,24 @@ exports.updateTransaction = async (req, res) => {
     await supabase.from('transaction_items').delete().eq('transaction_id', id);
 
     // 2. Insert the updated list
-    if (items && items.length > 0) {
-      const itemsToInsert = items.map(item => ({
-        transaction_id: id, // Link to the existing transaction ID
-        item_name: item.item_name,
-        quantity: Number(item.quantity) || 1,
-        price_per_unit: Number(item.price_per_unit) || 0,
-        set_number: item.set_number || null,
-        theme: item.theme || null,
-        discount_type: item.discount_type || 'amount',
-        discount_value: Number(item.discount_value) || 0,
-        // Recalculate final price
-        final_price: calculateFinalPrice(item.price_per_unit, item.discount_type, item.discount_value),
-        tags: item.tags || ''
-      }));
+    if (pricing.items.length > 0) {
+      const itemsToInsert = pricing.items.map(pricedItem => {
+        const { item } = pricedItem;
+        return {
+          transaction_id: id, // Link to the existing transaction ID
+          item_name: item.item_name,
+          quantity: Number(pricedItem.quantity),
+          price_per_unit: fromMinorUnits(pricedItem.originalUnitCents),
+          set_number: item.set_number || null,
+          theme: item.theme || null,
+          discount_type: item.discount_type || 'amount',
+          discount_value: Number(item.discount_value) || 0,
+          final_price: fromMinorUnits(pricedItem.receiptUnitCents),
+          allocated_global_discount: fromMinorUnits(pricedItem.allocatedGlobalDiscountCents),
+          acquisition_type: pricedItem.acquisitionType,
+          tags: item.tags || ''
+        };
+      });
 
       const { error: itemsError } = await supabase
         .from('transaction_items')

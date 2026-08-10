@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Blocks, Info, Search } from 'lucide-react';
 import { addLegoSet, getLegoSetDetails, updateLegoSet } from '../../services/api';
-import { BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
+import { ACQUISITION_OPTIONS, BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
 import {
   Alert,
   DateField,
@@ -13,13 +13,6 @@ import {
   TextField,
 } from '../ui';
 
-const ACQUISITION_OPTIONS = [
-  { key: 'purchased', label: 'נרכש' },
-  { key: 'gift', label: 'מתנה' },
-  { key: 'trade', label: 'החלפה' },
-  { key: 'other', label: 'אחר' },
-];
-
 const DEFAULT_FORM = {
   set_number: '',
   name: '',
@@ -30,6 +23,7 @@ const DEFAULT_FORM = {
   acquisition_type: 'purchased',
   purchase_date: '',
   purchase_price: '',
+  receipt_price: '',
   original_price: '',
   market_value: '',
 };
@@ -44,6 +38,7 @@ const formFromSet = (set) => ({
   acquisition_type: set?.acquisition_type || 'purchased',
   purchase_date: set?.purchase_date || '',
   purchase_price: set?.purchase_price ?? '',
+  receipt_price: set?.receipt_price ?? '',
   original_price: set?.original_price ?? '',
   market_value: set?.market_value ?? '',
 });
@@ -166,6 +161,7 @@ const AddLegoSetModal = ({
         acquisition_type: form.acquisition_type,
         pieces: numberOrNull(form.pieces),
         purchase_price: numberOrNull(form.purchase_price),
+        receipt_price: numberOrNull(form.receipt_price),
         original_price: numberOrNull(form.original_price),
         market_value: numberOrNull(form.market_value),
         purchase_date: form.purchase_date || null,
@@ -328,7 +324,7 @@ const AddLegoSetModal = ({
             label="אופן קבלה"
             value={form.acquisition_type}
             onValueChange={(value) => updateField('acquisition_type', value)}
-            helperText={form.acquisition_type === 'gift' ? 'במתנה אפשר להשאיר את המחיר ששולם ריק.' : undefined}
+            helperText={form.acquisition_type === 'gift' ? 'למתנה ללא עלות הזינו 0; שדה ריק מציין מחיר לא ידוע.' : undefined}
           >
             {ACQUISITION_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
           </Select>
@@ -342,19 +338,29 @@ const AddLegoSetModal = ({
 
         <div className="lego-form-grid lego-form-grid--prices">
           <NumberField
-            id="lego-purchase-price"
-            label="מחיר ששולם"
-            value={form.purchase_price}
-            onValueChange={(value) => updateField('purchase_price', value)}
+            id="lego-original-price"
+            label="מחיר לפני הנחת פריט"
+            value={form.original_price}
+            onValueChange={(value) => updateField('original_price', value)}
             min="0"
             step="0.01"
             suffix="₪"
           />
           <NumberField
-            id="lego-original-price"
-            label="מחיר מקורי / מחירון"
-            value={form.original_price}
-            onValueChange={(value) => updateField('original_price', value)}
+            id="lego-receipt-price"
+            label="מחיר בקבלה"
+            value={form.receipt_price}
+            onValueChange={(value) => updateField('receipt_price', value)}
+            min="0"
+            step="0.01"
+            suffix="₪"
+            helperText="אחרי הנחת הפריט ולפני הנחה כללית."
+          />
+          <NumberField
+            id="lego-purchase-price"
+            label="מחיר ששולם"
+            value={form.purchase_price}
+            onValueChange={(value) => updateField('purchase_price', value)}
             min="0"
             step="0.01"
             suffix="₪"

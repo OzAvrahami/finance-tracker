@@ -105,6 +105,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   payment_source_id       BIGINT REFERENCES payment_sources(id),
   loan_id                 BIGINT REFERENCES loans(id),
   global_discount         NUMERIC DEFAULT 0,
+  global_discount_source  TEXT CHECK (
+    global_discount_source IS NULL
+    OR global_discount_source IN ('loyalty_points', 'coupon', 'store_credit', 'other')
+  ),
   original_amount         NUMERIC,
   currency                TEXT DEFAULT 'ILS',
   exchange_rate           NUMERIC,
@@ -152,6 +156,9 @@ CREATE TABLE IF NOT EXISTS transaction_items (
   discount_type     TEXT DEFAULT 'amount' CHECK (discount_type IN ('amount', 'percent')),
   discount_value    NUMERIC DEFAULT 0,
   final_price       NUMERIC DEFAULT 0,
+  allocated_global_discount NUMERIC NOT NULL DEFAULT 0 CHECK (allocated_global_discount >= 0),
+  acquisition_type  TEXT NOT NULL DEFAULT 'purchased'
+                    CHECK (acquisition_type IN ('purchased', 'gift', 'trade', 'other')),
   tags              TEXT
 );
 
@@ -164,6 +171,7 @@ CREATE TABLE IF NOT EXISTS lego_sets (
   theme           TEXT,
   pieces          INTEGER,
   purchase_price  NUMERIC,
+  receipt_price   NUMERIC,
   market_value    NUMERIC,
   original_price  NUMERIC DEFAULT 0,
   status          TEXT DEFAULT 'New',

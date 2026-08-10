@@ -10,7 +10,7 @@ import {
   TechnicalValue,
   TextField,
 } from './ui';
-import { BRAND_OPTIONS } from '../utils/legoHelpers';
+import { ACQUISITION_OPTIONS, BRAND_OPTIONS } from '../utils/legoHelpers';
 
 const getLineTotal = (item) => {
   if (!item.price_per_unit) return 0;
@@ -22,8 +22,11 @@ const getLineTotal = (item) => {
   return finalUnitPrice * (Number(item.quantity) || 0);
 };
 
-const ItemCard = ({ item, index, onItemChange, onRemove }) => {
+const ItemCard = ({ item, index, pricing, onItemChange, onRemove }) => {
   const itemNumber = index + 1;
+  const allocatedDiscount = pricing?.allocatedGlobalDiscount === '0.00'
+    ? '0.00'
+    : `-${pricing?.allocatedGlobalDiscount}`;
 
   return (
     <article className="transaction-item" aria-labelledby={`transaction-item-${itemNumber}-title`}>
@@ -98,6 +101,13 @@ const ItemCard = ({ item, index, onItemChange, onRemove }) => {
           <Trash2 size={18} aria-hidden="true" />
         </IconButton>
       </div>
+      {pricing && (
+        <div className="transaction-item__pricing" aria-label={`פירוט מחיר לפריט ${itemNumber}`}>
+          <span>אחרי הנחת פריט <MoneyAmount value={pricing.receiptPrice} /></span>
+          <span>הנחה כללית שהוקצתה <MoneyAmount value={allocatedDiscount} /></span>
+          <strong>שולם בפועל <MoneyAmount value={pricing.actualPaid} /></strong>
+        </div>
+      )}
     </article>
   );
 };
@@ -182,6 +192,15 @@ export const LegoItemFields = ({ item, index, legoThemes, onItemChange, onSetNum
           technicalLtr
         >
           {BRAND_OPTIONS.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+        </Select>
+        <Select
+          label="אופן קבלה"
+          value={item.acquisition_type || 'purchased'}
+          onValueChange={(value) => onItemChange(index, 'acquisition_type', value)}
+        >
+          {ACQUISITION_OPTIONS.map((option) => (
+            <option key={option.key} value={option.key}>{option.label}</option>
+          ))}
         </Select>
       </div>
     </article>

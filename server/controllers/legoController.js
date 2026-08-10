@@ -15,7 +15,7 @@ exports.getAllSets = async (req, res) => {
 };
 
 exports.addSet = async (req, res) => {
-    const { set_number, name, theme, brand, status, pieces, purchase_price, original_price, market_value, purchase_date, acquisition_type } = req.body;
+    const { set_number, name, theme, brand, status, pieces, purchase_price, receipt_price, original_price, market_value, purchase_date, acquisition_type } = req.body;
 
     if (!set_number || !String(set_number).trim()) {
         return res.status(400).json({ error: 'מספר סט הוא שדה חובה' });
@@ -36,6 +36,7 @@ exports.addSet = async (req, res) => {
         acquisition_type: acquisition_type || 'purchased',
         pieces: pieces !== '' && pieces != null ? Number(pieces) : null,
         purchase_price: purchase_price !== '' && purchase_price != null ? Number(purchase_price) : null,
+        receipt_price: receipt_price !== '' && receipt_price != null ? Number(receipt_price) : null,
         original_price: original_price !== '' && original_price != null ? Number(original_price) : null,
         market_value: market_value !== '' && market_value != null ? Number(market_value) : null,
         purchase_date: purchase_date || null,
