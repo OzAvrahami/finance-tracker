@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { LogOut, Menu, Sparkles } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/auth-context';
+import { useTheme } from '../context/theme-context';
 import { usePageHeaderContext } from '../context/PageHeaderContext';
 import PageHeaderProvider from '../context/PageHeaderProvider';
 import { TechnicalValue } from './ui';

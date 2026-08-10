@@ -1,20 +1,23 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth-context';
+import './ProtectedRoute.css';
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        fontSize: '1.2rem',
-        color: '#6c757d'
-      }}>
-        ...טוען
+      <div
+        className="protected-route-loading"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <span
+          className="ui-button-spinner protected-route-loading__spinner"
+          aria-hidden="true"
+        />
+        <span>טוען...</span>
       </div>
     );
   }

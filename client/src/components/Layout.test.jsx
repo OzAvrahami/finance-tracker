@@ -16,14 +16,14 @@ const mocks = vi.hoisted(() => ({
   toggleTheme: vi.fn(),
 }));
 
-vi.mock('../context/AuthContext', () => ({
+vi.mock('../context/auth-context', () => ({
   useAuth: () => ({
     user: { email: 'finance.user.with.a.long.address@example.com' },
     signOut: mocks.signOut,
   }),
 }));
 
-vi.mock('../context/ThemeContext', () => ({
+vi.mock('../context/theme-context', () => ({
   useTheme: () => ({ theme: 'dark', toggleTheme: mocks.toggleTheme }),
 }));
 

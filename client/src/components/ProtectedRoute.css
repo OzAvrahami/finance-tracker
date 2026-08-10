@@ -1,0 +1,16 @@
+.protected-route-loading {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ft-space-3);
+  color: var(--ft-text-muted);
+  background: var(--ft-bg);
+  font-size: var(--ft-font-size-body);
+}
+
+.protected-route-loading__spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+}

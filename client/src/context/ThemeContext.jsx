@@ -1,8 +1,10 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ThemeContext } from './theme-context';
 
-const ThemeContext = createContext({});
-
-export const useTheme = () => useContext(ThemeContext);
+// Compatibility export: application consumers now import the hook from its
+// Fast Refresh-safe module, while existing external imports remain valid.
+// eslint-disable-next-line react-refresh/only-export-components
+export { useTheme } from './theme-context';
 
 const STORAGE_KEY = 'theme';
 const TRANSITION_CLASS = 'theme-transitioning';
