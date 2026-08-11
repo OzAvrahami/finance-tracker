@@ -9,6 +9,9 @@ const createItemKey = () => `transaction-item-${nextItemKey += 1}`;
 
 const withItemKey = (item) => ({
   ...item,
+  acquisition_type: item.acquisition_type === 'purchased'
+    ? 'purchase'
+    : (item.acquisition_type || 'purchase'),
   _uiKey: item._uiKey || (item.id ? `transaction-item-saved-${item.id}` : createItemKey()),
 });
 
@@ -200,13 +203,24 @@ const useTransactionForm = () => {
 
   const handleItemChange = (index, field, value) => {
     setItems((currentItems) => currentItems.map((item, itemIndex) => (
-      itemIndex === index ? { ...item, [field]: value } : item
+      itemIndex === index
+        ? {
+          ...item,
+          [field]: value,
+          ...(field === 'acquisition_type' && ['gift', 'gwp'].includes(value)
+            ? { discount_type: 'percent', discount_value: 100 }
+            : {}),
+          ...(field === 'acquisition_type' && value === 'purchase'
+            ? { discount_type: 'amount', discount_value: 0 }
+            : {}),
+        }
+        : item
     )));
   };
 
   const addItem = () => setItems((currentItems) => [
     ...currentItems,
-    withItemKey({ item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', acquisition_type: 'purchased', tags: '', discount_type: 'amount', discount_value: 0 }),
+    withItemKey({ item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', acquisition_type: 'purchase', tags: '', discount_type: 'amount', discount_value: 0 }),
   ]);
 
   const clearItems = () => setItems([]);

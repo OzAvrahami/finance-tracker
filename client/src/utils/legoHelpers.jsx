@@ -9,10 +9,10 @@ export const sortBySetNumber = (sets) => {
 
 export const calculateStats = (sets) => {
   const totalSets = sets.length;
-  const totalValue = sets.reduce((sum, set) => sum + (Number(set.original_price) || Number(set.purchase_price) || 0), 0);
+  const totalListPrice = sets.reduce((sum, set) => sum + (Number(set.original_price) || Number(set.purchase_price) || 0), 0);
   const totalPaid = sets.reduce((sum, set) => sum + (Number(set.purchase_price) || 0), 0);
-  const totalSaved = totalValue - totalPaid;
-  return { totalSets, totalValue, totalPaid, totalSaved };
+  const totalSaved = totalListPrice - totalPaid;
+  return { totalSets, totalListPrice, totalPaid, totalSaved };
 };
 
 export const STATUS_OPTIONS = [
@@ -25,8 +25,7 @@ export const STATUS_OPTIONS = [
 export const BRAND_OPTIONS = ['LEGO', 'CaDA', 'Mould King', 'Cobi', 'Other'];
 
 export const ACQUISITION_OPTIONS = [
-  { key: 'purchased', label: 'נרכש' },
+  { key: 'purchase', label: 'רכישה' },
   { key: 'gift', label: 'מתנה' },
-  { key: 'trade', label: 'החלפה' },
-  { key: 'other', label: 'אחר' },
+  { key: 'gwp', label: 'GWP' },
 ];

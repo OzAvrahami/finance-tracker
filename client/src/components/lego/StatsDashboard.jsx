@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { Blocks, HandCoins, PiggyBank, WalletCards } from 'lucide-react';
+import { Blocks, HandCoins, PiggyBank, ReceiptText } from 'lucide-react';
 import { GlassCard, MoneyAmount, TechnicalValue } from '../ui';
 
 const SUMMARY_ITEMS = [
@@ -12,10 +12,10 @@ const SUMMARY_ITEMS = [
     money: false,
   },
   {
-    key: 'totalValue',
-    label: 'שווי מוצג',
-    note: 'לפי הנתונים שהוזנו לאוסף',
-    icon: WalletCards,
+    key: 'totalListPrice',
+    label: 'מחיר מחירון כולל',
+    note: 'לפי מחירי המקור שתועדו',
+    icon: ReceiptText,
     tone: 'primary',
     money: true,
   },
@@ -29,8 +29,8 @@ const SUMMARY_ITEMS = [
   },
   {
     key: 'totalSaved',
-    label: 'חיסכון',
-    note: 'פער מול הערך המחושב הקיים',
+    label: 'פער ממחיר מחירון',
+    note: 'מחיר מקור פחות הסכום ששולם',
     icon: PiggyBank,
     tone: 'positive',
     money: true,

@@ -1,4 +1,5 @@
-const ACQUISITION_TYPES = new Set(['purchased', 'gift', 'trade', 'other']);
+const ACQUISITION_TYPES = new Set(['purchase', 'gift', 'gwp']);
+const FREE_ACQUISITION_TYPES = new Set(['gift', 'gwp']);
 const GLOBAL_DISCOUNT_SOURCES = new Set(['loyalty_points', 'coupon', 'store_credit', 'other']);
 
 const DECIMAL_PATTERN = /^(-?)(\d+)(?:\.(\d+))?$/;
@@ -86,7 +87,7 @@ function normalizeQuantity(value) {
 }
 
 function normalizeAcquisitionType(value) {
-  const acquisitionType = value || 'purchased';
+  const acquisitionType = value || 'purchase';
   if (!ACQUISITION_TYPES.has(acquisitionType)) {
     throw new Error('Invalid transaction item acquisition type');
   }
@@ -115,6 +116,9 @@ function buildTransactionPricing(items = [], globalDiscount = 0, expectedTotal =
     );
     const receiptLineCents = receiptUnitCents * quantity;
     const acquisitionType = normalizeAcquisitionType(item.acquisition_type);
+    if (FREE_ACQUISITION_TYPES.has(acquisitionType) && receiptLineCents !== 0n) {
+      throw new Error('gift and gwp transaction items must have a zero receipt price');
+    }
 
     return {
       index,
@@ -124,7 +128,7 @@ function buildTransactionPricing(items = [], globalDiscount = 0, expectedTotal =
       receiptUnitCents,
       receiptLineCents,
       acquisitionType,
-      eligible: acquisitionType !== 'gift' && receiptLineCents > 0n,
+      eligible: !FREE_ACQUISITION_TYPES.has(acquisitionType) && receiptLineCents > 0n,
       allocatedGlobalDiscountCents: 0n,
     };
   });

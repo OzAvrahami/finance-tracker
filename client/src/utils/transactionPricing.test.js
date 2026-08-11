@@ -6,7 +6,7 @@ const item = (price, overrides = {}) => ({
   price_per_unit: price,
   discount_type: 'amount',
   discount_value: 0,
-  acquisition_type: 'purchased',
+  acquisition_type: 'purchase',
   ...overrides,
 });
 
@@ -51,7 +51,7 @@ describe('transaction pricing preview', () => {
       item('109.32', {
         discount_type: 'percent',
         discount_value: '100',
-        acquisition_type: 'gift',
+        acquisition_type: 'gwp',
       }),
     ], '93.00');
 

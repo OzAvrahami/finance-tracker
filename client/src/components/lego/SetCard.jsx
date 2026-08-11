@@ -4,10 +4,9 @@ import { IconButton, MoneyAmount, TechnicalValue } from '../ui';
 import { BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
 
 const ACQUISITION_LABELS = {
-  purchased: 'נרכש',
+  purchase: 'רכישה',
   gift: 'מתנה',
-  trade: 'החלפה',
-  other: 'אחר',
+  gwp: 'GWP',
 };
 
 const STATUS_META = {
@@ -38,7 +37,9 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
   const imageFailed = failedImageUrl === imageUrl;
 
   const status = STATUS_META[set.status] || { label: set.status || 'ללא סטטוס', className: 'is-neutral' };
-  const acquisition = ACQUISITION_LABELS[set.acquisition_type] || ACQUISITION_LABELS.other;
+  const acquisitionRibbon = ['gift', 'gwp'].includes(set.acquisition_type)
+    ? ACQUISITION_LABELS[set.acquisition_type]
+    : null;
   const titleId = `lego-set-${set.id}`;
 
   return (
@@ -57,6 +58,11 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
             <span>התמונה אינה זמינה</span>
           </div>
         )}
+        {acquisitionRibbon && (
+          <span className={`lego-acquisition-ribbon is-${set.acquisition_type}`}>
+            {acquisitionRibbon}
+          </span>
+        )}
         <span className={`lego-status-badge ${status.className}`}>{status.label}</span>
       </div>
 
@@ -74,7 +80,6 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
           {set.pieces !== null && set.pieces !== undefined && set.pieces !== '' && (
             <span className="lego-meta-chip"><TechnicalValue>{set.pieces}</TechnicalValue> חלקים</span>
           )}
-          <span className="lego-meta-chip">{acquisition}</span>
         </div>
 
         <dl className="lego-set-card__finance">
@@ -89,10 +94,6 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
           <div>
             <dt>לפני הנחת פריט</dt>
             <dd><MoneyOrDash value={set.original_price} /></dd>
-          </div>
-          <div>
-            <dt>שווי מוצג</dt>
-            <dd><MoneyOrDash value={set.market_value} className="is-value" /></dd>
           </div>
         </dl>
 

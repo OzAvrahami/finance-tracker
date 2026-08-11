@@ -20,12 +20,11 @@ const DEFAULT_FORM = {
   brand: 'LEGO',
   status: 'New',
   pieces: '',
-  acquisition_type: 'purchased',
+  acquisition_type: 'purchase',
   purchase_date: '',
   purchase_price: '',
   receipt_price: '',
   original_price: '',
-  market_value: '',
 };
 
 const formFromSet = (set) => ({
@@ -35,12 +34,13 @@ const formFromSet = (set) => ({
   brand: set?.brand || 'LEGO',
   status: set?.status || 'New',
   pieces: set?.pieces ?? '',
-  acquisition_type: set?.acquisition_type || 'purchased',
+  acquisition_type: set?.acquisition_type === 'purchased'
+    ? 'purchase'
+    : (set?.acquisition_type || 'purchase'),
   purchase_date: set?.purchase_date || '',
   purchase_price: set?.purchase_price ?? '',
   receipt_price: set?.receipt_price ?? '',
   original_price: set?.original_price ?? '',
-  market_value: set?.market_value ?? '',
 });
 
 const AddLegoSetModal = ({
@@ -76,7 +76,13 @@ const AddLegoSetModal = ({
   );
 
   const updateField = (name, value) => {
-    setForm((previous) => ({ ...previous, [name]: value }));
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+      ...(name === 'acquisition_type' && ['gift', 'gwp'].includes(value)
+        ? { receipt_price: 0, purchase_price: 0 }
+        : {}),
+    }));
     if (errors[name]) setErrors((previous) => ({ ...previous, [name]: null }));
     if (name === 'set_number') {
       setLookupState('idle');
@@ -163,7 +169,6 @@ const AddLegoSetModal = ({
         purchase_price: numberOrNull(form.purchase_price),
         receipt_price: numberOrNull(form.receipt_price),
         original_price: numberOrNull(form.original_price),
-        market_value: numberOrNull(form.market_value),
         purchase_date: form.purchase_date || null,
       };
 
@@ -324,7 +329,11 @@ const AddLegoSetModal = ({
             label="אופן קבלה"
             value={form.acquisition_type}
             onValueChange={(value) => updateField('acquisition_type', value)}
-            helperText={form.acquisition_type === 'gift' ? 'למתנה ללא עלות הזינו 0; שדה ריק מציין מחיר לא ידוע.' : undefined}
+            helperText={form.acquisition_type === 'gift'
+              ? 'מתנה אישית שאינה תלויה ברכישה אחרת.'
+              : form.acquisition_type === 'gwp'
+                ? 'סט חינם שהתקבל כחלק מרכישה או מבצע.'
+                : undefined}
           >
             {ACQUISITION_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
           </Select>
@@ -346,35 +355,40 @@ const AddLegoSetModal = ({
             step="0.01"
             suffix="₪"
           />
-          <NumberField
-            id="lego-receipt-price"
-            label="מחיר בקבלה"
-            value={form.receipt_price}
-            onValueChange={(value) => updateField('receipt_price', value)}
-            min="0"
-            step="0.01"
-            suffix="₪"
-            helperText="אחרי הנחת הפריט ולפני הנחה כללית."
-          />
-          <NumberField
-            id="lego-purchase-price"
-            label="מחיר ששולם"
-            value={form.purchase_price}
-            onValueChange={(value) => updateField('purchase_price', value)}
-            min="0"
-            step="0.01"
-            suffix="₪"
-          />
-          <NumberField
-            id="lego-market-value"
-            label="שווי מוצג"
-            value={form.market_value}
-            onValueChange={(value) => updateField('market_value', value)}
-            min="0"
-            step="0.01"
-            suffix="₪"
-            helperText="ערך שמוזן ידנית, לא מחיר שוק חי."
-          />
+          {form.acquisition_type === 'purchase' ? (
+            <>
+              <NumberField
+                id="lego-receipt-price"
+                label="מחיר בקבלה"
+                value={form.receipt_price}
+                onValueChange={(value) => updateField('receipt_price', value)}
+                min="0"
+                step="0.01"
+                suffix="₪"
+                helperText="אחרי הנחת הפריט ולפני הנחה כללית."
+              />
+              <NumberField
+                id="lego-purchase-price"
+                label="מחיר ששולם"
+                value={form.purchase_price}
+                onValueChange={(value) => updateField('purchase_price', value)}
+                min="0"
+                step="0.01"
+                suffix="₪"
+              />
+            </>
+          ) : (
+            <NumberField
+              id="lego-purchase-price"
+              label="מחיר ששולם"
+              value={0}
+              readOnly
+              suffix="₪"
+              helperText={form.acquisition_type === 'gwp'
+                ? 'GWP מתקבל ללא תשלום ישיר עבור הסט.'
+                : 'מתנה אישית נרשמת ללא עלות רכישה.'}
+            />
+          )}
         </div>
       </form>
     </Dialog>

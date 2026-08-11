@@ -1,8 +1,47 @@
 const supabase = require('../config/supabase');
 const axios = require('axios');
 
-// How a set entered the collection. Validated here (not via DB CHECK), consistent with status/brand.
-const ACQUISITION_TYPES = ['purchased', 'gift', 'trade', 'other'];
+const ACQUISITION_TYPES = ['purchase', 'gift', 'gwp'];
+const FREE_ACQUISITION_TYPES = new Set(['gift', 'gwp']);
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+const nullableNumber = (value) => (value !== '' && value != null ? Number(value) : null);
+
+const buildLegoPayload = (input, { create = false } = {}) => {
+    const payload = {};
+    const acquisitionType = hasOwn(input, 'acquisition_type')
+        ? (input.acquisition_type || (create ? 'purchase' : null))
+        : (create ? 'purchase' : null);
+
+    if (hasOwn(input, 'set_number')) payload.set_number = String(input.set_number).trim();
+    if (hasOwn(input, 'name')) payload.name = String(input.name).trim();
+    if (hasOwn(input, 'theme')) payload.theme = input.theme ? String(input.theme).trim() : null;
+    if (hasOwn(input, 'brand')) payload.brand = input.brand || 'LEGO';
+    if (hasOwn(input, 'status')) payload.status = input.status || 'New';
+    if (hasOwn(input, 'pieces')) payload.pieces = nullableNumber(input.pieces);
+    if (hasOwn(input, 'purchase_date')) payload.purchase_date = input.purchase_date || null;
+    if (hasOwn(input, 'original_price')) payload.original_price = nullableNumber(input.original_price);
+    if (hasOwn(input, 'receipt_price')) payload.receipt_price = nullableNumber(input.receipt_price);
+    if (hasOwn(input, 'purchase_price')) payload.purchase_price = nullableNumber(input.purchase_price);
+    if (acquisitionType) payload.acquisition_type = acquisitionType;
+
+    if (create) {
+        payload.brand ??= 'LEGO';
+        payload.status ??= 'New';
+        payload.theme ??= null;
+        payload.pieces ??= null;
+        payload.purchase_date ??= null;
+        payload.original_price ??= null;
+        payload.receipt_price ??= null;
+        payload.purchase_price ??= null;
+    }
+
+    if (FREE_ACQUISITION_TYPES.has(acquisitionType)) {
+        payload.receipt_price = 0;
+        payload.purchase_price = 0;
+    }
+
+    return payload;
+};
 
 exports.getAllSets = async (req, res) => {
     try {
@@ -15,7 +54,7 @@ exports.getAllSets = async (req, res) => {
 };
 
 exports.addSet = async (req, res) => {
-    const { set_number, name, theme, brand, status, pieces, purchase_price, receipt_price, original_price, market_value, purchase_date, acquisition_type } = req.body;
+    const { set_number, name, acquisition_type } = req.body;
 
     if (!set_number || !String(set_number).trim()) {
         return res.status(400).json({ error: 'מספר סט הוא שדה חובה' });
@@ -27,20 +66,7 @@ exports.addSet = async (req, res) => {
         return res.status(400).json({ error: 'אופן קבלה לא תקין' });
     }
 
-    const payload = {
-        set_number: String(set_number).trim(),
-        name: String(name).trim(),
-        theme: theme ? String(theme).trim() : null,
-        brand: brand || 'LEGO',
-        status: status || 'New',
-        acquisition_type: acquisition_type || 'purchased',
-        pieces: pieces !== '' && pieces != null ? Number(pieces) : null,
-        purchase_price: purchase_price !== '' && purchase_price != null ? Number(purchase_price) : null,
-        receipt_price: receipt_price !== '' && receipt_price != null ? Number(receipt_price) : null,
-        original_price: original_price !== '' && original_price != null ? Number(original_price) : null,
-        market_value: market_value !== '' && market_value != null ? Number(market_value) : null,
-        purchase_date: purchase_date || null,
-    };
+    const payload = buildLegoPayload(req.body, { create: true });
 
     try {
         const { data: existing } = await supabase
@@ -74,9 +100,10 @@ exports.updateSet = async (req, res) => {
                 .maybeSingle();
             if (existing) return res.status(409).json({ error: 'הסט כבר קיים באוסף' });
         }
+        const payload = buildLegoPayload(req.body);
         const { data, error } = await supabase
             .from('lego_sets')
-            .update(req.body)
+            .update(payload)
             .eq('id', id)
             .select();
         if (error) throw error;

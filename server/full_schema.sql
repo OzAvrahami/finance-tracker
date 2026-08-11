@@ -1,6 +1,6 @@
 -- =============================================
 -- FULL DATABASE SCHEMA - FINANCE TRACKER
--- Last updated: 2026-08-05
+-- Last updated: 2026-08-11
 -- Source of truth: docs/db_snapshot.md
 -- =============================================
 -- Table creation order respects FK dependencies.
@@ -157,8 +157,8 @@ CREATE TABLE IF NOT EXISTS transaction_items (
   discount_value    NUMERIC DEFAULT 0,
   final_price       NUMERIC DEFAULT 0,
   allocated_global_discount NUMERIC NOT NULL DEFAULT 0 CHECK (allocated_global_discount >= 0),
-  acquisition_type  TEXT NOT NULL DEFAULT 'purchased'
-                    CHECK (acquisition_type IN ('purchased', 'gift', 'trade', 'other')),
+  acquisition_type  TEXT NOT NULL DEFAULT 'purchase'
+                    CHECK (acquisition_type IN ('purchase', 'gift', 'gwp')),
   tags              TEXT
 );
 
@@ -172,11 +172,11 @@ CREATE TABLE IF NOT EXISTS lego_sets (
   pieces          INTEGER,
   purchase_price  NUMERIC,
   receipt_price   NUMERIC,
-  market_value    NUMERIC,
   original_price  NUMERIC DEFAULT 0,
   status          TEXT DEFAULT 'New',
   brand           TEXT DEFAULT 'LEGO',
-  acquisition_type TEXT NOT NULL DEFAULT 'purchased', -- purchased | gift | trade | other (validated in legoController.js)
+  acquisition_type TEXT NOT NULL DEFAULT 'purchase'
+                   CHECK (acquisition_type IN ('purchase', 'gift', 'gwp')),
   purchase_date   DATE,
   transaction_id  INTEGER REFERENCES transactions(id),
   created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())

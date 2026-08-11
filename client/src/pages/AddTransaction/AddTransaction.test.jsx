@@ -256,8 +256,8 @@ describe('AddTransaction characterization', () => {
     expect(itemCards).toHaveLength(2);
     const firstLego = within(itemCards[0]).getByRole('region', { name: 'LEGO בפריט 1' });
     const secondLego = within(itemCards[1]).getByRole('region', { name: 'LEGO בפריט 2' });
-    expect(within(firstLego).getByLabelText('אופן קבלה')).toHaveValue('purchased');
-    expect(within(secondLego).getByLabelText('אופן קבלה')).toHaveValue('purchased');
+    expect(within(firstLego).getByLabelText('אופן קבלה')).toHaveValue('purchase');
+    expect(within(secondLego).getByLabelText('אופן קבלה')).toHaveValue('purchase');
 
     await user.type(within(firstLego).getByLabelText('מספר סט'), '21368');
     fireEvent.blur(within(firstLego).getByLabelText('מספר סט'));
@@ -295,7 +295,7 @@ describe('AddTransaction characterization', () => {
     fireEvent.change(screen.getByLabelText('הנחה על כל התנועה'), { target: { value: '20' } });
 
     const acquisition = await screen.findByLabelText('אופן קבלה');
-    expect(acquisition).toHaveValue('purchased');
+    expect(acquisition).toHaveValue('purchase');
     fireEvent.change(screen.getByLabelText('מקור ההנחה'), { target: { value: 'loyalty_points' } });
 
     const breakdown = within(itemCard).getByLabelText('פירוט מחיר לפריט 1');
@@ -312,7 +312,7 @@ describe('AddTransaction characterization', () => {
         global_discount: '20',
         global_discount_source: 'loyalty_points',
       }),
-      items: [expect.objectContaining({ acquisition_type: 'purchased' })],
+      items: [expect.objectContaining({ acquisition_type: 'purchase' })],
     }));
   });
 
@@ -342,7 +342,7 @@ describe('AddTransaction characterization', () => {
     fireEvent.change(within(itemCards[4]).getByLabelText('מחיר ליחידה'), { target: { value: '109.32' } });
     await user.click(within(itemCards[4]).getByRole('button', { name: 'אחוזים' }));
     fireEvent.change(within(itemCards[4]).getByLabelText('ערך ההנחה'), { target: { value: '100' } });
-    fireEvent.change(within(itemCards[4]).getByLabelText('אופן קבלה'), { target: { value: 'gift' } });
+    fireEvent.change(within(itemCards[4]).getByLabelText('אופן קבלה'), { target: { value: 'gwp' } });
     fireEvent.change(screen.getByLabelText('הנחה על כל התנועה'), { target: { value: '93.00' } });
     fireEvent.change(screen.getByLabelText('מקור ההנחה'), { target: { value: 'loyalty_points' } });
 
@@ -364,7 +364,7 @@ describe('AddTransaction characterization', () => {
     expect(createTransaction.mock.calls[0][0].transaction.total_amount).toBe(547.67);
   });
 
-  it('allows a LEGO receipt line to be marked as a zero-cost gift', async () => {
+  it('allows a LEGO receipt line to be marked explicitly as a zero-cost GWP', async () => {
     const user = userEvent.setup();
     renderForm();
     await settleInitialData();
@@ -374,17 +374,15 @@ describe('AddTransaction characterization', () => {
     const itemCard = screen.getByRole('article', { name: 'פריט 1' });
     await user.type(within(itemCard).getByRole('textbox', { name: /^שם הפריט/ }), 'Teddy Bear GWP');
     fireEvent.change(within(itemCard).getByLabelText('מחיר ליחידה'), { target: { value: '109.32' } });
-    await user.click(within(itemCard).getByRole('button', { name: 'אחוזים' }));
-    fireEvent.change(within(itemCard).getByLabelText('ערך ההנחה'), { target: { value: '100' } });
-    fireEvent.change(await screen.findByLabelText('אופן קבלה'), { target: { value: 'gift' } });
+    fireEvent.change(await screen.findByLabelText('אופן קבלה'), { target: { value: 'gwp' } });
 
     await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
     await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1));
     expect(createTransaction.mock.calls[0][0].items[0]).toEqual(expect.objectContaining({
       price_per_unit: '109.32',
       discount_type: 'percent',
-      discount_value: '100',
-      acquisition_type: 'gift',
+      discount_value: 100,
+      acquisition_type: 'gwp',
     }));
   });
 
@@ -486,7 +484,7 @@ describe('AddTransaction characterization', () => {
             set_number: '21368',
             theme: 'Peanuts',
             brand: 'LEGO',
-            acquisition_type: 'purchased',
+            acquisition_type: 'purchase',
           },
           {
             id: 102,
@@ -498,7 +496,7 @@ describe('AddTransaction characterization', () => {
             set_number: '40763',
             theme: 'Seasonal',
             brand: 'LEGO',
-            acquisition_type: 'gift',
+            acquisition_type: 'gwp',
           },
         ],
       },
@@ -520,15 +518,15 @@ describe('AddTransaction characterization', () => {
     expect(itemCards).toHaveLength(2);
     const remainingSavedLego = within(itemCards[0]).getByRole('region', { name: 'LEGO בפריט 1' });
     expect(within(remainingSavedLego).getByLabelText('מספר סט')).toHaveValue('40763');
-    expect(within(remainingSavedLego).getByLabelText('אופן קבלה')).toHaveValue('gift');
+    expect(within(remainingSavedLego).getByLabelText('אופן קבלה')).toHaveValue('gwp');
     expect(within(remainingSavedLego).getByText(/Teddy Bear GWP/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'עדכן תנועה' }));
     await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1));
     const submittedItems = updateTransaction.mock.calls[0][1].items;
     expect(submittedItems).toEqual([
-      expect.objectContaining({ id: 102, set_number: '40763', acquisition_type: 'gift' }),
-      expect.objectContaining({ item_name: 'סט חדש', acquisition_type: 'purchased' }),
+      expect.objectContaining({ id: 102, set_number: '40763', acquisition_type: 'gwp' }),
+      expect.objectContaining({ item_name: 'סט חדש', acquisition_type: 'purchase' }),
     ]);
     expect(submittedItems.every((item) => !Object.hasOwn(item, '_uiKey'))).toBe(true);
   });

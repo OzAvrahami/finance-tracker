@@ -59,7 +59,7 @@ export const getTransactionPricingPreview = (items = [], globalDiscount = 0) => 
       index,
       originalCents,
       receiptCents,
-      eligible: (item.acquisition_type || 'purchased') !== 'gift' && receiptCents > 0n,
+      eligible: !['gift', 'gwp'].includes(item.acquisition_type) && receiptCents > 0n,
       allocatedCents: 0n,
     };
   });

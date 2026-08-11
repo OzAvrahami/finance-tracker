@@ -88,19 +88,23 @@ It should be treated as the source of truth for current DB structure.
 | theme | text | YES | null |
 | pieces | integer | YES | null |
 | purchase_price | numeric | YES | null |
-| market_value | numeric | YES | null |
+| receipt_price | numeric | YES | null |
 | status | text | YES | 'New'::text |
 | purchase_date | date | YES | null |
 | created_at | timestamp with time zone | YES | timezone('utc'::text, now()) |
 | original_price | numeric | YES | 0 |
 | transaction_id | integer | YES | null |
 | brand | text | YES | 'LEGO'::text |
+| acquisition_type | text | NO | 'purchase'::text |
 
 ### Primary Key
 - `id`
 
 ### Foreign Keys
 - `transaction_id -> transactions.id`
+
+### Check Constraints
+- `acquisition_type IN ('purchase', 'gift', 'gwp')`
 
 ### Indexes
 - `lego_sets_pkey` UNIQUE on `(id)`
@@ -404,12 +408,19 @@ It should be treated as the source of truth for current DB structure.
 | discount_value | numeric | YES | 0 |
 | final_price | numeric | YES | 0 |
 | theme | text | YES | null |
+| allocated_global_discount | numeric | NO | 0 |
+| acquisition_type | text | NO | 'purchase'::text |
 
 ### Primary Key
 - `id`
 
 ### Foreign Keys
 - `transaction_id -> transactions.id`
+
+### Check Constraints
+- `discount_type IN ('amount', 'percent')`
+- `allocated_global_discount >= 0`
+- `acquisition_type IN ('purchase', 'gift', 'gwp')`
 
 ### Indexes
 - `transaction_items_pkey` UNIQUE on `(id)`
@@ -432,6 +443,7 @@ It should be treated as the source of truth for current DB structure.
 | tags | text | YES | null |
 | updated_at | timestamp with time zone | YES | timezone('utc'::text, now()) |
 | global_discount | numeric | YES | 0 |
+| global_discount_source | text | YES | null |
 | category_id | bigint | YES | null |
 | original_amount | numeric | YES | null |
 | currency | text | YES | 'ILS'::text |
@@ -457,6 +469,7 @@ It should be treated as the source of truth for current DB structure.
 
 ### Check Constraints
 - `movement_type IN ('expense', 'income')`
+- `global_discount_source IS NULL OR global_discount_source IN ('loyalty_points', 'coupon', 'store_credit', 'other')`
 
 ### Indexes
 - `transactions_pkey` UNIQUE on `(id)`

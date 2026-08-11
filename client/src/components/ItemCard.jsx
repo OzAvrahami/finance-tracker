@@ -118,7 +118,7 @@ const LegoItemFields = ({ item, index, legoThemes, onItemChange, onSetNumberBlur
         <Select
           className="transaction-item__acquisition"
           label="אופן קבלה"
-          value={item.acquisition_type || 'purchased'}
+          value={item.acquisition_type || 'purchase'}
           onValueChange={(value) => onItemChange(index, 'acquisition_type', value)}
           size="compact"
         >

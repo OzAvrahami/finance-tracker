@@ -247,6 +247,31 @@
   border-color: var(--ft-positive-border);
 }
 
+.lego-acquisition-ribbon {
+  position: absolute;
+  inset-block-start: var(--ft-space-3);
+  inset-inline-end: var(--ft-space-3);
+  z-index: 1;
+  min-height: 25px;
+  display: inline-flex;
+  align-items: center;
+  padding-inline: var(--ft-space-3);
+  color: var(--ft-primary-hover);
+  background: var(--ft-primary-weak);
+  border: 1px solid var(--ft-primary-border);
+  border-radius: 999px;
+  box-shadow: var(--ft-shadow);
+  font-size: var(--fs-11);
+  font-weight: 780;
+  line-height: 1;
+}
+
+.lego-acquisition-ribbon.is-gift {
+  color: var(--ft-positive);
+  background: var(--ft-positive-weak);
+  border-color: var(--ft-positive-border);
+}
+
 .lego-set-card__body {
   min-height: 0;
   display: flex;
@@ -340,7 +365,6 @@
 }
 
 .lego-set-card__finance .is-paid { color: var(--ft-negative); }
-.lego-set-card__finance .is-value { color: var(--ft-primary-hover); }
 .lego-money-empty { color: var(--ft-text-faint); }
 
 .lego-set-card__footer {

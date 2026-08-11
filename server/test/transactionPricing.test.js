@@ -17,7 +17,7 @@ const item = (overrides = {}) => ({
   price_per_unit: '200.00',
   discount_type: 'amount',
   discount_value: '0',
-  acquisition_type: 'purchased',
+  acquisition_type: 'purchase',
   ...overrides,
 });
 
@@ -76,7 +76,7 @@ test('rounding remainder uses largest remainder and stable item order for ties',
   );
 });
 
-test('gift/GWP lines remain zero and receive no global allocation', () => {
+test('GWP lines remain zero and receive no global allocation', () => {
   const pricing = buildTransactionPricing([
     item({ price_per_unit: '100', discount_value: '0' }),
     item({
@@ -84,7 +84,7 @@ test('gift/GWP lines remain zero and receive no global allocation', () => {
       price_per_unit: '109.32',
       discount_type: 'percent',
       discount_value: '100',
-      acquisition_type: 'gift',
+      acquisition_type: 'gwp',
     }),
   ], '10', '90');
 
@@ -117,10 +117,19 @@ test('invalid global discounts are rejected before persistence', () => {
   );
   assert.throws(
     () => buildTransactionPricing([
-      item({ price_per_unit: '10', discount_type: 'percent', discount_value: '100', acquisition_type: 'gift' }),
+      item({ price_per_unit: '10', discount_type: 'percent', discount_value: '100', acquisition_type: 'gwp' }),
     ], '1', '0'),
     /requires at least one eligible/,
   );
+});
+
+test('Gift and GWP acquisition types reject a non-zero receipt cost', () => {
+  for (const acquisitionType of ['gift', 'gwp']) {
+    assert.throws(
+      () => buildTransactionPricing([item({ acquisition_type: acquisitionType })], 0, 200),
+      /must have a zero receipt price/,
+    );
+  }
 });
 
 test('minor-unit conversion preserves explicit zero and rounds floating artifacts', () => {
@@ -175,7 +184,7 @@ test('create transaction persists allocation provenance and the real LEGO transa
       price_per_unit: '109.32',
       discount_type: 'percent',
       discount_value: '100',
-      acquisition_type: 'gift',
+      acquisition_type: 'gwp',
       set_number: '40649-1',
     }),
   ];
@@ -204,7 +213,7 @@ test('create transaction persists allocation provenance and the real LEGO transa
   );
   assert.deepEqual(
     fake.inserts.transaction_items.map((row) => row.acquisition_type),
-    ['purchased', 'purchased', 'gift'],
+    ['purchase', 'purchase', 'gwp'],
   );
 
   const paidSet = fake.inserts.lego_sets.find((set) => set.set_number === '12345-1');
@@ -217,11 +226,11 @@ test('create transaction persists allocation provenance and the real LEGO transa
   assert.equal(gift.original_price, '109.32');
   assert.equal(gift.receipt_price, '0.00');
   assert.equal(gift.purchase_price, '0.00');
-  assert.equal(gift.acquisition_type, 'gift');
+  assert.equal(gift.acquisition_type, 'gwp');
   assert.equal(gift.transaction_id, 321);
 });
 
-test('legacy transaction payloads default to purchased items and a null discount source', async () => {
+test('transaction payloads without an acquisition value default to purchase', async () => {
   const fake = createWriteFake();
   const controller = loadControllerWithFake('../../controllers/transactionController', fake);
   const res = createMockResponse();
@@ -241,7 +250,7 @@ test('legacy transaction payloads default to purchased items and a null discount
 
   assert.equal(res.statusCode, 201);
   assert.equal(fake.inserts.transactions[0].global_discount_source, null);
-  assert.equal(fake.inserts.transaction_items[0].acquisition_type, 'purchased');
+  assert.equal(fake.inserts.transaction_items[0].acquisition_type, 'purchase');
   assert.equal(fake.inserts.lego_sets[0].receipt_price, '25.00');
 });
 
@@ -375,7 +384,7 @@ test('updating a transaction creates each current LEGO set once and remains idem
       price_per_unit: '109.32',
       discount_type: 'percent',
       discount_value: '100',
-      acquisition_type: 'gift',
+      acquisition_type: 'gwp',
       set_number: '40649-1',
     }),
     item({ item_name: 'Non-LEGO product', price_per_unit: '100', set_number: '' }),
@@ -394,7 +403,7 @@ test('updating a transaction creates each current LEGO set once and remains idem
   assert.equal(paidSet.transaction_id, '42');
 
   const gift = fake.state.lego_sets.find((set) => set.set_number === '40649-1');
-  assert.equal(gift.acquisition_type, 'gift');
+  assert.equal(gift.acquisition_type, 'gwp');
   assert.equal(gift.receipt_price, '0.00');
   assert.equal(gift.purchase_price, '0.00');
   assert.equal(fake.state.lego_sets.some((set) => set.name === 'Non-LEGO product'), false);
@@ -414,7 +423,6 @@ test('existing collection set numbers are skipped without overwriting any record
       set_number: '12345-1',
       name: 'Old name',
       status: 'Built',
-      market_value: '350.00',
       piece_count: 999,
       image_url: 'https://example.test/manual-image.png',
       brand: 'CaDA',
@@ -426,7 +434,6 @@ test('existing collection set numbers are skipped without overwriting any record
       set_number: '99999-1',
       name: 'Manually enriched removed line',
       status: 'In Progress',
-      market_value: '500.00',
     },
   ]);
   const controller = loadControllerWithFake('../../controllers/transactionController', fake);
@@ -450,14 +457,12 @@ test('existing collection set numbers are skipped without overwriting any record
   assert.equal(updated.receipt_price, undefined);
   assert.equal(updated.purchase_price, '200.00');
   assert.equal(updated.status, 'Built');
-  assert.equal(updated.market_value, '350.00');
   assert.equal(updated.piece_count, 999);
   assert.equal(updated.image_url, 'https://example.test/manual-image.png');
   assert.equal(updated.brand, 'CaDA');
 
   const removed = fake.state.lego_sets.find((set) => set.id === 'removed-line-set');
   assert.equal(removed.name, 'Manually enriched removed line');
-  assert.equal(removed.market_value, '500.00');
 });
 
 test('manual and other-transaction collection records are skipped by collection-wide set number', async () => {
@@ -468,7 +473,6 @@ test('manual and other-transaction collection records are skipped by collection-
       set_number: '12345-1',
       name: 'Manual collection record',
       purchase_price: '999.00',
-      market_value: '1200.00',
       status: 'Built',
     },
     {
@@ -490,7 +494,7 @@ test('manual and other-transaction collection records are skipped by collection-
       price_per_unit: '109.32',
       discount_type: 'percent',
       discount_value: '100',
-      acquisition_type: 'gift',
+      acquisition_type: 'gwp',
       set_number: '40649-1',
     }),
   ], { total_amount: '200.00', global_discount: 0, global_discount_source: null }), res);
@@ -502,7 +506,7 @@ test('manual and other-transaction collection records are skipped by collection-
   assert.equal(fake.state.lego_sets.find((set) => set.id === 'other-transaction-set').transaction_id, 999);
   const gift = fake.state.lego_sets.find((set) => set.set_number === '40649-1');
   assert.equal(gift.transaction_id, '42');
-  assert.equal(gift.acquisition_type, 'gift');
+  assert.equal(gift.acquisition_type, 'gwp');
   assert.equal(gift.receipt_price, '0.00');
   assert.equal(gift.purchase_price, '0.00');
   assert.deepEqual(fake.queries.find((query) => query.table === 'lego_sets'), {
