@@ -11,6 +11,7 @@ import {
   updateLegoSet,
 } from '../../services/api';
 import LegoCollection from './LegoCollection';
+import { invalidateLegoCollection } from '../../utils/legoCollectionInvalidation';
 
 vi.mock('../../services/api', () => ({
   addLegoSet: vi.fn(),
@@ -110,6 +111,30 @@ describe('LEGO collection loading, summary, filters, and cards', () => {
     expect(within(summary).getByText('2')).toBeInTheDocument();
     expect(screen.queryByText(/000000000|999999999/)).not.toBeInTheDocument();
     expect(screen.queryByText(/שווי מוצג|שווי מוערך|שווי שוק חי|תשואה|השקעה/)).not.toBeInTheDocument();
+  });
+
+  it('refetches authoritative collection data when a transaction invalidates LEGO state', async () => {
+    getLegoSets
+      .mockResolvedValueOnce({ data: [collection[0]] })
+      .mockResolvedValueOnce({ data: [{
+        ...collection[0],
+        pieces: 7541,
+        image_url: 'https://cdn.rebrickable.com/media/sets/refreshed-75367-1.jpg',
+        acquisition_type: 'gwp',
+      }] });
+
+    const { container } = renderPage();
+    expect(await screen.findByText('5374')).toBeInTheDocument();
+
+    act(() => invalidateLegoCollection());
+
+    await waitFor(() => expect(getLegoSets).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('7541')).toBeInTheDocument();
+    expect(container.querySelector('.lego-acquisition-ribbon--diagonal')).toHaveTextContent('GWP');
+    expect(screen.getByRole('img', { name: /Venator-Class/ })).toHaveAttribute(
+      'src',
+      'https://cdn.rebrickable.com/media/sets/refreshed-75367-1.jpg',
+    );
   });
 
   it('preserves real card content, technical direction, financial values, and image fallback', async () => {

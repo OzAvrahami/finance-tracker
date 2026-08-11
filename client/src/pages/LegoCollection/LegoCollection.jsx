@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import { Blocks, Plus } from 'lucide-react';
 import { deleteLegoSet, getLegoSets, updateLegoSet } from '../../services/api';
 import { sortBySetNumber, calculateStats } from '../../utils/legoHelpers';
+import { useLegoCollectionRevision } from '../../utils/legoCollectionInvalidation';
 import StatsDashboard from '../../components/lego/StatsDashboard';
 import CollectionFilters from '../../components/lego/CollectionFilters';
 import SetCard from '../../components/lego/SetCard';
@@ -36,6 +37,7 @@ const LegoCollectionSkeleton = () => (
 
 const LegoCollection = () => {
   const { setPageHeader } = useContext(PageHeaderContext);
+  const collectionRevision = useLegoCollectionRevision();
   const [sets, setSets] = useState([]);
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterTheme, setFilterTheme] = useState('All');
@@ -87,7 +89,7 @@ const LegoCollection = () => {
 
   useEffect(() => {
     loadSets();
-  }, [loadSets]);
+  }, [collectionRevision, loadSets]);
 
   const updateSetField = async (id, field, value) => {
     setPendingQuickUpdate({ id, field });

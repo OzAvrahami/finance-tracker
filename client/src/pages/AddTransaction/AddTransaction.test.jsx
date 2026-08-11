@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import AddTransaction from './AddTransaction';
+import { invalidateLegoCollection } from '../../utils/legoCollectionInvalidation';
 import {
   createCategory,
   createTransaction,
@@ -27,6 +28,10 @@ vi.mock('../../services/api', () => ({
   getTags: vi.fn(),
   getTransactionById: vi.fn(),
   updateTransaction: vi.fn(),
+}));
+
+vi.mock('../../utils/legoCollectionInvalidation', () => ({
+  invalidateLegoCollection: vi.fn(),
 }));
 
 const categories = [
@@ -405,7 +410,12 @@ describe('AddTransaction characterization', () => {
   it('preserves LEGO lookup success and failure while keeping item state in the create payload', async () => {
     const user = userEvent.setup();
     getLegoSetDetails
-      .mockResolvedValueOnce({ data: { name: 'Millennium Falcon', theme: 'Star Wars' } })
+      .mockResolvedValueOnce({ data: {
+        name: 'Millennium Falcon',
+        theme: 'Star Wars',
+        parts: 7541,
+        img: 'https://cdn.rebrickable.com/media/sets/75192-1.jpg',
+      } })
       .mockRejectedValueOnce(new Error('not found'));
     renderForm();
     await settleInitialData();
@@ -428,6 +438,35 @@ describe('AddTransaction characterization', () => {
     fireEvent.blur(setInput);
     await waitFor(() => expect(within(legoFields).getByText(/החיפוש.*נכשל/)).toBeInTheDocument());
     expect(within(legoFields).getByLabelText('נושא')).toHaveValue('Star Wars');
+  });
+
+  it('submits lookup image and pieces and invalidates the authoritative LEGO collection', async () => {
+    const user = userEvent.setup();
+    getLegoSetDetails.mockResolvedValue({ data: {
+      name: 'Millennium Falcon',
+      theme: 'Star Wars',
+      parts: 7541,
+      img: 'https://cdn.rebrickable.com/media/sets/75192-1.jpg',
+    } });
+    renderForm();
+    await settleInitialData();
+
+    await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'קניית לגו');
+    await user.click(screen.getByRole('radio', { name: 'פירוט פריטים' }));
+    const setInput = screen.getByLabelText('מספר סט');
+    await user.type(setInput, '75192-1');
+    fireEvent.blur(setInput);
+    await waitFor(() => expect(getLegoSetDetails).toHaveBeenCalledWith('75192-1'));
+
+    await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1));
+    expect(createTransaction.mock.calls[0][0].items[0]).toEqual(expect.objectContaining({
+      set_number: '75192-1',
+      pieces: 7541,
+      image_url: 'https://cdn.rebrickable.com/media/sets/75192-1.jpg',
+      acquisition_type: 'purchase',
+    }));
+    expect(invalidateLegoCollection).toHaveBeenCalledTimes(1);
   });
 
   it('uses the same interactive amount-mode control for an itemized edit', async () => {
@@ -484,6 +523,8 @@ describe('AddTransaction characterization', () => {
             set_number: '21368',
             theme: 'Peanuts',
             brand: 'LEGO',
+            pieces: 150,
+            image_url: 'https://cdn.rebrickable.com/media/sets/21368-1.jpg',
             acquisition_type: 'purchase',
           },
           {
@@ -496,6 +537,8 @@ describe('AddTransaction characterization', () => {
             set_number: '40763',
             theme: 'Seasonal',
             brand: 'LEGO',
+            pieces: 204,
+            image_url: 'https://cdn.rebrickable.com/media/sets/40763-1.jpg',
             acquisition_type: 'gwp',
           },
         ],
@@ -525,10 +568,17 @@ describe('AddTransaction characterization', () => {
     await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1));
     const submittedItems = updateTransaction.mock.calls[0][1].items;
     expect(submittedItems).toEqual([
-      expect.objectContaining({ id: 102, set_number: '40763', acquisition_type: 'gwp' }),
+      expect.objectContaining({
+        id: 102,
+        set_number: '40763',
+        pieces: 204,
+        image_url: 'https://cdn.rebrickable.com/media/sets/40763-1.jpg',
+        acquisition_type: 'gwp',
+      }),
       expect.objectContaining({ item_name: 'סט חדש', acquisition_type: 'purchase' }),
     ]);
     expect(submittedItems.every((item) => !Object.hasOwn(item, '_uiKey'))).toBe(true);
+    expect(invalidateLegoCollection).toHaveBeenCalledTimes(1);
   });
 
   it('loads and updates one existing transaction with its category, payment, items, notes, and navigation unchanged', async () => {

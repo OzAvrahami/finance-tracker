@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, getPaymentSources, createCategory, getAllLoans } from '../services/api';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTransactionTotalValue } from '../utils/transactionPricing';
+import { invalidateLegoCollection } from '../utils/legoCollectionInvalidation';
 
 let nextItemKey = 0;
 
@@ -207,6 +208,7 @@ const useTransactionForm = () => {
         ? {
           ...item,
           [field]: value,
+          ...(field === 'set_number' ? { pieces: null, image_url: null } : {}),
           ...(field === 'acquisition_type' && ['gift', 'gwp'].includes(value)
             ? { discount_type: 'percent', discount_value: 100 }
             : {}),
@@ -261,11 +263,17 @@ const useTransactionForm = () => {
 
       if (isEditMode) {
         await updateTransaction(id, payload);
+        if (isLegoCategory() && items.some((item) => String(item.set_number || '').trim())) {
+          invalidateLegoCollection();
+        }
         alert('העסקה עודכנה בהצלחה! 💾');
         navigate('/transactions');
         return;
       } else {
         await createTransaction(payload);
+        if (isLegoCategory() && items.some((item) => String(item.set_number || '').trim())) {
+          invalidateLegoCollection();
+        }
         alert('התנועה נשמרה בהצלחה! 🚀');
       }
 
@@ -309,6 +317,8 @@ const useTransactionForm = () => {
             item_name: item.item_name || res.data.name,
             theme: item.theme || res.data.theme,
             brand: item.brand || res.data.brand || 'LEGO',
+            pieces: res.data.parts ?? item.pieces ?? null,
+            image_url: res.data.img ?? item.image_url ?? null,
           };
         }));
         return res.data;

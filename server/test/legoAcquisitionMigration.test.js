@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const migrationPath = path.join(__dirname, '..', 'migrations', '005_lego_acquisition_method.sql');
 const imageMigrationPath = path.join(__dirname, '..', 'migrations', '006_lego_set_image_url.sql');
+const transactionItemMetadataMigrationPath = path.join(__dirname, '..', 'migrations', '007_transaction_item_lego_metadata.sql');
 const schemaPath = path.join(__dirname, '..', 'full_schema.sql');
 
 test('migration promotes only the explicit historical transaction GWP pattern', () => {
@@ -41,4 +42,16 @@ test('schema and migration preserve the optional lookup image without rewriting 
   assert.match(schema, /image_url\s+TEXT/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS image_url TEXT/);
   assert.doesNotMatch(migration, /UPDATE\s+lego_sets/i);
+});
+
+test('transaction item schema persists lookup metadata for create and update synchronization', () => {
+  const schema = fs.readFileSync(schemaPath, 'utf8');
+  const migration = fs.readFileSync(transactionItemMetadataMigrationPath, 'utf8');
+  assert.match(schema, /transaction_items[\s\S]*brand\s+TEXT/);
+  assert.match(schema, /transaction_items[\s\S]*pieces\s+INTEGER/);
+  assert.match(schema, /transaction_items[\s\S]*image_url\s+TEXT/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS brand TEXT/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS pieces INTEGER/);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS image_url TEXT/);
+  assert.doesNotMatch(migration, /UPDATE\s+transaction_items/i);
 });

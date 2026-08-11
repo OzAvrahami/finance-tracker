@@ -177,7 +177,16 @@ test('create transaction persists allocation provenance and the real LEGO transa
   const controller = loadControllerWithFake('../../controllers/transactionController', fake);
   const res = createMockResponse();
   const items = [
-    item({ item_name: 'Discounted set', price_per_unit: '200', discount_value: '110', set_number: '12345-1' }),
+    item({
+      item_name: 'Discounted set',
+      price_per_unit: '200',
+      discount_value: '110',
+      set_number: '12345-1',
+      theme: 'Icons',
+      brand: 'LEGO',
+      pieces: 7541,
+      image_url: 'https://cdn.rebrickable.com/media/sets/12345-1.jpg',
+    }),
     item({ item_name: 'Other product', price_per_unit: '10', set_number: '' }),
     item({
       item_name: 'GWP',
@@ -221,6 +230,11 @@ test('create transaction persists allocation provenance and the real LEGO transa
   assert.equal(paidSet.receipt_price, '90.00');
   assert.equal(paidSet.purchase_price, '72.00');
   assert.equal(paidSet.transaction_id, 321);
+  assert.equal(paidSet.pieces, 7541);
+  assert.equal(paidSet.image_url, 'https://cdn.rebrickable.com/media/sets/12345-1.jpg');
+  assert.equal(fake.inserts.transaction_items[0].brand, 'LEGO');
+  assert.equal(fake.inserts.transaction_items[0].pieces, 7541);
+  assert.equal(fake.inserts.transaction_items[0].image_url, 'https://cdn.rebrickable.com/media/sets/12345-1.jpg');
 
   const gift = fake.inserts.lego_sets.find((set) => set.set_number === '40649-1');
   assert.equal(gift.original_price, '109.32');
@@ -377,7 +391,16 @@ test('updating a transaction creates each current LEGO set once and remains idem
   const fake = createUpdateSyncFake();
   const controller = loadControllerWithFake('../../controllers/transactionController', fake);
   const items = [
-    item({ item_name: 'Sale set', price_per_unit: '200', discount_value: '110', set_number: '12345-1' }),
+    item({
+      item_name: 'Sale set',
+      price_per_unit: '200',
+      discount_value: '110',
+      set_number: '12345-1',
+      theme: 'Icons',
+      brand: 'LEGO',
+      pieces: 7541,
+      image_url: 'https://cdn.rebrickable.com/media/sets/12345-1.jpg',
+    }),
     item({ item_name: 'Second set', price_per_unit: '10', set_number: '22222-1' }),
     item({
       item_name: 'GWP',
@@ -401,6 +424,11 @@ test('updating a transaction creates each current LEGO set once and remains idem
   assert.equal(paidSet.receipt_price, '90.00');
   assert.equal(paidSet.purchase_price, '81.00');
   assert.equal(paidSet.transaction_id, '42');
+  assert.equal(paidSet.pieces, 7541);
+  assert.equal(paidSet.image_url, 'https://cdn.rebrickable.com/media/sets/12345-1.jpg');
+  assert.equal(fake.state.transaction_items[0].brand, 'LEGO');
+  assert.equal(fake.state.transaction_items[0].pieces, 7541);
+  assert.equal(fake.state.transaction_items[0].image_url, 'https://cdn.rebrickable.com/media/sets/12345-1.jpg');
 
   const gift = fake.state.lego_sets.find((set) => set.set_number === '40649-1');
   assert.equal(gift.acquisition_type, 'gwp');
