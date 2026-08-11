@@ -1,6 +1,22 @@
 import { useState, useEffect } from 'react';
 import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, getPaymentSources, createCategory, getAllLoans } from '../services/api';
 import { useNavigate, useParams } from 'react-router-dom';
+import { getTransactionTotalValue } from '../utils/transactionPricing';
+
+let nextItemKey = 0;
+
+const createItemKey = () => `transaction-item-${nextItemKey += 1}`;
+
+const withItemKey = (item) => ({
+  ...item,
+  _uiKey: item._uiKey || (item.id ? `transaction-item-saved-${item.id}` : createItemKey()),
+});
+
+const withoutItemKey = (item) => {
+  const payloadItem = { ...item };
+  delete payloadItem._uiKey;
+  return payloadItem;
+};
 
 const getNextMonth2nd = (dateStr) => {
   const d = dateStr ? new Date(dateStr) : new Date();
@@ -108,7 +124,7 @@ const useTransactionForm = () => {
           });
 
           if (data.transaction_items?.length > 0) {
-            setItems(data.transaction_items);
+            setItems(data.transaction_items.map(withItemKey));
           } else {
             setItems([]);
           }
@@ -122,31 +138,14 @@ const useTransactionForm = () => {
     }
   }, [id, isEditMode, navigate]);
 
-  // --- Calculations ---
-  const calculateFinalPrice = (price, type, value) => {
-    if (!price) return 0;
-    const p = Number(price);
-    const v = Number(value);
-    return type === 'percent' ? p - (p * (v / 100)) : p - v;
-  };
-
-  const calculateTotal = () => {
-    const itemsTotal = items.reduce((sum, item) => {
-      const linePrice = calculateFinalPrice(item.price_per_unit, item.discount_type, item.discount_value);
-      return sum + (linePrice * item.quantity);
-    }, 0);
-
-    const finalTotal = itemsTotal - Number(transaction.global_discount);
-    return finalTotal > 0 ? finalTotal : 0;
-  };
-
   useEffect(() => {
     if (items.length > 0) {
       // The existing item model owns the authoritative transaction total through this effect.
-      setTransaction(prev => ({ ...prev, total_amount: calculateTotal() }));
+      setTransaction(prev => ({
+        ...prev,
+        total_amount: getTransactionTotalValue(items, transaction.global_discount),
+      }));
     }
-  // Keeping the legacy dependency boundary avoids changing when totals are recalculated.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, transaction.global_discount]);
 
   // --- Helpers ---
@@ -200,16 +199,19 @@ const useTransactionForm = () => {
   };
 
   const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
+    setItems((currentItems) => currentItems.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [field]: value } : item
+    )));
   };
 
-  const addItem = () => setItems([...items, { item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', acquisition_type: 'purchased', tags: '', discount_type: 'amount', discount_value: 0 }]);
+  const addItem = () => setItems((currentItems) => [
+    ...currentItems,
+    withItemKey({ item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', acquisition_type: 'purchased', tags: '', discount_type: 'amount', discount_value: 0 }),
+  ]);
 
   const clearItems = () => setItems([]);
 
-  const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
+  const removeItem = (index) => setItems((currentItems) => currentItems.filter((_, itemIndex) => itemIndex !== index));
 
   const handleSaveNewCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -240,7 +242,7 @@ const useTransactionForm = () => {
             payment_source_id: transaction.payment_source_id ? parseInt(transaction.payment_source_id) : null,
             installment_count: parseInt(transaction.installment_count) || 1,
         },
-        items
+        items: items.map(withoutItemKey),
       };
 
       if (isEditMode) {
@@ -281,16 +283,21 @@ const useTransactionForm = () => {
     }
   };
 
-  const handleSetNumberBlur = async (index, setNumber) => {
+  const handleSetNumberBlur = async (itemKey, setNumber) => {
     if (!setNumber || !isLegoCategory()) return false;
 
     try {
         const res = await getLegoSetDetails(setNumber);
-        const newItems = [...items];
-        if (!newItems[index].item_name) newItems[index].item_name = res.data.name;
-        if (!newItems[index].theme) newItems[index].theme = res.data.theme;
-        setItems(newItems);
-        return true;
+        setItems((currentItems) => currentItems.map((item) => {
+          if (item._uiKey !== itemKey) return item;
+          return {
+            ...item,
+            item_name: item.item_name || res.data.name,
+            theme: item.theme || res.data.theme,
+            brand: item.brand || res.data.brand || 'LEGO',
+          };
+        }));
+        return res.data;
     } catch {
         console.log("Set details not found");
         return false;

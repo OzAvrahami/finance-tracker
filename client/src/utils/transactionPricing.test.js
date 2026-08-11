@@ -32,7 +32,41 @@ describe('transaction pricing preview', () => {
       '64.47',
       '86.21',
     ]);
+    expect(preview.totals).toEqual({
+      originalSubtotal: '640.67',
+      itemDiscounts: '0.00',
+      receiptSubtotal: '640.67',
+      globalDiscount: '93.00',
+      actualTotal: '547.67',
+    });
     expect(JSON.stringify(preview)).not.toMatch(/000000000|999999999/);
+  });
+
+  it('normalizes a real receipt plus a 100% discounted GWP to exact agorot', () => {
+    const preview = getTransactionPricingPreview([
+      item('295.76'),
+      item('168.64'),
+      item('75.42'),
+      item('100.85'),
+      item('109.32', {
+        discount_type: 'percent',
+        discount_value: '100',
+        acquisition_type: 'gift',
+      }),
+    ], '93.00');
+
+    expect(preview.totals).toEqual({
+      originalSubtotal: '749.99',
+      itemDiscounts: '109.32',
+      receiptSubtotal: '640.67',
+      globalDiscount: '93.00',
+      actualTotal: '547.67',
+    });
+    expect(preview.items[4]).toEqual({
+      receiptPrice: '0.00',
+      allocatedGlobalDiscount: '0.00',
+      actualPaid: '0.00',
+    });
   });
 
   it('excludes a zero-cost gift while retaining paid non-LEGO participation', () => {
@@ -54,4 +88,3 @@ describe('transaction pricing preview', () => {
     });
   });
 });
-

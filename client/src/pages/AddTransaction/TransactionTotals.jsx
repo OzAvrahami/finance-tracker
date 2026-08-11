@@ -7,30 +7,6 @@ const GLOBAL_DISCOUNT_SOURCES = [
   { value: 'other', label: 'אחר' },
 ];
 
-const calculateFinalUnitPrice = (price, discountType, discountValue) => {
-  if (!price) return 0;
-  const numericPrice = Number(price);
-  const numericDiscount = Number(discountValue);
-  return discountType === 'percent'
-    ? numericPrice - (numericPrice * (numericDiscount / 100))
-    : numericPrice - numericDiscount;
-};
-
-const calculateItemValues = (items) => items.reduce((summary, item) => {
-  const quantity = Number(item.quantity) || 0;
-  const unitPrice = Number(item.price_per_unit) || 0;
-  const finalUnitPrice = calculateFinalUnitPrice(
-    item.price_per_unit,
-    item.discount_type,
-    item.discount_value,
-  );
-
-  return {
-    subtotal: summary.subtotal + (unitPrice * quantity),
-    itemDiscounts: summary.itemDiscounts + ((unitPrice - finalUnitPrice) * quantity),
-  };
-}, { subtotal: 0, itemDiscounts: 0 });
-
 const SummaryRow = ({ label, value }) => (
   <div className="transaction-totals__row">
     <span>{label}</span>
@@ -39,21 +15,20 @@ const SummaryRow = ({ label, value }) => (
 );
 
 const TransactionTotals = ({
-  items,
   globalDiscount,
   globalDiscountSource,
   total,
   pricingPreview,
   onDiscountChange,
 }) => {
-  const { subtotal, itemDiscounts } = calculateItemValues(items);
-  const discountedItemsTotal = subtotal - itemDiscounts;
+  const itemDiscounts = pricingPreview?.totals?.itemDiscounts || '0.00';
+  const discountedItemsTotal = pricingPreview?.totals?.receiptSubtotal || '0.00';
 
   return (
     <aside className="transaction-totals" aria-label="סיכום סכום התנועה">
       <SummaryRow label="סה״כ פריטים" value={discountedItemsTotal} />
-      {itemDiscounts > 0 && (
-        <SummaryRow label="הנחות בפריטים" value={-itemDiscounts} />
+      {Number(itemDiscounts) > 0 && (
+        <SummaryRow label="הנחות בפריטים" value={`-${itemDiscounts}`} />
       )}
       <NumberField
         className="transaction-totals__discount"

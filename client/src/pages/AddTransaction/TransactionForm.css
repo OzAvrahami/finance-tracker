@@ -287,7 +287,7 @@
 
 .transaction-item {
   min-width: 0;
-  padding: 9px;
+  padding: 10px;
   border: 1px solid var(--ft-border);
   border-radius: 14px;
   background: var(--ft-glass-hover);
@@ -416,22 +416,28 @@
   border-color: var(--ft-negative-border);
 }
 
-.transaction-add-item.ui-btn-primary {
+.transaction-add-item.ui-btn-secondary {
   width: 100%;
   min-height: 44px;
   margin-block-start: 2px;
-  color: var(--ft-text-muted);
-  background: transparent !important;
-  border: 1.5px dashed var(--ft-border-strong);
+  color: var(--ft-primary-hover) !important;
+  background: var(--ft-primary-weak) !important;
+  border: 1.5px dashed var(--ft-primary-border) !important;
   border-radius: 13px;
   box-shadow: none !important;
   font-size: 13px !important;
   font-weight: 700;
 }
 
-.transaction-add-item.ui-btn-primary:hover {
-  color: var(--ft-primary-hover);
-  border-color: var(--ft-primary-border);
+.transaction-add-item.ui-btn-secondary:hover {
+  color: var(--ft-text) !important;
+  background: var(--ft-glass-hover) !important;
+  border-color: var(--ft-primary-hover) !important;
+}
+
+.transaction-add-item.ui-btn-secondary:focus-visible {
+  outline: 3px solid var(--ft-focus);
+  outline-offset: 2px;
 }
 
 .transaction-totals {
@@ -556,8 +562,7 @@
   font-size: 11.5px;
 }
 
-.transaction-context-block,
-.transaction-context-items {
+.transaction-context-block {
   display: grid;
   gap: 12px;
 }
@@ -566,30 +571,54 @@
   width: min(100%, calc(50% - 8px));
 }
 
-.transaction-context-item {
-  width: min(100%, calc(50% - 8px));
+.transaction-item__lego {
   min-width: 0;
-  padding: 0;
-}
-
-.transaction-context-item + .transaction-context-item {
-  padding-block-start: 14px;
+  margin-block-start: 10px;
+  padding-block-start: 10px;
   border-block-start: 1px solid var(--ft-border);
 }
 
-.transaction-context-item h3 {
-  margin: 0 0 10px;
-  color: var(--ft-text);
+.transaction-item__lego-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-block-end: 8px;
+}
+
+.transaction-item__lego-heading h4,
+.transaction-item__lego-heading span {
+  margin: 0;
+}
+
+.transaction-item__lego-heading h4 {
+  color: var(--ft-primary-hover);
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.transaction-item__lego-heading span {
+  color: var(--ft-text-faint);
+  font-size: 11px;
+}
+
+.transaction-item__lego-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(132px, 172px);
+  align-items: start;
+  gap: 10px;
+}
+
+.transaction-item__lookup {
+  min-width: 0;
 }
 
 .transaction-item__lego-metadata {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  width: 100%;
-  margin-block-start: 12px;
+  width: min(100%, 460px);
+  margin-block-start: 8px;
 }
 
 .transaction-item__lookup-field {
@@ -600,34 +629,79 @@
 }
 
 .transaction-item__lookup-button {
-  min-height: 46px !important;
-  padding-inline: 14px !important;
-  border-radius: 13px !important;
+  min-height: 40px !important;
+  padding-inline: 12px !important;
+  border-radius: 10px !important;
   color: var(--ft-text) !important;
   background: var(--ft-glass-hover) !important;
-  font-size: 12.5px !important;
+  font-size: 12px !important;
   font-weight: 700 !important;
 }
 
 .transaction-item__lookup-status {
-  min-height: 18px;
-  margin-block-start: 8px;
+  min-height: 16px;
+  margin-block-start: 5px;
   color: var(--ft-text-faint);
   font-size: 11px;
   line-height: 1.5;
 }
 
 .transaction-item__lookup-success {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 8px;
   border: 1px solid var(--ft-positive-border);
-  border-radius: 12px;
+  border-radius: 10px;
   color: var(--ft-positive);
   background: var(--ft-positive-weak);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 650;
+}
+
+.transaction-item__lookup-success > svg {
+  flex: 0 0 auto;
+}
+
+.transaction-item__lookup-success > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.transaction-item__lookup-success strong {
+  overflow: hidden;
+  color: var(--ft-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-item__lookup-success small {
+  color: var(--ft-text-muted);
+  font-size: 10.5px;
+}
+
+.transaction-item__manual-toggle {
+  min-height: 32px;
+  margin-block-start: 2px;
+  padding: 3px 0;
+  border: 0;
+  color: var(--ft-primary-hover);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.transaction-item__manual-toggle:hover {
+  text-decoration: underline;
+}
+
+.transaction-item__manual-toggle:focus-visible {
+  outline: 2px solid var(--ft-focus);
+  outline-offset: 2px;
 }
 
 .transaction-item__spinner {
@@ -699,17 +773,14 @@
     grid-template-columns: 1fr;
   }
 
-  .transaction-item__lego-metadata {
-    width: 100%;
+  .transaction-item__lego-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 160px);
   }
 
   .transaction-context-block > .ui-field {
     width: 100%;
   }
 
-  .transaction-context-item {
-    width: 100%;
-  }
 }
 
 @media (max-width: 760px) {
@@ -814,8 +885,7 @@
   }
 
   .transaction-core-grid,
-  .transaction-form-grid--two,
-  .transaction-item__lego-metadata {
+  .transaction-form-grid--two {
     grid-template-columns: 1fr;
   }
 
@@ -836,8 +906,18 @@
     grid-template-columns: 1fr;
   }
 
+  .transaction-item__lego-controls,
+  .transaction-item__lego-metadata {
+    grid-template-columns: 1fr;
+  }
+
   .transaction-item__lookup-button {
     width: 100%;
+    min-height: 44px !important;
+  }
+
+  .transaction-item__manual-toggle {
+    min-height: 44px;
   }
 
   .transaction-form-actions {

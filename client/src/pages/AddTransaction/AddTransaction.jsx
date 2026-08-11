@@ -12,13 +12,14 @@ import {
 import useTransactionForm from '../../hooks/useTransactionForm';
 import CategoryCombobox from '../../components/CategoryCombobox';
 import NewCategoryModal from '../../components/NewCategoryModal';
-import ItemCard, { LegoItemFields } from '../../components/ItemCard';
+import ItemCard from '../../components/ItemCard';
 import {
   Alert,
   Button,
   DateField,
   MoneyAmount,
   NumberField,
+  SecondaryButton,
   SegmentedControl,
   Select,
   TextArea,
@@ -91,7 +92,7 @@ const AddTransaction = () => {
   const loanCategorySelected = isLoanCategory();
   const hasItems = items.length > 0;
   const pricingPreview = getTransactionPricingPreview(items, transaction.global_discount);
-  const hasContextFields = legoCategorySelected || loanCategorySelected;
+  const hasContextFields = loanCategorySelected;
   const installmentCount = Number(transaction.installment_count) || 1;
   const perInstallment = installmentCount > 1 && Number(transaction.total_amount) > 0
     ? Math.round((Number(transaction.total_amount) / installmentCount) * 100) / 100
@@ -235,36 +236,40 @@ const AddTransaction = () => {
           )}
 
           {hasItems && (
-            <div className="transaction-items" aria-label="פריטי התנועה">
-              <div className="transaction-items__head" aria-hidden="true">
-                <span>שם הפריט</span>
-                <span>כמות</span>
-                <span>מחיר יחידה</span>
-                <span>הנחה</span>
-                <span>סה״כ</span>
-                <span />
+            <>
+              <div className="transaction-items" aria-label="פריטי התנועה">
+                <div className="transaction-items__head" aria-hidden="true">
+                  <span>שם הפריט</span>
+                  <span>כמות</span>
+                  <span>מחיר יחידה</span>
+                  <span>הנחה</span>
+                  <span>סה״כ</span>
+                  <span />
+                </div>
+                {items.map((item, index) => (
+                  <ItemCard
+                    key={item._uiKey}
+                    item={item}
+                    index={index}
+                    pricing={pricingPreview.items[index]}
+                    globalDiscountSource={transaction.global_discount_source}
+                    isLego={legoCategorySelected}
+                    legoThemes={legoThemes}
+                    onItemChange={handleItemChange}
+                    onRemove={removeItem}
+                    onSetNumberBlur={handleSetNumberBlur}
+                  />
+                ))}
               </div>
-              {items.map((item, index) => (
-                <ItemCard
-                  key={index}
-                  item={item}
-                  index={index}
-                  pricing={Number(transaction.global_discount) > 0 ? pricingPreview.items[index] : null}
-                  onItemChange={handleItemChange}
-                  onRemove={removeItem}
-                />
-              ))}
-            </div>
+              <SecondaryButton type="button" className="transaction-add-item" onClick={addItem}>
+                <Plus size={18} aria-hidden="true" />
+                הוסף פריט
+              </SecondaryButton>
+            </>
           )}
-
-          <Button type="button" className="transaction-add-item" onClick={addItem}>
-            <Plus size={18} aria-hidden="true" />
-            הוספת פריט
-          </Button>
 
           {(hasItems || Number(transaction.global_discount) !== 0) && (
             <TransactionTotals
-              items={items}
               globalDiscount={transaction.global_discount}
               globalDiscountSource={transaction.global_discount_source}
               total={transaction.total_amount}
@@ -352,7 +357,7 @@ const AddTransaction = () => {
           <TransactionFormSection
             step="5"
             title="שדות לפי הקשר"
-            description="השדות האלה נפתחים לפי הקטגוריה שנבחרה — הלוואה לקטגוריות החזר, ושדות לגו לקטגוריית לגו."
+            description="השדות האלה נפתחים לפי הקטגוריה שנבחרה."
           >
             {loanCategorySelected && (
               <div className="transaction-context-block">
@@ -374,31 +379,6 @@ const AddTransaction = () => {
               </div>
             )}
 
-            {legoCategorySelected && (
-              <div className="transaction-context-block">
-                {isEditMode && (
-                  <Alert variant="info">
-                    עריכת התנועה אינה מסנכרנת רשומות אוסף LEGO שכבר נוצרו.
-                  </Alert>
-                )}
-                {hasItems ? (
-                  <div className="transaction-context-items">
-                    {items.map((item, index) => (
-                      <LegoItemFields
-                        key={index}
-                        item={item}
-                        index={index}
-                        legoThemes={legoThemes}
-                        onItemChange={handleItemChange}
-                        onSetNumberBlur={handleSetNumberBlur}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <Alert variant="info">הוסיפו פריט בשלב 2 כדי להזין מספר סט, נושא ומותג.</Alert>
-                )}
-              </div>
-            )}
           </TransactionFormSection>
         )}
 

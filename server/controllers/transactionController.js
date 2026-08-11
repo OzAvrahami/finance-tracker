@@ -26,6 +26,109 @@ const advanceMonthClamped = (dateStr, months) => {
   return `${targetYear}-${mm}-${dd}`;
 };
 
+const isLegoCategoryName = (name) => name === 'Lego' || name === 'לגו';
+
+const getCategoryName = async (categoryId) => {
+  if (!categoryId) return null;
+  const { data, error } = await supabase
+    .from('categories')
+    .select('name')
+    .eq('id', categoryId)
+    .single();
+  if (error) throw error;
+  return data?.name || null;
+};
+
+const getTransactionLegoPayload = (pricedItem, transactionId, transactionDate) => {
+  const { item } = pricedItem;
+  // The collection still models one set per transaction line. Preserve the
+  // existing per-set/unit behavior for legacy quantity > 1 lines.
+  const purchasePriceCents = pricedItem.quantity === 1n
+    ? pricedItem.actualLineCents
+    : roundDivide(pricedItem.actualLineCents, pricedItem.quantity);
+
+  return {
+    transaction_id: transactionId,
+    set_number: String(item.set_number).trim(),
+    name: item.item_name,
+    theme: item.theme || 'General',
+    ...(item.brand ? { brand: item.brand } : {}),
+    original_price: fromMinorUnits(pricedItem.originalUnitCents),
+    receipt_price: fromMinorUnits(pricedItem.receiptUnitCents),
+    purchase_price: fromMinorUnits(purchasePriceCents),
+    acquisition_type: pricedItem.acquisitionType,
+    purchase_date: transactionDate,
+  };
+};
+
+const synchronizeTransactionLegoSets = async ({
+  transactionId,
+  transactionDate,
+  categoryName,
+  pricing,
+}) => {
+  if (!isLegoCategoryName(categoryName)) return;
+
+  const desiredBySetNumber = new Map();
+  pricing.items.forEach((pricedItem) => {
+    const setNumber = String(pricedItem.item.set_number || '').trim();
+    if (setNumber && !desiredBySetNumber.has(setNumber)) {
+      desiredBySetNumber.set(
+        setNumber,
+        getTransactionLegoPayload(pricedItem, transactionId, transactionDate),
+      );
+    }
+  });
+
+  if (desiredBySetNumber.size === 0) return;
+
+  const setNumbers = [...desiredBySetNumber.keys()];
+  const { data: existingSets, error: existingError } = await supabase
+    .from('lego_sets')
+    .select('set_number')
+    .in('set_number', setNumbers);
+
+  if (existingError) {
+    console.error('LEGO synchronization existence query failed', {
+      transactionId,
+      setNumbers,
+      code: existingError.code,
+      message: existingError.message,
+    });
+    throw new Error('Failed to synchronize LEGO collection');
+  }
+
+  // This application is currently single-tenant and lego_sets has no owner
+  // column. Collection-wide set_number existence is therefore the complete
+  // ownership boundary. transaction_id is provenance for new records only.
+  const existingSetNumbers = new Set(
+    (existingSets || []).map((set) => String(set.set_number || '').trim()),
+  );
+  const missingSets = setNumbers
+    .filter((setNumber) => !existingSetNumbers.has(setNumber))
+    .map((setNumber) => ({
+      ...desiredBySetNumber.get(setNumber),
+      brand: desiredBySetNumber.get(setNumber).brand || 'LEGO',
+      status: 'New',
+    }));
+
+  if (missingSets.length === 0) return;
+
+  const { error: insertError } = await supabase
+    .from('lego_sets')
+    .insert(missingSets);
+
+  if (insertError) {
+    console.error('LEGO synchronization insert failed', {
+      transactionId,
+      setNumbers: missingSets.map((set) => set.set_number),
+      code: insertError.code,
+      message: insertError.message,
+    });
+    throw new Error('Failed to synchronize LEGO collection');
+  }
+};
+
 exports.createTransaction = async (req, res) => {
   try {
     const { transaction, items } = req.body;
@@ -75,51 +178,7 @@ exports.createTransaction = async (req, res) => {
     if (transError) throw transError;
     const transactionId = transData[0].id;
 
-    // 2. Lego Automation Logic - check by category_id
-    // First, look up the category name
-    let categoryName = null;
-    if (transaction.category_id) {
-      const { data: catData } = await supabase
-        .from('categories')
-        .select('name')
-        .eq('id', transaction.category_id)
-        .single();
-      categoryName = catData?.name;
-    }
-
-    if (categoryName === 'Lego' || categoryName === 'לגו') {
-      // Filter only items that have a set number
-      const legoItems = pricing.items.filter(({ item }) => item.set_number && item.set_number.trim() !== '');
-      
-      if (legoItems.length > 0) {
-        console.log("Processing Lego Sets:", legoItems.map(({ item }) => item.set_number));
-        
-        // Use Promise.all to handle multiple sets concurrently
-        await Promise.all(legoItems.map(async (pricedItem) => {
-          const { item } = pricedItem;
-          // LEGO auto-creation still creates one collection record per line. For
-          // legacy quantity > 1 lines, retain the existing per-set/unit meaning.
-          const purchasePriceCents = pricedItem.quantity === 1n
-            ? pricedItem.actualLineCents
-            : roundDivide(pricedItem.actualLineCents, pricedItem.quantity);
-          const { error } = await supabase.from('lego_sets').insert([{
-            set_number: item.set_number,
-            name: item.item_name,
-            theme: item.theme || 'General',
-            original_price: fromMinorUnits(pricedItem.originalUnitCents),
-            receipt_price: fromMinorUnits(pricedItem.receiptUnitCents),
-            purchase_price: fromMinorUnits(purchasePriceCents),
-            acquisition_type: pricedItem.acquisitionType,
-            purchase_date: transaction.transaction_date,
-            status: 'New',
-            transaction_id: transactionId,
-            brand: item.brand || 'LEGO'
-          }]);
-          
-          if (error) console.error(`Error inserting lego set ${item.set_number}:`, error.message);
-        }));
-      }
-    }
+    const categoryName = await getCategoryName(transaction.category_id);
 
     // 3. Insert Transaction Items
     if (pricing.items.length > 0) {
@@ -152,6 +211,13 @@ exports.createTransaction = async (req, res) => {
 
       if (itemsError) throw itemsError;
     }
+
+    await synchronizeTransactionLegoSets({
+      transactionId,
+      transactionDate: transaction.transaction_date,
+      categoryName,
+      pricing,
+    });
 
     const description = transaction.description ? transaction.description.trim() : '';
     const wordCount = description.split(/\s+/).length;
@@ -449,6 +515,14 @@ exports.updateTransaction = async (req, res) => {
         
       if (itemsError) throw itemsError;
     }
+
+    const categoryName = await getCategoryName(transaction.category_id);
+    await synchronizeTransactionLegoSets({
+      transactionId: id,
+      transactionDate: transaction.transaction_date,
+      categoryName,
+      pricing,
+    });
 
     res.status(200).json({ message: 'Transaction updated successfully' });
 

@@ -53,9 +53,11 @@ export const getTransactionPricingPreview = (items = [], globalDiscount = 0) => 
     const quantity = /^\d+$/.test(String(item.quantity)) && BigInt(item.quantity) > 0n
       ? BigInt(item.quantity)
       : 1n;
+    const originalCents = toCents(item.price_per_unit) * quantity;
     const receiptCents = receiptUnitCents(item) * quantity;
     return {
       index,
+      originalCents,
       receiptCents,
       eligible: (item.acquisition_type || 'purchased') !== 'gift' && receiptCents > 0n,
       allocatedCents: 0n,
@@ -65,6 +67,8 @@ export const getTransactionPricingPreview = (items = [], globalDiscount = 0) => 
     (sum, item) => sum + (item.eligible ? item.receiptCents : 0n),
     0n,
   );
+  const originalSubtotal = pricedItems.reduce((sum, item) => sum + item.originalCents, 0n);
+  const receiptSubtotal = pricedItems.reduce((sum, item) => sum + item.receiptCents, 0n);
 
   let error = '';
   if (discountCents < 0n) error = 'ההנחה הכללית לא יכולה להיות שלילית.';
@@ -94,6 +98,13 @@ export const getTransactionPricingPreview = (items = [], globalDiscount = 0) => 
 
   return {
     error,
+    totals: {
+      originalSubtotal: fromCents(originalSubtotal),
+      itemDiscounts: fromCents(originalSubtotal - receiptSubtotal),
+      receiptSubtotal: fromCents(receiptSubtotal),
+      globalDiscount: fromCents(discountCents),
+      actualTotal: fromCents(receiptSubtotal - discountCents),
+    },
     items: pricedItems.map((item) => ({
       receiptPrice: fromCents(item.receiptCents),
       allocatedGlobalDiscount: fromCents(item.allocatedCents),
@@ -102,3 +113,8 @@ export const getTransactionPricingPreview = (items = [], globalDiscount = 0) => 
   };
 };
 
+export const getTransactionTotalValue = (items = [], globalDiscount = 0) => {
+  const { totals } = getTransactionPricingPreview(items, globalDiscount);
+  const value = Number(totals.actualTotal);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
