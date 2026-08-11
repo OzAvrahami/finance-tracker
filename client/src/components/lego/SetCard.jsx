@@ -28,13 +28,17 @@ const MoneyOrDash = ({ value, className = '' }) => (
 
 const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, onDelete }) => {
   const rawSetNumber = String(set.set_number || '').trim();
-  const imageUrl = useMemo(() => {
-    if (set.image_url) return set.image_url;
+  const imageCandidates = useMemo(() => {
+    const candidates = [];
+    const savedImageUrl = String(set.image_url || '').trim();
+    if (savedImageUrl) candidates.push(savedImageUrl);
+    if (!rawSetNumber) return candidates;
     const normalized = /-\d+$/.test(rawSetNumber) ? rawSetNumber : `${rawSetNumber}-1`;
-    return `https://images.brickset.com/sets/images/${normalized}.jpg`;
+    candidates.push(`https://images.brickset.com/sets/images/${encodeURIComponent(normalized)}.jpg`);
+    return [...new Set(candidates)];
   }, [rawSetNumber, set.image_url]);
-  const [failedImageUrl, setFailedImageUrl] = useState('');
-  const imageFailed = failedImageUrl === imageUrl;
+  const [failedImageUrls, setFailedImageUrls] = useState(() => new Set());
+  const imageUrl = imageCandidates.find((candidate) => !failedImageUrls.has(candidate));
 
   const status = STATUS_META[set.status] || { label: set.status || 'ללא סטטוס', className: 'is-neutral' };
   const acquisitionRibbon = ['gift', 'gwp'].includes(set.acquisition_type)
@@ -45,12 +49,13 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
   return (
     <article className="lego-set-card ui-glass" aria-labelledby={titleId}>
       <div className="lego-set-card__media">
-        {!imageFailed ? (
+        {imageUrl ? (
           <img
             src={imageUrl}
             alt={`תמונת ${set.name || `סט ${rawSetNumber}`}`}
             loading="lazy"
-            onError={() => setFailedImageUrl(imageUrl)}
+            decoding="async"
+            onError={() => setFailedImageUrls((failed) => new Set(failed).add(imageUrl))}
           />
         ) : (
           <div className="lego-set-card__fallback" role="img" aria-label={`אין תמונה זמינה עבור ${set.name || rawSetNumber}`}>
@@ -59,7 +64,7 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
           </div>
         )}
         {acquisitionRibbon && (
-          <span className={`lego-acquisition-ribbon is-${set.acquisition_type}`}>
+          <span className={`lego-acquisition-ribbon lego-acquisition-ribbon--diagonal is-${set.acquisition_type}`}>
             {acquisitionRibbon}
           </span>
         )}

@@ -187,6 +187,7 @@
   padding: clamp(var(--ft-space-3), 4%, var(--ft-space-5));
   overflow: hidden;
   contain: layout paint;
+  isolation: isolate;
   background: var(--ft-surface-solid-secondary);
   border-block-end: 1px solid var(--ft-border);
 }
@@ -249,27 +250,32 @@
 
 .lego-acquisition-ribbon {
   position: absolute;
-  inset-block-start: var(--ft-space-3);
-  inset-inline-end: var(--ft-space-3);
-  z-index: 1;
-  min-height: 25px;
+  top: 18px;
+  left: -38px;
+  z-index: 2;
+  width: 132px;
+  min-height: 27px;
   display: inline-flex;
   align-items: center;
-  padding-inline: var(--ft-space-3);
-  color: var(--ft-primary-hover);
-  background: var(--ft-primary-weak);
-  border: 1px solid var(--ft-primary-border);
-  border-radius: 999px;
-  box-shadow: var(--ft-shadow);
-  font-size: var(--fs-11);
-  font-weight: 780;
+  justify-content: center;
+  padding-inline: var(--ft-space-5);
+  color: var(--ft-on-primary);
+  background: color-mix(in srgb, var(--ft-primary-hover) 88%, var(--ft-surface-solid));
+  border-block: 1px solid color-mix(in srgb, var(--ft-on-primary) 32%, transparent);
+  box-shadow: var(--ft-shadow-lg);
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+  transform: rotate(-38deg);
+  transform-origin: center;
+  pointer-events: none;
+  font-size: var(--fs-12);
+  font-weight: 800;
+  letter-spacing: 0.02em;
   line-height: 1;
 }
 
 .lego-acquisition-ribbon.is-gift {
-  color: var(--ft-positive);
-  background: var(--ft-positive-weak);
-  border-color: var(--ft-positive-border);
+  color: var(--ft-on-primary);
+  background: color-mix(in srgb, var(--ft-positive) 86%, var(--ft-surface-solid));
 }
 
 .lego-set-card__body {
@@ -513,6 +519,27 @@
 .lego-form-grid--prices {
   padding-block-start: 14px;
   border-block-start: 1px solid var(--ft-border);
+}
+
+.lego-acquisition-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lego-acquisition-fieldset legend {
+  margin-block-end: var(--ft-space-2);
+  color: var(--ft-text);
+  font-size: var(--ft-font-size-sm);
+  font-weight: 700;
+}
+
+.lego-acquisition-fieldset__helper {
+  margin: var(--ft-space-2) 0 0;
+  color: var(--ft-text-muted);
+  font-size: var(--ft-font-size-xs);
+  line-height: 1.45;
 }
 
 @media (max-width: 1023px) {

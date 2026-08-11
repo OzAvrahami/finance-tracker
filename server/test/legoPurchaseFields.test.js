@@ -47,6 +47,8 @@ async function addSet(acquisitionType, overrides = {}) {
     set_number: ({ purchase: '10001-1', gift: '10002-1', gwp: '10003-1' })[acquisitionType] || '10004-1',
     name: 'Acquisition model set',
     acquisition_type: acquisitionType,
+    pieces: '7541',
+    image_url: 'https://cdn.rebrickable.com/media/sets/10001-1.jpg',
     original_price: '200.00',
     receipt_price: '90.00',
     purchase_price: '70.00',
@@ -63,6 +65,8 @@ test('direct Purchase preserves the three purchase-cost fields', async () => {
   assert.equal(fake.inserts[0].original_price, 200);
   assert.equal(fake.inserts[0].receipt_price, 90);
   assert.equal(fake.inserts[0].purchase_price, 70);
+  assert.equal(fake.inserts[0].pieces, 7541);
+  assert.equal(fake.inserts[0].image_url, 'https://cdn.rebrickable.com/media/sets/10001-1.jpg');
 });
 
 test('direct Gift is distinct from GWP and always has zero receipt and paid cost', async () => {

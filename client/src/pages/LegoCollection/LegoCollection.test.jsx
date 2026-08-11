@@ -27,6 +27,7 @@ const collection = [
     name: 'Venator-Class Republic Attack Cruiser',
     theme: 'Star Wars',
     pieces: 5374,
+    image_url: 'https://cdn.rebrickable.com/media/sets/75367-1.jpg',
     brand: 'LEGO',
     status: 'Built',
     acquisition_type: 'purchase',
@@ -81,7 +82,12 @@ beforeEach(() => {
   vi.resetAllMocks();
   getLegoSets.mockResolvedValue({ data: collection });
   getLegoSetDetails.mockResolvedValue({
-    data: { name: 'Millennium Falcon', theme: 'Star Wars', parts: 7541 },
+    data: {
+      name: 'Millennium Falcon',
+      theme: 'Star Wars',
+      parts: 7541,
+      img: 'https://cdn.rebrickable.com/media/sets/75192-1.jpg',
+    },
   });
   addLegoSet.mockResolvedValue({ data: { id: 3 } });
   updateLegoSet.mockResolvedValue({ data: {} });
@@ -112,7 +118,9 @@ describe('LEGO collection loading, summary, filters, and cards', () => {
     const card = await screen.findByRole('article', { name: /Venator-Class/ });
     const mediaStage = card.querySelector('.lego-set-card__media');
     expect(mediaStage).toBeInTheDocument();
-    expect(mediaStage).toContainElement(within(card).getByRole('img', { name: /תמונת Venator/ }));
+    const savedImage = within(card).getByRole('img', { name: /תמונת Venator/ });
+    expect(mediaStage).toContainElement(savedImage);
+    expect(savedImage).toHaveAttribute('src', 'https://cdn.rebrickable.com/media/sets/75367-1.jpg');
     expect(within(card).getByText('#75367-1')).toHaveAttribute('dir', 'ltr');
     expect(within(card).getByText('Star Wars')).toBeInTheDocument();
     expect(within(card).getByText('LEGO', { selector: 'bdi' })).toHaveAttribute('dir', 'ltr');
@@ -124,7 +132,10 @@ describe('LEGO collection loading, summary, filters, and cards', () => {
     expect(within(card).getByText('₪2,500.20')).toBeInTheDocument();
     expect(within(card).queryByText('שווי מוצג')).not.toBeInTheDocument();
 
-    fireEvent.error(within(card).getByRole('img', { name: /תמונת Venator/ }));
+    fireEvent.error(savedImage);
+    const sourceFallback = within(card).getByRole('img', { name: /תמונת Venator/ });
+    expect(sourceFallback).toHaveAttribute('src', 'https://images.brickset.com/sets/images/75367-1.jpg');
+    fireEvent.error(sourceFallback);
     const fallback = within(card).getByRole('img', { name: /אין תמונה זמינה/ });
     expect(fallback).toBeInTheDocument();
     expect(mediaStage).toContainElement(fallback);
@@ -142,8 +153,8 @@ describe('LEGO collection loading, summary, filters, and cards', () => {
     const giftCard = screen.getByRole('article', { name: /Eiffel Tower/ });
     const gwpCard = screen.getByRole('article', { name: /Teddy Bear GWP/ });
     expect(purchaseCard.querySelector('.lego-acquisition-ribbon')).not.toBeInTheDocument();
-    expect(giftCard.querySelector('.lego-acquisition-ribbon')).toHaveTextContent('מתנה');
-    expect(gwpCard.querySelector('.lego-acquisition-ribbon')).toHaveTextContent('GWP');
+    expect(giftCard.querySelector('.lego-acquisition-ribbon--diagonal')).toHaveTextContent('מתנה');
+    expect(gwpCard.querySelector('.lego-acquisition-ribbon--diagonal')).toHaveTextContent('GWP');
   });
 
   it('combines status and real theme filters and distinguishes filtered empty from dataset empty', async () => {
@@ -239,10 +250,14 @@ describe('LEGO add and edit dialog', () => {
     expect(getLegoSetDetails).toHaveBeenCalledWith('75192-1');
     expect(within(dialog).queryByLabelText(/שווי מוצג|שווי מוערך/)).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/סנכרון|Marketplace|BrickLink|מחיר חי/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('נרכש')).not.toBeInTheDocument();
+
+    const acquisitionOptions = within(dialog).getAllByRole('radio');
+    expect(acquisitionOptions.map((option) => option.textContent)).toEqual(['רכישה', 'מתנה', 'GWP']);
+    expect(within(dialog).getByRole('radio', { name: 'רכישה' })).toHaveAttribute('aria-checked', 'true');
 
     await userEvent.selectOptions(within(dialog).getByLabelText('מותג'), 'Mould King');
     await userEvent.selectOptions(within(dialog).getByLabelText('סטטוס'), 'In Progress');
-    expect(within(dialog).getByLabelText('אופן קבלה')).toHaveValue('purchase');
     await userEvent.type(within(dialog).getByLabelText('תאריך כניסה לאוסף'), '2026-08-10');
     await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '1500.25');
     await userEvent.type(within(dialog).getByLabelText('מחיר בקבלה'), '1600');
@@ -257,11 +272,34 @@ describe('LEGO add and edit dialog', () => {
       status: 'In Progress',
       acquisition_type: 'purchase',
       pieces: 7541,
+      image_url: 'https://cdn.rebrickable.com/media/sets/75192-1.jpg',
       purchase_price: 1500.25,
       receipt_price: 1600,
       original_price: 1800,
       purchase_date: '2026-08-10',
     }));
+    expect(addLegoSet.mock.calls[0][0]).not.toHaveProperty('market_value');
+  });
+
+  it('keeps piece count and lookup image unknown when the existing source omits them', async () => {
+    getLegoSetDetails.mockResolvedValueOnce({
+      data: { name: 'Manual metadata set', theme: 'Ideas' },
+    });
+    renderPage();
+    await screen.findByRole('article', { name: /Venator-Class/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת סט' }));
+    const dialog = screen.getByRole('dialog', { name: 'הוספת סט לאוסף' });
+
+    await userEvent.type(within(dialog).getByLabelText(/מספר סט/), '99998-1');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'חיפוש פרטי הסט' }));
+    expect(await within(dialog).findByDisplayValue('Manual metadata set')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('מספר חלקים')).toHaveValue(null);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'הוספת הסט' }));
+
+    await waitFor(() => expect(addLegoSet).toHaveBeenCalledWith(expect.objectContaining({
+      pieces: null,
+      image_url: null,
+    })));
   });
 
   it('blocks duplicate set numbers without lookup or submit and retains the entered form', async () => {
@@ -320,6 +358,61 @@ describe('LEGO add and edit dialog', () => {
     expect(screen.queryByText(/סנכרון תנועה|עדכון תנועה/)).not.toBeInTheDocument();
   });
 
+  it('allows an explicit edit lookup to complete missing pieces and the saved image', async () => {
+    getLegoSets.mockResolvedValueOnce({ data: [{
+      ...collection[0],
+      pieces: null,
+      image_url: null,
+    }] });
+    renderPage();
+    const card = await screen.findByRole('article', { name: /Venator-Class/ });
+    await userEvent.click(within(card).getByRole('button', { name: /עריכת Venator/ }));
+    const dialog = screen.getByRole('dialog', { name: 'עריכת סט באוסף' });
+
+    expect(within(dialog).getByLabelText('מספר חלקים')).toHaveValue(null);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'חיפוש פרטי הסט' }));
+    expect(await within(dialog).findByText(/פרטי הסט נמצאו/)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('מספר חלקים')).toHaveValue(7541);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת שינויים' }));
+
+    await waitFor(() => expect(updateLegoSet).toHaveBeenCalledWith(1, expect.objectContaining({
+      pieces: 7541,
+      image_url: 'https://cdn.rebrickable.com/media/sets/75192-1.jpg',
+    })));
+  });
+
+  it('normalizes free acquisition prices in edit mode without submitting obsolete value data', async () => {
+    getLegoSets.mockResolvedValueOnce({ data: [
+      collection[0],
+      {
+        ...collection[1],
+        acquisition_type: 'gift',
+        receipt_price: 299.9,
+        purchase_price: 199.9,
+        market_value: 450,
+      },
+    ] });
+    renderPage();
+    const card = await screen.findByRole('article', { name: /Eiffel Tower/ });
+    await userEvent.click(within(card).getByRole('button', { name: /עריכת Eiffel Tower/ }));
+    const dialog = screen.getByRole('dialog', { name: 'עריכת סט באוסף' });
+
+    expect(within(dialog).getByRole('radio', { name: 'מתנה' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).getByLabelText('מחיר בקבלה')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('מחיר בקבלה')).toHaveAttribute('readonly');
+    expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveAttribute('readonly');
+    expect(within(dialog).queryByLabelText(/שווי מוצג|שווי מוערך|שווי נוכחי/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת שינויים' }));
+    await waitFor(() => expect(updateLegoSet).toHaveBeenCalledWith(2, expect.objectContaining({
+      acquisition_type: 'gift',
+      receipt_price: 0,
+      purchase_price: 0,
+    })));
+    expect(updateLegoSet.mock.calls[0][1]).not.toHaveProperty('market_value');
+  });
+
   it('creates a regular Gift with zero paid cost and no GWP classification', async () => {
     renderPage();
     await screen.findByRole('article', { name: /Venator-Class/ });
@@ -328,9 +421,10 @@ describe('LEGO add and edit dialog', () => {
 
     await userEvent.type(within(dialog).getByLabelText(/מספר סט/), '40649-1');
     await userEvent.type(within(dialog).getByLabelText(/שם הסט/), 'Birthday Simba');
-    await userEvent.selectOptions(within(dialog).getByLabelText('אופן קבלה'), 'gift');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'מתנה' }));
     await userEvent.type(within(dialog).getByLabelText('מחיר לפני הנחת פריט'), '109.32');
-    expect(within(dialog).queryByLabelText('מחיר בקבלה')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('מחיר בקבלה')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('מחיר בקבלה')).toHaveAttribute('readonly');
     expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveValue(0);
     expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveAttribute('readonly');
     expect(within(dialog).queryByLabelText(/שווי/)).not.toBeInTheDocument();
@@ -352,7 +446,7 @@ describe('LEGO add and edit dialog', () => {
 
     await userEvent.type(within(dialog).getByLabelText(/מספר סט/), '40763-1');
     await userEvent.type(within(dialog).getByLabelText(/שם הסט/), 'Teddy Bear GWP');
-    await userEvent.selectOptions(within(dialog).getByLabelText('אופן קבלה'), 'gwp');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'GWP' }));
     expect(within(dialog).getByText(/כחלק מרכישה או מבצע/)).toBeInTheDocument();
     expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveValue(0);
     await userEvent.click(within(dialog).getByRole('button', { name: 'הוספת הסט' }));
@@ -370,10 +464,9 @@ describe('LEGO add and edit dialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'הוספת סט' }));
     const dialog = screen.getByRole('dialog', { name: 'הוספת סט לאוסף' });
 
-    const acquisition = within(dialog).getByLabelText('אופן קבלה');
-    await userEvent.selectOptions(acquisition, 'gift');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'מתנה' }));
     expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveAttribute('readonly');
-    await userEvent.selectOptions(acquisition, 'purchase');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'רכישה' }));
     expect(within(dialog).getByLabelText('מחיר בקבלה')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('מחיר ששולם')).not.toHaveAttribute('readonly');
     expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveValue(0);

@@ -18,6 +18,7 @@ const buildLegoPayload = (input, { create = false } = {}) => {
     if (hasOwn(input, 'brand')) payload.brand = input.brand || 'LEGO';
     if (hasOwn(input, 'status')) payload.status = input.status || 'New';
     if (hasOwn(input, 'pieces')) payload.pieces = nullableNumber(input.pieces);
+    if (hasOwn(input, 'image_url')) payload.image_url = input.image_url ? String(input.image_url).trim() : null;
     if (hasOwn(input, 'purchase_date')) payload.purchase_date = input.purchase_date || null;
     if (hasOwn(input, 'original_price')) payload.original_price = nullableNumber(input.original_price);
     if (hasOwn(input, 'receipt_price')) payload.receipt_price = nullableNumber(input.receipt_price);
@@ -29,6 +30,7 @@ const buildLegoPayload = (input, { create = false } = {}) => {
         payload.status ??= 'New';
         payload.theme ??= null;
         payload.pieces ??= null;
+        payload.image_url ??= null;
         payload.purchase_date ??= null;
         payload.original_price ??= null;
         payload.receipt_price ??= null;

@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS lego_sets (
   name            TEXT NOT NULL,
   theme           TEXT,
   pieces          INTEGER,
+  image_url       TEXT,
   purchase_price  NUMERIC,
   receipt_price   NUMERIC,
   original_price  NUMERIC DEFAULT 0,

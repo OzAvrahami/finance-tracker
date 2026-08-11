@@ -9,9 +9,23 @@ import {
   NumberField,
   PrimaryButton,
   SecondaryButton,
+  SegmentedControl,
   Select,
   TextField,
 } from '../ui';
+
+const FREE_ACQUISITION_TYPES = new Set(['gift', 'gwp']);
+const ACQUISITION_CONTROL_OPTIONS = ACQUISITION_OPTIONS.map((option) => ({
+  value: option.key,
+  label: option.label,
+}));
+
+const normalizeAcquisitionType = (value) => {
+  const normalized = value === 'purchased' ? 'purchase' : value;
+  return ACQUISITION_OPTIONS.some((option) => option.key === normalized)
+    ? normalized
+    : 'purchase';
+};
 
 const DEFAULT_FORM = {
   set_number: '',
@@ -20,6 +34,7 @@ const DEFAULT_FORM = {
   brand: 'LEGO',
   status: 'New',
   pieces: '',
+  image_url: '',
   acquisition_type: 'purchase',
   purchase_date: '',
   purchase_price: '',
@@ -27,21 +42,25 @@ const DEFAULT_FORM = {
   original_price: '',
 };
 
-const formFromSet = (set) => ({
-  set_number: set?.set_number || '',
-  name: set?.name || '',
-  theme: set?.theme || '',
-  brand: set?.brand || 'LEGO',
-  status: set?.status || 'New',
-  pieces: set?.pieces ?? '',
-  acquisition_type: set?.acquisition_type === 'purchased'
-    ? 'purchase'
-    : (set?.acquisition_type || 'purchase'),
-  purchase_date: set?.purchase_date || '',
-  purchase_price: set?.purchase_price ?? '',
-  receipt_price: set?.receipt_price ?? '',
-  original_price: set?.original_price ?? '',
-});
+const formFromSet = (set) => {
+  const acquisitionType = normalizeAcquisitionType(set?.acquisition_type);
+  const isFreeAcquisition = FREE_ACQUISITION_TYPES.has(acquisitionType);
+
+  return {
+    set_number: set?.set_number || '',
+    name: set?.name || '',
+    theme: set?.theme || '',
+    brand: set?.brand || 'LEGO',
+    status: set?.status || 'New',
+    pieces: set?.pieces ?? '',
+    image_url: set?.image_url ?? '',
+    acquisition_type: acquisitionType,
+    purchase_date: set?.purchase_date || '',
+    purchase_price: isFreeAcquisition ? 0 : (set?.purchase_price ?? ''),
+    receipt_price: isFreeAcquisition ? 0 : (set?.receipt_price ?? ''),
+    original_price: set?.original_price ?? '',
+  };
+};
 
 const AddLegoSetModal = ({
   show,
@@ -79,7 +98,7 @@ const AddLegoSetModal = ({
     setForm((previous) => ({
       ...previous,
       [name]: value,
-      ...(name === 'acquisition_type' && ['gift', 'gwp'].includes(value)
+      ...(name === 'acquisition_type' && FREE_ACQUISITION_TYPES.has(value)
         ? { receipt_price: 0, purchase_price: 0 }
         : {}),
     }));
@@ -91,7 +110,7 @@ const AddLegoSetModal = ({
     if (saveError) setSaveError('');
   };
 
-  const runLookup = async () => {
+  const runLookup = async ({ force = false } = {}) => {
     const trimmed = form.set_number.trim();
     if (!trimmed || lookupInFlightRef.current) return;
 
@@ -103,7 +122,7 @@ const AddLegoSetModal = ({
       return;
     }
 
-    if (isEditMode && trimmed === initialData.set_number) return;
+    if (isEditMode && trimmed === initialData.set_number && !force) return;
 
     lookupInFlightRef.current = true;
     setLookupState('loading');
@@ -114,7 +133,8 @@ const AddLegoSetModal = ({
         ...previous,
         name: !previous.name ? (response.data.name ?? previous.name) : previous.name,
         theme: !previous.theme ? (response.data.theme ?? previous.theme) : previous.theme,
-        pieces: !previous.pieces ? (response.data.parts ?? previous.pieces) : previous.pieces,
+        pieces: response.data.parts ?? previous.pieces,
+        image_url: response.data.img ?? previous.image_url,
       }));
       setLookupState('success');
       setLookupMessage('פרטי הסט נמצאו. אפשר לבדוק ולהמשיך לערוך אותם.');
@@ -158,6 +178,7 @@ const AddLegoSetModal = ({
     setSaveError('');
     try {
       const numberOrNull = (value) => (value !== '' && value != null ? Number(value) : null);
+      const isFreeAcquisition = FREE_ACQUISITION_TYPES.has(form.acquisition_type);
       const payload = {
         set_number: form.set_number.trim(),
         name: form.name.trim(),
@@ -166,8 +187,9 @@ const AddLegoSetModal = ({
         status: form.status,
         acquisition_type: form.acquisition_type,
         pieces: numberOrNull(form.pieces),
-        purchase_price: numberOrNull(form.purchase_price),
-        receipt_price: numberOrNull(form.receipt_price),
+        image_url: form.image_url ? String(form.image_url).trim() : null,
+        purchase_price: isFreeAcquisition ? 0 : numberOrNull(form.purchase_price),
+        receipt_price: isFreeAcquisition ? 0 : numberOrNull(form.receipt_price),
         original_price: numberOrNull(form.original_price),
         purchase_date: form.purchase_date || null,
       };
@@ -254,7 +276,7 @@ const AddLegoSetModal = ({
             disabled={saving || lookupState === 'loading' || !form.set_number.trim()}
             loading={lookupState === 'loading'}
             loadingText="מחפש…"
-            onClick={runLookup}
+            onClick={() => runLookup({ force: true })}
           >
             <Search size={16} aria-hidden="true" />
             חיפוש פרטי הסט
@@ -324,19 +346,23 @@ const AddLegoSetModal = ({
         </div>
 
         <div className="lego-form-grid lego-form-grid--two">
-          <Select
-            id="lego-acquisition-type"
-            label="אופן קבלה"
-            value={form.acquisition_type}
-            onValueChange={(value) => updateField('acquisition_type', value)}
-            helperText={form.acquisition_type === 'gift'
-              ? 'מתנה אישית שאינה תלויה ברכישה אחרת.'
-              : form.acquisition_type === 'gwp'
-                ? 'סט חינם שהתקבל כחלק מרכישה או מבצע.'
-                : undefined}
-          >
-            {ACQUISITION_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
-          </Select>
+          <fieldset className="lego-acquisition-fieldset">
+            <legend id="lego-acquisition-type-label">אופן קבלה</legend>
+            <SegmentedControl
+              labelledBy="lego-acquisition-type-label"
+              size="compact"
+              fullWidth
+              value={form.acquisition_type}
+              options={ACQUISITION_CONTROL_OPTIONS}
+              onValueChange={(value) => updateField('acquisition_type', value)}
+            />
+            {form.acquisition_type === 'gift' && (
+              <p className="lego-acquisition-fieldset__helper">מתנה אישית שאינה תלויה ברכישה אחרת.</p>
+            )}
+            {form.acquisition_type === 'gwp' && (
+              <p className="lego-acquisition-fieldset__helper">סט חינם שהתקבל כחלק מרכישה או מבצע.</p>
+            )}
+          </fieldset>
           <DateField
             id="lego-purchase-date"
             label="תאריך כניסה לאוסף"
@@ -355,7 +381,7 @@ const AddLegoSetModal = ({
             step="0.01"
             suffix="₪"
           />
-          {form.acquisition_type === 'purchase' ? (
+          {!FREE_ACQUISITION_TYPES.has(form.acquisition_type) ? (
             <>
               <NumberField
                 id="lego-receipt-price"
@@ -378,16 +404,25 @@ const AddLegoSetModal = ({
               />
             </>
           ) : (
-            <NumberField
-              id="lego-purchase-price"
-              label="מחיר ששולם"
-              value={0}
-              readOnly
-              suffix="₪"
-              helperText={form.acquisition_type === 'gwp'
-                ? 'GWP מתקבל ללא תשלום ישיר עבור הסט.'
-                : 'מתנה אישית נרשמת ללא עלות רכישה.'}
-            />
+            <>
+              <NumberField
+                id="lego-receipt-price"
+                label="מחיר בקבלה"
+                value={0}
+                readOnly
+                suffix="₪"
+              />
+              <NumberField
+                id="lego-purchase-price"
+                label="מחיר ששולם"
+                value={0}
+                readOnly
+                suffix="₪"
+                helperText={form.acquisition_type === 'gwp'
+                  ? 'GWP מתקבל ללא תשלום ישיר עבור הסט.'
+                  : 'מתנה אישית נרשמת ללא עלות רכישה.'}
+              />
+            </>
           )}
         </div>
       </form>
