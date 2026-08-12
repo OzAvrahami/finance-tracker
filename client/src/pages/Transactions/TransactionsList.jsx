@@ -89,7 +89,6 @@ export const TransactionsSummary = ({ totals, loading = false }) => {
     );
   }
 
-  const balance = Number(totals.income) - Number(totals.expense);
   const balance = (
     Math.round(Number(totals.income) * 100)
     - Math.round(Number(totals.expense) * 100)
