@@ -90,6 +90,11 @@ export const TransactionsSummary = ({ totals, loading = false }) => {
   }
 
   const balance = Number(totals.income) - Number(totals.expense);
+  const balance = (
+    Math.round(Number(totals.income) * 100)
+    - Math.round(Number(totals.expense) * 100)
+  ) / 100;
+
   const items = [
     { key: 'count', label: 'תנועות', value: <TechnicalValue>{Number(totals.count).toLocaleString('en-US')}</TechnicalValue> },
     { key: 'income', label: 'הכנסות', value: <MoneyAmount value={totals.income} />, tone: 'income' },
