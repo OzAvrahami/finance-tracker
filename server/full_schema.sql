@@ -769,12 +769,25 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.refresh_loan_summary(BIGINT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.sync_loan_payment_from_transaction(BIGINT, BOOLEAN) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.create_transaction_with_loan_payment(JSONB, BOOLEAN) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.update_transaction_with_loan_payment(BIGINT, JSONB, BOOLEAN) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.delete_transaction_with_loan_payment(BIGINT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.refresh_loan_summary(BIGINT) TO service_role;
+-- Normalize Supabase default function grants. Internal helpers remain callable
+-- only by their owner (including through triggers/SECURITY DEFINER RPCs); only
+-- the three bounded application entry points are exposed to service_role.
+REVOKE ALL ON FUNCTION public.refresh_loan_summary(BIGINT)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.recalculate_loan_status()
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.refresh_loan_summary_from_payment()
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.sync_loan_payment_from_transaction(BIGINT, BOOLEAN)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+REVOKE ALL ON FUNCTION public.create_transaction_with_loan_payment(JSONB, BOOLEAN)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.update_transaction_with_loan_payment(BIGINT, JSONB, BOOLEAN)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.delete_transaction_with_loan_payment(BIGINT)
+  FROM PUBLIC, anon, authenticated, service_role;
+
 GRANT EXECUTE ON FUNCTION public.create_transaction_with_loan_payment(JSONB, BOOLEAN) TO service_role;
 GRANT EXECUTE ON FUNCTION public.update_transaction_with_loan_payment(BIGINT, JSONB, BOOLEAN) TO service_role;
 GRANT EXECUTE ON FUNCTION public.delete_transaction_with_loan_payment(BIGINT) TO service_role;

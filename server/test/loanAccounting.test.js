@@ -160,3 +160,51 @@ test('application loan creation forces loan_payments while schema default stays 
   assert.match(migration, /calculation_mode TEXT NOT NULL DEFAULT 'legacy'/);
   assert.doesNotMatch(migration, /UPDATE public\.loans[\s\S]{0,120}calculation_mode/);
 });
+
+test('migration exposes only bounded RPCs and revokes every internal helper role', () => {
+  const migration = fs.readFileSync(migrationPath, 'utf8');
+  const schema = fs.readFileSync(schemaPath, 'utf8');
+  const internalHelpers = [
+    'refresh_loan_summary\\(BIGINT\\)',
+    'recalculate_loan_status\\(\\)',
+    'refresh_loan_summary_from_payment\\(\\)',
+    'sync_loan_payment_from_transaction\\(BIGINT, BOOLEAN\\)',
+  ];
+  const serviceRpcs = [
+    'create_transaction_with_loan_payment\\(JSONB, BOOLEAN\\)',
+    'update_transaction_with_loan_payment\\(BIGINT, JSONB, BOOLEAN\\)',
+    'delete_transaction_with_loan_payment\\(BIGINT\\)',
+  ];
+
+  for (const sql of [migration, schema]) {
+    for (const signature of [...internalHelpers, ...serviceRpcs]) {
+      assert.match(
+        sql,
+        new RegExp(
+          `REVOKE ALL ON FUNCTION public\\.${signature}\\s+` +
+          'FROM PUBLIC, anon, authenticated, service_role;',
+        ),
+      );
+    }
+
+    for (const signature of internalHelpers) {
+      assert.doesNotMatch(
+        sql,
+        new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${signature} TO service_role;`),
+      );
+    }
+
+    for (const signature of serviceRpcs) {
+      assert.match(
+        sql,
+        new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${signature} TO service_role;`),
+      );
+    }
+  }
+
+  assert.doesNotMatch(migration, /GRANT EXECUTE ON ALL FUNCTIONS/i);
+  assert.equal(
+    (migration.match(/SECURITY DEFINER\s+SET search_path = pg_catalog, public/g) || []).length,
+    7,
+  );
+});
