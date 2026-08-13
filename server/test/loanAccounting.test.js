@@ -93,7 +93,6 @@ test('migration defines compatibility mode, constraints, and both refresh trigge
   for (const sql of [migration, schema]) {
     assert.match(sql, /calculation_mode\s+TEXT NOT NULL DEFAULT 'legacy'/);
     assert.match(sql, /CREATE TABLE IF NOT EXISTS (?:public\.)?loan_payments/);
-    assert.match(sql, /UNIQUE \(loan_id, installment_number\)/);
     assert.match(sql, /UNIQUE \(transaction_id\)/);
     assert.match(sql, /NUMERIC\(24, 10\)/);
     assert.match(sql, /refresh_loan_summary\(p_loan_id BIGINT\)/);
@@ -103,6 +102,9 @@ test('migration defines compatibility mode, constraints, and both refresh trigge
     assert.match(sql, /update_transaction_with_loan_payment/);
     assert.match(sql, /delete_transaction_with_loan_payment/);
   }
+
+  assert.match(migration, /UNIQUE \(loan_id, installment_number\)/);
+  assert.match(schema, /CREATE UNIQUE INDEX loan_payments_unique_installment[\s\S]*ON loan_payments \(loan_id, installment_number\)[\s\S]*WHERE payment_kind = 'installment'/);
 
   assert.match(migration, /v_loan\.calculation_mode = 'loan_payments'/);
   assert.match(migration, /sum\(principal_amount\)/);

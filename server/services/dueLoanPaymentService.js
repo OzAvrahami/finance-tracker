@@ -95,6 +95,9 @@ const fetchLoanPayments = async (supabaseClient, loanId) => {
       'interest_amount',
       'annual_interest_rate',
       'source_kind',
+      'payment_kind',
+      'other_amount',
+      'balance_adjustment_amount',
     ].join(','))
     .eq('loan_id', loanId)
     .order('installment_number', { ascending: true });
@@ -104,7 +107,12 @@ const fetchLoanPayments = async (supabaseClient, loanId) => {
 };
 
 const validateAccountingState = (loan, payments) => {
-  const installmentNumbers = payments.map((payment) => Number(payment.installment_number));
+  const installments = payments.filter(
+    (payment) => payment.payment_kind === 'installment',
+  );
+  const installmentNumbers = installments.map(
+    (payment) => Number(payment.installment_number),
+  );
   installmentNumbers.forEach((number, index) => {
     if (!Number.isInteger(number) || number !== index + 1) {
       throw new Error('Loan payment installments are not contiguous');
@@ -116,13 +124,14 @@ const validateAccountingState = (loan, payments) => {
   if (!Number.isInteger(totalInstallments) || totalInstallments <= 0) {
     throw new Error('Loan total installments are invalid');
   }
-  if (remainingInstallments !== totalInstallments - payments.length) {
+  if (remainingInstallments !== totalInstallments - installments.length) {
     throw new Error('Loan remaining-installment summary has drifted');
   }
 
   return {
     totalInstallments,
-    nextInstallmentNumber: payments.length + 1,
+    installments,
+    nextInstallmentNumber: installments.length + 1,
   };
 };
 
@@ -154,7 +163,7 @@ const processDueLoanPayments = async ({
     try {
       const payments = await fetchLoanPayments(supabaseClient, loan.id);
       const accounting = validateAccountingState(loan, payments);
-      const dueDatePayments = payments.filter(
+      const dueDatePayments = accounting.installments.filter(
         (payment) => payment.payment_date === loan.next_payment_date,
       );
       if (dueDatePayments.length > 1) {
@@ -165,7 +174,7 @@ const processDueLoanPayments = async ({
       let payment;
       if (dueDatePayments.length === 1) {
         const existing = dueDatePayments[0];
-        if (Number(existing.installment_number) !== payments.length) {
+        if (Number(existing.installment_number) !== accounting.installments.length) {
           throw new Error('A non-latest loan payment matches the current due date');
         }
         installmentNumber = Number(existing.installment_number);
@@ -179,6 +188,7 @@ const processDueLoanPayments = async ({
           originalAmount: loan.original_amount,
           payments: payments.map((row) => ({
             principalAmount: row.principal_amount,
+            balanceAdjustmentAmount: row.balance_adjustment_amount,
           })),
         });
         payment = calculateDueLoanPayment({

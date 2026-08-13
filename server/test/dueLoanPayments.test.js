@@ -80,7 +80,12 @@ class Query {
 const createDueLoanFake = ({ loans, loanPayments = [], categories } = {}) => {
   const state = {
     loans: structuredClone(loans || []),
-    loan_payments: structuredClone(loanPayments),
+    loan_payments: structuredClone(loanPayments).map((payment) => ({
+      payment_kind: 'installment',
+      other_amount: '0.0000000000',
+      balance_adjustment_amount: '0.0000000000',
+      ...payment,
+    })),
     categories: structuredClone(categories || [
       { id: 24, name: 'הלוואות', type: 'expense', is_active: true },
     ]),
@@ -136,6 +141,9 @@ const createDueLoanFake = ({ loans, loanPayments = [], categories } = {}) => {
         interest_amount: params.p_interest_amount,
         annual_interest_rate: params.p_annual_interest_rate,
         source_kind: 'generated',
+        payment_kind: 'installment',
+        other_amount: '0.0000000000',
+        balance_adjustment_amount: '0.0000000000',
       });
       loan.current_balance = Number(loan.current_balance) - Number(params.p_principal_amount);
       loan.remaining_installments -= 1;
@@ -328,6 +336,34 @@ test('a manual payment on the due date is reconciled without a duplicate', async
   assert.equal(fake.state.loans[0].next_payment_date, '2026-10-02');
 });
 
+test('automatic processing counts only regular installments, never an early payoff row', async () => {
+  const fake = createDueLoanFake({
+    loans: [loan({ current_balance: '901.00', remaining_installments: 9 })],
+    loanPayments: [
+      {
+        id: 1, loan_id: 101, transaction_id: 1, installment_number: 1,
+        payment_date: '2026-08-02', payment_amount: '110.00',
+        principal_amount: '99.0000000000', interest_amount: '11.0000000000',
+        annual_interest_rate: '12.00', source_kind: 'manual',
+      },
+      {
+        id: 2, loan_id: 101, transaction_id: 2, installment_number: null,
+        payment_date: '2026-08-15', payment_amount: '0.00',
+        principal_amount: '0.0000000000', interest_amount: '0.0000000000',
+        annual_interest_rate: null, source_kind: 'manual',
+        payment_kind: 'early_payoff',
+      },
+    ],
+  });
+
+  const summary = await processDueLoanPayments({
+    today: '2026-09-02', supabaseClient: fake, logger: { error() {} },
+  });
+
+  assert.equal(summary.processed, 1);
+  assert.equal(fake.state.rpcCalls[0].params.p_expected_installment_number, 2);
+});
+
 test('legacy, future, and disabled loans are ignored and ancillary transactions are irrelevant', async () => {
   const fake = createDueLoanFake({
     loans: [
@@ -431,5 +467,5 @@ test('migration 009 and canonical schema define the bounded automatic-payment fe
   assert.match(migration, /source_kind,[\s\S]*'generated'/);
   assert.equal((migration.match(/INSERT INTO public\.transactions/g) || []).length, 1);
   assert.doesNotMatch(migration, /generate_series/i);
-  assert.match(schema, /UNIQUE \(loan_id, installment_number\)/);
+  assert.match(schema, /loan_payments_unique_installment[\s\S]*payment_kind = 'installment'/);
 });

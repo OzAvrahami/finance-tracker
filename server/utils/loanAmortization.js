@@ -112,27 +112,39 @@ const summarizeSchedule = (rows) => {
 const summarizeLoanPayments = ({ originalAmount, totalInstallments, payments }) => {
   const scale = 10;
   const original = toScaled(originalAmount, scale);
-  const paidPrincipal = payments.reduce(
-    (total, payment) => total + toScaled(payment.principalAmount, scale),
+  const principalReduction = payments.reduce(
+    (total, payment) => total
+      + toScaled(payment.principalAmount, scale)
+      + toScaled(payment.balanceAdjustmentAmount ?? 0, scale),
     0n,
   );
-  const balance = original > paidPrincipal ? original - paidPrincipal : 0n;
+  const balance = original > principalReduction ? original - principalReduction : 0n;
   const balanceCents = roundDivide(balance, pow10(scale - 2));
+  const installmentCount = payments.filter(
+    (payment) => (payment.paymentKind ?? 'installment') === 'installment',
+  ).length;
 
   return {
     currentBalance: formatScaled(balanceCents, 2),
-    remainingInstallments: Math.max(totalInstallments - payments.length, 0),
+    remainingInstallments: balanceCents === 0n
+      ? 0
+      : Math.max(totalInstallments - installmentCount, 0),
   };
 };
 
 const calculateOutstandingPrincipal = ({ originalAmount, payments }) => {
   const scale = 10;
   const original = toScaled(originalAmount, scale);
-  const paidPrincipal = payments.reduce(
-    (total, payment) => total + toScaled(payment.principalAmount, scale),
+  const principalReduction = payments.reduce(
+    (total, payment) => total
+      + toScaled(payment.principalAmount, scale)
+      + toScaled(payment.balanceAdjustmentAmount ?? 0, scale),
     0n,
   );
-  return formatScaled(original > paidPrincipal ? original - paidPrincipal : 0n, scale);
+  return formatScaled(
+    original > principalReduction ? original - principalReduction : 0n,
+    scale,
+  );
 };
 
 const calculateDueLoanPayment = ({
