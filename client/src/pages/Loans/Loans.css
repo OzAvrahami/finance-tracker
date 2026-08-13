@@ -347,6 +347,21 @@
 
 .loan-card__metadata--closed > div:first-child dd { font-size: 12.5px; font-weight: 700; }
 
+.installment-progress {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.installment-progress > span {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
 .loans-closed {
   min-width: 0;
   padding: 14px;
@@ -766,9 +781,57 @@
   font-weight: 700;
 }
 
+.loan-create-section--first {
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
 .loan-create-section .ui-segmented { width: fit-content; }
 .loan-create-conditional { width: 240px; max-width: 100%; margin-block-start: 2px; }
 .loan-create-dates { padding-block-start: 14px; border-block-start: 1px solid var(--ft-border); }
+
+.loan-create-auto-payment {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--ft-border);
+  border-radius: 14px;
+  background: var(--ft-glass);
+  cursor: pointer;
+}
+
+.loan-create-auto-payment:focus-within {
+  border-color: var(--ft-primary);
+  box-shadow: 0 0 0 3px var(--ft-primary-weak);
+}
+
+.loan-create-auto-payment input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--ft-primary);
+}
+
+.loan-create-auto-payment__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.loan-create-auto-payment__copy strong {
+  color: var(--ft-text);
+  font-size: 13.5px;
+}
+
+.loan-create-auto-payment__copy small {
+  max-width: 480px;
+  color: var(--ft-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
 
 @media (max-width: 1080px) {
   .loans-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

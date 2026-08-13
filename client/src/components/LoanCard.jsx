@@ -1,4 +1,5 @@
 import { ProgressBar, MoneyAmount, TechnicalValue } from './ui';
+import InstallmentProgress from './InstallmentProgress';
 import {
   countRegularLoanPayments,
   formatLoanDate,
@@ -103,9 +104,9 @@ const LoanCard = ({ loan, onSelect }) => {
           <div>
             <dt>תשלומים רגילים</dt>
             <dd>
-              <TechnicalValue>
-                {regularPaymentsKnown ? `${regularPayments} מתוך ${loan.total_installments ?? '−'}` : '−'}
-              </TechnicalValue>
+              {regularPaymentsKnown
+                ? <InstallmentProgress paid={regularPayments} total={loan.total_installments} />
+                : '−'}
             </dd>
           </div>
           <div>

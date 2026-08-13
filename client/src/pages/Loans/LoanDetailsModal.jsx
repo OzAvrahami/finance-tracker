@@ -18,6 +18,7 @@ import {
   hasEarlyPayoff,
   isClosedLoan,
 } from '../../utils/loanDisplay';
+import InstallmentProgress from '../../components/InstallmentProgress';
 
 const valueOrDash = (value) => (value === null || value === undefined || value === '' ? '−' : value);
 
@@ -96,9 +97,7 @@ const LoanDetailsModal = ({ loan: summaryLoan, open, onClose, returnFocusRef }) 
   const earlyPayoff = hasEarlyPayoff(payments)
     || (!details && hasEarlyPayoff(summaryLoan));
   const regularPayments = countRegularLoanPayments(payments.length ? payments : summaryLoan);
-  const regularPaymentsLabel = loan?.calculation_mode === 'legacy' && payments.length === 0
-    ? '−'
-    : `${regularPayments} מתוך ${valueOrDash(loan?.total_installments)}`;
+  const regularPaymentsKnown = loan?.calculation_mode !== 'legacy' || payments.length > 0;
   const original = Number(loan?.original_amount) || 0;
   const balance = Number(loan?.current_balance) || 0;
   const progress = original > 0
@@ -206,7 +205,11 @@ const LoanDetailsModal = ({ loan: summaryLoan, open, onClose, returnFocusRef }) 
                   <OverviewItem label="מרווח פריים"><TechnicalValue>{valueOrDash(loan.prime_margin)}%</TechnicalValue></OverviewItem>
                 )}
                 <OverviewItem label="החזר חודשי"><MoneyAmount value={loan.monthly_payment} maximumFractionDigits={2} /></OverviewItem>
-                <OverviewItem label="תשלומים רגילים"><TechnicalValue>{regularPaymentsLabel}</TechnicalValue></OverviewItem>
+                <OverviewItem label="תשלומים רגילים">
+                  {regularPaymentsKnown
+                    ? <InstallmentProgress paid={regularPayments} total={loan.total_installments} />
+                    : '−'}
+                </OverviewItem>
                 <OverviewItem label="תשלומים שנותרו"><TechnicalValue>{valueOrDash(loan.remaining_installments)}</TechnicalValue></OverviewItem>
                 <OverviewItem label="תחילת הלוואה"><TechnicalValue>{formatLoanDate(loan.start_date)}</TechnicalValue></OverviewItem>
                 <OverviewItem label="סיום מתוכנן"><TechnicalValue>{formatLoanDate(loan.end_date)}</TechnicalValue></OverviewItem>

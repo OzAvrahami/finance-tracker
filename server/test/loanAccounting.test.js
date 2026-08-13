@@ -134,6 +134,14 @@ test('application loan creation forces loan_payments while schema default stays 
   const inserted = [];
   const fake = {
     from(table) {
+      if (table === 'payment_sources') {
+        const query = {
+          select() { return query; },
+          eq() { return query; },
+          async maybeSingle() { return { data: { id: 5 }, error: null }; },
+        };
+        return query;
+      }
       assert.equal(table, 'loans');
       return {
         insert(rows) {
@@ -151,13 +159,28 @@ test('application loan creation forces loan_payments while schema default stays 
     body: {
       name: 'New loan',
       original_amount: 1000,
-      current_balance: 1000,
+      total_installments: 12,
+      monthly_payment: 90,
+      interest_type: 'fixed',
+      interest_rate: 8,
+      start_date: '2026-08-13',
+      payment_source_id: 5,
+      next_payment_date: '2026-09-13',
+      auto_payment_enabled: true,
+      current_balance: 1,
+      remaining_installments: 1,
+      status: 'paid',
+      closed_date: '2026-08-13',
       calculation_mode: 'legacy',
     },
   }, res);
 
   assert.equal(res.statusCode, 200);
   assert.equal(inserted[0].calculation_mode, 'loan_payments');
+  assert.equal(inserted[0].current_balance, 1000);
+  assert.equal(inserted[0].remaining_installments, 12);
+  assert.equal(inserted[0].status, 'active');
+  assert.equal(inserted[0].closed_date, null);
   const migration = fs.readFileSync(migrationPath, 'utf8');
   assert.match(migration, /calculation_mode TEXT NOT NULL DEFAULT 'legacy'/);
   assert.doesNotMatch(migration, /UPDATE public\.loans[\s\S]{0,120}calculation_mode/);

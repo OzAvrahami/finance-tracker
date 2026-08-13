@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
-import { createLoan, getAllLoans, getLoanDetails } from '../../services/api';
+import { createLoan, getAllLoans, getLoanDetails, getPaymentSources } from '../../services/api';
 import LoanSimulator from '../../components/LoanSimulator';
 import Loans from './Loans';
 
@@ -11,6 +11,7 @@ vi.mock('../../services/api', () => ({
   createLoan: vi.fn(),
   getAllLoans: vi.fn(),
   getLoanDetails: vi.fn(),
+  getPaymentSources: vi.fn(),
 }));
 
 const loan = (overrides = {}) => ({
@@ -107,6 +108,12 @@ beforeEach(() => {
     },
   });
   createLoan.mockResolvedValue({ data: {} });
+  getPaymentSources.mockResolvedValue({
+    data: [
+      { id: 5, name: 'Cal - 5746' },
+      { id: 8, name: 'חשבון בדיקה' },
+    ],
+  });
 });
 
 describe('loans loading, summary, and cards', () => {
@@ -249,7 +256,7 @@ describe('loans loading, summary, and cards', () => {
     const closedCard = screen.getByRole('button', { name: 'הלוואה: כאל - אקספרס 6,000' });
     expect(within(closedCard).getByText('נפרעה מוקדם')).toBeInTheDocument();
     expect(within(closedCard).getByText('03/06/2026')).toBeInTheDocument();
-    expect(within(closedCard).getByText('25 מתוך 72')).toBeInTheDocument();
+    expect(within(closedCard).getByLabelText('25 מתוך 72')).toHaveAttribute('dir', 'ltr');
     expect(within(closedCard).getByText('פירעון מוקדם')).toBeInTheDocument();
     expect(within(closedCard).queryByText('תשלומים שנותרו')).not.toBeInTheDocument();
 
@@ -276,6 +283,7 @@ describe('loans loading, summary, and cards', () => {
     expect(within(modal).getAllByText('₪1,850').length).toBeGreaterThan(0);
     expect(within(modal).getAllByText('15/09/2026').length).toBeGreaterThan(0);
     expect(within(modal).getAllByText('תשלום אוטומטי').length).toBeGreaterThan(0);
+    expect(within(modal).getByLabelText('0 מתוך 60')).toHaveAttribute('dir', 'ltr');
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'הלוואת רכב' })).not.toBeInTheDocument());
@@ -311,7 +319,7 @@ describe('loans loading, summary, and cards', () => {
     await userEvent.click(await screen.findByRole('button', { name: /הצג 1 הלוואה סגורה/ }));
     const card = screen.getByRole('button', { name: 'הלוואה: הלוואה שהושלמה' });
     expect(within(card).getByText('נפרעה')).toBeInTheDocument();
-    expect(within(card).getByText('60 מתוך 60')).toBeInTheDocument();
+    expect(within(card).getByLabelText('60 מתוך 60')).toHaveAttribute('dir', 'ltr');
     expect(within(card).getByText('פירעון מלא')).toBeInTheDocument();
     expect(within(card).queryByText('נפרעה מוקדם')).not.toBeInTheDocument();
   });
@@ -412,71 +420,116 @@ describe('loans loading, summary, and cards', () => {
 });
 
 describe('create loan dialog', () => {
-  it('validates required fields and exposes the implemented conditional fields', async () => {
+  const fillRequiredFields = async (dialog, { prime = false, withAutoFields = true } = {}) => {
+    await userEvent.type(within(dialog).getByLabelText(/שם ההלוואה/), 'הלוואת מבחן');
+    await userEvent.type(within(dialog).getByLabelText(/סכום מקורי/), '100000');
+    await userEvent.type(within(dialog).getByLabelText(/מספר תשלומים/), '60');
+    fireEvent.change(within(dialog).getByLabelText(/תאריך תחילה/), { target: { value: '2026-08-09' } });
+    await userEvent.type(within(dialog).getByLabelText(/ריבית שנתית נומינלית נוכחית/), prime ? '11.85' : '7.5');
+    await userEvent.type(within(dialog).getByLabelText(/החזר חודשי נוכחי/), '1800');
+    if (withAutoFields) {
+      await userEvent.selectOptions(within(dialog).getByLabelText(/מקור תשלום/), '5');
+      fireEvent.change(within(dialog).getByLabelText(/תאריך התשלום הבא/), { target: { value: '2026-09-02' } });
+    }
+  };
+
+  it('exposes the modern fields, defaults automation on, and validates its dependencies', async () => {
     renderPage();
     await screen.findByRole('button', { name: /הלוואה:/ });
     await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
 
     const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
+    expect(getPaymentSources).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByRole('checkbox', { name: /תשלום אוטומטי/ })).toBeChecked();
+    expect(await within(dialog).findByRole('option', { name: 'Cal - 5746' })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/ריבית שנתית נומינלית נוכחית/)).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('מרווח פריים')).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('יתרה נוכחית')).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('radio', { name: 'בלון' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('radio', { name: 'גרייס' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('radio', { name: 'צמודת מדד' })).not.toBeInTheDocument();
+
     await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
-    expect(within(dialog).getByText('חובה למלא שם הלוואה וסכום מקורי.')).toBeInTheDocument();
+    expect(within(dialog).getByText('יש לתקן את השדות המסומנים לפני יצירת ההלוואה.')).toBeInTheDocument();
+    expect(within(dialog).getByText('מקור תשלום נדרש לתשלום אוטומטי')).toBeInTheDocument();
+    expect(within(dialog).getByText('תאריך התשלום הבא נדרש לתשלום אוטומטי')).toBeInTheDocument();
     expect(createLoan).not.toHaveBeenCalled();
 
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'בלון' }));
-    expect(within(dialog).getByLabelText('סכום הבלון')).toBeInTheDocument();
-    expect(within(dialog).queryByLabelText('חודשי גרייס')).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'ריבית פריים / משתנה' }));
+    expect(within(dialog).getByLabelText(/מרווח פריים/)).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText(/מרווח פריים/), '6.85');
+    await userEvent.type(within(dialog).getByLabelText(/ריבית שנתית נומינלית נוכחית/), '11.85');
+    expect(within(dialog).getByText('P + 6.85% · ריבית נוכחית: 11.85%')).toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'גרייס' }));
-    expect(within(dialog).getByLabelText('חודשי גרייס')).toBeInTheDocument();
-    expect(within(dialog).queryByLabelText('סכום הבלון')).not.toBeInTheDocument();
-
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'פריים' }));
-    expect(within(dialog).getByLabelText('מרווח מעל הפריים')).toBeInTheDocument();
-    expect(within(dialog).getByText('מחושב לפי נתוני הריבית הקיימים במערכת')).toBeInTheDocument();
-
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'צמודת מדד' }));
-    expect(within(dialog).getByLabelText('ריבית ריאלית מעל המדד')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'ריבית קבועה' }));
+    expect(within(dialog).queryByLabelText('מרווח פריים')).not.toBeInTheDocument();
   });
 
-  it('preserves the existing prime payload, defaults, dates, and grace values', async () => {
+  it('submits an explicit fixed-rate payload containing only supported create fields', async () => {
     renderPage();
     await screen.findByRole('button', { name: /הלוואה:/ });
     await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
     const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
 
-    await userEvent.type(within(dialog).getByLabelText(/שם ההלוואה/), 'הלוואת מבחן');
+    await fillRequiredFields(dialog);
     await userEvent.type(within(dialog).getByLabelText('מלווה'), 'בנק לדוגמה');
-    await userEvent.type(within(dialog).getByLabelText(/סכום מקורי/), '100000');
-    await userEvent.type(within(dialog).getByLabelText('החזר חודשי'), '1800');
-    await userEvent.type(within(dialog).getByLabelText('מספר תשלומים'), '60');
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'גרייס' }));
-    await userEvent.type(within(dialog).getByLabelText('חודשי גרייס'), '3');
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'פריים' }));
-    await userEvent.type(within(dialog).getByLabelText('מרווח מעל הפריים'), '1.5');
-    fireEvent.change(within(dialog).getByLabelText('תאריך תחילה'), { target: { value: '2026-08-09' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
+
+    await waitFor(() => expect(createLoan).toHaveBeenCalledTimes(1));
+    expect(createLoan).toHaveBeenCalledWith({
+      name: 'הלוואת מבחן',
+      lender_name: 'בנק לדוגמה',
+      original_amount: 100000,
+      total_installments: 60,
+      start_date: '2026-08-09',
+      end_date: null,
+      interest_type: 'fixed',
+      interest_rate: 7.5,
+      prime_margin: 0,
+      monthly_payment: 1800,
+      payment_source_id: 5,
+      next_payment_date: '2026-09-02',
+      auto_payment_enabled: true,
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'הלוואה חדשה' })).not.toBeInTheDocument());
+    expect(getAllLoans).toHaveBeenCalledTimes(2);
+  });
+
+  it('stores effective interest and Prime margin independently for a variable-rate loan', async () => {
+    renderPage();
+    await screen.findByRole('button', { name: /הלוואה:/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
+    const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
+
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'ריבית פריים / משתנה' }));
+    await fillRequiredFields(dialog, { prime: true });
+    await userEvent.type(within(dialog).getByLabelText(/מרווח פריים/), '6.85');
     await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
 
     await waitFor(() => expect(createLoan).toHaveBeenCalledTimes(1));
     expect(createLoan).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'הלוואת מבחן',
-      lender_name: 'בנק לדוגמה',
-      loan_type: 'bank_loan',
-      amortization_type: 'grace',
       interest_type: 'prime',
-      original_amount: 100000,
-      current_balance: 100000,
-      monthly_payment: 1800,
-      total_installments: 60,
-      remaining_installments: 0,
-      grace_months: 3,
-      balloon_amount: 0,
-      prime_margin: 1.5,
-      interest_rate: 7.5,
-      start_date: '2026-08-09',
-      end_date: null,
+      interest_rate: 11.85,
+      prime_margin: 6.85,
     }));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'הלוואה חדשה' })).not.toBeInTheDocument());
-    expect(getAllLoans).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows an explicitly manual loan to omit automatic-payment dependencies', async () => {
+    renderPage();
+    await screen.findByRole('button', { name: /הלוואה:/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
+    const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
+
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /תשלום אוטומטי/ }));
+    await fillRequiredFields(dialog, { withAutoFields: false });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
+
+    await waitFor(() => expect(createLoan).toHaveBeenCalledTimes(1));
+    expect(createLoan).toHaveBeenCalledWith(expect.objectContaining({
+      auto_payment_enabled: false,
+      payment_source_id: null,
+      next_payment_date: null,
+    }));
   });
 
   it('retains values on failure and prevents duplicate submission while saving', async () => {
@@ -488,8 +541,9 @@ describe('create loan dialog', () => {
     const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
     const name = within(dialog).getByLabelText(/שם ההלוואה/);
 
+    await fillRequiredFields(dialog);
+    await userEvent.clear(name);
     await userEvent.type(name, 'הלוואה שנשמרת');
-    await userEvent.type(within(dialog).getByLabelText(/סכום מקורי/), '50000');
     const submit = within(dialog).getByRole('button', { name: 'יצירת ההלוואה' });
     await userEvent.click(submit);
     expect(submit).toBeDisabled();
