@@ -123,6 +123,7 @@ export const getDashboardMonthlySeries = (months = 6) =>
 
 // Loan
 export const getAllLoans = () => api.get('/loans');
+export const getLoanDetails = (id) => api.get(`/loans/${id}/details`);
 export const createLoan = (data) => api.post('/loans', data);
 
 // Lego set collection

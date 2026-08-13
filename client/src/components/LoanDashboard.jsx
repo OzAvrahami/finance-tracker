@@ -1,6 +1,7 @@
 import { createElement, useMemo } from 'react';
 import { Banknote, Landmark, Percent, ReceiptText } from 'lucide-react';
 import { MoneyAmount, TechnicalValue } from './ui';
+import { isActiveLoan } from '../utils/loanDisplay';
 
 const LoansDashboard = ({ loans }) => {
   const stats = useMemo(() => {
@@ -8,13 +9,17 @@ const LoansDashboard = ({ loans }) => {
     let monthlyPayment = 0;
     let highestInterest = 0;
     let highestInterestName = '';
+    let activeLoanCount = 0;
 
     loans.forEach((loan) => {
       const balance = parseFloat(loan.current_balance) || 0;
+      totalDebt += Math.max(balance, 0);
+
+      if (!isActiveLoan(loan)) return;
+
       const payment = parseFloat(loan.monthly_payment) || 0;
       const interest = parseFloat(loan.interest_rate) || 0;
-
-      totalDebt += balance;
+      activeLoanCount += 1;
       monthlyPayment += payment;
 
       if (interest > highestInterest) {
@@ -23,7 +28,9 @@ const LoansDashboard = ({ loans }) => {
       }
     });
 
-    return { totalDebt, monthlyPayment, highestInterest, highestInterestName };
+    return {
+      totalDebt, monthlyPayment, highestInterest, highestInterestName, activeLoanCount,
+    };
   }, [loans]);
 
   const cards = [
@@ -52,7 +59,7 @@ const LoansDashboard = ({ loans }) => {
       label: 'מספר ההלוואות הפעילות',
       icon: ReceiptText,
       tone: 'neutral',
-      value: <TechnicalValue>{loans.length}</TechnicalValue>,
+      value: <TechnicalValue>{stats.activeLoanCount}</TechnicalValue>,
     },
   ];
 

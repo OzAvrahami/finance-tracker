@@ -14,6 +14,8 @@ import {
   Skeleton,
 } from '../../components/ui';
 import CreateLoanDialog from './CreateLoanDialog';
+import LoanDetailsDrawer from './LoanDetailsDrawer';
+import { isActiveLoan, isClosedLoan } from '../../utils/loanDisplay';
 import './Loans.css';
 
 const LoansSkeleton = () => (
@@ -39,8 +41,11 @@ const Loans = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showAllLoans, setShowAllLoans] = useState(false);
+  const [showAllActiveLoans, setShowAllActiveLoans] = useState(false);
+  const [showClosedLoans, setShowClosedLoans] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState(null);
   const addButtonRef = useRef(null);
+  const selectedCardRef = useRef(null);
 
   const openCreateDialog = useCallback(() => setShowCreateDialog(true), []);
   const closeCreateDialog = useCallback(() => setShowCreateDialog(false), []);
@@ -83,8 +88,20 @@ const Loans = () => {
     await fetchLoans({ showLoading: false });
   }, [closeCreateDialog, fetchLoans]);
 
-  const visibleLoans = showAllLoans ? loans : loans.slice(0, 6);
-  const hiddenLoanCount = Math.max(loans.length - 6, 0);
+  const activeLoans = loans.filter(isActiveLoan);
+  const closedLoans = loans
+    .filter(isClosedLoan)
+    .sort((left, right) => (
+      String(right.closed_date || '').localeCompare(String(left.closed_date || ''))
+      || Number(right.id) - Number(left.id)
+    ));
+  const visibleActiveLoans = showAllActiveLoans ? activeLoans : activeLoans.slice(0, 6);
+  const hiddenActiveLoanCount = Math.max(activeLoans.length - 6, 0);
+
+  const openLoanDetails = useCallback((loan, trigger) => {
+    selectedCardRef.current = trigger;
+    setSelectedLoan(loan);
+  }, []);
 
   return (
     <div className="loans-page" dir="rtl">
@@ -118,35 +135,76 @@ const Loans = () => {
         <>
           <LoansDashboard loans={loans} />
 
-          <section className="loans-portfolio" aria-labelledby="loans-portfolio-title">
-            <h2 id="loans-portfolio-title" className="loans-visually-hidden">תיק ההלוואות</h2>
-            <div id="loans-cards-grid" className="loans-cards-grid">
-              {visibleLoans.map((loan) => <LoanCard key={loan.id} loan={loan} />)}
+          <section className="loans-portfolio" aria-labelledby="active-loans-title">
+            <div className="loans-section-heading">
+              <div>
+                <h2 id="active-loans-title">הלוואות פעילות</h2>
+                <span>
+                  {activeLoans.length} {activeLoans.length === 1 ? 'הלוואה עם יתרת קרן' : 'הלוואות עם יתרת קרן'}
+                </span>
+              </div>
             </div>
-            {hiddenLoanCount > 0 && (
+            <div id="loans-cards-grid" className="loans-cards-grid">
+              {visibleActiveLoans.map((loan) => (
+                <LoanCard key={loan.id} loan={loan} onSelect={openLoanDetails} />
+              ))}
+            </div>
+            {activeLoans.length === 0 && (
+              <div className="loans-active-empty">אין כרגע הלוואות פעילות עם יתרת קרן.</div>
+            )}
+            {hiddenActiveLoanCount > 0 && (
               <div className="loans-disclosure">
                 <SecondaryButton
                   type="button"
                   size="sm"
                   aria-controls="loans-cards-grid"
-                  aria-expanded={showAllLoans}
-                  onClick={() => setShowAllLoans((current) => !current)}
+                  aria-expanded={showAllActiveLoans}
+                  onClick={() => setShowAllActiveLoans((current) => !current)}
                 >
-                  {showAllLoans
+                  {showAllActiveLoans
                     ? <ChevronUp size={16} aria-hidden="true" />
                     : <ChevronDown size={16} aria-hidden="true" />}
-                  {showAllLoans
+                  {showAllActiveLoans
                     ? 'הצג פחות'
-                    : `הצג עוד ${hiddenLoanCount} ${hiddenLoanCount === 1 ? 'הלוואה' : 'הלוואות'}`}
+                    : `הצג עוד ${hiddenActiveLoanCount} ${hiddenActiveLoanCount === 1 ? 'הלוואה' : 'הלוואות'}`}
                 </SecondaryButton>
                 <span className="loans-visually-hidden" role="status" aria-live="polite">
-                  מוצגות {visibleLoans.length} מתוך {loans.length} הלוואות
+                  מוצגות {visibleActiveLoans.length} מתוך {activeLoans.length} הלוואות פעילות
                 </span>
               </div>
             )}
           </section>
 
-          <LoanSimulator loans={loans} />
+          {closedLoans.length > 0 && (
+            <section className="loans-closed" aria-labelledby="closed-loans-title">
+              <button
+                type="button"
+                className="loans-closed__toggle"
+                aria-controls="closed-loans-grid"
+                aria-expanded={showClosedLoans}
+                onClick={() => setShowClosedLoans((current) => !current)}
+              >
+                <span>
+                  <strong id="closed-loans-title">הלוואות סגורות</strong>
+                  <small>
+                    הצג {closedLoans.length} {closedLoans.length === 1 ? 'הלוואה סגורה' : 'הלוואות סגורות'}
+                  </small>
+                </span>
+                {showClosedLoans
+                  ? <ChevronUp size={18} aria-hidden="true" />
+                  : <ChevronDown size={18} aria-hidden="true" />}
+              </button>
+              {showClosedLoans && (
+                <div id="closed-loans-grid" className="loans-cards-grid loans-cards-grid--closed">
+                  {closedLoans.map((loan) => (
+                    <LoanCard key={loan.id} loan={loan} onSelect={openLoanDetails} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          <LoanSimulator loans={activeLoans} />
 
           <Alert className="loans-limitations" variant="info">
             עריכת הלוואה, מחיקתה, רישום החזר ושינוי סטטוס אינם זמינים כיום ולכן אינם מוצגים כפעולות.
@@ -160,6 +218,16 @@ const Loans = () => {
           onClose={closeCreateDialog}
           onSubmit={handleCreateLoan}
           returnFocusRef={addButtonRef}
+        />
+      )}
+
+      {selectedLoan && (
+        <LoanDetailsDrawer
+          key={selectedLoan.id}
+          loan={selectedLoan}
+          open
+          onClose={() => setSelectedLoan(null)}
+          returnFocusRef={selectedCardRef}
         />
       )}
     </div>
