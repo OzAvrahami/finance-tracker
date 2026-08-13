@@ -125,8 +125,96 @@ const summarizeLoanPayments = ({ originalAmount, totalInstallments, payments }) 
   };
 };
 
+const calculateOutstandingPrincipal = ({ originalAmount, payments }) => {
+  const scale = 10;
+  const original = toScaled(originalAmount, scale);
+  const paidPrincipal = payments.reduce(
+    (total, payment) => total + toScaled(payment.principalAmount, scale),
+    0n,
+  );
+  return formatScaled(original > paidPrincipal ? original - paidPrincipal : 0n, scale);
+};
+
+const calculateDueLoanPayment = ({
+  openingPrincipal,
+  paymentAmount,
+  annualInterestRate,
+  interestType,
+  isFinalInstallment = false,
+}) => {
+  const rateScale = 6;
+  const rate = toScaled(annualInterestRate, rateScale);
+  const rateDenominator = 1200n * pow10(rateScale);
+
+  if (interestType === 'fixed') {
+    const opening = toScaled(openingPrincipal, 2);
+    const scheduledPayment = toScaled(paymentAmount, 2);
+    const calculatedInterest = roundDivide(opening * rate, rateDenominator);
+    let payment = scheduledPayment;
+    let principal = scheduledPayment - calculatedInterest;
+    let interest = calculatedInterest;
+
+    if (isFinalInstallment) {
+      principal = opening;
+      if (scheduledPayment >= principal) {
+        interest = scheduledPayment - principal;
+      } else {
+        interest = calculatedInterest;
+        payment = principal + interest;
+      }
+    }
+
+    if (principal < 0n || interest < 0n) {
+      throw new Error('Payment is less than monthly interest');
+    }
+
+    const closing = opening > principal ? opening - principal : 0n;
+    return {
+      openingPrincipal: formatScaled(opening * pow10(8), 10),
+      paymentAmount: formatScaled(payment, 2),
+      principalAmount: formatScaled(principal * pow10(8), 10),
+      interestAmount: formatScaled(interest * pow10(8), 10),
+      closingBalance: formatScaled(closing * pow10(8), 10),
+    };
+  }
+
+  const scale = 10;
+  const opening = toScaled(openingPrincipal, scale);
+  const scheduledPayment = toScaled(paymentAmount, scale);
+  const calculatedInterest = roundDivide(opening * rate, rateDenominator);
+  let payment = scheduledPayment;
+  let principal = scheduledPayment - calculatedInterest;
+  let interest = calculatedInterest;
+
+  if (isFinalInstallment) {
+    principal = opening;
+    if (scheduledPayment >= principal) {
+      interest = scheduledPayment - principal;
+    } else {
+      const required = opening + calculatedInterest;
+      const paymentCents = roundDivide(required, pow10(scale - 2));
+      payment = paymentCents * pow10(scale - 2);
+      interest = payment - principal;
+    }
+  }
+
+  if (principal < 0n || interest < 0n) {
+    throw new Error('Payment is less than monthly interest');
+  }
+
+  return {
+    openingPrincipal: formatScaled(opening, scale),
+    paymentAmount: formatScaled(roundDivide(payment, pow10(scale - 2)), 2),
+    principalAmount: formatScaled(principal, scale),
+    interestAmount: formatScaled(interest, scale),
+    closingBalance: formatScaled(opening > principal ? opening - principal : 0n, scale),
+  };
+};
+
 module.exports = {
+  calculateDueLoanPayment,
   calculateFixedSchedule,
+  calculateOutstandingPrincipal,
   calculateVariableSchedule,
   summarizeLoanPayments,
   summarizeSchedule,

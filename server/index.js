@@ -23,7 +23,8 @@ require('dotenv').config();
 const requiredEnv = [
     "SUPABASE_URL",
     "SUPABASE_KEY",
-    "EXTERNAL_API_KEY"
+    "EXTERNAL_API_KEY",
+    "LOAN_JOB_SECRET"
 ];
 
 for (const key of requiredEnv) {
@@ -96,6 +97,11 @@ app.get("/health", (req, res) => res.status(200).send("OK"));
 const { apiKeyAuth } = require('./middleware/apiKeyAuth');
 const v1TransactionRoutes = require('./routes/v1/transactionRoutes');
 app.use('/api/v1/transactions', apiKeyAuth, v1TransactionRoutes);
+
+// Scheduler-only endpoint. It has its own dedicated secret and is deliberately
+// mounted before end-user Supabase authentication.
+const internalJobRoutes = require('./routes/internalJobRoutes');
+app.use('/api/internal/jobs', internalJobRoutes);
 
 // Auth middleware - protect all /api/* routes
 app.use('/api', requireAuth);
