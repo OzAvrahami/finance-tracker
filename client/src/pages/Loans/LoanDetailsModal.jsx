@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Clock3 } from 'lucide-react';
 import { getLoanDetails } from '../../services/api';
 import {
-  Drawer,
+  Dialog,
   MoneyAmount,
   ProgressBar,
   Skeleton,
@@ -60,7 +59,7 @@ const StatusBadge = ({ loan, earlyPayoff }) => {
   return <span className="loan-status-badge is-active">פעילה</span>;
 };
 
-const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef }) => {
+const LoanDetailsModal = ({ loan: summaryLoan, open, onClose, returnFocusRef }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -105,16 +104,18 @@ const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef })
   const progress = original > 0
     ? Math.min(100, Math.max(0, ((original - balance) / original) * 100))
     : 0;
+  const closed = isClosedLoan(loan);
 
   return (
-    <Drawer
+    <Dialog
       open={open}
       onClose={onClose}
       title={loan?.name || 'פרטי הלוואה'}
       description={loan?.lender_name || 'מידע מלא על ההלוואה'}
-      side="start"
-      size="lg"
-      className="loan-details-drawer"
+      header={<StatusBadge loan={loan} earlyPayoff={earlyPayoff} />}
+      size="xl"
+      className="loan-details-modal"
+      bodyClassName="loan-details-modal__body"
       returnFocusRef={returnFocusRef}
       closeLabel="סגירת פרטי ההלוואה"
     >
@@ -136,10 +137,6 @@ const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef })
       {!loading && !error && details && (
         <>
           <section className="loan-details-hero" aria-label="מצב ההלוואה">
-            <div className="loan-details-hero__status">
-              {isClosedLoan(loan) ? <CheckCircle2 size={20} aria-hidden="true" /> : <Clock3 size={20} aria-hidden="true" />}
-              <StatusBadge loan={loan} earlyPayoff={earlyPayoff} />
-            </div>
             <div className="loan-details-hero__amounts">
               <div>
                 <span>סכום מקורי</span>
@@ -149,14 +146,43 @@ const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef })
                 <span>יתרה נוכחית</span>
                 <MoneyAmount value={loan.current_balance} maximumFractionDigits={2} />
               </div>
+              {closed ? (
+                <>
+                  <div>
+                    <span>תאריך סגירה</span>
+                    <TechnicalValue>{formatLoanDate(loan.closed_date)}</TechnicalValue>
+                  </div>
+                  <div>
+                    <span>אופן סגירה</span>
+                    <strong>{earlyPayoff ? 'פירעון מוקדם' : 'פירעון מלא'}</strong>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <span>החזר חודשי</span>
+                    <MoneyAmount value={loan.monthly_payment} maximumFractionDigits={2} />
+                  </div>
+                  <div>
+                    <span>תשלום הבא</span>
+                    <TechnicalValue>{formatLoanDate(loan.next_payment_date)}</TechnicalValue>
+                  </div>
+                </>
+              )}
             </div>
-            {!isClosedLoan(loan) && (
-              <ProgressBar
-                value={progress}
-                height={7}
-                aria-label="התקדמות פירעון הקרן"
-                aria-valuetext={`${Math.round(progress)}% מהקרן נפרעה`}
-              />
+            {!closed && (
+              <div className="loan-details-hero__active">
+                <ProgressBar
+                  className="loan-details-hero__progress"
+                  value={progress}
+                  height={7}
+                  aria-label="התקדמות פירעון הקרן"
+                  aria-valuetext={`${Math.round(progress)}% מהקרן נפרעה`}
+                />
+                {loan.auto_payment_enabled && (
+                  <span className="loan-status-badge is-auto">תשלום אוטומטי</span>
+                )}
+              </div>
             )}
           </section>
 
@@ -187,6 +213,9 @@ const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef })
                 {isClosedLoan(loan) && (
                   <OverviewItem label="תאריך סגירה בפועל"><TechnicalValue>{formatLoanDate(loan.closed_date)}</TechnicalValue></OverviewItem>
                 )}
+                {isClosedLoan(loan) && (
+                  <OverviewItem label="אופן סגירה">{earlyPayoff ? 'פירעון מוקדם' : 'פירעון מלא'}</OverviewItem>
+                )}
                 {!isClosedLoan(loan) && (
                   <OverviewItem label="התשלום הבא"><TechnicalValue>{formatLoanDate(loan.next_payment_date)}</TechnicalValue></OverviewItem>
                 )}
@@ -208,6 +237,7 @@ const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef })
                     <span role="columnheader">סכום</span>
                     <span role="columnheader">קרן</span>
                     <span role="columnheader">ריבית</span>
+                    <span role="columnheader">התאמות</span>
                     <span role="columnheader">יתרה</span>
                   </div>
                   {paymentRows.map((payment) => (
@@ -226,17 +256,17 @@ const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef })
                       <MoneyAmount role="cell" value={payment.payment_amount} maximumFractionDigits={2} />
                       <MoneyAmount role="cell" value={payment.principal_amount} maximumFractionDigits={2} />
                       <MoneyAmount role="cell" value={payment.interest_amount} maximumFractionDigits={2} />
+                      <div role="cell" className="loan-payment-row__adjustments">
+                        {Number(payment.other_amount) === 0
+                          && Number(payment.balance_adjustment_amount) === 0 && <span>−</span>}
+                        {Number(payment.other_amount) !== 0 && (
+                          <span>נוסף <MoneyAmount value={payment.other_amount} maximumFractionDigits={2} /></span>
+                        )}
+                        {Number(payment.balance_adjustment_amount) !== 0 && (
+                          <span>יתרה <MoneyAmount value={payment.balance_adjustment_amount} maximumFractionDigits={2} /></span>
+                        )}
+                      </div>
                       <MoneyAmount role="cell" value={payment.running_balance} maximumFractionDigits={2} />
-                      {(Number(payment.other_amount) !== 0 || Number(payment.balance_adjustment_amount) !== 0) && (
-                        <div className="loan-payment-row__adjustments">
-                          {Number(payment.other_amount) !== 0 && (
-                            <span>רכיב נוסף: <MoneyAmount value={payment.other_amount} maximumFractionDigits={2} /></span>
-                          )}
-                          {Number(payment.balance_adjustment_amount) !== 0 && (
-                            <span>התאמת יתרה: <MoneyAmount value={payment.balance_adjustment_amount} maximumFractionDigits={2} /></span>
-                          )}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -281,8 +311,8 @@ const LoanDetailsDrawer = ({ loan: summaryLoan, open, onClose, returnFocusRef })
           </Tabs>
         </>
       )}
-    </Drawer>
+    </Dialog>
   );
 };
 
-export default LoanDetailsDrawer;
+export default LoanDetailsModal;

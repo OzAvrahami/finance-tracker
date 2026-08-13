@@ -48,6 +48,78 @@ const createLoanDetailsFake = () => {
   };
 };
 
+const createLoanListFake = () => {
+  const calls = [];
+  const loans = [
+    { id: 3, name: 'Closed early', current_balance: '0.00', status: 'paid' },
+    { id: 4, name: 'Closed normal', current_balance: '0.00', status: 'paid' },
+  ];
+  const paymentKinds = [
+    ...Array.from({ length: 25 }, () => ({ loan_id: 3, payment_kind: 'installment' })),
+    { loan_id: 3, payment_kind: 'early_payoff' },
+    { loan_id: 4, payment_kind: 'installment' },
+  ];
+
+  return {
+    calls,
+    from(table) {
+      calls.push({ table, op: 'from' });
+      if (table === 'loans') {
+        return {
+          select(columns) {
+            calls.push({ table, op: 'select', columns });
+            return {
+              async order(column, options) {
+                calls.push({ table, op: 'order', column, options });
+                return { data: loans, error: null };
+              },
+            };
+          },
+        };
+      }
+      if (table === 'loan_payments') {
+        return {
+          select(columns) {
+            calls.push({ table, op: 'select', columns });
+            return {
+              async in(column, values) {
+                calls.push({ table, op: 'in', column, values });
+                return { data: paymentKinds, error: null };
+              },
+            };
+          },
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    },
+  };
+};
+
+test('loan list returns compact authoritative payment summaries for cards', async () => {
+  const fake = createLoanListFake();
+  const controller = loadControllerWithFake('../../controllers/loanController', fake);
+  const response = createMockResponse();
+
+  await controller.getAllLoans({}, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body.map((loan) => ({
+    id: loan.id,
+    regular_payment_count: loan.regular_payment_count,
+    has_early_payoff: loan.has_early_payoff,
+  })), [
+    { id: 3, regular_payment_count: 25, has_early_payoff: true },
+    { id: 4, regular_payment_count: 1, has_early_payoff: false },
+  ]);
+  assert.equal(Object.hasOwn(response.body[0], 'loan_payments'), false);
+  assert.ok(fake.calls.some((call) => call.table === 'loan_payments'
+    && call.op === 'select' && call.columns === 'loan_id, payment_kind'));
+  assert.deepEqual(
+    fake.calls.find((call) => call.table === 'loan_payments' && call.op === 'in').values,
+    [3, 4],
+  );
+});
+
 test('loan details returns authoritative payments and every related transaction', async () => {
   const fake = createLoanDetailsFake();
   const controller = loadControllerWithFake('../../controllers/loanController', fake);

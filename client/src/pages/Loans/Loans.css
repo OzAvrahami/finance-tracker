@@ -231,6 +231,12 @@
   border-color: var(--ft-primary-border);
 }
 
+.loan-status-badge.is-auto {
+  color: var(--ft-primary-hover);
+  background: var(--ft-primary-weak);
+  border-color: var(--ft-primary-border);
+}
+
 .loan-status-badge.is-warning {
   color: var(--ft-warning);
   background: var(--ft-warning-weak);
@@ -378,9 +384,19 @@
 .loans-closed__toggle small { color: var(--ft-text-faint); font-size: 11.5px; }
 .loans-cards-grid--closed { margin-block-start: 12px; }
 
-.loan-details-drawer { width: min(96vw, 720px); }
-.loan-details-drawer .ui-drawer-header { padding: 20px 24px 16px; }
-.loan-details-drawer .ui-drawer-body { padding: 0 24px 24px; }
+.loan-details-modal.ui-dialog {
+  width: min(1100px, calc(100vw - 64px));
+  max-width: none;
+  max-height: min(90dvh, 900px);
+  border-radius: 24px;
+}
+
+.loan-details-modal .ui-dialog-header {
+  align-items: center;
+  padding: 20px 26px 18px;
+}
+
+.loan-details-modal__body { padding: 0 26px 26px; }
 
 .loan-details-loading {
   display: flex;
@@ -418,10 +434,12 @@
 }
 
 .loan-details-hero__status { display: flex; align-items: center; gap: 8px; color: var(--ft-positive); }
-.loan-details-hero__amounts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.loan-details-hero__amounts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .loan-details-hero__amounts > div { display: flex; flex-direction: column; gap: 3px; }
 .loan-details-hero__amounts span { color: var(--ft-text-faint); font-size: 11.5px; }
 .loan-details-hero__amounts .num { color: var(--ft-text); font-size: 21px; font-weight: 800; }
+.loan-details-hero__active { display: flex; align-items: center; gap: 8px; }
+.loan-details-hero__progress { min-width: 180px; flex: 1; }
 
 .loan-details-tabs .ui-tab-list {
   position: sticky;
@@ -434,7 +452,7 @@
 
 .loan-details-overview {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 0;
 }
@@ -461,7 +479,7 @@
 .loan-payment-list__header,
 .loan-payment-row {
   display: grid;
-  grid-template-columns: minmax(108px, 1.35fr) repeat(5, minmax(76px, 1fr));
+  grid-template-columns: minmax(112px, 1.3fr) minmax(92px, 1fr) repeat(5, minmax(78px, 1fr));
   gap: 8px;
   align-items: center;
 }
@@ -493,12 +511,10 @@
 .loan-payment-row__kind span { color: var(--ft-text-faint); font-size: 10px; }
 .loan-payment-row__adjustments {
   display: flex;
-  grid-column: 1 / -1;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  padding-block-start: 7px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
   color: var(--ft-text-muted);
-  border-block-start: 1px dashed var(--ft-border);
   font-size: 10.5px;
 }
 
@@ -757,6 +773,7 @@
 @media (max-width: 1080px) {
   .loans-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .loans-cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .loan-details-overview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 760px) {
@@ -780,7 +797,8 @@
   .loan-payment-row > [role='cell']:nth-child(3)::before { content: 'סכום'; }
   .loan-payment-row > [role='cell']:nth-child(4)::before { content: 'קרן'; }
   .loan-payment-row > [role='cell']:nth-child(5)::before { content: 'ריבית'; }
-  .loan-payment-row > [role='cell']:nth-child(6)::before { content: 'יתרה'; }
+  .loan-payment-row > [role='cell']:nth-child(6)::before { content: 'התאמות'; }
+  .loan-payment-row > [role='cell']:nth-child(7)::before { content: 'יתרה'; }
 }
 
 @media (max-width: 639.98px) {
@@ -794,11 +812,19 @@
   .loan-create-section .ui-segmented { width: 100%; }
   .loan-create-section .ui-segmented-option { min-height: 44px; }
   .loan-create-conditional { width: 100%; }
-  .loan-details-drawer { width: 100vw; }
-  .loan-details-drawer .ui-drawer-header { padding: 16px 18px 14px; }
-  .loan-details-drawer .ui-drawer-body { padding: 0 16px calc(20px + env(safe-area-inset-bottom, 0px)); }
+  .loan-details-modal.ui-dialog {
+    width: 100%;
+    max-width: none;
+    height: calc(100dvh - 2 * var(--ft-space-3));
+    max-height: calc(100dvh - 2 * var(--ft-space-3));
+    border-radius: 18px;
+  }
+  .loan-details-modal .ui-dialog-header { padding: 16px 18px 14px; }
+  .loan-details-modal__body { padding: 0 16px calc(20px + env(safe-area-inset-bottom, 0px)); }
   .loan-details-overview { grid-template-columns: 1fr; }
-  .loan-details-hero__amounts { gap: 8px; }
+  .loan-details-hero__amounts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .loan-details-hero__active { flex-wrap: wrap; }
+  .loan-details-hero__progress { flex-basis: 100%; }
   .loan-details-hero__amounts .num { font-size: 18px; }
   .loan-details-tabs .ui-tab { padding-inline: 10px; }
 }

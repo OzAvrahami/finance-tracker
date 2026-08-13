@@ -3,14 +3,38 @@ const axios = require('axios');
 
 exports.getAllLoans = async (req, res) => {
     try {
-        const {data, error} = await supabase
+        const { data: loans, error: loansError } = await supabase
             .from('loans')
-            .select('*, loan_payments(payment_kind, installment_number, payment_date)')
+            .select('*')
             .order('current_balance', { ascending: false});
-        if (error) throw error;
-        res.status(200).json(data);
+        if (loansError) throw loansError;
+
+        if (!loans?.length) return res.status(200).json([]);
+
+        const { data: paymentKinds, error: paymentsError } = await supabase
+            .from('loan_payments')
+            .select('loan_id, payment_kind')
+            .in('loan_id', loans.map((loan) => loan.id));
+        if (paymentsError) throw paymentsError;
+
+        const summaries = new Map(loans.map((loan) => [Number(loan.id), {
+            regular_payment_count: 0,
+            has_early_payoff: false,
+        }]));
+
+        (paymentKinds || []).forEach((payment) => {
+            const summary = summaries.get(Number(payment.loan_id));
+            if (!summary) return;
+            if (payment.payment_kind === 'installment') summary.regular_payment_count += 1;
+            if (payment.payment_kind === 'early_payoff') summary.has_early_payoff = true;
+        });
+
+        return res.status(200).json(loans.map((loan) => ({
+            ...loan,
+            ...summaries.get(Number(loan.id)),
+        })));
     } catch (error) {
-        res.status(400).json({ error: error.message});
+        return res.status(400).json({ error: error.message});
     }
 };
 

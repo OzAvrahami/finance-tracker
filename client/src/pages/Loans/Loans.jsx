@@ -14,7 +14,7 @@ import {
   Skeleton,
 } from '../../components/ui';
 import CreateLoanDialog from './CreateLoanDialog';
-import LoanDetailsDrawer from './LoanDetailsDrawer';
+import LoanDetailsModal from './LoanDetailsModal';
 import { isActiveLoan, isClosedLoan } from '../../utils/loanDisplay';
 import './Loans.css';
 
@@ -222,7 +222,7 @@ const Loans = () => {
       )}
 
       {selectedLoan && (
-        <LoanDetailsDrawer
+        <LoanDetailsModal
           key={selectedLoan.id}
           loan={selectedLoan}
           open

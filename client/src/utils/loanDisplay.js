@@ -27,6 +27,10 @@ export const isActiveLoan = (loan) => !isClosedLoan(loan)
   && Number(loan?.current_balance) > 0;
 
 export const hasEarlyPayoff = (loanOrPayments) => {
+  if (!Array.isArray(loanOrPayments)
+    && typeof loanOrPayments?.has_early_payoff === 'boolean') {
+    return loanOrPayments.has_early_payoff;
+  }
   const payments = Array.isArray(loanOrPayments)
     ? loanOrPayments
     : loanOrPayments?.loan_payments;
@@ -35,6 +39,10 @@ export const hasEarlyPayoff = (loanOrPayments) => {
 };
 
 export const countRegularLoanPayments = (loanOrPayments) => {
+  if (!Array.isArray(loanOrPayments)
+    && Number.isInteger(Number(loanOrPayments?.regular_payment_count))) {
+    return Number(loanOrPayments.regular_payment_count);
+  }
   const payments = Array.isArray(loanOrPayments)
     ? loanOrPayments
     : loanOrPayments?.loan_payments;

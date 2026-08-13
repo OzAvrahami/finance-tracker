@@ -226,7 +226,9 @@ describe('loans loading, summary, and cards', () => {
       remaining_installments: 0,
       start_date: '2024-05-01',
       closed_date: '2026-06-03',
-      loan_payments: closedPayments(),
+      calculation_mode: 'loan_payments',
+      regular_payment_count: 25,
+      has_early_payoff: true,
     });
     getAllLoans.mockResolvedValue({ data: [loan(), closed] });
     renderPage();
@@ -256,18 +258,24 @@ describe('loans loading, summary, and cards', () => {
     expect(screen.queryByRole('button', { name: 'הלוואה: כאל - אקספרס 6,000' })).not.toBeInTheDocument();
   });
 
-  it('opens the loan details drawer from the card and closes it with Escape', async () => {
+  it('opens a centered, mobile-capable details modal without navigation and supports every dismissal path', async () => {
     renderPage();
     const card = await screen.findByRole('button', { name: 'הלוואה: הלוואת רכב' });
     const pathBefore = window.location.pathname;
 
     await userEvent.click(card);
-    const drawer = await screen.findByRole('dialog', { name: 'הלוואת רכב' });
+    const modal = await screen.findByRole('dialog', { name: 'הלוואת רכב' });
     expect(getLoanDetails).toHaveBeenCalledWith(1);
     expect(window.location.pathname).toBe(pathBefore);
-    expect(within(drawer).getByText('פעילה')).toBeInTheDocument();
-    expect(within(drawer).getByText('15/09/2026')).toBeInTheDocument();
-    expect(within(drawer).getByText('תשלום אוטומטי')).toBeInTheDocument();
+    expect(modal).toHaveClass('loan-details-modal', 'ui-dialog--mobile-full');
+    expect(modal).not.toHaveClass('ui-drawer');
+    expect(document.querySelector('.loan-details-drawer')).not.toBeInTheDocument();
+    expect(within(modal).getByText('פעילה')).toBeInTheDocument();
+    expect(within(modal).getAllByText('₪120,000').length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText('₪74,300').length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText('₪1,850').length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText('15/09/2026').length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText('תשלום אוטומטי').length).toBeGreaterThan(0);
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'הלוואת רכב' })).not.toBeInTheDocument());
@@ -277,6 +285,35 @@ describe('loans loading, summary, and cards', () => {
     const reopened = await screen.findByRole('dialog', { name: 'הלוואת רכב' });
     await userEvent.click(within(reopened).getByRole('button', { name: 'סגירת פרטי ההלוואה' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'הלוואת רכב' })).not.toBeInTheDocument());
+
+    await userEvent.click(card);
+    await screen.findByRole('dialog', { name: 'הלוואת רכב' });
+    await userEvent.click(screen.getByRole('button', { name: 'סגירת חלון' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'הלוואת רכב' })).not.toBeInTheDocument());
+    expect(card).toHaveFocus();
+  });
+
+  it('uses normal paid terminology when the list summary has no early payoff', async () => {
+    getAllLoans.mockResolvedValue({
+      data: [loan({
+        id: 10,
+        name: 'הלוואה שהושלמה',
+        status: 'paid',
+        current_balance: 0,
+        calculation_mode: 'loan_payments',
+        regular_payment_count: 60,
+        has_early_payoff: false,
+        closed_date: '2026-07-01',
+      })],
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /הצג 1 הלוואה סגורה/ }));
+    const card = screen.getByRole('button', { name: 'הלוואה: הלוואה שהושלמה' });
+    expect(within(card).getByText('נפרעה')).toBeInTheDocument();
+    expect(within(card).getByText('60 מתוך 60')).toBeInTheDocument();
+    expect(within(card).getByText('פירעון מלא')).toBeInTheDocument();
+    expect(within(card).queryByText('נפרעה מוקדם')).not.toBeInTheDocument();
   });
 
   it('renders early payoff history, exact running balance, and ancillary transactions distinctly', async () => {
@@ -294,7 +331,9 @@ describe('loans loading, summary, and cards', () => {
       start_date: '2024-05-01',
       end_date: '2030-05-02',
       closed_date: '2026-06-03',
-      loan_payments: payments,
+      calculation_mode: 'loan_payments',
+      regular_payment_count: 25,
+      has_early_payoff: true,
     });
     getAllLoans.mockResolvedValue({ data: [closed] });
     getLoanDetails.mockResolvedValue({
@@ -329,14 +368,16 @@ describe('loans loading, summary, and cards', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: /הצג 1 הלוואה סגורה/ }));
     await userEvent.click(screen.getByRole('button', { name: 'הלוואה: כאל - אקספרס 6,000' }));
-    const drawer = await screen.findByRole('dialog', { name: 'כאל - אקספרס 6,000' });
-    expect(within(drawer).getByText('נפרעה מוקדם')).toBeInTheDocument();
-    expect(within(drawer).getByText('סיום מתוכנן')).toBeInTheDocument();
-    expect(within(drawer).getByText('תאריך סגירה בפועל')).toBeInTheDocument();
-    expect(within(drawer).getAllByText('03/06/2026').length).toBeGreaterThan(0);
+    const modal = await screen.findByRole('dialog', { name: 'כאל - אקספרס 6,000' });
+    expect(within(modal).getByText('נפרעה מוקדם')).toBeInTheDocument();
+    expect(within(modal).getByText('סיום מתוכנן')).toBeInTheDocument();
+    expect(within(modal).getByText('תאריך סגירה בפועל')).toBeInTheDocument();
+    expect(within(modal).getAllByText('אופן סגירה').length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText('פירעון מוקדם').length).toBeGreaterThan(0);
+    expect(within(modal).getAllByText('03/06/2026').length).toBeGreaterThan(0);
 
-    await userEvent.click(within(drawer).getByRole('tab', { name: /לוח תשלומים/ }));
-    const table = within(drawer).getByRole('table', { name: 'לוח תשלומי הלוואה' });
+    await userEvent.click(within(modal).getByRole('tab', { name: /לוח תשלומים/ }));
+    const table = within(modal).getByRole('table', { name: 'לוח תשלומי הלוואה' });
     const paymentTableRows = within(table).getAllByRole('row');
     expect(paymentTableRows).toHaveLength(27);
     expect(within(table).getByText('25/72')).toBeInTheDocument();
@@ -346,10 +387,10 @@ describe('loans loading, summary, and cards', () => {
     expect(within(table).getAllByText('₪0.00').length).toBeGreaterThan(0);
     expect(within(paymentTableRows.at(-1)).getByText('פירעון מוקדם')).toBeInTheDocument();
 
-    await userEvent.click(within(drawer).getByRole('tab', { name: /תנועות קשורות/ }));
-    const ancillary = within(drawer).getByText('ריבית גישור').closest('article');
+    await userEvent.click(within(modal).getByRole('tab', { name: /תנועות קשורות/ }));
+    const ancillary = within(modal).getByText('ריבית גישור').closest('article');
     expect(within(ancillary).getByText('הוצאה קשורה')).toBeInTheDocument();
-    const regular = within(drawer).getAllByText('תשלום הלוואה')
+    const regular = within(modal).getAllByText('תשלום הלוואה')
       .find((element) => element.tagName === 'STRONG')
       .closest('article');
     expect(within(regular).getByText('תשלום הלוואה', { selector: '.is-payment' })).toBeInTheDocument();
