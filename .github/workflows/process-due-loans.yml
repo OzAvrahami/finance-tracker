@@ -2,7 +2,8 @@ name: Process due loan payments
 
 on:
   schedule:
-    - cron: '17 4 * * *'
+    - cron: '15 7 * * *'
+      timezone: 'Asia/Jerusalem'
   workflow_dispatch:
 
 permissions:
