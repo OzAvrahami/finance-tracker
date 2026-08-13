@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS loan_payments (
       AND installment_number > 0)
     OR (payment_kind = 'early_payoff' AND installment_number IS NULL)
   ),
-  CHECK (
+  CONSTRAINT loan_payments_components_reconcile CHECK (
     abs(payment_amount - principal_amount - interest_amount - other_amount)
       <= 0.00000001
   )

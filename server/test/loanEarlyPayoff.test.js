@@ -14,6 +14,12 @@ const migration = fs.readFileSync(path.join(
   'migrations',
   '010_loan_early_payoff_accounting.sql',
 ), 'utf8');
+const reconciliationMigration = fs.readFileSync(path.join(
+  __dirname,
+  '..',
+  'migrations',
+  '011_fix_loan_payment_component_reconciliation.sql',
+), 'utf8');
 const schema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const regularRows = [
@@ -92,6 +98,35 @@ test('provider cash differences reconcile through other_amount without reducing 
     }],
   });
   assert.equal(withCashOther, withoutOther);
+});
+
+test('Migration 011 replaces the stale cash constraint and excludes balance adjustments', () => {
+  const toUnits = (value) => {
+    const [whole, fraction = ''] = value.split('.');
+    return (BigInt(whole) * 100n) + BigInt(`${fraction}00`.slice(0, 2));
+  };
+  const payment = toUnits('111.34');
+  const principal = toUnits('71.61');
+  const interest = toUnits('39.55');
+  const other = toUnits('0.18');
+  const balanceAdjustment = toUnits('7.84');
+
+  assert.equal(payment, principal + interest + other);
+  assert.notEqual(payment, principal + interest + other + balanceAdjustment);
+
+  assert.match(reconciliationMigration, /DROP CONSTRAINT IF EXISTS loan_payments_components_reconcile/);
+  assert.match(reconciliationMigration, /DROP CONSTRAINT IF EXISTS loan_payments_cash_reconciliation_check/);
+  assert.match(reconciliationMigration, /ADD CONSTRAINT loan_payments_components_reconcile CHECK/);
+  assert.match(reconciliationMigration, /payment_amount - principal_amount - interest_amount - other_amount/);
+  const canonicalConstraint = reconciliationMigration.match(
+    /ADD CONSTRAINT loan_payments_components_reconcile CHECK \(([\s\S]*?)\n  \);/,
+  )?.[1];
+  assert.ok(canonicalConstraint);
+  assert.doesNotMatch(canonicalConstraint, /balance_adjustment_amount/);
+  assert.match(reconciliationMigration, /<= 0\.00000001/);
+  assert.match(schema, /CONSTRAINT loan_payments_components_reconcile CHECK[\s\S]*payment_amount - principal_amount - interest_amount - other_amount/);
+
+  assert.equal(toUnits('90.00'), toUnits('70.00') + toUnits('20.00') + toUnits('0.00'));
 });
 
 test('provider balance adjustments reduce principal independently from cash', () => {
