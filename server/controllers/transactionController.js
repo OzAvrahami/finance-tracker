@@ -10,6 +10,11 @@ const {
   normalizeGlobalDiscountSource,
   roundDivide,
 } = require('../utils/transactionPricing');
+const {
+  createTransactionWithLoanPayment,
+  updateTransactionWithLoanPayment,
+  deleteTransactionWithLoanPayment,
+} = require('../services/loanPaymentService');
 
 // Advances a YYYY-MM-DD date string by N months, clamping to the last valid day of the target month.
 // e.g. Jan 31 + 1 month → Feb 28 (not Feb 31)
@@ -95,6 +100,39 @@ const getTransactionLegoPayload = (pricedItem, transactionId, transactionDate) =
   };
 };
 
+const getTransactionPayload = ({
+  transaction,
+  totalAmount,
+  globalDiscountCents,
+  globalDiscountSource,
+  installmentCount,
+  createsInstallmentSiblings,
+}) => ({
+  description: transaction.description,
+  movement_type: transaction.movement_type,
+  category_id: transaction.category_id,
+  total_amount: totalAmount,
+  global_discount: fromMinorUnits(globalDiscountCents),
+  global_discount_source: globalDiscountSource,
+  payment_source_id: transaction.payment_source_id || null,
+  transaction_date: transaction.transaction_date,
+  charge_date: transaction.charge_date || transaction.transaction_date,
+  tags: transaction.tags,
+  loan_id: transaction.loan_id || null,
+  original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
+  currency: transaction.currency || 'ILS',
+  exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
+  installments_info: createsInstallmentSiblings
+    ? `1/${installmentCount}`
+    : (transaction.installments_info || null),
+  installment_number: createsInstallmentSiblings
+    ? 1
+    : (transaction.installment_number || null),
+  installment_count: installmentCount > 1 ? installmentCount : null,
+  parent_transaction_id: null,
+  notes: transaction.notes || null,
+});
+
 const synchronizeTransactionLegoSets = async ({
   transactionId,
   transactionDate,
@@ -178,39 +216,40 @@ exports.createTransaction = async (req, res) => {
     );
 
     const installmentCount = Math.max(1, parseInt(transaction.installment_count) || 1);
+    const isLoanLinked = transaction.loan_id !== null
+      && transaction.loan_id !== undefined
+      && transaction.loan_id !== '';
+    const createsInstallmentSiblings = installmentCount > 1 && !isLoanLinked;
     const fullAmount = Number(transaction.total_amount);
-    const perAmount = installmentCount > 1
+    const perAmount = createsInstallmentSiblings
       ? Math.round((fullAmount / installmentCount) * 100) / 100
       : fullAmount;
 
-    // 1. Insert Main Transaction
-    const { data: transData, error: transError } = await supabase
-      .from('transactions')
-      .insert([{
-        description: transaction.description,
-        movement_type: transaction.movement_type,
-        category_id: transaction.category_id,
-        total_amount: perAmount,
-        global_discount: fromMinorUnits(pricing.globalDiscountCents),
-        global_discount_source: globalDiscountSource,
-        payment_source_id: transaction.payment_source_id || null,
-        transaction_date: transaction.transaction_date,
-        charge_date: transaction.charge_date || transaction.transaction_date,
-        tags: transaction.tags,
-        loan_id: transaction.loan_id || null,
-        original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
-        currency: transaction.currency || 'ILS',
-        exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
-        installments_info: installmentCount > 1 ? `1/${installmentCount}` : (transaction.installments_info || null),
-        installment_number: installmentCount > 1 ? 1 : null,
-        installment_count: installmentCount > 1 ? installmentCount : null,
-        parent_transaction_id: null,
-        notes: transaction.notes || null
-      }])
-      .select();
+    const mainTransaction = getTransactionPayload({
+      transaction,
+      totalAmount: perAmount,
+      globalDiscountCents: pricing.globalDiscountCents,
+      globalDiscountSource,
+      installmentCount,
+      createsInstallmentSiblings,
+    });
 
-    if (transError) throw transError;
-    const transactionId = transData[0].id;
+    let transactionId;
+    if (isLoanLinked) {
+      transactionId = await createTransactionWithLoanPayment(
+        supabase,
+        mainTransaction,
+        transaction.record_loan_payment !== false,
+      );
+    } else {
+      const { data: transData, error: transError } = await supabase
+        .from('transactions')
+        .insert([mainTransaction])
+        .select();
+
+      if (transError) throw transError;
+      transactionId = transData[0].id;
+    }
 
     const categoryName = await getCategoryName(transaction.category_id);
 
@@ -259,7 +298,7 @@ exports.createTransaction = async (req, res) => {
     }
 
     // 5. Auto-create remaining installments
-    if (installmentCount > 1) {
+    if (createsInstallmentSiblings) {
       const siblings = [];
       for (let i = 1; i < installmentCount; i++) {
         const isLast = i === installmentCount - 1;
@@ -397,28 +436,7 @@ exports.deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { error: legoError } = await supabase
-      .from('lego_sets')
-      .delete()
-      .eq('transaction_id', id);
-
-    if (legoError) {
-        console.error("Error deleting related lego sets:", legoError);
-    }
-
-    const { error: itemsError } = await supabase
-      .from('transaction_items')
-      .delete()
-      .eq('transaction_id', id);
-
-    if (itemsError) throw itemsError;
-
-    const { error: transactionError } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', id);
-
-    if (transactionError) throw transactionError;
+    await deleteTransactionWithLoanPayment(supabase, id);
 
     res.status(200).json({ message: 'Transaction and all related data deleted successfully' });
   } catch (error) {
@@ -473,30 +491,36 @@ exports.updateTransaction = async (req, res) => {
       pricing.globalDiscountCents,
     );
 
-    // A. Update the main transaction details
-    const { error: transError } = await supabase
-      .from('transactions')
-      .update({
-        description: transaction.description,
-        movement_type: transaction.movement_type,
-        category_id: transaction.category_id,
-        total_amount: transaction.total_amount,
-        global_discount: fromMinorUnits(pricing.globalDiscountCents),
-        global_discount_source: globalDiscountSource,
-        payment_source_id: transaction.payment_source_id || null,
-        transaction_date: transaction.transaction_date,
-        charge_date: transaction.charge_date || transaction.transaction_date,
-        tags: transaction.tags,
-        loan_id: transaction.loan_id || null,
-        original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
-        currency: transaction.currency || 'ILS',
-        exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
-        installments_info: transaction.installments_info || null,
-        notes: transaction.notes || null
-      })
-      .eq('id', id);
+    const updatedTransaction = getTransactionPayload({
+      transaction,
+      totalAmount: Number(transaction.total_amount),
+      globalDiscountCents: pricing.globalDiscountCents,
+      globalDiscountSource,
+      installmentCount: Math.max(1, parseInt(transaction.installment_count) || 1),
+      createsInstallmentSiblings: false,
+    });
+    // The legacy edit path did not detach ordinary installment children when
+    // the form omitted their schedule metadata. Preserve those database values
+    // rather than serializing an invented null through the RPC.
+    delete updatedTransaction.parent_transaction_id;
+    if (!Object.hasOwn(transaction, 'installment_number')) {
+      delete updatedTransaction.installment_number;
+    }
+    if (!Object.hasOwn(transaction, 'installment_count')) {
+      delete updatedTransaction.installment_count;
+    }
 
-    if (transError) throw transError;
+    // The ledger mutation and any authoritative existing_transaction payment
+    // are owned by one PostgreSQL function invocation. This also covers moves
+    // between loans and transitions to/from a non-loan transaction.
+    await updateTransactionWithLoanPayment(
+      supabase,
+      id,
+      updatedTransaction,
+      Object.hasOwn(transaction, 'record_loan_payment')
+        ? transaction.record_loan_payment !== false
+        : null,
+    );
 
     // B. Sync Items: The safest strategy is Delete All -> Insert New
     // This handles added items, removed items, and modified items in one go.

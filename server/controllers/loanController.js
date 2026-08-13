@@ -18,7 +18,15 @@ exports.createLoan = async (req, res) => {
             return res.status(400).json({ error: 'Name and original amount are required'});
         }
 
-        const {data, error} = await supabase.from('loans').insert([loanData]).select();
+        // The database default intentionally remains `legacy` so migration 008
+        // cannot change historical loans. New loans created through the product
+        // always opt into the authoritative loan_payments accounting model.
+        // Put the server-owned value after the request payload so clients cannot
+        // select compatibility mode themselves.
+        const {data, error} = await supabase.from('loans').insert([{
+            ...loanData,
+            calculation_mode: 'loan_payments',
+        }]).select();
 
         if (error) throw error;
         res.status(200).json(data[0]);
