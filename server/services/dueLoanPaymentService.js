@@ -28,6 +28,9 @@ const assertIsoDate = (value) => {
 const isEligibleDueLoan = (loan, today) => loan.calculation_mode === 'loan_payments'
   && loan.status === 'active'
   && loan.auto_payment_enabled === true
+  // CPI-linked principal/payment calculation is intentionally unsupported until
+  // an authoritative index feed and indexation engine exist.
+  && (loan.indexation_type ?? 'none') === 'none'
   && Number(loan.remaining_installments) > 0
   && typeof loan.next_payment_date === 'string'
   && loan.next_payment_date <= today;
@@ -61,6 +64,7 @@ const fetchDueLoans = async (supabaseClient, today) => {
       'monthly_payment',
       'interest_rate',
       'interest_type',
+      'indexation_type',
       'total_installments',
       'remaining_installments',
       'status',
@@ -72,6 +76,7 @@ const fetchDueLoans = async (supabaseClient, today) => {
     .eq('calculation_mode', 'loan_payments')
     .eq('status', 'active')
     .eq('auto_payment_enabled', true)
+    .eq('indexation_type', 'none')
     .gt('remaining_installments', 0)
     .not('next_payment_date', 'is', null)
     .lte('next_payment_date', today)

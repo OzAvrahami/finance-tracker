@@ -22,6 +22,8 @@ const INITIAL_FORM = {
   interest_type: 'fixed',
   interest_rate: '',
   prime_margin: '',
+  indexation_type: 'none',
+  base_index: '',
   monthly_payment: '',
   payment_source_id: '',
   next_payment_date: '',
@@ -31,6 +33,11 @@ const INITIAL_FORM = {
 const INTEREST_OPTIONS = [
   { value: 'fixed', label: 'ריבית קבועה' },
   { value: 'prime', label: 'ריבית פריים / משתנה' },
+];
+
+const INDEXATION_OPTIONS = [
+  { value: 'none', label: 'ללא הצמדה' },
+  { value: 'cpi', label: 'מדד המחירים לצרכן' },
 ];
 
 const isFiniteNumber = (value) => value !== '' && value !== null && value !== undefined
@@ -73,6 +80,10 @@ const CreateLoanDialog = ({ open, onClose, onSubmit, returnFocusRef }) => {
       ...previous,
       [name]: value,
       ...(name === 'interest_type' && value === 'fixed' ? { prime_margin: '' } : {}),
+      ...(name === 'indexation_type' && value === 'cpi'
+        ? { auto_payment_enabled: false }
+        : {}),
+      ...(name === 'indexation_type' && value === 'none' ? { base_index: '' } : {}),
     }));
     setFormError('');
   };
@@ -89,6 +100,9 @@ const CreateLoanDialog = ({ open, onClose, onSubmit, returnFocusRef }) => {
     interest_rate: !isNonNegativeNumber(formData.interest_rate) ? 'יש להזין ריבית שנתית תקינה' : undefined,
     prime_margin: formData.interest_type === 'prime' && !isFiniteNumber(formData.prime_margin)
       ? 'יש להזין מרווח פריים תקין'
+      : undefined,
+    base_index: formData.base_index && !isPositiveNumber(formData.base_index)
+      ? 'מדד בסיס חייב להיות מספר גדול מאפס'
       : undefined,
     monthly_payment: !isPositiveNumber(formData.monthly_payment) ? 'יש להזין החזר חודשי גדול מאפס' : undefined,
     payment_source_id: formData.auto_payment_enabled && !formData.payment_source_id
@@ -116,6 +130,7 @@ const CreateLoanDialog = ({ open, onClose, onSubmit, returnFocusRef }) => {
       !formData.start_date,
       !isNonNegativeNumber(formData.interest_rate),
       formData.interest_type === 'prime' && !isFiniteNumber(formData.prime_margin),
+      formData.base_index && !isPositiveNumber(formData.base_index),
       !isPositiveNumber(formData.monthly_payment),
       formData.auto_payment_enabled && !formData.payment_source_id,
       formData.auto_payment_enabled && !formData.next_payment_date,
@@ -136,6 +151,10 @@ const CreateLoanDialog = ({ open, onClose, onSubmit, returnFocusRef }) => {
       interest_type: formData.interest_type,
       interest_rate: Number(formData.interest_rate),
       prime_margin: formData.interest_type === 'prime' ? Number(formData.prime_margin) : 0,
+      indexation_type: formData.indexation_type,
+      base_index: formData.indexation_type === 'cpi' && formData.base_index
+        ? Number(formData.base_index)
+        : null,
       monthly_payment: Number(formData.monthly_payment),
       payment_source_id: formData.payment_source_id ? Number(formData.payment_source_id) : null,
       next_payment_date: formData.next_payment_date || null,
@@ -278,6 +297,32 @@ const CreateLoanDialog = ({ open, onClose, onSubmit, returnFocusRef }) => {
               />
             )}
           </div>
+          <SegmentedControl
+            label="הצמדה"
+            size="compact"
+            value={formData.indexation_type}
+            options={INDEXATION_OPTIONS}
+            onValueChange={(value) => updateField('indexation_type', value)}
+          />
+          {formData.indexation_type === 'cpi' && (
+            <>
+              <div className="loan-create-conditional">
+                <NumberField
+                  name="base_index"
+                  label="מדד בסיס"
+                  helperText="אופציונלי — יש להזין רק ערך מאומת ממסמך המקור"
+                  min="0.0001"
+                  step="0.0001"
+                  value={formData.base_index}
+                  onChange={handleChange}
+                  error={fieldErrors.base_index}
+                />
+              </div>
+              <Alert variant="info">
+                תשלום אוטומטי להלוואה צמודת מדד אינו נתמך עדיין
+              </Alert>
+            </>
+          )}
         </fieldset>
 
         <fieldset className="loan-create-section">
@@ -324,6 +369,7 @@ const CreateLoanDialog = ({ open, onClose, onSubmit, returnFocusRef }) => {
               type="checkbox"
               name="auto_payment_enabled"
               checked={formData.auto_payment_enabled}
+              disabled={formData.indexation_type === 'cpi'}
               onChange={(event) => updateField('auto_payment_enabled', event.target.checked)}
             />
             <span className="loan-create-auto-payment__copy">

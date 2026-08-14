@@ -64,6 +64,12 @@ const LoanCard = ({ loan, onSelect }) => {
                 <TechnicalValue>{interestRate.toLocaleString('en-US', { maximumFractionDigits: 2 })}%</TechnicalValue>
               </>
             )}
+            {loan.indexation_type === 'cpi' && (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span>צמוד מדד</span>
+              </>
+            )}
           </p>
         </div>
         {closed ? (

@@ -177,6 +177,7 @@ const loan = (overrides = {}) => ({
   monthly_payment: '110.00',
   interest_rate: '12.00',
   interest_type: 'fixed',
+  indexation_type: 'none',
   total_installments: 10,
   remaining_installments: 10,
   status: 'active',
@@ -416,6 +417,7 @@ test('legacy, future, and disabled loans are ignored and ancillary transactions 
       loan({ id: 1, calculation_mode: 'legacy' }),
       loan({ id: 2, next_payment_date: '2026-10-02' }),
       loan({ id: 3, auto_payment_enabled: false }),
+      loan({ id: 4, indexation_type: 'cpi' }),
     ],
   });
   fake.state.transactions.push({ id: 70, loan_id: 2, total_amount: '165.70' });
@@ -427,6 +429,19 @@ test('legacy, future, and disabled loans are ignored and ancillary transactions 
   assert.equal(summary.processed, 0);
   assert.equal(fake.state.rpcCalls.length, 0);
   assert.equal(fake.state.loan_payments.length, 0);
+});
+
+test('CPI-indexed loans are excluded before automatic payment calculation', async () => {
+  const fake = createDueLoanFake({ loans: [loan({ indexation_type: 'cpi' })] });
+
+  const summary = await processDueLoanPayments({
+    today: '2026-09-02', supabaseClient: fake, logger: { error() {} },
+  });
+
+  assert.equal(summary.processed, 0);
+  assert.equal(summary.failed, 0);
+  assert.equal(fake.state.rpcCalls.length, 0);
+  assert.equal(fake.state.transactions.length, 0);
 });
 
 test('Jerusalem business date is independent of the host UTC date', () => {

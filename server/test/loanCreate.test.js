@@ -12,6 +12,8 @@ const validBody = (overrides = {}) => ({
   interest_type: 'fixed',
   interest_rate: 12,
   prime_margin: 99,
+  indexation_type: 'none',
+  base_index: null,
   monthly_payment: 727.39,
   payment_source_id: 5,
   next_payment_date: '2026-09-02',
@@ -87,6 +89,8 @@ test('creates a fixed-rate loan in a server-controlled loan_payments initial sta
     amortization_type: 'spitzer',
     interest_type: 'fixed',
     prime_margin: 0,
+    indexation_type: 'none',
+    base_index: null,
     calculation_mode: 'loan_payments',
     next_payment_date: '2026-09-02',
     payment_source_id: 5,
@@ -111,6 +115,23 @@ test('creates a Prime loan with separate effective rate and margin', async () =>
   assert.equal(fake.inserted[0].prime_margin, 6.85);
 });
 
+test('creates CPI metadata independently from fixed interest with an optional base index', async () => {
+  for (const baseIndex of [14024, null]) {
+    const { fake, res } = await create(validBody({
+      name: 'CPI-linked fixed loan',
+      indexation_type: 'cpi',
+      base_index: baseIndex,
+      auto_payment_enabled: false,
+    }));
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(fake.inserted[0].interest_type, 'fixed');
+    assert.equal(fake.inserted[0].indexation_type, 'cpi');
+    assert.equal(fake.inserted[0].base_index, baseIndex);
+    assert.equal(fake.inserted[0].auto_payment_enabled, false);
+  }
+});
+
 test('allows informational next-payment/source fields to be absent when automation is disabled', async () => {
   const { fake, res } = await create(validBody({
     auto_payment_enabled: false,
@@ -133,6 +154,10 @@ test('rejects unsafe or incomplete create configurations with 400 responses', as
     ['unsupported interest', { interest_type: 'cpi_linked' }, 'Interest type must be fixed or prime'],
     ['negative rate', { interest_rate: -1 }, 'Interest rate must be zero or greater'],
     ['missing Prime margin', { interest_type: 'prime', prime_margin: '' }, 'Prime margin is required for a prime-rate loan'],
+    ['unsupported indexation', { indexation_type: 'currency' }, 'Indexation type must be none or cpi'],
+    ['zero base index', { base_index: 0 }, 'Base index must be greater than zero when supplied'],
+    ['negative base index', { base_index: -1 }, 'Base index must be greater than zero when supplied'],
+    ['CPI automation', { indexation_type: 'cpi' }, 'Automatic payment is not supported for CPI-indexed loans'],
     ['invalid start date', { start_date: '2026-02-30' }, 'Start date must be a valid YYYY-MM-DD date'],
     ['missing source with automation', { payment_source_id: null }, 'Payment source is required when automatic payment is enabled'],
     ['missing due date with automation', { next_payment_date: null }, 'Next payment date is required when automatic payment is enabled'],

@@ -61,6 +61,20 @@ const interestLabels = {
   cpi_linked: 'צמודת מדד',
 };
 
+const indexationLabels = {
+  none: 'ללא הצמדה',
+  cpi: 'מדד המחירים לצרכן',
+};
+
+const formatBaseIndex = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '−';
+  return numeric.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
+};
+
 const sourceLabels = {
   existing_transaction: 'מתנועה קיימת',
   reconstructed: 'שוחזר',
@@ -225,6 +239,14 @@ const LoanDetailsModal = ({ loan: summaryLoan, open, onClose, returnFocusRef }) 
                 <OverviewItem label="ריבית נוכחית"><TechnicalValue>{valueOrDash(loan.interest_rate)}{loan.interest_rate != null ? '%' : ''}</TechnicalValue></OverviewItem>
                 {loan.interest_type === 'prime' && (
                   <OverviewItem label="מרווח פריים"><TechnicalValue>{valueOrDash(loan.prime_margin)}%</TechnicalValue></OverviewItem>
+                )}
+                <OverviewItem label="הצמדה">
+                  {indexationLabels[loan.indexation_type ?? 'none'] || valueOrDash(loan.indexation_type)}
+                </OverviewItem>
+                {loan.indexation_type === 'cpi' && loan.base_index != null && (
+                  <OverviewItem label="מדד בסיס">
+                    <TechnicalValue>{formatBaseIndex(loan.base_index)}</TechnicalValue>
+                  </OverviewItem>
                 )}
                 <OverviewItem label="החזר חודשי"><MoneyAmount value={loan.monthly_payment} maximumFractionDigits={2} /></OverviewItem>
                 <OverviewItem label="תשלומים שכוסו">

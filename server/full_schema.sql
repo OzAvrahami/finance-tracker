@@ -79,6 +79,10 @@ CREATE TABLE IF NOT EXISTS loans (
   amortization_type       TEXT DEFAULT 'spitzer',
   interest_type           TEXT DEFAULT 'fixed',
   prime_margin            NUMERIC DEFAULT 0,
+  indexation_type         TEXT NOT NULL DEFAULT 'none'
+                          CHECK (indexation_type IN ('none', 'cpi')),
+  base_index              NUMERIC(18,4)
+                          CHECK (base_index IS NULL OR base_index > 0),
   balloon_amount          NUMERIC DEFAULT 0,
   grace_months            INTEGER DEFAULT 0,
   calculation_mode        TEXT NOT NULL DEFAULT 'legacy'

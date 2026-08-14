@@ -21,6 +21,8 @@ const loan = (overrides = {}) => ({
   loan_type: 'bank_loan',
   amortization_type: 'spitzer',
   interest_type: 'fixed',
+  indexation_type: 'none',
+  base_index: null,
   original_amount: 120000,
   current_balance: 74300,
   monthly_payment: 1850,
@@ -117,6 +119,16 @@ beforeEach(() => {
 });
 
 describe('loans loading, summary, and cards', () => {
+  it('adds a compact CPI marker to an indexed loan card without changing interest semantics', async () => {
+    getAllLoans.mockResolvedValue({
+      data: [loan({ indexation_type: 'cpi', interest_type: 'fixed', interest_rate: 3 })],
+    });
+    renderPage();
+
+    const card = await screen.findByRole('button', { name: 'הלוואה: הלוואת רכב' });
+    expect(card).toHaveTextContent(/ריבית קבועה.*צמוד מדד/);
+  });
+
   it('uses the shell heading, fetches loans, and renders the four real summary metrics', async () => {
     renderPage();
 
@@ -447,7 +459,9 @@ describe('create loan dialog', () => {
     expect(within(dialog).queryByLabelText('יתרה נוכחית')).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('radio', { name: 'בלון' })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('radio', { name: 'גרייס' })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole('radio', { name: 'צמודת מדד' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: 'ללא הצמדה' })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: 'מדד המחירים לצרכן' })).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('מדד בסיס')).not.toBeInTheDocument();
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
     expect(within(dialog).getByText('יש לתקן את השדות המסומנים לפני יצירת ההלוואה.')).toBeInTheDocument();
@@ -486,6 +500,8 @@ describe('create loan dialog', () => {
       interest_type: 'fixed',
       interest_rate: 7.5,
       prime_margin: 0,
+      indexation_type: 'none',
+      base_index: null,
       monthly_payment: 1800,
       payment_source_id: 5,
       next_payment_date: '2026-09-02',
@@ -511,6 +527,34 @@ describe('create loan dialog', () => {
       interest_type: 'prime',
       interest_rate: 11.85,
       prime_margin: 6.85,
+    }));
+  });
+
+  it('reveals optional CPI metadata and turns unsupported automation off', async () => {
+    renderPage();
+    await screen.findByRole('button', { name: /הלוואה:/ });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת הלוואה' }));
+    const dialog = screen.getByRole('dialog', { name: 'הלוואה חדשה' });
+    const automaticPayment = within(dialog).getByRole('checkbox', { name: /תשלום אוטומטי/ });
+
+    expect(automaticPayment).toBeChecked();
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'מדד המחירים לצרכן' }));
+
+    expect(automaticPayment).not.toBeChecked();
+    expect(automaticPayment).toBeDisabled();
+    expect(within(dialog).getByLabelText('מדד בסיס')).toBeInTheDocument();
+    expect(within(dialog).getByText('תשלום אוטומטי להלוואה צמודת מדד אינו נתמך עדיין')).toBeInTheDocument();
+
+    await fillRequiredFields(dialog, { withAutoFields: false });
+    await userEvent.type(within(dialog).getByLabelText('מדד בסיס'), '14024');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת ההלוואה' }));
+
+    await waitFor(() => expect(createLoan).toHaveBeenCalledTimes(1));
+    expect(createLoan).toHaveBeenCalledWith(expect.objectContaining({
+      interest_type: 'fixed',
+      indexation_type: 'cpi',
+      base_index: 14024,
+      auto_payment_enabled: false,
     }));
   });
 

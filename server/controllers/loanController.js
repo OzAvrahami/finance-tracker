@@ -2,6 +2,7 @@ const supabase = require('../config/supabase');
 const axios = require('axios');
 
 const CREATE_INTEREST_TYPES = new Set(['fixed', 'prime']);
+const CREATE_INDEXATION_TYPES = new Set(['none', 'cpi']);
 
 const isIsoDate = (value) => {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -118,6 +119,11 @@ exports.createLoan = async (req, res) => {
         const interestRate = requiredNumber(input.interest_rate);
         const interestType = input.interest_type;
         const primeMargin = interestType === 'prime' ? requiredNumber(input.prime_margin) : 0;
+        const indexationType = input.indexation_type ?? 'none';
+        const baseIndexSupplied = input.base_index !== undefined
+            && input.base_index !== null
+            && input.base_index !== '';
+        const baseIndex = baseIndexSupplied ? requiredNumber(input.base_index) : null;
         const autoPaymentEnabled = input.auto_payment_enabled === undefined
             ? true
             : input.auto_payment_enabled;
@@ -149,6 +155,12 @@ exports.createLoan = async (req, res) => {
         if (interestType === 'prime' && primeMargin === null) {
             return res.status(400).json({ error: 'Prime margin is required for a prime-rate loan' });
         }
+        if (!CREATE_INDEXATION_TYPES.has(indexationType)) {
+            return res.status(400).json({ error: 'Indexation type must be none or cpi' });
+        }
+        if (baseIndexSupplied && (baseIndex === null || baseIndex <= 0)) {
+            return res.status(400).json({ error: 'Base index must be greater than zero when supplied' });
+        }
         if (!isIsoDate(input.start_date)) {
             return res.status(400).json({ error: 'Start date must be a valid YYYY-MM-DD date' });
         }
@@ -166,6 +178,11 @@ exports.createLoan = async (req, res) => {
         }
         if (typeof autoPaymentEnabled !== 'boolean') {
             return res.status(400).json({ error: 'Automatic payment must be a boolean' });
+        }
+        if (indexationType === 'cpi' && autoPaymentEnabled) {
+            return res.status(400).json({
+                error: 'Automatic payment is not supported for CPI-indexed loans',
+            });
         }
         if (paymentSourceId !== null && (!Number.isInteger(paymentSourceId) || paymentSourceId <= 0)) {
             return res.status(400).json({ error: 'Payment source id must be a positive integer' });
@@ -209,6 +226,8 @@ exports.createLoan = async (req, res) => {
             amortization_type: 'spitzer',
             interest_type: interestType,
             prime_margin: primeMargin,
+            indexation_type: indexationType,
+            base_index: baseIndex,
             calculation_mode: 'loan_payments',
             next_payment_date: nextPaymentDate,
             payment_source_id: paymentSourceId,
