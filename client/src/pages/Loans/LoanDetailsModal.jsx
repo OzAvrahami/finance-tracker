@@ -24,6 +24,7 @@ const valueOrDash = (value) => (value === null || value === undefined || value =
 
 const paymentKindLabels = {
   catch_up: 'השלמת פיגורים',
+  irregular_payment: 'תשלום לא סדיר',
   balance_adjustment: 'התאמת יתרה',
   early_payoff: 'פירעון מוקדם',
 };
@@ -40,6 +41,9 @@ const getPaymentKindDetail = (payment) => {
   }
   if (payment.payment_kind === 'balance_adjustment') {
     return 'התאמת ספק ללא תנועת מזומן';
+  }
+  if (payment.payment_kind === 'irregular_payment') {
+    return 'תשלום מזומן ללא שיוך לתשלום חוזי';
   }
   return sourceLabels[payment.source_kind] || payment.source_kind;
 };

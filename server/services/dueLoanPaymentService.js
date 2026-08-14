@@ -120,6 +120,7 @@ const validateAccountingState = (loan, payments) => {
     const kind = payment.payment_kind;
     if (kind === 'balance_adjustment') return;
     if (kind === 'early_payoff') return;
+    if (kind === 'irregular_payment') return;
     const covered = Number(payment.installments_covered);
     if (!Number.isInteger(covered) || covered < 1) {
       throw new Error('Loan payment installment coverage is invalid');

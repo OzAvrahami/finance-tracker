@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS loan_payments (
   source_kind           TEXT NOT NULL
                         CHECK (source_kind IN ('existing_transaction', 'reconstructed', 'manual', 'generated')),
   payment_kind          TEXT NOT NULL DEFAULT 'installment'
-                        CHECK (payment_kind IN ('installment', 'catch_up', 'balance_adjustment', 'early_payoff')),
+                        CHECK (payment_kind IN ('installment', 'catch_up', 'irregular_payment', 'balance_adjustment', 'early_payoff')),
   installments_covered  INTEGER NOT NULL DEFAULT 1,
   other_amount          NUMERIC(24, 10) NOT NULL DEFAULT 0,
   balance_adjustment_amount NUMERIC(24, 10) NOT NULL DEFAULT 0,
@@ -182,8 +182,12 @@ CREATE TABLE IF NOT EXISTS loan_payments (
       AND installment_number > 0 AND installments_covered = 1)
     OR (payment_kind = 'catch_up' AND installment_number IS NULL
       AND installments_covered >= 1)
-    OR (payment_kind IN ('balance_adjustment', 'early_payoff')
+    OR (payment_kind IN ('irregular_payment', 'balance_adjustment', 'early_payoff')
       AND installment_number IS NULL AND installments_covered = 0)
+  ),
+  CONSTRAINT loan_payments_irregular_payment_shape_check CHECK (
+    payment_kind <> 'irregular_payment'
+    OR (payment_amount > 0 AND balance_adjustment_amount = 0)
   ),
   CONSTRAINT loan_payments_balance_adjustment_shape_check CHECK (
     payment_kind <> 'balance_adjustment'

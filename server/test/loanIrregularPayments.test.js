@@ -19,10 +19,10 @@ const schema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'u
 test('Migration 012 defines reusable irregular payment shapes', () => {
   for (const sql of [migration, schema]) {
     assert.match(sql, /installments_covered\s+INTEGER(?: NOT NULL DEFAULT 1)?/);
-    assert.match(sql, /'installment', 'catch_up', 'balance_adjustment', 'early_payoff'/);
+    assert.match(sql, /'installment', 'catch_up', (?:'irregular_payment', )?'balance_adjustment', 'early_payoff'/);
     assert.match(sql, /payment_kind = 'installment'[\s\S]*installments_covered = 1/);
     assert.match(sql, /payment_kind = 'catch_up'[\s\S]*installment_number IS NULL[\s\S]*installments_covered >= 1/);
-    assert.match(sql, /payment_kind IN \('balance_adjustment', 'early_payoff'\)[\s\S]*installments_covered = 0/);
+    assert.match(sql, /payment_kind IN \((?:'irregular_payment', )?'balance_adjustment', 'early_payoff'\)[\s\S]*installments_covered = 0/);
     assert.match(sql, /loan_payments_balance_adjustment_shape_check/);
     assert.match(sql, /transaction_id IS NULL[\s\S]*payment_amount = 0[\s\S]*principal_amount = 0[\s\S]*interest_amount = 0[\s\S]*other_amount = 0/);
   }

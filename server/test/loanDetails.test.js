@@ -23,6 +23,11 @@ const createLoanDetailsFake = () => {
         id: 2, loan_id: 4, transaction_id: 102, installment_number: null,
         payment_date: '2026-06-03', payment_kind: 'early_payoff',
       },
+      {
+        id: 3, loan_id: 4, transaction_id: 103, installment_number: null,
+        payment_date: '2025-01-20', payment_kind: 'irregular_payment',
+        installments_covered: 0,
+      },
     ],
     transactions: [
       { id: 101, loan_id: 4, description: 'Payment', charge_date: '2024-06-02' },
@@ -134,7 +139,7 @@ test('loan details returns authoritative payments and every related transaction'
   assert.equal(response.body.loan.id, 4);
   assert.deepEqual(
     response.body.loan_payments.map((payment) => payment.payment_kind),
-    ['installment', 'early_payoff'],
+    ['installment', 'early_payoff', 'irregular_payment'],
   );
   assert.equal(response.body.related_transactions.length, 2);
   assert.equal(response.body.related_transactions.find((row) => row.id === 70).description, 'Bridging interest');

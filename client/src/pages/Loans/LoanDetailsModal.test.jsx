@@ -37,6 +37,13 @@ describe('LoanDetailsModal irregular payment history', () => {
             other_amount: '0', balance_adjustment_amount: '842.00',
             source_kind: 'reconstructed',
           },
+          {
+            id: 3, payment_date: '2025-01-20', payment_kind: 'irregular_payment',
+            installments_covered: 0, installment_number: null,
+            payment_amount: '400.00', principal_amount: '0', interest_amount: '0',
+            other_amount: '400.00', balance_adjustment_amount: '0',
+            source_kind: 'existing_transaction',
+          },
         ],
         related_transactions: [],
       },
@@ -51,6 +58,8 @@ describe('LoanDetailsModal irregular payment history', () => {
     expect(within(modal).getByText('כיסה 3 תשלומים')).toBeInTheDocument();
     expect(within(modal).getByText('התאמת יתרה')).toBeInTheDocument();
     expect(within(modal).getByText('התאמת ספק ללא תנועת מזומן')).toBeInTheDocument();
+    expect(within(modal).getByText('תשלום לא סדיר')).toBeInTheDocument();
+    expect(within(modal).getByText('תשלום מזומן ללא שיוך לתשלום חוזי')).toBeInTheDocument();
     expect(within(modal).queryByText('/71', { exact: false })).not.toBeInTheDocument();
   });
 

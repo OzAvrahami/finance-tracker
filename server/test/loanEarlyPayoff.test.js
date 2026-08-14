@@ -77,8 +77,8 @@ test('Migration 010 defines installment and early-payoff row shapes safely', () 
 
   assert.match(migration, /payment_kind IN \('installment', 'early_payoff'\)/);
   assert.match(migration, /payment_kind = 'early_payoff' AND installment_number IS NULL/);
-  assert.match(schema, /payment_kind IN \('installment', 'catch_up', 'balance_adjustment', 'early_payoff'\)/);
-  assert.match(schema, /payment_kind IN \('balance_adjustment', 'early_payoff'\)[\s\S]*installment_number IS NULL/);
+  assert.match(schema, /payment_kind IN \('installment', 'catch_up', 'irregular_payment', 'balance_adjustment', 'early_payoff'\)/);
+  assert.match(schema, /payment_kind IN \('irregular_payment', 'balance_adjustment', 'early_payoff'\)[\s\S]*installment_number IS NULL/);
 
   assert.match(migration, /ALTER COLUMN installment_number DROP NOT NULL/);
   assert.match(migration, /DROP CONSTRAINT IF EXISTS loan_payments_loan_id_installment_number_key/);

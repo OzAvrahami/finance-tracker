@@ -411,6 +411,29 @@ test('automatic processing advances from catch-up coverage and ignores balance s
   assert.equal(fake.state.loan_payments.at(-1).installments_covered, 1);
 });
 
+test('automatic processing ignores irregular cash evidence and still generates a normal installment', async () => {
+  const fake = createDueLoanFake({
+    loans: [loan()],
+    loanPayments: [{
+      id: 1, loan_id: 101, transaction_id: 88, installment_number: null,
+      payment_date: '2026-08-15', payment_amount: '75.00',
+      principal_amount: '0.0000000000', interest_amount: '0.0000000000',
+      annual_interest_rate: null, source_kind: 'existing_transaction',
+      payment_kind: 'irregular_payment', installments_covered: 0,
+      other_amount: '75.0000000000', balance_adjustment_amount: '0.0000000000',
+    }],
+  });
+
+  const summary = await processDueLoanPayments({
+    today: '2026-09-02', supabaseClient: fake, logger: { error() {} },
+  });
+
+  assert.equal(summary.processed, 1);
+  assert.equal(fake.state.rpcCalls[0].params.p_expected_installment_number, 1);
+  assert.equal(fake.state.loan_payments.at(-1).payment_kind, 'installment');
+  assert.equal(fake.state.loan_payments.at(-1).installments_covered, 1);
+});
+
 test('legacy, future, and disabled loans are ignored and ancillary transactions are irrelevant', async () => {
   const fake = createDueLoanFake({
     loans: [
