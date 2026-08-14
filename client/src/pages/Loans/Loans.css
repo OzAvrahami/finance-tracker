@@ -516,9 +516,15 @@
   font-size: 11.5px;
 }
 
-.loan-payment-row.is-payoff {
+.loan-payment-row.is-early_payoff {
   background: var(--ft-positive-weak);
   border-color: var(--ft-positive-border);
+}
+
+.loan-payment-row.is-catch_up,
+.loan-payment-row.is-balance_adjustment {
+  background: var(--ft-accent-weak);
+  border-color: var(--ft-accent-border);
 }
 
 .loan-payment-row__kind { display: flex; min-width: 0; flex-direction: column; gap: 2px; }

@@ -55,9 +55,11 @@ const createLoanListFake = () => {
     { id: 4, name: 'Closed normal', current_balance: '0.00', status: 'paid' },
   ];
   const paymentKinds = [
-    ...Array.from({ length: 25 }, () => ({ loan_id: 3, payment_kind: 'installment' })),
-    { loan_id: 3, payment_kind: 'early_payoff' },
-    { loan_id: 4, payment_kind: 'installment' },
+    ...Array.from({ length: 25 }, () => ({
+      loan_id: 3, payment_kind: 'installment', installments_covered: 1,
+    })),
+    { loan_id: 3, payment_kind: 'early_payoff', installments_covered: 0 },
+    { loan_id: 4, payment_kind: 'catch_up', installments_covered: 3 },
   ];
 
   return {
@@ -109,11 +111,12 @@ test('loan list returns compact authoritative payment summaries for cards', asyn
     has_early_payoff: loan.has_early_payoff,
   })), [
     { id: 3, regular_payment_count: 25, has_early_payoff: true },
-    { id: 4, regular_payment_count: 1, has_early_payoff: false },
+    { id: 4, regular_payment_count: 3, has_early_payoff: false },
   ]);
   assert.equal(Object.hasOwn(response.body[0], 'loan_payments'), false);
   assert.ok(fake.calls.some((call) => call.table === 'loan_payments'
-    && call.op === 'select' && call.columns === 'loan_id, payment_kind'));
+    && call.op === 'select'
+    && call.columns === 'loan_id, payment_kind, installments_covered'));
   assert.deepEqual(
     fake.calls.find((call) => call.table === 'loan_payments' && call.op === 'in').values,
     [3, 4],

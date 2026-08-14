@@ -96,27 +96,43 @@ const fetchLoanPayments = async (supabaseClient, loanId) => {
       'annual_interest_rate',
       'source_kind',
       'payment_kind',
+      'installments_covered',
       'other_amount',
       'balance_adjustment_amount',
     ].join(','))
     .eq('loan_id', loanId)
-    .order('installment_number', { ascending: true });
+    .order('payment_date', { ascending: true })
+    .order('id', { ascending: true });
 
   if (error) throw error;
   return Array.isArray(data) ? data : [];
 };
 
 const validateAccountingState = (loan, payments) => {
-  const installments = payments.filter(
-    (payment) => payment.payment_kind === 'installment',
-  );
-  const installmentNumbers = installments.map(
-    (payment) => Number(payment.installment_number),
-  );
-  installmentNumbers.forEach((number, index) => {
-    if (!Number.isInteger(number) || number !== index + 1) {
+  const installments = [];
+  let coveredInstallments = 0;
+  payments.forEach((payment) => {
+    const kind = payment.payment_kind;
+    if (kind === 'balance_adjustment') return;
+    if (kind === 'early_payoff') return;
+    const covered = Number(payment.installments_covered);
+    if (!Number.isInteger(covered) || covered < 1) {
+      throw new Error('Loan payment installment coverage is invalid');
+    }
+    if (kind === 'catch_up') {
+      coveredInstallments += covered;
+      return;
+    }
+    if (kind !== 'installment' || covered !== 1) {
+      throw new Error('Loan payment kind is invalid for automatic processing');
+    }
+    const installmentNumber = Number(payment.installment_number);
+    if (!Number.isInteger(installmentNumber)
+      || installmentNumber !== coveredInstallments + 1) {
       throw new Error('Loan payment installments are not contiguous');
     }
+    installments.push(payment);
+    coveredInstallments += 1;
   });
 
   const totalInstallments = Number(loan.total_installments);
@@ -124,14 +140,18 @@ const validateAccountingState = (loan, payments) => {
   if (!Number.isInteger(totalInstallments) || totalInstallments <= 0) {
     throw new Error('Loan total installments are invalid');
   }
-  if (remainingInstallments !== totalInstallments - installments.length) {
+  if (coveredInstallments > totalInstallments) {
+    throw new Error('Loan payment coverage exceeds total installments');
+  }
+  if (remainingInstallments !== totalInstallments - coveredInstallments) {
     throw new Error('Loan remaining-installment summary has drifted');
   }
 
   return {
     totalInstallments,
     installments,
-    nextInstallmentNumber: installments.length + 1,
+    coveredInstallments,
+    nextInstallmentNumber: coveredInstallments + 1,
   };
 };
 
@@ -174,7 +194,7 @@ const processDueLoanPayments = async ({
       let payment;
       if (dueDatePayments.length === 1) {
         const existing = dueDatePayments[0];
-        if (Number(existing.installment_number) !== accounting.installments.length) {
+        if (Number(existing.installment_number) !== accounting.coveredInstallments) {
           throw new Error('A non-latest loan payment matches the current due date');
         }
         installmentNumber = Number(existing.installment_number);

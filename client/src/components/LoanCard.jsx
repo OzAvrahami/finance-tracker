@@ -102,7 +102,7 @@ const LoanCard = ({ loan, onSelect }) => {
             <dd><TechnicalValue>{formatLoanDate(loan.closed_date)}</TechnicalValue></dd>
           </div>
           <div>
-            <dt>תשלומים רגילים</dt>
+            <dt>תשלומים שכוסו</dt>
             <dd>
               {regularPaymentsKnown
                 ? <InstallmentProgress paid={regularPayments} total={loan.total_installments} />

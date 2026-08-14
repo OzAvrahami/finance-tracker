@@ -69,13 +69,16 @@ test('Migration 010 defines installment and early-payoff row shapes safely', () 
     assert.match(sql, /payment_kind\s+TEXT NOT NULL DEFAULT 'installment'/);
     assert.match(sql, /other_amount\s+NUMERIC\(24, 10\) NOT NULL DEFAULT 0/);
     assert.match(sql, /balance_adjustment_amount\s+NUMERIC\(24, 10\) NOT NULL DEFAULT 0/);
-    assert.match(sql, /payment_kind IN \('installment', 'early_payoff'\)/);
     assert.match(sql, /payment_kind = 'installment'[\s\S]*installment_number IS NOT NULL/);
-    assert.match(sql, /payment_kind = 'early_payoff' AND installment_number IS NULL/);
     assert.match(sql, /loan_payments_unique_installment[\s\S]*payment_kind = 'installment'/);
     assert.match(sql, /loan_payments_unique_early_payoff[\s\S]*payment_kind = 'early_payoff'/);
     assert.match(sql, /payment_amount - principal_amount - interest_amount - other_amount/);
   }
+
+  assert.match(migration, /payment_kind IN \('installment', 'early_payoff'\)/);
+  assert.match(migration, /payment_kind = 'early_payoff' AND installment_number IS NULL/);
+  assert.match(schema, /payment_kind IN \('installment', 'catch_up', 'balance_adjustment', 'early_payoff'\)/);
+  assert.match(schema, /payment_kind IN \('balance_adjustment', 'early_payoff'\)[\s\S]*installment_number IS NULL/);
 
   assert.match(migration, /ALTER COLUMN installment_number DROP NOT NULL/);
   assert.match(migration, /DROP CONSTRAINT IF EXISTS loan_payments_loan_id_installment_number_key/);

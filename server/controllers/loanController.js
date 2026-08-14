@@ -29,7 +29,7 @@ exports.getAllLoans = async (req, res) => {
 
         const { data: paymentKinds, error: paymentsError } = await supabase
             .from('loan_payments')
-            .select('loan_id, payment_kind')
+            .select('loan_id, payment_kind, installments_covered')
             .in('loan_id', loans.map((loan) => loan.id));
         if (paymentsError) throw paymentsError;
 
@@ -41,7 +41,12 @@ exports.getAllLoans = async (req, res) => {
         (paymentKinds || []).forEach((payment) => {
             const summary = summaries.get(Number(payment.loan_id));
             if (!summary) return;
-            if (payment.payment_kind === 'installment') summary.regular_payment_count += 1;
+            if (payment.payment_kind === 'installment' || payment.payment_kind === 'catch_up') {
+                summary.regular_payment_count += Number(
+                    payment.installments_covered
+                    ?? (payment.payment_kind === 'installment' ? 1 : 0),
+                );
+            }
             if (payment.payment_kind === 'early_payoff') summary.has_early_payoff = true;
         });
 

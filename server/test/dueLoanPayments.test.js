@@ -80,12 +80,19 @@ class Query {
 const createDueLoanFake = ({ loans, loanPayments = [], categories } = {}) => {
   const state = {
     loans: structuredClone(loans || []),
-    loan_payments: structuredClone(loanPayments).map((payment) => ({
-      payment_kind: 'installment',
-      other_amount: '0.0000000000',
-      balance_adjustment_amount: '0.0000000000',
-      ...payment,
-    })),
+    loan_payments: structuredClone(loanPayments).map((payment) => {
+      const row = {
+        payment_kind: 'installment',
+        other_amount: '0.0000000000',
+        balance_adjustment_amount: '0.0000000000',
+        ...payment,
+      };
+      return {
+        ...row,
+        installments_covered: row.installments_covered
+          ?? (row.payment_kind === 'installment' ? 1 : 0),
+      };
+    }),
     categories: structuredClone(categories || [
       { id: 24, name: 'הלוואות', type: 'expense', is_active: true },
     ]),
@@ -142,6 +149,7 @@ const createDueLoanFake = ({ loans, loanPayments = [], categories } = {}) => {
         annual_interest_rate: params.p_annual_interest_rate,
         source_kind: 'generated',
         payment_kind: 'installment',
+        installments_covered: 1,
         other_amount: '0.0000000000',
         balance_adjustment_amount: '0.0000000000',
       });
@@ -362,6 +370,44 @@ test('automatic processing counts only regular installments, never an early payo
 
   assert.equal(summary.processed, 1);
   assert.equal(fake.state.rpcCalls[0].params.p_expected_installment_number, 2);
+});
+
+test('automatic processing advances from catch-up coverage and ignores balance snapshots', async () => {
+  const fake = createDueLoanFake({
+    loans: [loan({ current_balance: '901.00', remaining_installments: 6 })],
+    loanPayments: [
+      {
+        id: 1, loan_id: 101, transaction_id: 1, installment_number: null,
+        payment_date: '2026-06-02', payment_amount: '330.00',
+        principal_amount: '0.0000000000', interest_amount: '0.0000000000',
+        annual_interest_rate: null, source_kind: 'manual', payment_kind: 'catch_up',
+        installments_covered: 3, other_amount: '330.0000000000',
+      },
+      {
+        id: 2, loan_id: 101, transaction_id: null, installment_number: null,
+        payment_date: '2026-07-01', payment_amount: '0.00',
+        principal_amount: '0.0000000000', interest_amount: '0.0000000000',
+        annual_interest_rate: null, source_kind: 'manual',
+        payment_kind: 'balance_adjustment', installments_covered: 0,
+        balance_adjustment_amount: '9.0000000000',
+      },
+      {
+        id: 3, loan_id: 101, transaction_id: 3, installment_number: 4,
+        payment_date: '2026-08-02', payment_amount: '110.00',
+        principal_amount: '99.0000000000', interest_amount: '11.0000000000',
+        annual_interest_rate: '12.00', source_kind: 'manual',
+        installments_covered: 1,
+      },
+    ],
+  });
+
+  const summary = await processDueLoanPayments({
+    today: '2026-09-02', supabaseClient: fake, logger: { error() {} },
+  });
+
+  assert.equal(summary.processed, 1);
+  assert.equal(fake.state.rpcCalls[0].params.p_expected_installment_number, 5);
+  assert.equal(fake.state.loan_payments.at(-1).installments_covered, 1);
 });
 
 test('legacy, future, and disabled loans are ignored and ancillary transactions are irrelevant', async () => {

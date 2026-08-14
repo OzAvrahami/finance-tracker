@@ -22,6 +22,28 @@ import InstallmentProgress from '../../components/InstallmentProgress';
 
 const valueOrDash = (value) => (value === null || value === undefined || value === '' ? '−' : value);
 
+const paymentKindLabels = {
+  catch_up: 'השלמת פיגורים',
+  balance_adjustment: 'התאמת יתרה',
+  early_payoff: 'פירעון מוקדם',
+};
+
+const getPaymentKindLabel = (payment, totalInstallments) => (
+  payment.payment_kind === 'installment'
+    ? `${payment.installment_number}/${totalInstallments}`
+    : paymentKindLabels[payment.payment_kind] || payment.payment_kind
+);
+
+const getPaymentKindDetail = (payment) => {
+  if (payment.payment_kind === 'catch_up') {
+    return `כיסה ${payment.installments_covered} תשלומים`;
+  }
+  if (payment.payment_kind === 'balance_adjustment') {
+    return 'התאמת ספק ללא תנועת מזומן';
+  }
+  return sourceLabels[payment.source_kind] || payment.source_kind;
+};
+
 const loanTypeLabels = {
   bank_loan: 'הלוואה בנקאית',
   cal_express: 'כאל אקספרס',
@@ -205,7 +227,7 @@ const LoanDetailsModal = ({ loan: summaryLoan, open, onClose, returnFocusRef }) 
                   <OverviewItem label="מרווח פריים"><TechnicalValue>{valueOrDash(loan.prime_margin)}%</TechnicalValue></OverviewItem>
                 )}
                 <OverviewItem label="החזר חודשי"><MoneyAmount value={loan.monthly_payment} maximumFractionDigits={2} /></OverviewItem>
-                <OverviewItem label="תשלומים רגילים">
+                <OverviewItem label="תשלומים שכוסו">
                   {regularPaymentsKnown
                     ? <InstallmentProgress paid={regularPayments} total={loan.total_installments} />
                     : '−'}
@@ -246,14 +268,12 @@ const LoanDetailsModal = ({ loan: summaryLoan, open, onClose, returnFocusRef }) 
                   {paymentRows.map((payment) => (
                     <div
                       key={payment.id}
-                      className={`loan-payment-row${payment.payment_kind === 'early_payoff' ? ' is-payoff' : ''}`}
+                      className={`loan-payment-row is-${payment.payment_kind}`}
                       role="row"
                     >
                       <div role="cell" className="loan-payment-row__kind">
-                        <strong>{payment.payment_kind === 'early_payoff'
-                          ? 'פירעון מוקדם'
-                          : `${payment.installment_number}/${loan.total_installments}`}</strong>
-                        <span>{sourceLabels[payment.source_kind] || payment.source_kind}</span>
+                        <strong>{getPaymentKindLabel(payment, loan.total_installments)}</strong>
+                        <span>{getPaymentKindDetail(payment)}</span>
                       </div>
                       <TechnicalValue role="cell">{formatLoanDate(payment.payment_date)}</TechnicalValue>
                       <MoneyAmount role="cell" value={payment.payment_amount} maximumFractionDigits={2} />

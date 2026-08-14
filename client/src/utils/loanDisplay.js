@@ -47,7 +47,14 @@ export const countRegularLoanPayments = (loanOrPayments) => {
     ? loanOrPayments
     : loanOrPayments?.loan_payments;
   return Array.isArray(payments)
-    ? payments.filter((payment) => payment.payment_kind === 'installment').length
+    ? payments.reduce((total, payment) => {
+      if (payment.payment_kind !== 'installment' && payment.payment_kind !== 'catch_up') {
+        return total;
+      }
+      const covered = payment.installments_covered
+        ?? (payment.payment_kind === 'installment' ? 1 : 0);
+      return total + Number(covered);
+    }, 0)
     : 0;
 };
 

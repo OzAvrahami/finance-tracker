@@ -165,7 +165,8 @@ CREATE TABLE IF NOT EXISTS loan_payments (
   source_kind           TEXT NOT NULL
                         CHECK (source_kind IN ('existing_transaction', 'reconstructed', 'manual', 'generated')),
   payment_kind          TEXT NOT NULL DEFAULT 'installment'
-                        CHECK (payment_kind IN ('installment', 'early_payoff')),
+                        CHECK (payment_kind IN ('installment', 'catch_up', 'balance_adjustment', 'early_payoff')),
+  installments_covered  INTEGER NOT NULL DEFAULT 1,
   other_amount          NUMERIC(24, 10) NOT NULL DEFAULT 0,
   balance_adjustment_amount NUMERIC(24, 10) NOT NULL DEFAULT 0,
   notes                 TEXT,
@@ -174,8 +175,16 @@ CREATE TABLE IF NOT EXISTS loan_payments (
   UNIQUE (transaction_id),
   CHECK (
     (payment_kind = 'installment' AND installment_number IS NOT NULL
-      AND installment_number > 0)
-    OR (payment_kind = 'early_payoff' AND installment_number IS NULL)
+      AND installment_number > 0 AND installments_covered = 1)
+    OR (payment_kind = 'catch_up' AND installment_number IS NULL
+      AND installments_covered >= 1)
+    OR (payment_kind IN ('balance_adjustment', 'early_payoff')
+      AND installment_number IS NULL AND installments_covered = 0)
+  ),
+  CONSTRAINT loan_payments_balance_adjustment_shape_check CHECK (
+    payment_kind <> 'balance_adjustment'
+    OR (transaction_id IS NULL AND payment_amount = 0
+      AND principal_amount = 0 AND interest_amount = 0 AND other_amount = 0)
   ),
   CONSTRAINT loan_payments_components_reconcile CHECK (
     abs(payment_amount - principal_amount - interest_amount - other_amount)
@@ -357,7 +366,8 @@ CREATE POLICY "Public Access Budgets"         ON budgets          FOR ALL USING 
 
 -- =============================================
 -- SECTION 5A: LOAN ACCOUNTING FUNCTIONS/TRIGGERS
--- Source: migrations/008_loan_payment_accounting.sql
+-- Source: migrations/008_loan_payment_accounting.sql through
+-- migrations/012_irregular_loan_payment_accounting.sql
 -- =============================================
 
 CREATE OR REPLACE FUNCTION public.refresh_loan_summary(p_loan_id BIGINT)
@@ -368,7 +378,7 @@ SET search_path = pg_catalog, public
 AS $$
 DECLARE
   v_loan public.loans%ROWTYPE;
-  v_installment_count BIGINT := 0;
+  v_installments_covered BIGINT := 0;
   v_early_payoff_count BIGINT := 0;
   v_paid_principal NUMERIC := 0;
   v_balance_adjustment NUMERIC := 0;
@@ -387,14 +397,20 @@ BEGIN
 
   IF v_loan.calculation_mode = 'loan_payments' THEN
     SELECT
-      count(*) FILTER (WHERE payment_kind = 'installment'),
+      coalesce(sum(installments_covered) FILTER (
+        WHERE payment_kind IN ('installment', 'catch_up')
+      ), 0),
       count(*) FILTER (WHERE payment_kind = 'early_payoff'),
       coalesce(sum(principal_amount), 0),
       coalesce(sum(balance_adjustment_amount), 0)
-    INTO v_installment_count, v_early_payoff_count,
+    INTO v_installments_covered, v_early_payoff_count,
       v_paid_principal, v_balance_adjustment
     FROM public.loan_payments
     WHERE loan_id = p_loan_id;
+
+    IF v_installments_covered > coalesce(v_loan.total_installments, 0) THEN
+      RAISE EXCEPTION 'Loan % payment coverage exceeds total installments', p_loan_id;
+    END IF;
 
     v_balance := round(greatest(
       v_loan.original_amount - v_paid_principal - v_balance_adjustment,
@@ -419,7 +435,7 @@ BEGIN
     ELSE
       v_closed_date := NULL;
       v_remaining := greatest(
-        coalesce(v_loan.total_installments, 0) - v_installment_count,
+        coalesce(v_loan.total_installments, 0) - v_installments_covered,
         0
       )::integer;
     END IF;
@@ -445,14 +461,14 @@ BEGIN
     WHERE id = p_loan_id;
   ELSE
     SELECT count(*), coalesce(sum(total_amount), 0)
-    INTO v_installment_count, v_cash_total
+    INTO v_installments_covered, v_cash_total
     FROM public.transactions
     WHERE loan_id = p_loan_id;
 
     UPDATE public.loans
     SET
       current_balance = v_loan.original_amount - v_cash_total,
-      remaining_installments = coalesce(v_loan.total_installments, 0) - v_installment_count
+      remaining_installments = coalesce(v_loan.total_installments, 0) - v_installments_covered
     WHERE id = p_loan_id;
   END IF;
 END;
@@ -527,6 +543,7 @@ DECLARE
   v_existing public.loan_payments%ROWTYPE;
   v_result public.loan_payments%ROWTYPE;
   v_installment_number INTEGER;
+  v_installments_covered BIGINT := 0;
   v_opening_principal NUMERIC;
   v_payment NUMERIC;
   v_interest NUMERIC;
@@ -577,16 +594,20 @@ BEGIN
       v_loan.id;
   END IF;
 
+  SELECT coalesce(sum(installments_covered), 0)
+  INTO v_installments_covered
+  FROM public.loan_payments
+  WHERE loan_id = v_loan.id
+    AND payment_kind IN ('installment', 'catch_up')
+    AND id IS DISTINCT FROM v_existing.id;
+
   IF v_transaction.installment_number IS NOT NULL
     AND v_transaction.installment_number > 0 THEN
     v_installment_number := v_transaction.installment_number;
   ELSIF v_existing.id IS NOT NULL AND v_existing.loan_id = v_loan.id THEN
     v_installment_number := v_existing.installment_number;
   ELSE
-    SELECT coalesce(max(installment_number), 0) + 1 INTO v_installment_number
-    FROM public.loan_payments
-    WHERE loan_id = v_loan.id
-      AND payment_kind = 'installment';
+    v_installment_number := v_installments_covered + 1;
   END IF;
 
   IF v_loan.total_installments IS NOT NULL
@@ -613,9 +634,12 @@ BEGIN
   )
   INTO v_opening_principal FROM public.loan_payments
   WHERE loan_id = v_loan.id
-    AND payment_kind = 'installment'
-    AND installment_number < v_installment_number
-    AND id IS DISTINCT FROM v_existing.id;
+    AND id IS DISTINCT FROM v_existing.id
+    AND (
+      (payment_kind = 'installment' AND installment_number < v_installment_number)
+      OR (payment_kind IN ('catch_up', 'balance_adjustment')
+        AND payment_date <= v_transaction.charge_date)
+    );
 
   v_payment := round(abs(v_transaction.total_amount), 2);
   IF v_loan.interest_type = 'fixed' THEN
@@ -637,13 +661,13 @@ BEGIN
     loan_id, transaction_id, installment_number, payment_date,
     payment_amount, principal_amount, interest_amount,
     annual_interest_rate, source_kind, notes,
-    payment_kind, other_amount, balance_adjustment_amount
+    payment_kind, installments_covered, other_amount, balance_adjustment_amount
   ) VALUES (
     v_loan.id, v_transaction.id, v_installment_number,
     v_transaction.charge_date, v_payment, v_principal, v_interest,
     v_loan.interest_rate, 'existing_transaction',
     'Generated from an actual loan-linked ledger transaction',
-    'installment', 0, 0
+    'installment', 1, 0, 0
   )
   ON CONFLICT (transaction_id) DO UPDATE SET
     loan_id = EXCLUDED.loan_id,
@@ -655,6 +679,7 @@ BEGIN
     annual_interest_rate = EXCLUDED.annual_interest_rate,
     source_kind = EXCLUDED.source_kind,
     payment_kind = 'installment',
+    installments_covered = 1,
     other_amount = 0,
     balance_adjustment_amount = 0,
     updated_at = timezone('utc'::text, now())
@@ -872,8 +897,7 @@ DECLARE
   v_existing public.loan_payments%ROWTYPE;
   v_transaction_id BIGINT;
   v_payment_id BIGINT;
-  v_paid_count BIGINT := 0;
-  v_max_installment INTEGER := 0;
+  v_covered_count BIGINT := 0;
   v_precise_balance NUMERIC(24, 10) := 0;
   v_refreshed_balance NUMERIC := 0;
   v_refreshed_remaining INTEGER := 0;
@@ -892,13 +916,12 @@ BEGIN
     AND installment_number = p_expected_installment_number
   FOR UPDATE;
   IF FOUND THEN
-    SELECT count(*), coalesce(max(installment_number), 0)
-    INTO v_paid_count, v_max_installment
+    SELECT coalesce(sum(installments_covered), 0)
+    INTO v_covered_count
     FROM public.loan_payments
     WHERE loan_id = p_loan_id
-      AND payment_kind = 'installment';
-    IF v_max_installment <> v_paid_count
-      OR v_existing.installment_number <> v_paid_count THEN
+      AND payment_kind IN ('installment', 'catch_up');
+    IF v_existing.installment_number <> v_covered_count THEN
       RAISE EXCEPTION 'Loan % existing installment is not the latest accounting row', p_loan_id;
     END IF;
     IF p_expected_due_date > v_today THEN
@@ -968,26 +991,27 @@ BEGIN
   END IF;
 
   SELECT
-    count(*) FILTER (WHERE payment_kind = 'installment'),
-    coalesce(max(installment_number) FILTER (WHERE payment_kind = 'installment'), 0),
+    coalesce(sum(installments_covered) FILTER (
+      WHERE payment_kind IN ('installment', 'catch_up')
+    ), 0),
     round(greatest(
       v_loan.original_amount
         - coalesce(sum(principal_amount), 0)
         - coalesce(sum(balance_adjustment_amount), 0),
       0
     ), 10)
-  INTO v_paid_count, v_max_installment, v_precise_balance
+  INTO v_covered_count, v_precise_balance
   FROM public.loan_payments WHERE loan_id = p_loan_id;
-  IF v_max_installment <> v_paid_count THEN
-    RAISE EXCEPTION 'Loan % payment installments are not contiguous', p_loan_id;
+  IF v_covered_count > v_loan.total_installments THEN
+    RAISE EXCEPTION 'Loan % payment coverage exceeds total installments', p_loan_id;
   END IF;
-  IF v_loan.remaining_installments <> v_loan.total_installments - v_paid_count THEN
+  IF v_loan.remaining_installments <> v_loan.total_installments - v_covered_count THEN
     RAISE EXCEPTION 'Loan % remaining-installment summary has drifted', p_loan_id;
   END IF;
-  IF p_expected_installment_number <> v_paid_count + 1
+  IF p_expected_installment_number <> v_covered_count + 1
     OR p_expected_installment_number > v_loan.total_installments THEN
     RAISE EXCEPTION 'Loan % expected installment % but received %',
-      p_loan_id, v_paid_count + 1, p_expected_installment_number;
+      p_loan_id, v_covered_count + 1, p_expected_installment_number;
   END IF;
   IF p_payment_amount IS NULL OR round(p_payment_amount, 2) <= 0
     OR p_payment_amount <> round(p_payment_amount, 2)
@@ -1024,13 +1048,13 @@ BEGIN
   INSERT INTO public.loan_payments (
     loan_id, transaction_id, installment_number, payment_date, payment_amount,
     principal_amount, interest_amount, annual_interest_rate, source_kind, notes,
-    payment_kind, other_amount, balance_adjustment_amount
+    payment_kind, installments_covered, other_amount, balance_adjustment_amount
   ) VALUES (
     v_loan.id, v_transaction_id, p_expected_installment_number,
     p_expected_due_date, p_payment_amount, p_principal_amount, p_interest_amount,
     p_annual_interest_rate, 'generated',
     'Generated automatically from loans.next_payment_date',
-    'installment', 0, 0
+    'installment', 1, 0, 0
   ) RETURNING id INTO v_payment_id;
 
   SELECT current_balance, remaining_installments

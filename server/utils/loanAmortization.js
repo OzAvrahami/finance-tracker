@@ -120,9 +120,13 @@ const summarizeLoanPayments = ({ originalAmount, totalInstallments, payments }) 
   );
   const balance = original > principalReduction ? original - principalReduction : 0n;
   const balanceCents = roundDivide(balance, pow10(scale - 2));
-  const installmentCount = payments.filter(
-    (payment) => (payment.paymentKind ?? 'installment') === 'installment',
-  ).length;
+  const installmentCount = payments.reduce((total, payment) => {
+    const paymentKind = payment.paymentKind ?? 'installment';
+    if (paymentKind !== 'installment' && paymentKind !== 'catch_up') return total;
+    const covered = payment.installmentsCovered
+      ?? (paymentKind === 'installment' ? 1 : 0);
+    return total + Number(covered);
+  }, 0);
 
   return {
     currentBalance: formatScaled(balanceCents, 2),
