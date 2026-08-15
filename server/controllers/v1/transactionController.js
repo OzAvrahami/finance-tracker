@@ -14,7 +14,12 @@ const schema = z.object({
   original_amount: z.number().positive().optional(),
   exchange_rate: z.number().positive().optional(),
   notes: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(
+    z.string()
+      .trim()
+      .min(1, 'Tags must not be empty')
+      .refine(tag => !tag.includes(','), 'Tags must not contain commas'),
+  ).optional(),
   external_id: z.string().max(255).optional(),
   dry_run: z.boolean().optional(),
 });
@@ -45,7 +50,7 @@ async function createTransaction(req, res) {
     notes, tags, external_id, dry_run,
   } = parsed.data;
 
-  const safeTags = Array.isArray(tags) ? tags : [];
+  const serializedTags = serializeTags(tags);
 
   let duplicateInfo = null;
   if (external_id) {
@@ -128,7 +133,7 @@ async function createTransaction(req, res) {
     ...(original_amount !== undefined && { original_amount }),
     ...(exchange_rate !== undefined && { exchange_rate }),
     ...(notes !== undefined && { notes }),
-    ...(safeTags.length > 0 && { tags: safeTags }),
+    ...(serializedTags !== null && { tags: serializedTags }),
     ...(external_id !== undefined && { external_id }),
   };
 
@@ -187,4 +192,9 @@ async function createTransaction(req, res) {
   });
 }
 
-module.exports = { createTransaction };
+function serializeTags(tags) {
+  if (!Array.isArray(tags) || tags.length === 0) return null;
+  return tags.join(',');
+}
+
+module.exports = { createTransaction, serializeTags };

@@ -6,8 +6,8 @@
 - Target first formally tracked baseline: **v0.9.0**.
 - The baseline has not been tagged or released.
 - Repository HEAD observed during the documentation audit: `657e22a`.
-- Repository migration history currently reaches Migration 015.
-- Production migration state must be verified independently; repository migration files do not prove database application state.
+- Repository migration history currently reaches Migration 016.
+- A read-only production catalog verification on 2026-08-15 confirmed the expected repository-era objects through Migration 015. Migration 016 was subsequently applied and independently verified read-only. No Finance Tracker applied-migration ledger exists, so these findings are object-state evidence rather than an authoritative execution history.
 
 The application is mature and operational across its principal product areas, but it remains pre-1.0 while release hygiene, database reproducibility, and several architectural boundaries are formalized.
 
@@ -52,13 +52,13 @@ The application is mature and operational across its principal product areas, bu
 - Authentication is present, but financial data has no per-user row-ownership isolation.
 - Runtime, environment-variable, migration, and deployment contracts need a single maintained operational specification.
 - Package versions currently do not represent the planned formal baseline.
-- The external transaction API's tags representation should be verified against the deployed schema before it is treated as stable.
+- Transaction tags remain comma-separated TEXT. External v1 requests accept `string[]` and serialize explicitly; commas inside an individual tag are unsupported because the storage format has no escape convention.
 
 ## Repository versus production state
 
-The repository documents intended code and schema. It does not establish:
+The repository documents intended code and schema. Production was verified read-only for expected object presence through Migration 015, then Migration 016 was applied and independently verified. The repository still does not establish:
 
-- which migrations are currently applied to any external database;
+- an authoritative ordered record of which migrations were applied to any external database;
 - which commit is currently deployed;
 - whether scheduler/deployment secrets are configured; or
 - whether private operational repair scripts have been executed.
@@ -68,13 +68,14 @@ Those facts require an external deployment and database verification before rele
 ## Baseline readiness checklist
 
 - [x] Create canonical README, changelog, status, roadmap, architecture, and decision documentation.
-- [ ] Verify the actual production migration level and record it outside schema assumptions.
+- [x] Verify and record production object state through Migration 015 independently of repository assumptions.
+- [x] Apply Migration 016 and independently verify its production object state.
 - [ ] Run and record the complete client test suite.
 - [ ] Run and record client lint.
 - [ ] Run and record the client production build.
 - [ ] Run and record the complete server test suite.
 - [ ] Normalize and document the effective Node/runtime contract.
-- [ ] Verify the external transaction API tags representation end to end.
+- [x] Verify and canonicalize the external transaction API tags representation in repository code and schema history.
 - [ ] Decide how package versions should align with the planned baseline.
 - [ ] Confirm private production audit, backup, and repair artifacts are excluded from the release commit.
 - [ ] Review known partial-mutation and security boundaries for baseline acceptance.

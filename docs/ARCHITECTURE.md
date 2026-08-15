@@ -191,7 +191,7 @@ This reduces transferred data and avoids offset drift as transaction history gro
 
 ## Import and external ingestion
 
-Spreadsheet import supports known bank/card profiles, preview, categorization, and accepted-row persistence. The external v1 API validates a simpler transaction payload, supports external-ID duplicate detection, and resolves selected reference data.
+Spreadsheet import supports known bank/card profiles, preview, categorization, and accepted-row persistence. The external v1 API validates a simpler transaction payload, supports external-ID duplicate detection, and resolves selected reference data. Its public request accepts `tags` as `string[]`; Node validates each value and explicitly serializes the array to the existing comma-separated `transactions.tags` TEXT representation. Commas inside one tag are unsupported because this storage model has no escaping convention.
 
 These are distinct ingestion paths. They do not automatically inherit every item, LEGO, loan-payment, keyword-learning, and installment side effect of Add Transaction.
 
@@ -215,10 +215,12 @@ The application is effectively single-user. Financial tables do not contain a pe
 
 Ordered migrations in `server/migrations/` are schema history. `server/full_schema.sql` is the consolidated intended-schema reference.
 
-There is currently no canonical repository migration runner or applied-migration ledger. Consequently:
+Migration 016 canonicalizes three external-ingestion prerequisites that existed in production before they entered repository history: nullable `transactions.external_id`, its partial unique index, and `get_unique_tags()`. The canonical autocomplete function is a `SECURITY INVOKER` read RPC executable directly only by the service-role backend.
+
+There is currently no canonical repository migration runner or applied-migration ledger. A read-only production catalog verification on 2026-08-15 confirmed expected object state through Migration 015; Migration 016 was subsequently applied and independently verified read-only. Neither verification created an execution ledger. Consequently:
 
 - repository history can establish what a migration intends;
-- it cannot establish what is applied to production;
+- repository history alone cannot establish what is applied to production;
 - ordered migration testing remains necessary; and
 - external database state must be verified before release or repair work.
 

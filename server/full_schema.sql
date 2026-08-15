@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   payment_method          CHARACTER VARYING,          -- legacy field, superseded by payment_source_id
   payment_source          TEXT,                       -- legacy field, superseded by payment_source_id
   tags                    TEXT,
+  external_id             TEXT,
   notes                   TEXT,
   created_at              TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at              TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
@@ -137,6 +138,9 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 CREATE INDEX idx_transactions_loan_id ON transactions (loan_id);
 CREATE INDEX idx_transactions_payment_source_id ON transactions (payment_source_id);
+CREATE UNIQUE INDEX idx_transactions_external_id
+  ON transactions (external_id)
+  WHERE external_id IS NOT NULL;
 
 -- Added by migrations/003_transaction_pagination_and_aggregates.sql
 -- Backs the default list branch: ORDER BY transaction_date DESC, id DESC, its
@@ -1790,7 +1794,8 @@ CREATE INDEX idx_tasks_category ON tasks (category);
 
 -- =============================================
 -- SECTION 7: READ-ONLY FUNCTIONS (RPC)
--- Source: migrations/003_transaction_pagination_and_aggregates.sql
+-- Sources: migrations/003_transaction_pagination_and_aggregates.sql and
+-- migrations/016_external_transaction_contract.sql
 --
 -- These are the authoritative definitions for transaction filtering, sorting
 -- and financial aggregation. All are read-only (STABLE, or IMMUTABLE for the
@@ -1799,9 +1804,26 @@ CREATE INDEX idx_tasks_category ON tasks (category);
 -- The bodies below are kept byte-identical to the migration. If you change one,
 -- change both — this file must stay a standalone reproducible schema.
 --
--- Pre-existing, defined outside this file:
---   get_unique_tags()  -> distinct tag list for autocomplete.
 -- =============================================
+
+-- Canonical comma-separated TEXT tag autocomplete. The API server is the only
+-- direct caller; SECURITY INVOKER means this function grants no table access.
+CREATE OR REPLACE FUNCTION public.get_unique_tags()
+RETURNS TABLE(tag TEXT)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT DISTINCT
+    pg_catalog.unnest(pg_catalog.string_to_array(t.tags, ',')) AS tag
+  FROM public.transactions AS t;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_unique_tags()
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_unique_tags()
+  TO service_role;
 
 -- 7.1 SEARCH PATTERN (single owner of the escaping rule)
 -- =============================================

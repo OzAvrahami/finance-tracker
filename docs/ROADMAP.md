@@ -7,10 +7,10 @@ This roadmap is organized by outcomes rather than speculative dates. It distingu
 The first formal baseline is planned but not yet tagged or released.
 
 - Complete the canonical documentation bootstrap.
-- Verify the actual database migration state independently of repository files.
+- Preserve the independently verified Migration 016 production contract in baseline release checks.
 - Run and record client tests, lint, production build, and server tests.
 - Normalize the effective Node.js runtime expectation around the requirements of Vite 7.
-- Verify the external transaction API tags representation against the current database contract.
+- Keep the now-canonical external transaction tag contract covered by regression tests.
 - Decide how root, client, and server package versions should represent the baseline.
 - Confirm private production audit/repair artifacts and secrets are excluded.
 - Establish a repeatable baseline review, changelog, tag, and release process.

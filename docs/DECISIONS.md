@@ -271,3 +271,21 @@ Prepare `v0.9.0` as the first formally tracked baseline. Record earlier work as 
 ### Consequences
 
 `v0.9.0` remains unreleased until readiness checks, documentation, and baseline review are complete. Future releases should keep tags, changelog entries, and package metadata deliberate and consistent.
+
+## D-016 — Preserve comma-separated transaction tags at the v0.9.0 boundary
+
+**Status:** Accepted
+
+**Date:** 2026-08-15
+
+### Context
+
+`transactions.tags` and the existing autocomplete function use comma-separated TEXT, while the external v1 API accepts an array of tag strings. Passing that array through to a TEXT column relied on undocumented PostgREST coercion, and the prerequisite column, index, and function were not represented in migration history.
+
+### Decision
+
+Keep the established TEXT storage for the planned baseline. Validate external tag values, serialize the array explicitly with commas in Node, and canonicalize `external_id`, its partial unique index, and the service-only `get_unique_tags()` RPC in Migration 016.
+
+### Consequences
+
+External ingestion has a deterministic database payload without a broader tag-model migration. Individual tag values cannot contain commas, duplicates retain their input order, and any future normalized tag model will require an explicit migration and API compatibility plan.

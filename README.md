@@ -66,7 +66,7 @@ Node handles HTTP validation, orchestration, pricing and amortization inputs. Po
 ```text
 client/                 React SPA, Finance v3 UI, tests, and Vercel SPA config
 server/                 Express API, business services, migrations, and server tests
-server/migrations/      Ordered schema history, currently 001 through 015
+server/migrations/      Ordered schema history, currently 001 through 016
 server/full_schema.sql  Consolidated schema reference
 docs/                   Canonical documentation and a retained read-only security audit
 .github/workflows/      Daily due-loan scheduler
@@ -146,7 +146,9 @@ The checked-in [server/.env.example](server/.env.example) contains the core serv
 
 ## Database and migrations
 
-Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 015. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema.
+Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 016. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema.
+
+A read-only production catalog verification on 2026-08-15 confirmed the repository-era objects expected through Migration 015, plus the older `transactions.external_id`, partial unique index, and `get_unique_tags()` prerequisites. Migration 016 brought those previously unversioned prerequisites into repository history and was subsequently applied and independently verified read-only. This verifies the resulting object state, not an authoritative migration execution ledger.
 
 Important limitations:
 
@@ -226,6 +228,7 @@ Repository configuration proves that the scheduler workflow exists; deployment s
 - Manual and automatic loan-payment mutations use PostgreSQL RPCs for atomicity.
 - Item, LEGO, keyword, import, and shopping workflows still contain multi-call boundaries documented in [Architecture](docs/ARCHITECTURE.md).
 - Import is a separate ingestion path and does not automatically inherit every Add Transaction side effect.
+- External v1 requests accept tags as an array, which the server serializes to the existing comma-separated `transactions.tags` TEXT representation. Individual tag values cannot contain commas.
 - Finance v3 is the current UI architecture; Finance v2 is historical/intermediate.
 
 ## Documentation

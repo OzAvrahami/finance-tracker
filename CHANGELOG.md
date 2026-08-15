@@ -11,14 +11,17 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Added
 
 - Canonical project documentation for architecture, current status, roadmap, decisions, and release history.
+- Migration 016 to canonicalize the external transaction API's `external_id` column, partial unique index, and tag-autocomplete function in repository schema history.
+- Focused external-ingestion regression coverage for tag serialization, dry runs, and external-ID duplicate handling.
 
 ### Changed
 
-- No recorded product changes yet.
+- External v1 tag arrays are explicitly serialized to the application's comma-separated TEXT representation before persistence.
+- The canonical `get_unique_tags()` privilege boundary is service-role only rather than broadly executable through the exposed schema.
 
 ### Fixed
 
-- No recorded fixes yet.
+- Added previously unversioned production prerequisites for the external transaction API to `full_schema.sql` and ordered migration history.
 
 ### Removed
 
