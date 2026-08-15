@@ -68,7 +68,7 @@ client/                 React SPA, Finance v3 UI, tests, and Vercel SPA config
 server/                 Express API, business services, migrations, and server tests
 server/migrations/      Ordered schema history, currently 001 through 015
 server/full_schema.sql  Consolidated schema reference
-docs/                   Project documentation and retained migration audit artifacts
+docs/                   Canonical documentation and a retained read-only security audit
 .github/workflows/      Daily due-loan scheduler
 ```
 

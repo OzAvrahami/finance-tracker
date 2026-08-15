@@ -1,10 +1,10 @@
 -- =============================================
 -- FULL DATABASE SCHEMA - FINANCE TRACKER
--- Last updated: 2026-08-13
--- Source of truth: docs/db_snapshot.md
+-- Consolidated reference synchronized with repository migration history.
+-- Ordered schema history lives in server/migrations/.
+-- This file does not prove the state of an external database.
 -- =============================================
 -- Table creation order respects FK dependencies.
--- Only constraints confirmed by the DB snapshot are included.
 -- RLS policies are included for the original 5 tables only.
 -- =============================================
 
