@@ -10,6 +10,7 @@ const {
   normalizeGlobalDiscountSource,
   roundDivide,
 } = require('../utils/transactionPricing');
+const { normalizeLoanHandling } = require('../utils/manualLoanPayment');
 const {
   createTransactionWithLoanPayment,
   updateTransactionWithLoanPayment,
@@ -203,7 +204,7 @@ const synchronizeTransactionLegoSets = async ({
 
 exports.createTransaction = async (req, res) => {
   try {
-    const { transaction, items } = req.body;
+    const { transaction, items, loan_handling: loanHandling } = req.body;
     const transactionItems = Array.isArray(items) ? items : [];
     const pricing = buildTransactionPricing(
       transactionItems,
@@ -220,6 +221,7 @@ exports.createTransaction = async (req, res) => {
       && transaction.loan_id !== undefined
       && transaction.loan_id !== '';
     const createsInstallmentSiblings = installmentCount > 1 && !isLoanLinked;
+    const normalizedLoanHandling = normalizeLoanHandling({ transaction, loanHandling });
     const fullAmount = Number(transaction.total_amount);
     const perAmount = createsInstallmentSiblings
       ? Math.round((fullAmount / installmentCount) * 100) / 100
@@ -235,12 +237,14 @@ exports.createTransaction = async (req, res) => {
     });
 
     let transactionId;
+    let accountingResult = null;
     if (isLoanLinked) {
-      transactionId = await createTransactionWithLoanPayment(
+      accountingResult = await createTransactionWithLoanPayment(
         supabase,
         mainTransaction,
-        transaction.record_loan_payment !== false,
+        normalizedLoanHandling.payment,
       );
+      transactionId = accountingResult.transaction.id;
     } else {
       const { data: transData, error: transError } = await supabase
         .from('transactions')
@@ -333,7 +337,11 @@ exports.createTransaction = async (req, res) => {
       if (siblingsError) throw siblingsError;
     }
 
-    res.status(201).json({ message: 'Transaction saved successfully', id: transactionId });
+    res.status(201).json({
+      message: 'Transaction saved successfully',
+      id: transactionId,
+      ...(accountingResult || {}),
+    });
 
   } catch (error) {
     console.error("Create Transaction Error:", error);
@@ -469,7 +477,29 @@ exports.getTransactionById = async (req, res) => {
       .single();
 
     if (error) throw error;
-    res.status(200).json(data);
+    const { data: loanPayment, error: loanPaymentError } = await supabase
+      .from('loan_payments')
+      .select([
+        'id',
+        'loan_id',
+        'transaction_id',
+        'installment_number',
+        'payment_date',
+        'payment_amount',
+        'principal_amount',
+        'interest_amount',
+        'other_amount',
+        'balance_adjustment_amount',
+        'annual_interest_rate',
+        'source_kind',
+        'payment_kind',
+        'installments_covered',
+      ].join(','))
+      .eq('transaction_id', id)
+      .maybeSingle();
+
+    if (loanPaymentError) throw loanPaymentError;
+    res.status(200).json({ ...data, loan_payment: loanPayment || null });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -479,7 +509,7 @@ exports.getTransactionById = async (req, res) => {
 exports.updateTransaction = async (req, res) => {
   try {
     const { id } = req.params;
-    const { transaction, items } = req.body;
+    const { transaction, items, loan_handling: loanHandling } = req.body;
     const transactionItems = Array.isArray(items) ? items : [];
     const pricing = buildTransactionPricing(
       transactionItems,
@@ -509,17 +539,16 @@ exports.updateTransaction = async (req, res) => {
     if (!Object.hasOwn(transaction, 'installment_count')) {
       delete updatedTransaction.installment_count;
     }
+    const normalizedLoanHandling = normalizeLoanHandling({ transaction, loanHandling });
 
     // The ledger mutation and any authoritative existing_transaction payment
     // are owned by one PostgreSQL function invocation. This also covers moves
     // between loans and transitions to/from a non-loan transaction.
-    await updateTransactionWithLoanPayment(
+    const accountingResult = await updateTransactionWithLoanPayment(
       supabase,
       id,
       updatedTransaction,
-      Object.hasOwn(transaction, 'record_loan_payment')
-        ? transaction.record_loan_payment !== false
-        : null,
+      normalizedLoanHandling.payment,
     );
 
     // B. Sync Items: The safest strategy is Delete All -> Insert New
@@ -549,7 +578,10 @@ exports.updateTransaction = async (req, res) => {
       pricing,
     });
 
-    res.status(200).json({ message: 'Transaction updated successfully' });
+    res.status(200).json({
+      message: 'Transaction updated successfully',
+      ...accountingResult,
+    });
 
   } catch (error) {
     console.error("Update Error:", error);

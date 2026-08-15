@@ -3,6 +3,7 @@ import { createTransaction, updateTransaction, getTransactionById, getTags, getL
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTransactionTotalValue } from '../utils/transactionPricing';
 import { invalidateLegoCollection } from '../utils/legoCollectionInvalidation';
+import { addCalendarMonthIso, validateManualLoanPayment } from '../utils/manualLoanPayment';
 
 let nextItemKey = 0;
 
@@ -42,6 +43,14 @@ const useTransactionForm = () => {
   const [loans, setLoans] = useState([]);
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [loanHandling, setLoanHandling] = useState({
+    mode: 'link_only',
+    principal_amount: '',
+    interest_amount: '',
+    other_amount: '0',
+    next_scheduled_due_date: '',
+  });
+  const [loanPaymentError, setLoanPaymentError] = useState('');
 
   const [transaction, setTransaction] = useState({
     transaction_date: new Date().toISOString().split('T')[0],
@@ -126,6 +135,19 @@ const useTransactionForm = () => {
             installment_count: 1,
             notes: data.notes || ''
           });
+          setLoanHandling(data.loan_payment ? {
+            mode: 'repayment',
+            principal_amount: String(data.loan_payment.principal_amount ?? ''),
+            interest_amount: String(data.loan_payment.interest_amount ?? ''),
+            other_amount: String(data.loan_payment.other_amount ?? 0),
+            next_scheduled_due_date: data.loan_payment.next_scheduled_due_date || '',
+          } : {
+            mode: 'link_only',
+            principal_amount: '',
+            interest_amount: '',
+            other_amount: '0',
+            next_scheduled_due_date: '',
+          });
 
           if (data.transaction_items?.length > 0) {
             setItems(data.transaction_items.map(withItemKey));
@@ -165,6 +187,17 @@ const useTransactionForm = () => {
   // --- Handlers ---
   const handleTransactionChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'loan_id' && String(value) !== String(transaction.loan_id)) {
+      setLoanHandling({
+        mode: 'link_only',
+        principal_amount: '',
+        interest_amount: '',
+        other_amount: '0',
+        next_scheduled_due_date: '',
+      });
+      setLoanPaymentError('');
+    }
 
     setTransaction(prev => {
       const updated = { ...prev, [name]: value };
@@ -220,6 +253,31 @@ const useTransactionForm = () => {
     )));
   };
 
+  const handleLoanHandlingModeChange = (mode) => {
+    const selectedLoan = loans.find(
+      (loan) => String(loan.id) === String(transaction.loan_id),
+    );
+    setLoanHandling((previous) => ({
+      ...previous,
+      mode,
+      ...(mode === 'link_only' ? {
+        principal_amount: '',
+        interest_amount: '',
+        other_amount: '0',
+      } : {
+        next_scheduled_due_date: previous.next_scheduled_due_date
+          || addCalendarMonthIso(selectedLoan?.next_payment_date),
+      }),
+    }));
+    setLoanPaymentError('');
+  };
+
+  const handleLoanPaymentChange = (event) => {
+    const { name, value } = event.target;
+    setLoanHandling((previous) => ({ ...previous, [name]: value }));
+    setLoanPaymentError('');
+  };
+
   const addItem = () => setItems((currentItems) => [
     ...currentItems,
     withItemKey({ item_name: '', quantity: 1, price_per_unit: 0, set_number: '', theme: '', brand: 'LEGO', acquisition_type: 'purchase', tags: '', discount_type: 'amount', discount_value: 0 }),
@@ -249,6 +307,25 @@ const useTransactionForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const selectedLoan = loans.find((loan) => String(loan.id) === String(transaction.loan_id));
+    const repaymentSelected = isLoanCategory()
+      && selectedLoan?.calculation_mode === 'loan_payments'
+      && loanHandling.mode === 'repayment';
+    if (repaymentSelected) {
+      const validationError = validateManualLoanPayment({
+        total: transaction.total_amount,
+        principal: loanHandling.principal_amount,
+        interest: loanHandling.interest_amount,
+        other: loanHandling.other_amount,
+        nextScheduledDueDate: loanHandling.next_scheduled_due_date,
+        requiresNextScheduledDate: Number(selectedLoan.remaining_installments) > 1
+          && Number(loanHandling.principal_amount) < Number(selectedLoan.current_balance),
+      });
+      if (validationError) {
+        setLoanPaymentError(validationError);
+        return;
+      }
+    }
     try {
       const payload = {
         transaction: {
@@ -259,6 +336,17 @@ const useTransactionForm = () => {
             installment_count: parseInt(transaction.installment_count) || 1,
         },
         items: items.map(withoutItemKey),
+        ...(transaction.loan_id ? {
+          loan_handling: {
+            mode: repaymentSelected ? 'repayment' : 'link_only',
+            ...(repaymentSelected ? {
+              principal_amount: loanHandling.principal_amount,
+              interest_amount: loanHandling.interest_amount,
+              other_amount: loanHandling.other_amount,
+              next_scheduled_due_date: loanHandling.next_scheduled_due_date || null,
+            } : {}),
+          },
+        } : {}),
       };
 
       if (isEditMode) {
@@ -298,6 +386,14 @@ const useTransactionForm = () => {
         notes: '',
       });
       setItems([]);
+      setLoanHandling({
+        mode: 'link_only',
+        principal_amount: '',
+        interest_amount: '',
+        other_amount: '0',
+        next_scheduled_due_date: '',
+      });
+      setLoanPaymentError('');
 
     } catch (error) {
       console.error('Error saving transaction:', error);
@@ -337,6 +433,8 @@ const useTransactionForm = () => {
     categories,
     paymentSources,
     loans,
+    loanHandling,
+    loanPaymentError,
     legoThemes,
     availableTags,
     isEditMode,
@@ -351,6 +449,8 @@ const useTransactionForm = () => {
 
     // Handlers
     handleTransactionChange,
+    handleLoanHandlingModeChange,
+    handleLoanPaymentChange,
     handleItemChange,
     addItem,
     clearItems,

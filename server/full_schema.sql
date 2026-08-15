@@ -173,6 +173,9 @@ CREATE TABLE IF NOT EXISTS loan_payments (
   installments_covered  INTEGER NOT NULL DEFAULT 1,
   other_amount          NUMERIC(24, 10) NOT NULL DEFAULT 0,
   balance_adjustment_amount NUMERIC(24, 10) NOT NULL DEFAULT 0,
+  scheduled_due_date    DATE,
+  next_scheduled_due_date DATE,
+  auto_payment_enabled_before BOOLEAN,
   notes                 TEXT,
   created_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now()),
@@ -375,7 +378,7 @@ CREATE POLICY "Public Access Budgets"         ON budgets          FOR ALL USING 
 -- =============================================
 -- SECTION 5A: LOAN ACCOUNTING FUNCTIONS/TRIGGERS
 -- Source: migrations/008_loan_payment_accounting.sql through
--- migrations/012_irregular_loan_payment_accounting.sql
+-- migrations/015_manual_loan_repayments.sql
 -- =============================================
 
 CREATE OR REPLACE FUNCTION public.refresh_loan_summary(p_loan_id BIGINT)
@@ -1112,6 +1115,645 @@ GRANT EXECUTE ON FUNCTION public.create_due_loan_payment(
 ) TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.loan_payments TO service_role;
 GRANT USAGE, SELECT ON SEQUENCE public.loan_payments_id_seq TO service_role;
+
+
+-- =============================================
+-- MANUAL LOAN REPAYMENTS
+-- Source: migration 015_manual_loan_repayments.sql
+-- =============================================
+
+-- A manual installment can post on a different day than its contractual due
+-- date. Persist the schedule state consumed by that payment so create, edit,
+-- move, unlink and delete operations are deterministic and reversible.
+CREATE OR REPLACE FUNCTION public.sync_manual_loan_payment_from_transaction(
+  p_transaction_id BIGINT,
+  p_loan_payment JSONB
+)
+RETURNS public.loan_payments
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_transaction public.transactions%ROWTYPE;
+  v_loan public.loans%ROWTYPE;
+  v_existing public.loan_payments%ROWTYPE;
+  v_result public.loan_payments%ROWTYPE;
+  v_old_loan_id BIGINT;
+  v_old_scheduled_due_date DATE;
+  v_old_auto_payment_enabled BOOLEAN;
+  v_scheduled_due_date DATE;
+  v_next_scheduled_due_date DATE;
+  v_auto_payment_enabled_before BOOLEAN;
+  v_has_later_covered BOOLEAN := false;
+  v_installment_number INTEGER;
+  v_covered_without_existing BIGINT := 0;
+  v_current_covered BIGINT := 0;
+  v_precise_balance NUMERIC(24, 10) := 0;
+  v_balance_after NUMERIC(24, 10) := 0;
+  v_remaining_after INTEGER := 0;
+  v_payment NUMERIC(24, 10);
+  v_principal NUMERIC(24, 10);
+  v_interest NUMERIC(24, 10);
+  v_other NUMERIC(24, 10);
+  v_payment_date DATE;
+BEGIN
+  SELECT * INTO v_transaction
+  FROM public.transactions
+  WHERE id = p_transaction_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transaction % does not exist', p_transaction_id;
+  END IF;
+
+  SELECT * INTO v_existing
+  FROM public.loan_payments
+  WHERE transaction_id = p_transaction_id
+  FOR UPDATE;
+
+  IF v_existing.id IS NOT NULL
+    AND (v_existing.payment_kind <> 'installment'
+      OR v_existing.source_kind NOT IN ('manual', 'existing_transaction')) THEN
+    RAISE EXCEPTION
+      'Transaction % is linked to protected %/% loan payment %',
+      p_transaction_id, v_existing.source_kind, v_existing.payment_kind, v_existing.id;
+  END IF;
+
+  IF v_existing.id IS NOT NULL THEN
+    SELECT EXISTS (
+      SELECT 1
+      FROM public.loan_payments later
+      WHERE later.loan_id = v_existing.loan_id
+        AND later.id <> v_existing.id
+        AND later.payment_kind IN ('installment', 'catch_up')
+        AND (
+          (later.payment_kind = 'installment'
+            AND later.installment_number > v_existing.installment_number)
+          OR later.payment_date > v_existing.payment_date
+        )
+    ) INTO v_has_later_covered;
+  END IF;
+
+  -- A NULL payment specification is the explicit link-only mode. If this was
+  -- previously a manual repayment, reverse only that authoritative entry.
+  IF p_loan_payment IS NULL THEN
+    IF v_existing.id IS NULL THEN
+      RETURN NULL;
+    END IF;
+
+    IF v_has_later_covered THEN
+      RAISE EXCEPTION
+        'Cannot remove installment % while later covered payments exist',
+        v_existing.installment_number;
+    END IF;
+
+    IF v_existing.source_kind <> 'manual'
+      AND v_existing.scheduled_due_date IS NULL THEN
+      RAISE EXCEPTION
+        'Cannot remove loan payment % without a reversible schedule anchor',
+        v_existing.id;
+    END IF;
+
+    v_old_loan_id := v_existing.loan_id;
+    v_old_scheduled_due_date := v_existing.scheduled_due_date;
+    v_old_auto_payment_enabled := v_existing.auto_payment_enabled_before;
+    DELETE FROM public.loan_payments
+    WHERE id = v_existing.id
+    RETURNING * INTO v_result;
+
+    UPDATE public.transactions
+    SET installment_number = NULL,
+        installment_count = NULL,
+        installments_info = NULL,
+        updated_at = timezone('utc'::text, now())
+    WHERE id = p_transaction_id;
+
+    -- Restore the exact schedule state consumed by this latest payment. This
+    -- also reopens the schedule after reversing a payment that closed a loan.
+    UPDATE public.loans
+    SET next_payment_date = CASE
+          WHEN current_balance <= 0.005 OR remaining_installments <= 0 THEN NULL
+          ELSE v_old_scheduled_due_date
+        END,
+        auto_payment_enabled = CASE
+          WHEN current_balance <= 0.005 THEN false
+          ELSE coalesce(v_old_auto_payment_enabled, auto_payment_enabled)
+        END
+    WHERE id = v_old_loan_id
+      AND NOT v_has_later_covered;
+    RETURN v_result;
+  END IF;
+
+  IF v_existing.id IS NOT NULL
+    AND v_existing.source_kind <> 'manual'
+    AND v_existing.scheduled_due_date IS NULL THEN
+    RAISE EXCEPTION
+      'Cannot edit loan payment % without a reversible schedule anchor',
+      v_existing.id;
+  END IF;
+
+  IF v_transaction.loan_id IS NULL THEN
+    RAISE EXCEPTION 'A loan is required for a manual repayment';
+  END IF;
+  IF v_transaction.movement_type <> 'expense' THEN
+    RAISE EXCEPTION 'A manual loan repayment must be an expense transaction';
+  END IF;
+
+  SELECT * INTO v_loan
+  FROM public.loans
+  WHERE id = v_transaction.loan_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Loan % does not exist', v_transaction.loan_id;
+  END IF;
+  IF v_loan.calculation_mode <> 'loan_payments' THEN
+    RAISE EXCEPTION 'Loan % is not in loan_payments mode', v_loan.id;
+  END IF;
+  IF v_existing.id IS NULL AND v_loan.status <> 'active' THEN
+    RAISE EXCEPTION 'Loan % is not active', v_loan.id;
+  END IF;
+  IF v_loan.total_installments IS NULL OR v_loan.total_installments <= 0 THEN
+    RAISE EXCEPTION 'Loan % has invalid total installments', v_loan.id;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.loan_payments
+    WHERE loan_id = v_loan.id
+      AND payment_kind = 'early_payoff'
+      AND id IS DISTINCT FROM v_existing.id
+  ) THEN
+    RAISE EXCEPTION 'Loan % has an early payoff and cannot accept an installment', v_loan.id;
+  END IF;
+
+  v_payment := round(abs(v_transaction.total_amount), 2);
+  v_principal := nullif(p_loan_payment->>'principal_amount', '')::NUMERIC;
+  v_interest := nullif(p_loan_payment->>'interest_amount', '')::NUMERIC;
+  v_other := coalesce(nullif(p_loan_payment->>'other_amount', '')::NUMERIC, 0);
+  v_payment_date := coalesce(v_transaction.charge_date, v_transaction.transaction_date);
+
+  IF v_payment <= 0
+    OR v_principal IS NULL OR v_principal < 0 OR v_principal <> round(v_principal, 2)
+    OR v_interest IS NULL OR v_interest < 0 OR v_interest <> round(v_interest, 2)
+    OR v_other < 0 OR v_other <> round(v_other, 2)
+    OR abs(v_payment - v_principal - v_interest - v_other) > 0.00000001 THEN
+    RAISE EXCEPTION 'Manual loan payment components do not reconcile for transaction %',
+      p_transaction_id;
+  END IF;
+
+  SELECT coalesce(sum(installments_covered), 0)
+  INTO v_covered_without_existing
+  FROM public.loan_payments
+  WHERE loan_id = v_loan.id
+    AND payment_kind IN ('installment', 'catch_up')
+    AND id IS DISTINCT FROM v_existing.id;
+
+  v_current_covered := v_covered_without_existing + CASE
+    WHEN v_existing.id IS NOT NULL AND v_existing.loan_id = v_loan.id THEN 1
+    ELSE 0
+  END;
+  IF v_current_covered > v_loan.total_installments
+    OR v_loan.remaining_installments
+      <> v_loan.total_installments - v_current_covered THEN
+    RAISE EXCEPTION 'Loan % installment summary has drifted', v_loan.id;
+  END IF;
+
+  IF v_existing.id IS NOT NULL AND v_existing.loan_id = v_loan.id THEN
+    v_installment_number := v_existing.installment_number;
+  ELSE
+    v_installment_number := v_covered_without_existing + 1;
+  END IF;
+  IF v_installment_number <= 0 OR v_installment_number > v_loan.total_installments THEN
+    RAISE EXCEPTION 'Invalid next installment % for loan %',
+      v_installment_number, v_loan.id;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.loan_payments duplicate_payment
+    WHERE duplicate_payment.loan_id = v_loan.id
+      AND duplicate_payment.payment_kind = 'installment'
+      AND duplicate_payment.installment_number = v_installment_number
+      AND duplicate_payment.id IS DISTINCT FROM v_existing.id
+  ) THEN
+    RAISE EXCEPTION 'Installment % already exists for loan %',
+      v_installment_number, v_loan.id;
+  END IF;
+
+  SELECT round(greatest(
+    v_loan.original_amount
+      - coalesce(sum(principal_amount), 0)
+      - coalesce(sum(balance_adjustment_amount), 0),
+    0
+  ), 10)
+  INTO v_precise_balance
+  FROM public.loan_payments
+  WHERE loan_id = v_loan.id
+    AND id IS DISTINCT FROM v_existing.id;
+  IF v_principal > v_precise_balance + 0.00000001 THEN
+    RAISE EXCEPTION 'Principal component exceeds outstanding principal for loan %', v_loan.id;
+  END IF;
+
+  IF v_existing.id IS NOT NULL
+    AND v_existing.loan_id IS DISTINCT FROM v_loan.id
+    AND v_has_later_covered THEN
+    RAISE EXCEPTION 'Cannot move installment % while later covered payments exist',
+      v_existing.installment_number;
+  END IF;
+
+  v_old_loan_id := CASE
+    WHEN v_existing.id IS NOT NULL THEN v_existing.loan_id
+    ELSE NULL
+  END;
+  v_old_scheduled_due_date := CASE
+    WHEN v_existing.id IS NOT NULL THEN v_existing.scheduled_due_date
+    ELSE NULL
+  END;
+  v_old_auto_payment_enabled := CASE
+    WHEN v_existing.id IS NOT NULL THEN v_existing.auto_payment_enabled_before
+    ELSE NULL
+  END;
+
+  IF v_existing.id IS NOT NULL
+    AND v_existing.loan_id = v_loan.id THEN
+    -- Same-payment edits retain the contractual schedule anchor, regardless
+    -- of changes to transaction_date, charge_date or component amounts.
+    v_scheduled_due_date := v_existing.scheduled_due_date;
+    v_auto_payment_enabled_before := v_existing.auto_payment_enabled_before;
+    v_next_scheduled_due_date := CASE
+      WHEN p_loan_payment ? 'next_scheduled_due_date'
+        THEN nullif(p_loan_payment->>'next_scheduled_due_date', '')::DATE
+      ELSE v_existing.next_scheduled_due_date
+    END;
+  ELSE
+    -- A new payment (or the destination side of a move) consumes the target
+    -- loan's current scheduled due date, not the transaction posting date.
+    v_scheduled_due_date := v_loan.next_payment_date;
+    v_auto_payment_enabled_before := v_loan.auto_payment_enabled;
+    v_next_scheduled_due_date := nullif(
+      p_loan_payment->>'next_scheduled_due_date', ''
+    )::DATE;
+  END IF;
+
+  v_balance_after := greatest(v_precise_balance - v_principal, 0);
+  v_remaining_after := greatest(
+    v_loan.total_installments - (v_covered_without_existing + 1),
+    0
+  )::INTEGER;
+
+  IF v_balance_after > 0.005 AND v_remaining_after > 0 THEN
+    IF v_next_scheduled_due_date IS NULL THEN
+      RAISE EXCEPTION 'Next scheduled due date is required for loan %', v_loan.id;
+    END IF;
+    IF v_scheduled_due_date IS NOT NULL
+      AND v_next_scheduled_due_date <= v_scheduled_due_date THEN
+      RAISE EXCEPTION
+        'Next scheduled due date % must be later than covered due date % for loan %',
+        v_next_scheduled_due_date, v_scheduled_due_date, v_loan.id;
+    END IF;
+  END IF;
+
+  IF v_existing.id IS NOT NULL
+    AND v_existing.loan_id = v_loan.id
+    AND v_has_later_covered
+    AND v_next_scheduled_due_date IS DISTINCT FROM v_existing.next_scheduled_due_date THEN
+    RAISE EXCEPTION
+      'Cannot change the schedule transition for installment % while later covered payments exist',
+      v_existing.installment_number;
+  END IF;
+
+  IF v_existing.id IS NULL THEN
+    INSERT INTO public.loan_payments (
+      loan_id, transaction_id, installment_number, payment_date,
+      payment_amount, principal_amount, interest_amount, annual_interest_rate,
+      source_kind, notes, payment_kind, installments_covered,
+      other_amount, balance_adjustment_amount, scheduled_due_date,
+      next_scheduled_due_date, auto_payment_enabled_before
+    ) VALUES (
+      v_loan.id, v_transaction.id, v_installment_number, v_payment_date,
+      v_payment, v_principal, v_interest, v_loan.interest_rate,
+      'manual', 'Recorded manually through Add/Edit Transaction',
+      'installment', 1, v_other, 0, v_scheduled_due_date,
+      v_next_scheduled_due_date, v_auto_payment_enabled_before
+    ) RETURNING * INTO v_result;
+  ELSE
+    UPDATE public.loan_payments
+    SET loan_id = v_loan.id,
+        installment_number = v_installment_number,
+        payment_date = v_payment_date,
+        payment_amount = v_payment,
+        principal_amount = v_principal,
+        interest_amount = v_interest,
+        annual_interest_rate = v_loan.interest_rate,
+        source_kind = 'manual',
+        notes = 'Recorded manually through Add/Edit Transaction',
+        payment_kind = 'installment',
+        installments_covered = 1,
+        other_amount = v_other,
+        balance_adjustment_amount = 0,
+        scheduled_due_date = v_scheduled_due_date,
+        next_scheduled_due_date = v_next_scheduled_due_date,
+        auto_payment_enabled_before = v_auto_payment_enabled_before,
+        updated_at = timezone('utc'::text, now())
+    WHERE id = v_existing.id
+    RETURNING * INTO v_result;
+  END IF;
+
+  UPDATE public.transactions
+  SET installment_number = v_installment_number,
+      installment_count = v_loan.total_installments,
+      installments_info = v_installment_number::text || '/' || v_loan.total_installments::text,
+      updated_at = timezone('utc'::text, now())
+  WHERE id = p_transaction_id;
+
+  IF v_old_loan_id IS NOT NULL AND v_old_loan_id IS DISTINCT FROM v_loan.id THEN
+    UPDATE public.loans
+    SET next_payment_date = CASE
+          WHEN current_balance <= 0.005 OR remaining_installments <= 0 THEN NULL
+          ELSE v_old_scheduled_due_date
+        END,
+        auto_payment_enabled = CASE
+          WHEN current_balance <= 0.005 THEN false
+          ELSE coalesce(v_old_auto_payment_enabled, auto_payment_enabled)
+        END
+    WHERE id = v_old_loan_id
+      AND NOT v_has_later_covered;
+  END IF;
+
+  -- New payments and moves apply the explicit persisted transition. Editing
+  -- the latest payment may intentionally revise that transition; ordinary
+  -- split/date edits submit the same value and cannot advance it again.
+  IF v_existing.id IS NULL
+    OR v_old_loan_id IS DISTINCT FROM v_loan.id
+    OR NOT v_has_later_covered THEN
+    UPDATE public.loans
+    SET next_payment_date = CASE
+          WHEN current_balance <= 0.005 OR remaining_installments <= 0 THEN NULL
+          ELSE v_next_scheduled_due_date
+        END,
+        auto_payment_enabled = CASE
+          WHEN current_balance <= 0.005 THEN false
+          WHEN v_existing.id IS NOT NULL
+            AND v_old_loan_id = v_loan.id
+            AND v_loan.status = 'paid'
+            THEN coalesce(v_auto_payment_enabled_before, auto_payment_enabled)
+          ELSE auto_payment_enabled
+        END
+    WHERE id = v_loan.id;
+  END IF;
+
+  RETURN v_result;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.create_transaction_with_manual_loan_payment(
+  p_transaction JSONB,
+  p_loan_payment JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_transaction_id BIGINT;
+  v_transaction JSONB;
+  v_payment JSONB;
+  v_loan JSONB;
+BEGIN
+  IF p_transaction IS NULL THEN
+    RAISE EXCEPTION 'Transaction payload is required';
+  END IF;
+  IF nullif(p_transaction->>'loan_id', '') IS NULL THEN
+    RAISE EXCEPTION 'A loan-linked transaction requires a loan';
+  END IF;
+
+  INSERT INTO public.transactions (
+    description, movement_type, category_id, total_amount, global_discount,
+    global_discount_source, payment_source_id, transaction_date, charge_date,
+    tags, loan_id, original_amount, currency, exchange_rate, installments_info,
+    installment_number, installment_count, parent_transaction_id, notes
+  ) VALUES (
+    p_transaction->>'description', p_transaction->>'movement_type',
+    nullif(p_transaction->>'category_id', '')::BIGINT,
+    (p_transaction->>'total_amount')::NUMERIC,
+    coalesce(nullif(p_transaction->>'global_discount', '')::NUMERIC, 0),
+    nullif(p_transaction->>'global_discount_source', ''),
+    nullif(p_transaction->>'payment_source_id', '')::BIGINT,
+    (p_transaction->>'transaction_date')::DATE,
+    coalesce(nullif(p_transaction->>'charge_date', '')::DATE,
+      (p_transaction->>'transaction_date')::DATE),
+    p_transaction->>'tags', nullif(p_transaction->>'loan_id', '')::BIGINT,
+    nullif(p_transaction->>'original_amount', '')::NUMERIC,
+    coalesce(nullif(p_transaction->>'currency', ''), 'ILS'),
+    nullif(p_transaction->>'exchange_rate', '')::NUMERIC,
+    nullif(p_transaction->>'installments_info', ''),
+    nullif(p_transaction->>'installment_number', '')::INTEGER,
+    nullif(p_transaction->>'installment_count', '')::INTEGER,
+    nullif(p_transaction->>'parent_transaction_id', '')::BIGINT,
+    p_transaction->>'notes'
+  ) RETURNING id INTO v_transaction_id;
+
+  PERFORM public.sync_manual_loan_payment_from_transaction(
+    v_transaction_id, p_loan_payment
+  );
+  SELECT to_jsonb(t) INTO v_transaction
+  FROM public.transactions t WHERE id = v_transaction_id;
+  SELECT to_jsonb(lp) INTO v_payment
+  FROM public.loan_payments lp WHERE transaction_id = v_transaction_id;
+  SELECT to_jsonb(l) INTO v_loan
+  FROM public.loans l WHERE id = (v_transaction->>'loan_id')::BIGINT;
+  RETURN jsonb_build_object(
+    'transaction', v_transaction,
+    'loanPayment', v_payment,
+    'loan', v_loan
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_transaction_with_manual_loan_payment(
+  p_transaction_id BIGINT,
+  p_transaction JSONB,
+  p_loan_payment JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_old_transaction public.transactions%ROWTYPE;
+  v_new_loan_id BIGINT;
+  v_transaction JSONB;
+  v_payment JSONB;
+  v_loan JSONB;
+BEGIN
+  SELECT * INTO v_old_transaction
+  FROM public.transactions
+  WHERE id = p_transaction_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transaction % does not exist', p_transaction_id;
+  END IF;
+
+  v_new_loan_id := nullif(p_transaction->>'loan_id', '')::BIGINT;
+  PERFORM 1 FROM public.loans
+  WHERE id IN (v_old_transaction.loan_id, v_new_loan_id)
+  ORDER BY id
+  FOR UPDATE;
+  IF v_new_loan_id IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM public.loans WHERE id = v_new_loan_id) THEN
+    RAISE EXCEPTION 'Loan % does not exist', v_new_loan_id;
+  END IF;
+
+  UPDATE public.transactions
+  SET description = p_transaction->>'description',
+      movement_type = p_transaction->>'movement_type',
+      category_id = nullif(p_transaction->>'category_id', '')::BIGINT,
+      total_amount = (p_transaction->>'total_amount')::NUMERIC,
+      global_discount = coalesce(nullif(p_transaction->>'global_discount', '')::NUMERIC, 0),
+      global_discount_source = nullif(p_transaction->>'global_discount_source', ''),
+      payment_source_id = nullif(p_transaction->>'payment_source_id', '')::BIGINT,
+      transaction_date = (p_transaction->>'transaction_date')::DATE,
+      charge_date = coalesce(nullif(p_transaction->>'charge_date', '')::DATE,
+        (p_transaction->>'transaction_date')::DATE),
+      tags = p_transaction->>'tags',
+      loan_id = v_new_loan_id,
+      original_amount = nullif(p_transaction->>'original_amount', '')::NUMERIC,
+      currency = coalesce(nullif(p_transaction->>'currency', ''), 'ILS'),
+      exchange_rate = nullif(p_transaction->>'exchange_rate', '')::NUMERIC,
+      installments_info = CASE
+        WHEN p_transaction ? 'installments_info'
+          THEN nullif(p_transaction->>'installments_info', '')
+        ELSE installments_info
+      END,
+      installment_number = CASE
+        WHEN p_transaction ? 'installment_number'
+          THEN nullif(p_transaction->>'installment_number', '')::INTEGER
+        ELSE installment_number
+      END,
+      installment_count = CASE
+        WHEN p_transaction ? 'installment_count'
+          THEN nullif(p_transaction->>'installment_count', '')::INTEGER
+        ELSE installment_count
+      END,
+      notes = p_transaction->>'notes',
+      updated_at = timezone('utc'::text, now())
+  WHERE id = p_transaction_id;
+
+  PERFORM public.sync_manual_loan_payment_from_transaction(
+    p_transaction_id, p_loan_payment
+  );
+  SELECT to_jsonb(t) INTO v_transaction
+  FROM public.transactions t WHERE id = p_transaction_id;
+  SELECT to_jsonb(lp) INTO v_payment
+  FROM public.loan_payments lp WHERE transaction_id = p_transaction_id;
+  SELECT to_jsonb(l) INTO v_loan
+  FROM public.loans l WHERE id = nullif(v_transaction->>'loan_id', '')::BIGINT;
+  RETURN jsonb_build_object(
+    'transaction', v_transaction,
+    'loanPayment', v_payment,
+    'loan', v_loan
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_transaction_with_loan_payment(
+  p_transaction_id BIGINT
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_transaction public.transactions%ROWTYPE;
+  v_existing public.loan_payments%ROWTYPE;
+  v_old_loan_id BIGINT;
+  v_old_scheduled_due_date DATE;
+  v_old_auto_payment_enabled BOOLEAN;
+  v_has_later_covered BOOLEAN := false;
+BEGIN
+  SELECT * INTO v_transaction
+  FROM public.transactions
+  WHERE id = p_transaction_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transaction % does not exist', p_transaction_id;
+  END IF;
+  SELECT * INTO v_existing
+  FROM public.loan_payments
+  WHERE transaction_id = p_transaction_id
+  FOR UPDATE;
+
+  IF v_existing.id IS NOT NULL THEN
+    IF v_existing.payment_kind <> 'installment'
+      OR v_existing.source_kind NOT IN ('manual', 'existing_transaction') THEN
+      RAISE EXCEPTION
+        'Transaction % is linked to protected %/% loan payment % and cannot be deleted',
+        p_transaction_id, v_existing.source_kind, v_existing.payment_kind, v_existing.id;
+    END IF;
+    SELECT EXISTS (
+      SELECT 1 FROM public.loan_payments later
+      WHERE later.loan_id = v_existing.loan_id
+        AND later.id <> v_existing.id
+        AND later.payment_kind IN ('installment', 'catch_up')
+        AND (
+          (later.payment_kind = 'installment'
+            AND later.installment_number > v_existing.installment_number)
+          OR later.payment_date > v_existing.payment_date
+        )
+    ) INTO v_has_later_covered;
+    IF v_has_later_covered THEN
+      RAISE EXCEPTION 'Cannot delete installment % while later covered payments exist',
+        v_existing.installment_number;
+    END IF;
+
+    IF v_existing.source_kind <> 'manual'
+      AND v_existing.scheduled_due_date IS NULL THEN
+      RAISE EXCEPTION
+        'Cannot delete loan payment % without a reversible schedule anchor',
+        v_existing.id;
+    END IF;
+
+    v_old_loan_id := v_existing.loan_id;
+    v_old_scheduled_due_date := v_existing.scheduled_due_date;
+    v_old_auto_payment_enabled := v_existing.auto_payment_enabled_before;
+    DELETE FROM public.loan_payments WHERE id = v_existing.id;
+  END IF;
+
+  DELETE FROM public.lego_sets WHERE transaction_id = p_transaction_id;
+  DELETE FROM public.transaction_items WHERE transaction_id = p_transaction_id;
+  DELETE FROM public.transactions WHERE id = p_transaction_id;
+
+  IF v_old_loan_id IS NOT NULL THEN
+    UPDATE public.loans
+    SET next_payment_date = CASE
+          WHEN current_balance <= 0.005 OR remaining_installments <= 0 THEN NULL
+          ELSE v_old_scheduled_due_date
+        END,
+        auto_payment_enabled = CASE
+          WHEN current_balance <= 0.005 THEN false
+          ELSE coalesce(v_old_auto_payment_enabled, auto_payment_enabled)
+        END
+    WHERE id = v_old_loan_id
+      AND NOT v_has_later_covered;
+  END IF;
+  RETURN p_transaction_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_manual_loan_payment_from_transaction(BIGINT, JSONB)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.create_transaction_with_manual_loan_payment(JSONB, JSONB)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.update_transaction_with_manual_loan_payment(BIGINT, JSONB, JSONB)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.delete_transaction_with_loan_payment(BIGINT)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+GRANT EXECUTE ON FUNCTION public.create_transaction_with_manual_loan_payment(JSONB, JSONB)
+  TO service_role;
+GRANT EXECUTE ON FUNCTION public.update_transaction_with_manual_loan_payment(BIGINT, JSONB, JSONB)
+  TO service_role;
+GRANT EXECUTE ON FUNCTION public.delete_transaction_with_loan_payment(BIGINT)
+  TO service_role;
 
 
 -- =============================================

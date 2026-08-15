@@ -41,6 +41,11 @@ const amountModeOptions = [
   { value: 'items', label: 'פירוט פריטים' },
 ];
 
+const loanHandlingOptions = [
+  { value: 'link_only', label: 'קישור בלבד' },
+  { value: 'repayment', label: 'תשלום הלוואה' },
+];
+
 const AddTransaction = () => {
   const {
     loading,
@@ -50,6 +55,8 @@ const AddTransaction = () => {
     categories,
     paymentSources,
     loans,
+    loanHandling,
+    loanPaymentError,
     legoThemes,
     isEditMode,
     showNewCategoryModal,
@@ -59,6 +66,8 @@ const AddTransaction = () => {
     isLegoCategory,
     isLoanCategory,
     handleTransactionChange,
+    handleLoanHandlingModeChange,
+    handleLoanPaymentChange,
     handleItemChange,
     addItem,
     clearItems,
@@ -90,6 +99,8 @@ const AddTransaction = () => {
 
   const legoCategorySelected = isLegoCategory();
   const loanCategorySelected = isLoanCategory();
+  const selectedLoan = loans.find((loan) => String(loan.id) === String(transaction.loan_id));
+  const supportsLoanPayments = selectedLoan?.calculation_mode === 'loan_payments';
   const hasItems = items.length > 0;
   const pricingPreview = getTransactionPricingPreview(items, transaction.global_discount);
   const hasContextFields = loanCategorySelected;
@@ -367,7 +378,7 @@ const AddTransaction = () => {
                   value={transaction.loan_id}
                   onChange={handleTransactionChange}
                   placeholder="בחירת הלוואה"
-                  helperText="השיוך מסמן את התנועה כהחזר על ההלוואה, ואינו משנה את יתרת ההלוואה אוטומטית."
+                  helperText="בחירת הלוואה מקשרת את התנועה אליה. שינוי היתרה מתבצע רק בבחירה מפורשת של תשלום הלוואה."
                   required
                 >
                   {loans.map((loan) => (
@@ -376,6 +387,78 @@ const AddTransaction = () => {
                     </option>
                   ))}
                 </Select>
+
+                {supportsLoanPayments && (
+                  <div className="transaction-loan-handling">
+                    <SegmentedControl
+                      label="אופן רישום בהלוואה"
+                      value={loanHandling.mode}
+                      options={loanHandlingOptions}
+                      fullWidth
+                      onValueChange={handleLoanHandlingModeChange}
+                    />
+
+                    {loanHandling.mode === 'link_only' && (
+                      <p className="transaction-loan-handling__hint">
+                        התנועה תקושר להלוואה לצורכי מעקב בלבד, ללא שינוי בקרן או במספר התשלומים שנותרו.
+                      </p>
+                    )}
+
+                    {loanHandling.mode === 'repayment' && (
+                      <>
+                        <div className="transaction-loan-components">
+                          <NumberField
+                            name="principal_amount"
+                            label="קרן"
+                            value={loanHandling.principal_amount}
+                            onChange={handleLoanPaymentChange}
+                            min="0"
+                            step="0.01"
+                            suffix="₪"
+                            required
+                          />
+                          <NumberField
+                            name="interest_amount"
+                            label="ריבית"
+                            value={loanHandling.interest_amount}
+                            onChange={handleLoanPaymentChange}
+                            min="0"
+                            step="0.01"
+                            suffix="₪"
+                            required
+                          />
+                          <NumberField
+                            name="other_amount"
+                            label="אחר / עמלות"
+                            value={loanHandling.other_amount}
+                            onChange={handleLoanPaymentChange}
+                            min="0"
+                            step="0.01"
+                            suffix="₪"
+                            required
+                          />
+                        </div>
+                        <DateField
+                          name="next_scheduled_due_date"
+                          label="מועד התשלום הבא"
+                          value={loanHandling.next_scheduled_due_date}
+                          onChange={handleLoanPaymentChange}
+                          helperText="מוצע חודש קדימה. יש להתאים למועד הרשמי בלוח הסילוקין של הבנק."
+                          required={Number(selectedLoan?.remaining_installments) > 1
+                            && Number(loanHandling.principal_amount) < Number(selectedLoan?.current_balance)}
+                        />
+                        <p className="transaction-loan-handling__hint">
+                          סכום הקרן, הריבית והאחר חייב להיות שווה בדיוק לסכום התנועה.
+                        </p>
+                        {loanPaymentError && (
+                          <Alert variant="error" urgent title="לא ניתן לשמור את תשלום ההלוואה">
+                            {loanPaymentError}
+                          </Alert>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

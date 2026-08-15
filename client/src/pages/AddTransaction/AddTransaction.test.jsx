@@ -80,7 +80,15 @@ beforeEach(() => {
   getLegoThemes.mockResolvedValue({ data: ['Star Wars'] });
   getCategories.mockResolvedValue({ data: categories });
   getPaymentSources.mockResolvedValue({ data: paymentSources });
-  getAllLoans.mockResolvedValue({ data: [{ id: 7, name: 'הלוואת רכב', lender_name: 'בנק', current_balance: 12000 }] });
+  getAllLoans.mockResolvedValue({ data: [{
+    id: 7,
+    name: 'הלוואת רכב',
+    lender_name: 'בנק',
+    current_balance: 12000,
+    remaining_installments: 36,
+    next_payment_date: '2026-08-16',
+    calculation_mode: 'loan_payments',
+  }] });
   createTransaction.mockResolvedValue({ data: { id: 100 } });
   updateTransaction.mockResolvedValue({ data: { id: 42 } });
 });
@@ -400,11 +408,113 @@ describe('AddTransaction characterization', () => {
     await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'תשלום הלוואה');
     await waitFor(() => expect(screen.getByRole('combobox', { name: /הלוואה/ })).toBeInTheDocument());
     fireEvent.change(screen.getByRole('combobox', { name: /הלוואה/ }), { target: { value: '7' } });
+    expect(screen.getByRole('radio', { name: 'קישור בלבד' })).toHaveAttribute('aria-checked', 'true');
     await user.type(screen.getByRole('spinbutton', { name: /^סכום$/ }), '400');
     await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
 
     await waitFor(() => expect(createTransaction).toHaveBeenCalled());
     expect(createTransaction.mock.calls[0][0].transaction.loan_id).toBe(7);
+    expect(createTransaction.mock.calls[0][0].loan_handling).toEqual({ mode: 'link_only' });
+  });
+
+  it('records an explicitly selected manual repayment with an exact component payload', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await settleInitialData();
+
+    await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'תשלום הלוואה');
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /הלוואה/ })).toBeInTheDocument());
+    fireEvent.change(screen.getByRole('combobox', { name: /הלוואה/ }), { target: { value: '7' } });
+    await user.click(screen.getByRole('radio', { name: 'תשלום הלוואה' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /^סכום$/ }), { target: { value: '1611.58' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'קרן' }), { target: { value: '1103.36' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'ריבית' }), { target: { value: '508.22' } });
+    expect(screen.getByLabelText(/מועד התשלום הבא/)).toHaveValue('2026-09-16');
+    fireEvent.change(screen.getByLabelText(/מועד התשלום הבא/), {
+      target: { value: '2026-09-15' },
+    });
+
+    await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1));
+    expect(createTransaction.mock.calls[0][0]).toEqual(expect.objectContaining({
+      transaction: expect.objectContaining({ loan_id: 7, total_amount: '1611.58' }),
+      loan_handling: {
+        mode: 'repayment',
+        principal_amount: '1103.36',
+        interest_amount: '508.22',
+        other_amount: '0',
+        next_scheduled_due_date: '2026-09-15',
+      },
+    }));
+  });
+
+  it('blocks a mismatched manual repayment split with an inline Hebrew error', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await settleInitialData();
+
+    await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'תשלום הלוואה');
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /הלוואה/ })).toBeInTheDocument());
+    fireEvent.change(screen.getByRole('combobox', { name: /הלוואה/ }), { target: { value: '7' } });
+    await user.click(screen.getByRole('radio', { name: 'תשלום הלוואה' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /^סכום$/ }), { target: { value: '1611.58' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'קרן' }), { target: { value: '1103.36' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'ריבית' }), { target: { value: '500' } });
+    await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('חייב להיות שווה בדיוק לסכום התנועה');
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('loads a linked transfer without loan_payment as link-only during edit', async () => {
+    getTransactionById.mockResolvedValue({ data: {
+      id: 42,
+      transaction_date: '2026-08-10',
+      charge_date: '2026-08-10',
+      description: 'העברה לחשבון הלוואה',
+      movement_type: 'expense',
+      category_id: 24,
+      payment_source_id: 10,
+      total_amount: 5000,
+      loan_id: 7,
+      loan_payment: null,
+      transaction_items: [],
+    } });
+    renderForm('/edit-transaction/42');
+
+    expect(await screen.findByDisplayValue('העברה לחשבון הלוואה')).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: 'קישור בלבד' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('spinbutton', { name: 'קרן' })).not.toBeInTheDocument();
+  });
+
+  it('loads linked loan_payment components as a manual repayment during edit', async () => {
+    getTransactionById.mockResolvedValue({ data: {
+      id: 43,
+      transaction_date: '2026-08-10',
+      charge_date: '2026-08-10',
+      description: 'תשלום הלוואה קיים',
+      movement_type: 'expense',
+      category_id: 24,
+      payment_source_id: 10,
+      total_amount: 1611.58,
+      loan_id: 7,
+      loan_payment: {
+        principal_amount: '1103.36',
+        interest_amount: '508.22',
+        other_amount: '0.00',
+        next_scheduled_due_date: '2026-09-15',
+      },
+      transaction_items: [],
+    } });
+    renderForm('/edit-transaction/43');
+
+    expect(await screen.findByDisplayValue('תשלום הלוואה קיים')).toBeInTheDocument();
+    expect(await screen.findByRole('radio', { name: 'תשלום הלוואה' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('spinbutton', { name: 'קרן' })).toHaveValue(1103.36);
+    expect(screen.getByRole('spinbutton', { name: 'ריבית' })).toHaveValue(508.22);
+    expect(screen.getByRole('spinbutton', { name: 'אחר / עמלות' })).toHaveValue(0);
+    expect(screen.getByLabelText(/מועד התשלום הבא/)).toHaveValue('2026-09-15');
   });
 
   it('preserves LEGO lookup success and failure while keeping item state in the create payload', async () => {

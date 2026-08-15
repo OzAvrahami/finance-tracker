@@ -308,7 +308,7 @@ function createUpdateSyncFake(initialLinkedSets = [], options = {}) {
     queries,
     categoryIds,
     rpc: async (name, params) => {
-      if (name !== 'update_transaction_with_loan_payment') {
+      if (name !== 'update_transaction_with_manual_loan_payment') {
         return { data: null, error: { message: `unexpected rpc ${name}` } };
       }
       state.transactions = state.transactions.map((row) => (
@@ -316,7 +316,16 @@ function createUpdateSyncFake(initialLinkedSets = [], options = {}) {
           ? { ...row, ...params.p_transaction }
           : row
       ));
-      return { data: Number(params.p_transaction_id), error: null };
+      return {
+        data: {
+          transaction: state.transactions.find(
+            (row) => String(row.id) === String(params.p_transaction_id),
+          ),
+          loanPayment: null,
+          loan: null,
+        },
+        error: null,
+      };
     },
     from(table) {
       if (table === 'categories') {

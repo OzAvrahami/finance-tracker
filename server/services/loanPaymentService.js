@@ -1,7 +1,7 @@
-const createTransactionWithLoanPayment = async (supabase, transaction, recordLoanPayment) => {
-  const { data, error } = await supabase.rpc('create_transaction_with_loan_payment', {
+const createTransactionWithLoanPayment = async (supabase, transaction, loanPayment) => {
+  const { data, error } = await supabase.rpc('create_transaction_with_manual_loan_payment', {
     p_transaction: transaction,
-    p_record_loan_payment: recordLoanPayment,
+    p_loan_payment: loanPayment,
   });
 
   if (error) throw error;
@@ -12,12 +12,12 @@ const updateTransactionWithLoanPayment = async (
   supabase,
   transactionId,
   transaction,
-  recordLoanPayment,
+  loanPayment,
 ) => {
-  const { data, error } = await supabase.rpc('update_transaction_with_loan_payment', {
+  const { data, error } = await supabase.rpc('update_transaction_with_manual_loan_payment', {
     p_transaction_id: transactionId,
     p_transaction: transaction,
-    p_record_loan_payment: recordLoanPayment,
+    p_loan_payment: loanPayment,
   });
 
   if (error) throw error;

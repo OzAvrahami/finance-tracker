@@ -571,6 +571,28 @@
   width: min(100%, calc(50% - 8px));
 }
 
+.transaction-loan-handling {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--ft-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ft-surface) 84%, transparent);
+}
+
+.transaction-loan-components {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.transaction-loan-handling__hint {
+  margin: 0;
+  color: var(--ft-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .transaction-item__lego {
   min-width: 0;
   margin-block-start: 10px;
@@ -779,6 +801,10 @@
 
   .transaction-context-block > .ui-field {
     width: 100%;
+  }
+
+  .transaction-loan-components {
+    grid-template-columns: 1fr;
   }
 
 }
