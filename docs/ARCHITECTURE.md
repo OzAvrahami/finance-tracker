@@ -18,6 +18,14 @@ flowchart TD
 
 The repository captures the intended architecture. External deployment state, secrets, and applied database migrations require independent verification.
 
+## Runtime and deployment contract
+
+All three application packages require Node.js `^20.19.0 || >=22.12.0` and carry the planned private package version `0.9.0`. That metadata prepares the baseline but does not mark it released.
+
+The repository contains a Vercel SPA rewrite for the client. Backend hosting is provider-neutral and externally configured; there is no current Railway, Render, or other provider-specific backend descriptor. Express trusts the first reverse proxy. Its explicit CORS allowlist contains the local Vite origin and one Vercel client origin, whose production correctness must be checked operationally.
+
+The GitHub Actions due-loan workflow runs daily at `07:15` in `Asia/Jerusalem` and supports manual dispatch. GitHub secrets supply `LOAN_JOB_URL` and `LOAN_JOB_SECRET`; the latter is also required by the server endpoint. Repository evidence does not prove that those secrets are configured or that a production run succeeded.
+
 ## Frontend
 
 The client is a Vite-built React SPA using React Router. Supabase JS is used in the browser for authentication and session management; feature data normally flows through the Express API via Axios.
@@ -54,6 +62,8 @@ The server is a CommonJS Express application organized into:
 - **utilities** for reusable pricing and transaction-query rules.
 
 Normal application routes validate a Supabase bearer token. The external transaction API uses a separate API key. The scheduled loan endpoint uses a dedicated job secret and is not an ordinary authenticated-user endpoint.
+
+Canonical server tests are discovered recursively by a repository-owned Node launcher. Files named `*.local.test.js` are intentionally excluded because they may accompany ignored operational artifacts. A test-only bootstrap supplies fake configuration values without weakening production startup requirements or contacting live services.
 
 ### Node responsibilities
 

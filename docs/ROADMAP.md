@@ -8,11 +8,9 @@ The first formal baseline is planned but not yet tagged or released.
 
 - Complete the canonical documentation bootstrap.
 - Preserve the independently verified Migration 016 production contract in baseline release checks.
-- Run and record client tests, lint, production build, and server tests.
-- Normalize the effective Node.js runtime expectation around the requirements of Vite 7.
 - Keep the now-canonical external transaction tag contract covered by regression tests.
-- Decide how root, client, and server package versions should represent the baseline.
 - Confirm private production audit/repair artifacts and secrets are excluded.
+- Verify the deployed client origin, scheduler secrets/execution, and backend deployment configuration externally.
 - Establish a repeatable baseline review, changelog, tag, and release process.
 
 ## Stabilization after v0.9.0
@@ -25,7 +23,6 @@ The first formal baseline is planned but not yet tagged or released.
 - Reconcile import behavior with the supported Add Transaction business pipeline.
 - Remove or archive stale inventories, template documentation, unused shell components, and superseded design references.
 - Decompose oversized controllers, hooks, and page components along existing business boundaries.
-- Bring environment-variable examples and deployment documentation in line with source usage.
 
 ## v1.0.0 readiness
 

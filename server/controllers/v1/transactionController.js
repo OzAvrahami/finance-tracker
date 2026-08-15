@@ -25,8 +25,6 @@ const schema = z.object({
 });
 
 async function createTransaction(req, res) {
-  console.log("Incoming transaction body:", JSON.stringify(req.body, null, 2));
-
   const parsed = schema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -62,7 +60,11 @@ async function createTransaction(req, res) {
 
     if (existing) {
       if (!dry_run) {
-        console.log(JSON.stringify({ event: 'v1.transaction.duplicate', external_id, existing_id: existing.id }));
+        console.log(JSON.stringify({
+          event: 'v1.transaction.duplicate',
+          has_external_id: true,
+          existing_id: existing.id,
+        }));
         return res.status(409).json({
           error: 'already_exists',
           message: 'Transaction with this external_id already exists',
@@ -161,7 +163,10 @@ async function createTransaction(req, res) {
   if (error) {
     // Race condition: another request won the external_id unique constraint
     if (error.code === '23505') {
-      console.log(JSON.stringify({ event: 'v1.transaction.duplicate', external_id }));
+      console.log(JSON.stringify({
+        event: 'v1.transaction.duplicate',
+        has_external_id: Boolean(external_id),
+      }));
       return res.status(409).json({
         error: 'already_exists',
         message: 'Transaction with this external_id already exists',
@@ -183,7 +188,11 @@ async function createTransaction(req, res) {
     return res.status(500).json({ error: 'server_error', message: 'Internal server error' });
   }
 
-  console.log(JSON.stringify({ event: 'v1.transaction.created', id: data.id, external_id: data.external_id }));
+  console.log(JSON.stringify({
+    event: 'v1.transaction.created',
+    id: data.id,
+    has_external_id: Boolean(data.external_id),
+  }));
   return res.status(201).json({
     success: true,
     id: data.id,

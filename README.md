@@ -85,11 +85,11 @@ docs/                   Canonical documentation and a retained read-only securit
 
 ## Prerequisites
 
-- Use **Node.js 20.19+** or a currently supported **Node.js 22+** release.
+- Use **Node.js 20.19+ or 22.12+**. The package engines express this as `^20.19.0 || >=22.12.0`; supported Node 24 releases also satisfy that range.
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-The current package metadata contains older/inconsistent engine and package-version values. Those values are not the authoritative release or runtime contract and will be normalized separately.
+Root, client, and server package metadata use the planned `0.9.0` baseline version. This does not mean the Git release has been tagged.
 
 ## Getting started
 
@@ -130,19 +130,19 @@ npm start
 
 Do not commit secrets. Environment variables verified in source include:
 
-| Variable | Scope | Purpose |
-|---|---|---|
-| `VITE_API_URL` | Client | Base URL for the Express API |
-| `VITE_SUPABASE_URL` | Client | Supabase project URL used for browser authentication |
-| `VITE_SUPABASE_ANON_KEY` | Client | Supabase anonymous browser key |
-| `SUPABASE_URL` | Server | Supabase project URL |
-| `SUPABASE_KEY` | Server | Privileged server-side Supabase credential expected by server database access |
-| `REBRICKABLE_API_KEY` | Server | Rebrickable metadata lookup credential |
-| `EXTERNAL_API_KEY` | Server | Protects external transaction ingestion |
-| `LOAN_JOB_SECRET` | Server/job | Protects the internal due-loan job endpoint |
-| `PORT` | Server | Optional Express listen port |
+| Variable | Scope | Required | Purpose |
+|---|---|---:|---|
+| `VITE_API_URL` | Client | No | Express API base URL; defaults to `http://localhost:5050/api` |
+| `VITE_SUPABASE_URL` | Client | Yes | Supabase project URL used for browser authentication |
+| `VITE_SUPABASE_ANON_KEY` | Client | Yes | Supabase anonymous browser key |
+| `SUPABASE_URL` | Server | Yes | Supabase project URL |
+| `SUPABASE_KEY` | Server | Yes | Privileged server-side Supabase credential expected by server database access |
+| `EXTERNAL_API_KEY` | Server | Yes | Protects external transaction ingestion |
+| `LOAN_JOB_SECRET` | Server/job | Yes | Protects the internal due-loan job endpoint |
+| `REBRICKABLE_API_KEY` | Server | No | Enables Rebrickable metadata lookup |
+| `PORT` | Server | No | Express listen port; defaults to `5050` |
 
-The checked-in [server/.env.example](server/.env.example) contains the core server variables but does not yet list every source-referenced variable. Never expose server credentials in client-side `VITE_*` variables.
+Copy [client/.env.example](client/.env.example) and [server/.env.example](server/.env.example) for local configuration. Never expose server credentials in client-side `VITE_*` variables. `LOAN_JOB_URL` is a GitHub Actions secret naming the deployed protected endpoint; it is not a server process variable.
 
 ## Database and migrations
 
@@ -196,6 +196,8 @@ git diff --check
 
 There is currently no general CI workflow that runs all test, lint, and build gates. These checks must be run and recorded manually until one is added.
 
+The server test command recursively discovers canonical `*.test.js` files and excludes `*.local.test.js`. Local tests may depend on ignored/private operational artifacts; canonical tests use a test-only environment bootstrap with non-secret defaults and do not require `server/.env` or live services.
+
 ## Authentication and security model
 
 - Supabase Auth supplies browser sessions.
@@ -206,6 +208,12 @@ There is currently no general CI workflow that runs all test, lint, and build ga
 - Sensitive loan operations are exposed through narrowly granted PostgreSQL RPCs; internal helpers are not intended as public APIs.
 
 The current data model is effectively single-user: financial tables do not implement per-user row ownership. Authentication should not be interpreted as proven multi-tenant isolation.
+
+## Deployment contract
+
+- [client/vercel.json](client/vercel.json) provides the repository-supported Vercel SPA rewrite.
+- Backend hosting is provider-neutral in this repository; no current provider-specific backend descriptor is tracked.
+- The server CORS allowlist contains localhost and one Vercel client origin. Confirm that production origin manually before the baseline release.
 
 ## Scheduled loan processing
 
@@ -218,7 +226,7 @@ The current data model is effectively single-user: financial tables do not imple
 
 The scheduler does not generate future ledger rows. CPI-indexed loans are deliberately excluded because live CPI calculation is not implemented.
 
-Repository configuration proves that the scheduler workflow exists; deployment secrets and current external runtime state must be verified separately.
+The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. It requires GitHub Actions secrets `LOAN_JOB_URL` and `LOAN_JOB_SECRET`. Repository configuration proves that the workflow and protected endpoint contract exist; secret configuration and successful production executions must be verified separately.
 
 ## Important architectural notes
 
@@ -242,6 +250,8 @@ Repository configuration proves that the scheduler workflow exists; deployment s
 ## Versioning
 
 Formal semantic-version-style tracking begins with the planned **v0.9.0** baseline. It has not yet been tagged or released.
+
+The private root, client, and server application packages are aligned to version `0.9.0` in preparation for that baseline. Package metadata is not itself a Git tag or release.
 
 Earlier development is recorded as historical milestones rather than assigned fictional versions. Future releases should document changes under `Unreleased`, move them into a dated release section when tagged, and keep repository tags, package metadata, and documentation aligned.
 

@@ -37,7 +37,7 @@ for (const key of requiredEnv) {
 
 const app = express();
 
-// Render/Vercel
+// Backend hosting is externally configured; honor the first reverse proxy.
 app.set("trust proxy", 1);
 
 // Security headers

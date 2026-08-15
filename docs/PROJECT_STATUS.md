@@ -50,8 +50,7 @@ The application is mature and operational across its principal product areas, bu
 - Shopping checkout creates its financial and shopping records through multiple database calls.
 - Import is not behaviorally identical to Add Transaction.
 - Authentication is present, but financial data has no per-user row-ownership isolation.
-- Runtime, environment-variable, migration, and deployment contracts need a single maintained operational specification.
-- Package versions currently do not represent the planned formal baseline.
+- Backend provider selection, the deployed client origin used by CORS, scheduler secret configuration, and successful scheduler execution remain externally verified operational facts rather than repository guarantees.
 - Transaction tags remain comma-separated TEXT. External v1 requests accept `string[]` and serialize explicitly; commas inside an individual tag are unsupported because the storage format has no escape convention.
 
 ## Repository versus production state
@@ -70,14 +69,29 @@ Those facts require an external deployment and database verification before rele
 - [x] Create canonical README, changelog, status, roadmap, architecture, and decision documentation.
 - [x] Verify and record production object state through Migration 015 independently of repository assumptions.
 - [x] Apply Migration 016 and independently verify its production object state.
-- [ ] Run and record the complete client test suite.
-- [ ] Run and record client lint.
-- [ ] Run and record the client production build.
-- [ ] Run and record the complete server test suite.
-- [ ] Normalize and document the effective Node/runtime contract.
+- [x] Run and record the complete client test suite.
+- [x] Run and record client lint.
+- [x] Run and record the client production build.
+- [x] Run and record the complete canonical server test suite.
+- [x] Normalize and document the effective Node/runtime contract.
 - [x] Verify and canonicalize the external transaction API tags representation in repository code and schema history.
-- [ ] Decide how package versions should align with the planned baseline.
-- [ ] Confirm private production audit, backup, and repair artifacts are excluded from the release commit.
+- [x] Align private application package versions to the planned `0.9.0` baseline.
+- [x] Add complete client/server environment examples and document scheduler-only secrets.
+- [x] Confirm private production audit, backup, and repair artifacts remain ignored and unstaged.
 - [ ] Review known partial-mutation and security boundaries for baseline acceptance.
 - [ ] Review the final baseline commit and changelog.
 - [ ] Create the `v0.9.0` tag only after approval.
+
+## Latest local quality gate
+
+Run on 2026-08-15 with Node.js 24.11.1, which satisfies the declared runtime range:
+
+| Gate | Result |
+|---|---|
+| Client tests | 26 files, 408 tests passed; no failures or skips |
+| Client lint | Passed with no errors or warnings |
+| Client production build | Passed; Vite reported the existing large-chunk advisory |
+| Canonical server tests | 250 tests passed; no failures or skips |
+| Server environment-isolation run | Passed with inherited service variables blank; test bootstrap supplied non-secret values |
+
+These local gates do not prove deployment-provider configuration, scheduler execution, or database behavior beyond the separately reported read-only production verification.

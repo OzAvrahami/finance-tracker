@@ -13,15 +13,21 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Canonical project documentation for architecture, current status, roadmap, decisions, and release history.
 - Migration 016 to canonicalize the external transaction API's `external_id` column, partial unique index, and tag-autocomplete function in repository schema history.
 - Focused external-ingestion regression coverage for tag serialization, dry runs, and external-ID duplicate handling.
+- Portable server test discovery and test-only non-secret environment bootstrap.
+- Complete client and server example environment files.
 
 ### Changed
 
 - External v1 tag arrays are explicitly serialized to the application's comma-separated TEXT representation before persistence.
 - The canonical `get_unique_tags()` privilege boundary is service-role only rather than broadly executable through the exposed schema.
+- Root, client, and server package metadata now share the planned `0.9.0` version and the Node.js `^20.19.0 || >=22.12.0` engine contract.
+- Deployment documentation now distinguishes the Vercel client configuration, provider-neutral backend hosting, and GitHub scheduler secrets.
 
 ### Fixed
 
 - Added previously unversioned production prerequisites for the external transaction API to `full_schema.sql` and ordered migration history.
+- Canonical server tests no longer discover ignored `*.local.test.js` files or require private environment secrets.
+- External v1 request logging no longer emits complete financial request bodies or raw external IDs.
 
 ### Removed
 

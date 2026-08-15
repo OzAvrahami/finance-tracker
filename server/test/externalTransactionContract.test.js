@@ -198,3 +198,17 @@ test('Migration 016 and full_schema canonicalize the external transaction contra
     /GRANT EXECUTE ON FUNCTION public\.get_unique_tags\(\)\s+TO service_role;/i,
   );
 });
+
+test('external v1 does not log complete incoming financial request bodies', () => {
+  const controllerPath = path.join(
+    __dirname,
+    '..',
+    'controllers',
+    'v1',
+    'transactionController.js',
+  );
+  const controllerSource = fs.readFileSync(controllerPath, 'utf8');
+
+  assert.doesNotMatch(controllerSource, /Incoming transaction body/i);
+  assert.doesNotMatch(controllerSource, /JSON\.stringify\(req\.body/);
+});
