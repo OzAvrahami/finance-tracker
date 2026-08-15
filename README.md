@@ -15,9 +15,9 @@ The application is designed for a personal finance workflow. It is not presented
 
 ## Current maturity
 
-Development began in early 2026 and the application already has a broad operational feature set. Formal semantic release tracking is only now being introduced.
+Development began in early 2026 and the application already has a broad operational feature set. Formal semantic release tracking begins with v0.9.0.
 
-The repository is preparing for its first formally tracked baseline, **v0.9.0**. That baseline has not yet been tagged or released. Work before it is documented as pre-versioning development history, not as invented semantic releases.
+**v0.9.0** is the first formally tracked Finance Tracker baseline. Work before it is documented as pre-versioning development history, not as invented semantic releases.
 
 See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known limitations.
 
@@ -89,7 +89,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata use the planned `0.9.0` baseline version. This does not mean the Git release has been tagged.
+Root, client, and server package metadata use the `0.9.0` baseline version.
 
 ## Getting started
 
@@ -212,8 +212,8 @@ The current data model is effectively single-user: financial tables do not imple
 ## Deployment contract
 
 - [client/vercel.json](client/vercel.json) provides the repository-supported Vercel SPA rewrite.
-- Backend hosting is provider-neutral in this repository; no current provider-specific backend descriptor is tracked.
-- The server CORS allowlist contains localhost and one Vercel client origin. Confirm that production origin manually before the baseline release.
+- Backend hosting remains provider-neutral in repository configuration; the production Railway runtime was manually verified as Node.js 22.23.2 during the v0.9.0 release review.
+- The server CORS allowlist contains localhost and one Vercel client origin. The deployed Vercel origin was manually verified to match that allowlist during the release review.
 
 ## Scheduled loan processing
 
@@ -226,7 +226,7 @@ The current data model is effectively single-user: financial tables do not imple
 
 The scheduler does not generate future ledger rows. CPI-indexed loans are deliberately excluded because live CPI calculation is not implemented.
 
-The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. It requires GitHub Actions secrets `LOAN_JOB_URL` and `LOAN_JOB_SECRET`. Repository configuration proves that the workflow and protected endpoint contract exist; secret configuration and successful production executions must be verified separately.
+The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. It requires GitHub Actions secrets `LOAN_JOB_URL` and `LOAN_JOB_SECRET`. The latest scheduled production run was manually verified successful during the v0.9.0 release review; repository configuration still does not expose or prove secret values.
 
 ## Important architectural notes
 
@@ -249,12 +249,12 @@ The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. I
 
 ## Versioning
 
-Formal semantic-version-style tracking begins with the planned **v0.9.0** baseline. It has not yet been tagged or released.
+Formal semantic-version-style tracking begins with **v0.9.0**, the first finalized baseline.
 
-The private root, client, and server application packages are aligned to version `0.9.0` in preparation for that baseline. Package metadata is not itself a Git tag or release.
+The private root, client, and server application packages are aligned to version `0.9.0` for this baseline. Package metadata is not itself a Git tag or release.
 
-Earlier development is recorded as historical milestones rather than assigned fictional versions. Future releases should document changes under `Unreleased`, move them into a dated release section when tagged, and keep repository tags, package metadata, and documentation aligned.
+Earlier development is recorded as historical milestones rather than assigned fictional versions. Future releases should document changes under `Unreleased`, move them into a dated release section when release content is finalized, and keep repository tags, package metadata, and documentation aligned.
 
 ## License / project status
 
-This is a private personal project preparing for a pre-1.0 baseline. No canonical root license file currently establishes redistribution terms.
+This is a private personal project at its first formally tracked pre-1.0 baseline. No canonical root license file currently establishes redistribution terms.

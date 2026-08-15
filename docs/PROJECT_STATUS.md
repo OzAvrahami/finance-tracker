@@ -2,14 +2,12 @@
 
 ## Baseline status
 
-- Formal release tracking has not yet started.
-- Target first formally tracked baseline: **v0.9.0**.
-- The baseline has not been tagged or released.
-- Repository HEAD observed during the documentation audit: `657e22a`.
+- Current finalized baseline as of 2026-08-15: **v0.9.0**.
+- This is the first formally tracked Finance Tracker baseline.
 - Repository migration history currently reaches Migration 016.
 - A read-only production catalog verification on 2026-08-15 confirmed the expected repository-era objects through Migration 015. Migration 016 was subsequently applied and independently verified read-only. No Finance Tracker applied-migration ledger exists, so these findings are object-state evidence rather than an authoritative execution history.
 
-The application is mature and operational across its principal product areas, but it remains pre-1.0 while release hygiene, database reproducibility, and several architectural boundaries are formalized.
+The application is mature and operational across its principal product areas. It remains pre-1.0 while database reproducibility and several documented architectural boundaries are improved after the baseline.
 
 ## Module status
 
@@ -50,19 +48,18 @@ The application is mature and operational across its principal product areas, bu
 - Shopping checkout creates its financial and shopping records through multiple database calls.
 - Import is not behaviorally identical to Add Transaction.
 - Authentication is present, but financial data has no per-user row-ownership isolation.
-- Backend provider selection, the deployed client origin used by CORS, scheduler secret configuration, and successful scheduler execution remain externally verified operational facts rather than repository guarantees.
+- Deployment facts remain operational evidence rather than repository guarantees: Railway production was manually verified on Node.js 22.23.2, the deployed Vercel origin matches the CORS allowlist, and the latest scheduled due-loan GitHub Actions run was manually verified successful.
 - Transaction tags remain comma-separated TEXT. External v1 requests accept `string[]` and serialize explicitly; commas inside an individual tag are unsupported because the storage format has no escape convention.
 
 ## Repository versus production state
 
-The repository documents intended code and schema. Production was verified read-only for expected object presence through Migration 015, then Migration 016 was applied and independently verified. The repository still does not establish:
+The repository documents intended code and schema. Production was verified read-only for expected object presence through Migration 015, then Migration 016 was applied and independently verified. The final release review also manually verified the Railway Node.js 22.23.2 runtime, the deployed Vercel origin/CORS match, and a successful latest scheduled due-loan workflow run. The repository still does not establish:
 
 - an authoritative ordered record of which migrations were applied to any external database;
 - which commit is currently deployed;
-- whether scheduler/deployment secrets are configured; or
 - whether private operational repair scripts have been executed.
 
-Those facts require an external deployment and database verification before release.
+Those remaining facts require external deployment or database records; they are not implied by repository state.
 
 ## Baseline readiness checklist
 
@@ -75,12 +72,14 @@ Those facts require an external deployment and database verification before rele
 - [x] Run and record the complete canonical server test suite.
 - [x] Normalize and document the effective Node/runtime contract.
 - [x] Verify and canonicalize the external transaction API tags representation in repository code and schema history.
-- [x] Align private application package versions to the planned `0.9.0` baseline.
+- [x] Align private application package versions to the `0.9.0` baseline.
 - [x] Add complete client/server environment examples and document scheduler-only secrets.
 - [x] Confirm private production audit, backup, and repair artifacts remain ignored and unstaged.
-- [ ] Review known partial-mutation and security boundaries for baseline acceptance.
-- [ ] Review the final baseline commit and changelog.
-- [ ] Create the `v0.9.0` tag only after approval.
+- [x] Review and accept the documented partial-mutation and security boundaries for this pre-1.0 baseline.
+- [x] Complete the final baseline review and finalize the dated changelog entry.
+- [x] Verify the Railway production runtime as Node.js 22.23.2.
+- [x] Verify the deployed Vercel client origin matches the server CORS allowlist.
+- [x] Verify the latest scheduled due-loan GitHub Actions run completed successfully.
 
 ## Latest local quality gate
 
@@ -94,4 +93,4 @@ Run on 2026-08-15 with Node.js 24.11.1, which satisfies the declared runtime ran
 | Canonical server tests | 250 tests passed; no failures or skips |
 | Server environment-isolation run | Passed with inherited service variables blank; test bootstrap supplied non-secret values |
 
-These local gates do not prove deployment-provider configuration, scheduler execution, or database behavior beyond the separately reported read-only production verification.
+These local gates are complemented by the final manual deployment checks: Railway production uses Node.js 22.23.2, the deployed Vercel origin matches the CORS allowlist, and the latest scheduled due-loan workflow run succeeded. Database evidence remains catalog/object-state verification rather than an applied-migration ledger.

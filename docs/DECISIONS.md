@@ -254,7 +254,7 @@ Keep ordered SQL migrations under `server/migrations/` and synchronize material 
 
 Both sources must stay aligned. Neither repository presence nor the consolidated file proves external application state; a migration runner/applied ledger is still needed.
 
-## D-015 — Formal semantic tracking begins with the planned v0.9.0 baseline
+## D-015 — Formal semantic tracking begins with the v0.9.0 baseline
 
 **Status:** Accepted
 
@@ -266,11 +266,11 @@ The project is mature but historical work was not released under a formal semant
 
 ### Decision
 
-Prepare `v0.9.0` as the first formally tracked baseline. Record earlier work as milestones and do not invent retrospective version numbers.
+Use `v0.9.0` as the first formally tracked baseline. Record earlier work as milestones and do not invent retrospective version numbers.
 
 ### Consequences
 
-`v0.9.0` remains unreleased until readiness checks, documentation, and baseline review are complete. Future releases should keep tags, changelog entries, and package metadata deliberate and consistent.
+Readiness checks, documentation, and baseline review were completed on 2026-08-15. `v0.9.0` establishes the formal versioning baseline. Future releases should keep tags, changelog entries, and package metadata deliberate and consistent.
 
 ## D-016 — Preserve comma-separated transaction tags at the v0.9.0 boundary
 
@@ -284,7 +284,7 @@ Prepare `v0.9.0` as the first formally tracked baseline. Record earlier work as 
 
 ### Decision
 
-Keep the established TEXT storage for the planned baseline. Validate external tag values, serialize the array explicitly with commas in Node, and canonicalize `external_id`, its partial unique index, and the service-only `get_unique_tags()` RPC in Migration 016.
+Keep the established TEXT storage for the v0.9.0 baseline. Validate external tag values, serialize the array explicitly with commas in Node, and canonicalize `external_id`, its partial unique index, and the service-only `get_unique_tags()` RPC in Migration 016.
 
 ### Consequences
 

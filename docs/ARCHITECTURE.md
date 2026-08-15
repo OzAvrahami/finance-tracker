@@ -20,11 +20,11 @@ The repository captures the intended architecture. External deployment state, se
 
 ## Runtime and deployment contract
 
-All three application packages require Node.js `^20.19.0 || >=22.12.0` and carry the planned private package version `0.9.0`. That metadata prepares the baseline but does not mark it released.
+All three application packages require Node.js `^20.19.0 || >=22.12.0` and carry the private package version `0.9.0` for the first formally tracked baseline.
 
-The repository contains a Vercel SPA rewrite for the client. Backend hosting is provider-neutral and externally configured; there is no current Railway, Render, or other provider-specific backend descriptor. Express trusts the first reverse proxy. Its explicit CORS allowlist contains the local Vite origin and one Vercel client origin, whose production correctness must be checked operationally.
+The repository contains a Vercel SPA rewrite for the client. Backend hosting is provider-neutral in repository configuration; there is no current Railway, Render, or other provider-specific backend descriptor. Production was manually verified on Railway with Node.js 22.23.2. Express trusts the first reverse proxy. Its explicit CORS allowlist contains the local Vite origin and one Vercel client origin, and the deployed Vercel origin was manually verified to match it during the v0.9.0 release review.
 
-The GitHub Actions due-loan workflow runs daily at `07:15` in `Asia/Jerusalem` and supports manual dispatch. GitHub secrets supply `LOAN_JOB_URL` and `LOAN_JOB_SECRET`; the latter is also required by the server endpoint. Repository evidence does not prove that those secrets are configured or that a production run succeeded.
+The GitHub Actions due-loan workflow runs daily at `07:15` in `Asia/Jerusalem` and supports manual dispatch. GitHub secrets supply `LOAN_JOB_URL` and `LOAN_JOB_SECRET`; the latter is also required by the server endpoint. The latest scheduled production run was manually verified successful during the v0.9.0 release review. Secret values remain external to the repository.
 
 ## Frontend
 

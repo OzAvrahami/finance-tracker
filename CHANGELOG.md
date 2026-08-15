@@ -2,11 +2,23 @@
 
 All notable changes to Finance Tracker will be documented in this file.
 
-Formal release tracking begins with the upcoming **v0.9.0** baseline. That baseline has not yet been tagged or released, and no earlier semantic releases are implied.
+Formal release tracking begins with **v0.9.0**, the first formally tracked Finance Tracker baseline. No earlier semantic releases are implied.
 
 This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and will use semantic-version-style tracking for formal releases.
 
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.9.0] - 2026-08-15
+
+Finance Tracker's first formally tracked baseline, consolidating the mature pre-versioning application and its release-readiness work.
 
 ### Added
 
@@ -20,7 +32,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - External v1 tag arrays are explicitly serialized to the application's comma-separated TEXT representation before persistence.
 - The canonical `get_unique_tags()` privilege boundary is service-role only rather than broadly executable through the exposed schema.
-- Root, client, and server package metadata now share the planned `0.9.0` version and the Node.js `^20.19.0 || >=22.12.0` engine contract.
+- Root, client, and server package metadata now share the `0.9.0` baseline version and the Node.js `^20.19.0 || >=22.12.0` engine contract.
 - Deployment documentation now distinguishes the Vercel client configuration, provider-neutral backend hosting, and GitHub scheduler secrets.
 
 ### Fixed

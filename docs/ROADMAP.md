@@ -4,16 +4,13 @@ This roadmap is organized by outcomes rather than speculative dates. It distingu
 
 ## Baseline: v0.9.0
 
-The first formal baseline is planned but not yet tagged or released.
+Preparation for the first formal baseline is complete. **v0.9.0** establishes the documented starting point for semantic-version tracking.
 
-- Complete the canonical documentation bootstrap.
-- Preserve the independently verified Migration 016 production contract in baseline release checks.
-- Keep the now-canonical external transaction tag contract covered by regression tests.
-- Confirm private production audit/repair artifacts and secrets are excluded.
-- Verify the deployed client origin, scheduler secrets/execution, and backend deployment configuration externally.
-- Establish a repeatable baseline review, changelog, tag, and release process.
+Completed preparation includes canonical documentation, runtime and package alignment, portable quality gates, environment examples, independently verified production schema through Migration 016, external transaction contract coverage, private-artifact checks, and manual verification of the Railway runtime, Vercel origin/CORS match, and latest scheduled due-loan run.
 
 ## Stabilization after v0.9.0
+
+This is the current active roadmap.
 
 - Add a general CI workflow for client test/lint/build and server tests.
 - Introduce a canonical migration runner and applied-migration ledger.
