@@ -1,0 +1,273 @@
+# Technical Decisions
+
+This file records durable architectural decisions visible in the repository. Dates use Git evidence when recoverable; approximate periods are labeled accordingly.
+
+## D-001 — Supabase authentication with server-mediated financial APIs
+
+**Status:** Accepted
+
+**Date:** 2026-02 (repository history)
+
+### Context
+
+The browser needs authenticated sessions, while financial operations require centralized validation and privileged database access.
+
+### Decision
+
+Use Supabase Auth in the browser and send authenticated feature requests to the Express API. Keep privileged Supabase credentials and financial orchestration on the server.
+
+### Consequences
+
+The client does not directly own normal feature-table access. Authentication is centralized, but the data model remains effectively single-user because rows do not carry per-user ownership.
+
+## D-002 — PostgreSQL RPCs protect atomic financial mutations
+
+**Status:** Accepted
+
+**Date:** 2026-08-13
+
+### Context
+
+Sequential PostgREST requests could commit a ledger transaction without its authoritative loan payment, or reverse only one side.
+
+### Decision
+
+Use narrowly scoped PostgreSQL functions for transaction/loan-payment create, update, and delete operations that must commit or roll back together.
+
+### Consequences
+
+Core loan-accounting mutations are atomic and database constraints remain the final guard. Surrounding item, LEGO, and keyword side effects are not automatically part of the same transaction.
+
+## D-003 — Separate the cash ledger from authoritative loan accounting
+
+**Status:** Accepted
+
+**Date:** 2026-08-13
+
+### Context
+
+Loan payments contain principal, interest, fees, and adjustments. Subtracting `transactions.total_amount` from principal produces incorrect balances.
+
+### Decision
+
+Keep `transactions` as the actual cash/card ledger and use `loan_payments` for authoritative loan accounting.
+
+### Consequences
+
+Only principal and explicit balance adjustments change outstanding principal. A loan-related transaction may exist without being an installment.
+
+## D-004 — Preserve legacy and `loan_payments` calculation modes
+
+**Status:** Accepted
+
+**Date:** 2026-08-13
+
+### Context
+
+Existing loans could not all be safely reinterpreted when the principal-aware model was introduced.
+
+### Decision
+
+Add `loans.calculation_mode`, retain legacy transaction-total behavior for unmigrated loans, and use `loan_payments` for deliberately migrated or newly created loans.
+
+### Consequences
+
+Compatibility is preserved, but both behaviors require tests and documentation until legacy loans are audited or intentionally retained.
+
+## D-005 — Loan-linked transactions do not create future ledger transactions
+
+**Status:** Accepted
+
+**Date:** 2026-08-13
+
+### Context
+
+A future contractual loan payment is not yet an actual expense, while ordinary card installments may be represented by future sibling ledger rows.
+
+### Decision
+
+Do not generate future transaction siblings when `loan_id` is present. Store future loan expectations on the loan and create a transaction only when the payment becomes actual.
+
+### Consequences
+
+Loan balances no longer count future ledger rows as paid. Ordinary non-loan installment behavior remains distinct.
+
+## D-006 — Exclude CPI-indexed loans from automatic generation
+
+**Status:** Accepted
+
+**Date:** 2026-08-14
+
+### Context
+
+The application records indexation metadata but does not fetch or calculate live CPI adjustments.
+
+### Decision
+
+Model interest and indexation separately, and reject/skip automatic payment generation for CPI-indexed loans.
+
+### Consequences
+
+Indexed loans can be represented truthfully, but require manual/provider-informed accounting until a reviewed CPI engine exists.
+
+## D-007 — Persist reversible manual schedule transitions
+
+**Status:** Accepted
+
+**Date:** 2026-08-15
+
+### Context
+
+Actual bank posting dates can differ from contractual due dates, and simple month arithmetic cannot always reproduce provider schedules.
+
+### Decision
+
+Persist the previous and next scheduled due dates on manual loan-payment rows. Advance from the submitted contractual transition, not the transaction posting date.
+
+### Consequences
+
+Split/date edits do not advance schedules again, and deletion, link-only conversion, final-payment reversal, and loan moves can restore prior schedules without heuristics.
+
+## D-008 — Preserve provider history through irregular payments and balance adjustments
+
+**Status:** Accepted
+
+**Date:** 2026-08-14
+
+### Context
+
+CPI linkage, arrears, returned debits, catch-up payments, and provider snapshots can make a contractual amortization schedule unsuitable as historical fact.
+
+### Decision
+
+Represent real but unallocated cash as irregular/catch-up events and represent provider-confirmed balance movement as non-cash balance adjustments. Do not invent unsupported principal/interest splits.
+
+### Consequences
+
+Accounting remains reconcilable while provenance and uncertainty stay explicit. Provider snapshots can anchor principal without fabricating cash transactions.
+
+## D-009 — Use keyset pagination instead of offset pagination
+
+**Status:** Accepted
+
+**Date:** 2026-08-05
+
+### Context
+
+Loading or offset-paginating a growing transaction history is inefficient and can drift when rows are inserted.
+
+### Decision
+
+Use PostgreSQL keyset pagination with opaque date/amount/id cursors and database-computed filtered totals.
+
+### Consequences
+
+Pages remain stable and transfer less data, at the cost of stricter cursor/query contracts.
+
+## D-010 — Finance v3 is the current tokenized design system
+
+**Status:** Accepted
+
+**Date:** 2026-08-06 to 2026-08-10
+
+### Context
+
+Finance v2 established a responsive shell but did not provide the final shared visual/component language.
+
+### Decision
+
+Use Finance v3 tokens, glass surfaces, shared controls, and overlay primitives across current routed pages.
+
+### Consequences
+
+New UI work should compose the shared system. Legacy token aliases remain temporarily for compatibility and Finance v2 is historical context.
+
+## D-011 — Treat RTL and bidi isolation as separate concerns
+
+**Status:** Accepted
+
+**Date:** 2026-08 (repository implementation)
+
+### Context
+
+Hebrew page direction can reorder installment progress, codes, and mixed numeric text incorrectly.
+
+### Decision
+
+Keep the application RTL-first while explicitly isolating numeric and technical fragments with semantic bidi/LTR markup and utilities.
+
+### Consequences
+
+Values remain in logical data order and render predictably without reversing source data.
+
+## D-012 — Use three-stage LEGO transaction cost allocation
+
+**Status:** Accepted
+
+**Date:** 2026-08-10
+
+### Context
+
+Receipt prices, transaction-level discounts, and actual acquisition cost are distinct values for itemized LEGO purchases.
+
+### Decision
+
+Preserve receipt price, allocate the relevant transaction-level discount, and derive the stored purchase cost using integer minor-unit rules.
+
+### Consequences
+
+Collection cost is traceable to transaction evidence, while allocation and synchronization require consistent application utilities.
+
+## D-013 — Purchase, Gift, and GWP are canonical LEGO acquisition types
+
+**Status:** Accepted
+
+**Date:** 2026-08-11
+
+### Context
+
+Earlier acquisition labels were ambiguous and zero-price promotional sets needed distinct semantics.
+
+### Decision
+
+Use `purchase`, `gift`, and `gwp` as the canonical persisted vocabulary and explicitly distinguish genuine gifts from gifts-with-purchase.
+
+### Consequences
+
+UI, transaction metadata, and collection records share one vocabulary. Older ambiguous data required guarded normalization.
+
+## D-014 — Migrations are schema history; `full_schema.sql` is a consolidated reference
+
+**Status:** Accepted
+
+**Date:** 2026-05 onward; consolidated through 2026-08 repository work
+
+### Context
+
+The project needs both ordered evolution and a readable representation of the intended current schema.
+
+### Decision
+
+Keep ordered SQL migrations under `server/migrations/` and synchronize material changes into `server/full_schema.sql`.
+
+### Consequences
+
+Both sources must stay aligned. Neither repository presence nor the consolidated file proves external application state; a migration runner/applied ledger is still needed.
+
+## D-015 — Formal semantic tracking begins with the planned v0.9.0 baseline
+
+**Status:** Accepted
+
+**Date:** 2026-08-15
+
+### Context
+
+The project is mature but historical work was not released under a formal semantic-version process.
+
+### Decision
+
+Prepare `v0.9.0` as the first formally tracked baseline. Record earlier work as milestones and do not invent retrospective version numbers.
+
+### Consequences
+
+`v0.9.0` remains unreleased until readiness checks, documentation, and baseline review are complete. Future releases should keep tags, changelog entries, and package metadata deliberate and consistent.
