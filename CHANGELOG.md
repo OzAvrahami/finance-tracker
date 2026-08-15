@@ -16,6 +16,22 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Removed
 
+## [1.0.0] - 2026-08-15
+
+Finance Tracker's first stable release. It promotes the fully verified v0.9.0 baseline to stable status without introducing new product functionality solely for this release. Core personal-finance workflows are considered stable for regular use.
+
+### Stable product surface
+
+- Dashboard reporting, transactions, categories, payment sources, monthly budgets, and annual summaries.
+- Loans and authoritative loan-payment accounting, including manual and scheduled due-loan processing.
+- Spreadsheet import, the protected external transaction API, tasks, shopping lists, and Settings.
+- LEGO collection and acquisition accounting with transaction synchronization and Rebrickable metadata.
+- The Finance v3 RTL interface, Supabase authentication, and the verified Vercel/Railway production deployment contract.
+
+### Changed
+
+- Promoted the verified v0.9.0 baseline to the stable `1.0.0` product and package version.
+
 ## [0.9.0] - 2026-08-15
 
 Finance Tracker's first formally tracked baseline, consolidating the mature pre-versioning application and its release-readiness work.

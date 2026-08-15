@@ -1,13 +1,15 @@
 # Project Status
 
-## Baseline status
+## Current release status
 
-- Current finalized baseline as of 2026-08-15: **v0.9.0**.
-- This is the first formally tracked Finance Tracker baseline.
+- Current release as of 2026-08-15: **v1.0.0 — Stable**.
+- **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
+- The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
+- No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
 - Repository migration history currently reaches Migration 016.
 - A read-only production catalog verification on 2026-08-15 confirmed the expected repository-era objects through Migration 015. Migration 016 was subsequently applied and independently verified read-only. No Finance Tracker applied-migration ledger exists, so these findings are object-state evidence rather than an authoritative execution history.
 
-The application is mature and operational across its principal product areas. It remains pre-1.0 while database reproducibility and several documented architectural boundaries are improved after the baseline.
+The application is mature, operational across its principal product areas, and stable for regular personal use. The known limitations below remain explicit post-1.0 stabilization work rather than hidden release blockers.
 
 ## Module status
 
@@ -61,7 +63,7 @@ The repository documents intended code and schema. Production was verified read-
 
 Those remaining facts require external deployment or database records; they are not implied by repository state.
 
-## Baseline readiness checklist
+## Stable-release evidence
 
 - [x] Create canonical README, changelog, status, roadmap, architecture, and decision documentation.
 - [x] Verify and record production object state through Migration 015 independently of repository assumptions.
@@ -72,11 +74,11 @@ Those remaining facts require external deployment or database records; they are 
 - [x] Run and record the complete canonical server test suite.
 - [x] Normalize and document the effective Node/runtime contract.
 - [x] Verify and canonicalize the external transaction API tags representation in repository code and schema history.
-- [x] Align private application package versions to the `0.9.0` baseline.
+- [x] Align private application package versions to the stable `1.0.0` release.
 - [x] Add complete client/server environment examples and document scheduler-only secrets.
 - [x] Confirm private production audit, backup, and repair artifacts remain ignored and unstaged.
-- [x] Review and accept the documented partial-mutation and security boundaries for this pre-1.0 baseline.
-- [x] Complete the final baseline review and finalize the dated changelog entry.
+- [x] Review and accept the documented partial-mutation and security boundaries for the stable contract.
+- [x] Complete the release review and finalize the dated changelog entries.
 - [x] Verify the Railway production runtime as Node.js 22.23.2.
 - [x] Verify the deployed Vercel client origin matches the server CORS allowlist.
 - [x] Verify the latest scheduled due-loan GitHub Actions run completed successfully.

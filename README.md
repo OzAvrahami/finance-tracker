@@ -15,9 +15,9 @@ The application is designed for a personal finance workflow. It is not presented
 
 ## Current maturity
 
-Development began in early 2026 and the application already has a broad operational feature set. Formal semantic release tracking begins with v0.9.0.
+Development began in early 2026 and the application has a broad operational feature set. Formal semantic release tracking began with v0.9.0.
 
-**v0.9.0** is the first formally tracked Finance Tracker baseline. Work before it is documented as pre-versioning development history, not as invented semantic releases.
+**v1.0.0** is the current stable release and is suitable for regular personal use. **v0.9.0** remains the first formally tracked baseline. Stable does not mean feature-complete: architectural stabilization and new product capabilities remain active work.
 
 See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known limitations.
 
@@ -89,7 +89,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata use the `0.9.0` baseline version.
+Root, client, and server package metadata use the stable `1.0.0` product version.
 
 ## Getting started
 
@@ -249,12 +249,12 @@ The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. I
 
 ## Versioning
 
-Formal semantic-version-style tracking begins with **v0.9.0**, the first finalized baseline.
+Formal semantic-version-style tracking began with **v0.9.0**, the first finalized baseline. **v1.0.0** is the first stable release.
 
-The private root, client, and server application packages are aligned to version `0.9.0` for this baseline. Package metadata is not itself a Git tag or release.
+The private root, client, and server application packages are aligned to version `1.0.0`.
 
 Earlier development is recorded as historical milestones rather than assigned fictional versions. Future releases should document changes under `Unreleased`, move them into a dated release section when release content is finalized, and keep repository tags, package metadata, and documentation aligned.
 
 ## License / project status
 
-This is a private personal project at its first formally tracked pre-1.0 baseline. No canonical root license file currently establishes redistribution terms.
+This is a private personal project considered stable for regular use. No canonical root license file currently establishes redistribution terms.

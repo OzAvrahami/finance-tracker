@@ -289,3 +289,21 @@ Keep the established TEXT storage for the v0.9.0 baseline. Validate external tag
 ### Consequences
 
 External ingestion has a deterministic database payload without a broader tag-model migration. Individual tag values cannot contain commas, duplicates retain their input order, and any future normalized tag model will require an explicit migration and API compatibility plan.
+
+## D-017 — v1.0.0 establishes the stable product contract
+
+**Status:** Accepted
+
+**Date:** 2026-08-15
+
+### Context
+
+`v0.9.0` established formal release tracking and passed the complete production and repository readiness review. The verified product is mature enough for a stable contract without claiming feature completeness or eliminating documented technical debt.
+
+### Decision
+
+Use `v1.0.0` as the first stable Finance Tracker release. Apply semantic-version intent to product contracts: backwards-compatible product features use MINOR versions, backwards-compatible fixes use PATCH versions, and MAJOR versions are reserved for materially incompatible or breaking product, data, or API contracts.
+
+### Consequences
+
+Internal refactoring does not require a major version solely because implementation changes. Version impact follows externally meaningful compatibility, while new capabilities and fixes continue through deliberate changelog, package, and tag updates.

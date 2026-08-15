@@ -20,7 +20,7 @@ The repository captures the intended architecture. External deployment state, se
 
 ## Runtime and deployment contract
 
-All three application packages require Node.js `^20.19.0 || >=22.12.0` and carry the private package version `0.9.0` for the first formally tracked baseline.
+All three application packages require Node.js `^20.19.0 || >=22.12.0` and carry the private package version `1.0.0` for the first stable release. Formal version tracking began with the v0.9.0 baseline.
 
 The repository contains a Vercel SPA rewrite for the client. Backend hosting is provider-neutral in repository configuration; there is no current Railway, Render, or other provider-specific backend descriptor. Production was manually verified on Railway with Node.js 22.23.2. Express trusts the first reverse proxy. Its explicit CORS allowlist contains the local Vite origin and one Vercel client origin, and the deployed Vercel origin was manually verified to match it during the v0.9.0 release review.
 

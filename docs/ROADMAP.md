@@ -1,16 +1,18 @@
 # Roadmap
 
-This roadmap is organized by outcomes rather than speculative dates. It distinguishes baseline stabilization from larger future capabilities.
+This roadmap is organized by outcomes rather than speculative dates. It distinguishes completed release milestones from active post-1.0 work.
 
-## Baseline: v0.9.0
+## Completed milestone: v1.0.0
 
-Preparation for the first formal baseline is complete. **v0.9.0** establishes the documented starting point for semantic-version tracking.
+**v1.0.0**, dated 2026-08-15, is the first stable Finance Tracker release. It promotes the fully verified **v0.9.0** pre-1.0 baseline without adding new runtime functionality solely for the promotion.
 
-Completed preparation includes canonical documentation, runtime and package alignment, portable quality gates, environment examples, independently verified production schema through Migration 016, external transaction contract coverage, private-artifact checks, and manual verification of the Railway runtime, Vercel origin/CORS match, and latest scheduled due-loan run.
+The stable designation reflects verified core workflows, complete release documentation, runtime and package alignment, portable quality gates, environment examples, independently verified production schema through Migration 016, external transaction contract coverage, private-artifact checks, and manual verification of the Railway runtime, Vercel origin/CORS match, and latest scheduled due-loan run.
 
-## Stabilization after v0.9.0
+## Planned minor release: v1.1.0 — Savings / חיסכון
 
-This is the current active roadmap.
+The next planned product capability is a substantial Savings module. Its product and accounting design will be handled as separate work; this roadmap does not define or implement it.
+
+## Post-1.0 stabilization
 
 - Add a general CI workflow for client test/lint/build and server tests.
 - Introduce a canonical migration runner and applied-migration ledger.
@@ -20,21 +22,6 @@ This is the current active roadmap.
 - Reconcile import behavior with the supported Add Transaction business pipeline.
 - Remove or archive stale inventories, template documentation, unused shell components, and superseded design references.
 - Decompose oversized controllers, hooks, and page components along existing business boundaries.
-
-## v1.0.0 readiness
-
-`v1.0.0` should represent stable operational contracts, not completion of every possible feature.
-
-- Database evolution is reproducible and its applied state is observable.
-- Core transaction, budget, loan, shopping, import, and LEGO workflows have stable documented behavior.
-- Critical financial consistency paths have verified regression and database-level coverage.
-- Backup, rollback, and recovery expectations are documented and rehearsable.
-- Test, lint, and build gates run consistently before release.
-- The effective single-user/security model is explicit, reviewed, and intentionally accepted or replaced.
-- Runtime, environment, deployment, and scheduler contracts are stable and documented.
-- High-risk partial mutations are removed or have explicit bounded recovery behavior.
-- Legacy loan behavior is understood, tested, and retained or migrated intentionally.
-- Public/external API contracts are documented and verified.
 
 ## Future capabilities
 
