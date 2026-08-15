@@ -55,6 +55,7 @@ const AddTransaction = () => {
     categories,
     paymentSources,
     loans,
+    loanOptions,
     loanHandling,
     loanPaymentError,
     legoThemes,
@@ -381,7 +382,7 @@ const AddTransaction = () => {
                   helperText="בחירת הלוואה מקשרת את התנועה אליה. שינוי היתרה מתבצע רק בבחירה מפורשת של תשלום הלוואה."
                   required
                 >
-                  {loans.map((loan) => (
+                  {loanOptions.map((loan) => (
                     <option key={loan.id} value={loan.id}>
                       {loan.name} — {loan.lender_name} (₪{Number(loan.current_balance).toLocaleString('en-US')})
                     </option>

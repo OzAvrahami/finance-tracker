@@ -84,10 +84,27 @@ beforeEach(() => {
     id: 7,
     name: 'הלוואת רכב',
     lender_name: 'בנק',
+    status: 'active',
     current_balance: 12000,
     remaining_installments: 36,
     next_payment_date: '2026-08-16',
     calculation_mode: 'loan_payments',
+  }, {
+    id: 8,
+    name: 'הלוואת ליאור שהושלמה',
+    lender_name: 'בנק',
+    status: 'paid',
+    current_balance: 0,
+    remaining_installments: 0,
+    calculation_mode: 'loan_payments',
+  }, {
+    id: 9,
+    name: 'הלוואה בחוב',
+    lender_name: 'בנק',
+    status: 'defaulted',
+    current_balance: 3500,
+    remaining_installments: 6,
+    calculation_mode: 'legacy',
   }] });
   createTransaction.mockResolvedValue({ data: { id: 100 } });
   updateTransaction.mockResolvedValue({ data: { id: 42 } });
@@ -417,6 +434,19 @@ describe('AddTransaction characterization', () => {
     expect(createTransaction.mock.calls[0][0].loan_handling).toEqual({ mode: 'link_only' });
   });
 
+  it('offers active and defaulted loans for create but excludes completed paid loans', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await settleInitialData();
+
+    await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'תשלום הלוואה');
+    const selector = await screen.findByRole('combobox', { name: /הלוואה/ });
+
+    expect(within(selector).getByRole('option', { name: /הלוואת רכב/ })).toBeInTheDocument();
+    expect(within(selector).getByRole('option', { name: /הלוואה בחוב/ })).toBeInTheDocument();
+    expect(within(selector).queryByRole('option', { name: /ליאור/ })).not.toBeInTheDocument();
+  });
+
   it('records an explicitly selected manual repayment with an exact component payload', async () => {
     const user = userEvent.setup();
     renderForm();
@@ -485,7 +515,43 @@ describe('AddTransaction characterization', () => {
 
     expect(await screen.findByDisplayValue('העברה לחשבון הלוואה')).toBeInTheDocument();
     expect(await screen.findByRole('radio', { name: 'קישור בלבד' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('combobox', { name: /הלוואה/ })).toHaveValue('7');
     expect(screen.queryByRole('spinbutton', { name: 'קרן' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a historical paid loan selected during edit and preserves it on unrelated saves', async () => {
+    const user = userEvent.setup();
+    getTransactionById.mockResolvedValue({ data: {
+      id: 42,
+      transaction_date: '2026-08-10',
+      charge_date: '2026-08-10',
+      description: 'תשלום היסטורי לליאור',
+      movement_type: 'expense',
+      category_id: 24,
+      payment_source_id: 10,
+      total_amount: 400,
+      loan_id: 8,
+      loan_payment: null,
+      transaction_items: [],
+    } });
+    renderForm('/edit-transaction/42');
+
+    expect(await screen.findByDisplayValue('תשלום היסטורי לליאור')).toBeInTheDocument();
+    const selector = await screen.findByRole('combobox', { name: /הלוואה/ });
+    await waitFor(() => expect(selector).toHaveValue('8'));
+    expect(within(selector).getByRole('option', { name: /ליאור/ })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('הערות'), 'עדכון הערה בלבד');
+    await user.click(screen.getByRole('button', { name: 'עדכן תנועה' }));
+
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1));
+    expect(updateTransaction).toHaveBeenCalledWith('42', expect.objectContaining({
+      transaction: expect.objectContaining({
+        loan_id: 8,
+        notes: 'עדכון הערה בלבד',
+      }),
+      loan_handling: { mode: 'link_only' },
+    }));
   });
 
   it('loads linked loan_payment components as a manual repayment during edit', async () => {

@@ -184,6 +184,14 @@ const useTransactionForm = () => {
     return String(transaction.category_id) === '24';
   };
 
+  // Keep the complete loan records available for form/accounting behavior,
+  // while preventing new activity from being linked to a paid loan. An edit
+  // must still be able to represent its existing historical loan relation.
+  const loanOptions = loans.filter((loan) => (
+    loan.status !== 'paid'
+      || (isEditMode && String(loan.id) === String(transaction.loan_id))
+  ));
+
   // --- Handlers ---
   const handleTransactionChange = (e) => {
     const { name, value } = e.target;
@@ -433,6 +441,7 @@ const useTransactionForm = () => {
     categories,
     paymentSources,
     loans,
+    loanOptions,
     loanHandling,
     loanPaymentError,
     legoThemes,
