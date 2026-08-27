@@ -1,0 +1,23 @@
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+  categories:
+    - title: Features
+      labels:
+        - feature
+    - title: Enhancements
+      labels:
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+    - title: Maintenance
+      labels:
+        - chore
+    - title: Documentation
+      labels:
+        - documentation
+
