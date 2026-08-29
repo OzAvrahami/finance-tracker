@@ -648,6 +648,7 @@
   }
 
   .shell-sheet-layer {
+    display: flex;
     z-index: 100;
   }
 

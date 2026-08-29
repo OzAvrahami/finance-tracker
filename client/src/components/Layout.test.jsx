@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,6 +11,8 @@ import {
   mobilePrimaryItems,
   standardNavigationItems,
 } from './shell/navigation';
+
+const layoutStyles = readFileSync('src/components/Layout.css', 'utf8');
 
 const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
@@ -119,6 +122,12 @@ describe('responsive navigation surfaces', () => {
 });
 
 describe('mobile More sheet', () => {
+  it('restores the portal layer display inside the mobile breakpoint', () => {
+    expect(layoutStyles).toMatch(
+      /@media\s*\(max-width:\s*833\.98px\)\s*\{[\s\S]*?\.shell-sheet-layer\s*\{[^}]*display:\s*flex;/,
+    );
+  });
+
   it('opens with focus inside and contains every remaining destination', async () => {
     const user = userEvent.setup();
     renderShell('/');
