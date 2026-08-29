@@ -1,4 +1,5 @@
 import React from 'react';
+import { decimalSign, formatDecimalMoney } from '../../utils/money';
 import TechnicalValue from './TechnicalValue';
 
 const currencyMarks = {
@@ -8,15 +9,9 @@ const currencyMarks = {
   GBP: '£',
 };
 
-const suppliedFractionDigits = (value) => {
-  if (typeof value !== 'string') return 0;
-  const match = value.trim().match(/^[+-]?\d+\.(\d+)$/);
-  return match ? Math.min(match[1].length, 20) : 0;
-};
-
 /**
  * Displays a caller-supplied monetary value without changing business data.
- * Numeric strings keep explicitly supplied trailing decimal places.
+ * Canonical decimal strings are formatted without a JavaScript Number conversion.
  */
 const MoneyAmount = ({
   value,
@@ -31,28 +26,24 @@ const MoneyAmount = ({
   className = '',
   ...props
 }) => {
-  const parsed = Number(value);
-  const amount = Number.isFinite(parsed) ? parsed : 0;
-  const isNegative = amount < 0;
-  const isPositive = amount > 0;
+  let comparison = 0;
+  let formatted = '0';
+  try {
+    comparison = decimalSign(value ?? '0');
+    formatted = formatDecimalMoney(value ?? '0', {
+      minimumFractionDigits,
+      maximumFractionDigits,
+    }).replace(/^-/, '');
+  } catch {
+    // Presentation components remain fail-safe for legacy non-budget callers.
+  }
+  const isNegative = comparison < 0;
+  const isPositive = comparison > 0;
   const color = colorize
     ? (isNegative ? 'var(--ft-negative)' : 'var(--ft-positive)')
     : 'inherit';
   const sign = isNegative ? '−' : (signed && isPositive ? '+' : '');
   const mark = currencyMark ?? (currency === false ? '' : (currencyMarks[currency] ?? `${currency} `));
-  const explicitFractionDigits = suppliedFractionDigits(value);
-  const requestedMinDigits = minimumFractionDigits ?? explicitFractionDigits;
-  const minDigits = Math.min(Math.max(Number(requestedMinDigits) || 0, 0), 20);
-  const requestedMaxDigits = Number(maximumFractionDigits);
-  const boundedMaxDigits = Number.isFinite(requestedMaxDigits)
-    ? Math.min(Math.max(requestedMaxDigits, 0), 20)
-    : 20;
-  const maxDigits = Math.max(minDigits, boundedMaxDigits);
-  const formatted = Math.abs(amount).toLocaleString('en-US', {
-    minimumFractionDigits: minDigits,
-    maximumFractionDigits: maxDigits,
-  });
-
   return (
     <TechnicalValue
       {...props}

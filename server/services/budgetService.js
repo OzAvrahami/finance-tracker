@@ -1,0 +1,128 @@
+const { randomUUID } = require('node:crypto');
+
+const callBudgetRpc = async (supabase, name, params) => {
+  const { data, error } = await supabase.rpc(name, params);
+  if (error) throw error;
+  return data;
+};
+
+const requestKey = (value) => value || randomUUID();
+
+const getFundedBudgetMonth = (supabase, month) => (
+  callBudgetRpc(supabase, 'get_funded_budget_month', { p_month: month })
+);
+
+const addManualFunding = (supabase, {
+  month,
+  amount,
+  sourceLabel,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'add_manual_budget_funding', {
+  p_month: month,
+  p_amount: amount,
+  p_source_label: sourceLabel,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const establishBudget = (supabase, {
+  month,
+  categoryId,
+  startingAmount,
+  startingKind = 'manual',
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'establish_funded_budget', {
+  p_month: month,
+  p_category_id: categoryId,
+  p_starting_amount: startingAmount,
+  p_starting_kind: startingKind,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const setBudgetAmount = (supabase, {
+  budgetId,
+  targetAmount,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'set_funded_budget_amount', {
+  p_budget_id: budgetId,
+  p_target_amount: targetAmount,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const removeBudget = (supabase, {
+  budgetId,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'remove_funded_budget', {
+  p_budget_id: budgetId,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const reactivateBudget = (supabase, {
+  budgetId,
+  additionalAmount = '0.00',
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'reactivate_funded_budget', {
+  p_budget_id: budgetId,
+  p_additional_amount: additionalAmount,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const reverseOperation = (supabase, {
+  operationId,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'reverse_funded_budget_operation', {
+  p_operation_id: operationId,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const copyBudgetMonth = (supabase, {
+  fromMonth,
+  toMonth,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'copy_funded_budget_month', {
+  p_from_month: fromMonth,
+  p_to_month: toMonth,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const toCompatibilityRows = (state) => (state?.categories || [])
+  .filter((category) => category.budget_id && category.lifecycle_state === 'active')
+  .map((category) => ({
+    id: category.budget_id,
+    category_id: category.category_id,
+    month: state.month,
+    amount: category.final_funded,
+    starting_amount: category.starting_amount,
+    starting_kind: category.starting_kind,
+    adjustment_total: category.adjustment_total,
+    actual_spent: category.actual_spent,
+    remaining: category.remaining,
+    deficit: category.deficit,
+    lifecycle_state: category.lifecycle_state,
+    categories: category.categories,
+  }));
+
+module.exports = {
+  addManualFunding,
+  copyBudgetMonth,
+  establishBudget,
+  getFundedBudgetMonth,
+  reactivateBudget,
+  removeBudget,
+  reverseOperation,
+  setBudgetAmount,
+  toCompatibilityRows,
+};

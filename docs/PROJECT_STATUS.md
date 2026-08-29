@@ -6,7 +6,7 @@
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
 - No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
-- Repository migration history currently reaches Migration 016.
+- Repository migration history currently reaches Migration 017. Migration 017 is implemented and locally rehearsed only; it has not been applied to production.
 - A read-only production catalog verification on 2026-08-15 confirmed the expected repository-era objects through Migration 015. Migration 016 was subsequently applied and independently verified read-only. No Finance Tracker applied-migration ledger exists, so these findings are object-state evidence rather than an authoritative execution history.
 
 The application is mature, operational across its principal product areas, and stable for regular personal use. The known limitations below remain explicit post-1.0 stabilization work rather than hidden release blockers.
@@ -19,7 +19,7 @@ The application is mature, operational across its principal product areas, and s
 | Transactions | Operational with known limitations | Direct, itemized, installment, loan-linked, filtered, and paginated workflows. Core loan accounting is atomic; several surrounding item/LEGO/keyword operations are separate calls. |
 | Categories | Operational | Active state, keywords, quick creation, and Settings CRUD. |
 | Payment sources | Operational | Managed in Settings and used by transactions, loans, budgets, and checkout. |
-| Monthly budgets | Operational | Monthly read/upsert, copy, delete, and category breakdown. |
+| Monthly budgets | Foundation implemented locally, production migration pending | Funded month/read model, immutable opening snapshots and provenance, bounded funding/allocation/adjust/remove/reactivate/reverse/copy commands, and compatibility reads. Manual confirmed funds are the only normal source; recurring defaults, overrides, carryover, savings, rich reallocation/deficit UX, and the full summary redesign remain future work. |
 | Annual summary | Operational | Dedicated annual view using API-backed financial aggregates. |
 | Loans | Operational with known limitations | Finance v3 active/closed views, details, modern creation, legacy compatibility, manual/automatic payments, CPI metadata, and early payoff. CPI automatic calculation is intentionally unsupported. |
 | Loan payments | Operational | Authoritative principal accounting with installment, catch-up, irregular, balance-adjustment, and early-payoff events. |
@@ -43,6 +43,9 @@ The application is mature, operational across its principal product areas, and s
 ## Known limitations
 
 - There is no canonical migration runner or authoritative applied-migration ledger in the repository.
+- Migration 017 has not been applied to production. Repository clients and controllers require that migration before deployment.
+- Income transactions do not yet supply consumable budget funding. Monthly budget funding is manual; `legacy_import` is migration-only.
+- Recurring defaults, month overrides, carryover, unused-budget disposition/savings, category reallocation UX, explicit deficit-resolution UX, and the full funded-budget presentation remain deferred.
 - There is no general CI workflow for client tests, lint, build, and server tests.
 - Legacy loan calculation and the newer `loan_payments` model coexist intentionally.
 - Automatic payment generation does not support CPI-indexed loans.

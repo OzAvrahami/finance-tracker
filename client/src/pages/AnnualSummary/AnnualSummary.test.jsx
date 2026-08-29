@@ -41,19 +41,6 @@ const months = monthLabels.map((_, index) => `${currentYear}-${String(index + 1)
 
 const annualData = (overrides = {}) => ({
   year: currentYear,
-  summary: {
-    yearly_planned: 20400,
-    yearly_actual: 17700,
-    remaining: 2700,
-    budgeted_expenses: 17200,
-    non_budgeted_expenses: 500,
-    monthly_average: 2212.5,
-    projected_year_end: 26550,
-    months_with_data: 8,
-    months_with_budget: 8,
-    allowance_per_remaining_month: 675,
-    ...overrides.summary,
-  },
   monthly: monthLabels.map((label, index) => ({
     month: months[index],
     label,
@@ -73,6 +60,22 @@ const annualData = (overrides = {}) => ({
     ],
   },
   ...overrides,
+  // Keep partial summary overrides representative of the complete API contract.
+  // The old shallow fixture happened to tolerate missing money fields through
+  // JavaScript NaN coercion, which exact decimal handling intentionally rejects.
+  summary: {
+    yearly_planned: 20400,
+    yearly_actual: 17700,
+    remaining: 2700,
+    budgeted_expenses: 17200,
+    non_budgeted_expenses: 500,
+    monthly_average: 2212.5,
+    projected_year_end: 26550,
+    months_with_data: 8,
+    months_with_budget: 8,
+    allowance_per_remaining_month: 675,
+    ...overrides.summary,
+  },
 });
 
 const matrixCell = (planned, actual) => ({

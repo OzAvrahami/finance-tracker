@@ -29,8 +29,9 @@ export const CopyBudgetDialog = ({ open, sourceMonth, onClose, onCopy }) => {
     try {
       await onCopy(targetMonth);
       onClose('copied');
-    } catch {
-      setError('העתקת התקציב נכשלה. התקציב בחודש המקור לא השתנה.');
+    } catch (copyError) {
+      const detail = copyError?.response?.data?.error;
+      setError(detail || 'העתקת התקציב נכשלה. ודאו שבחודש היעד יש מספיק כסף זמין שטרם הוקצה.');
     } finally {
       setCopying(false);
     }
@@ -77,7 +78,7 @@ export const CopyBudgetDialog = ({ open, sourceMonth, onClose, onCopy }) => {
         required
         disabled={copying}
       />
-      <p className="budget-copy-dialog__note">ההעתקה כוללת יעדי תקציב בלבד. תנועות והוצאות בפועל אינן מועתקות.</p>
+      <p className="budget-copy-dialog__note">ההעתקה משתמשת רק בכסף זמין שכבר אושר בחודש היעד. תנועות והוצאות בפועל אינן מועתקות.</p>
       {error && <Alert variant="error" urgent>{error}</Alert>}
     </Dialog>
   );
@@ -88,15 +89,15 @@ export const DeleteBudgetDialog = ({ budget, onClose, onConfirm }) => (
     open={Boolean(budget)}
     onClose={onClose}
     onConfirm={() => onConfirm(budget)}
-    title="מחיקת תקציב הקטגוריה"
+    title="הסרת תקציב הקטגוריה"
     message={(
       <>
-        למחוק את יעד התקציב עבור <strong>{budget?.categoryName}</strong>? התנועות עצמן לא נמחקות — רק יעד התקציב לחודש הזה.
+        להסיר את התקציב הפעיל עבור <strong>{budget?.categoryName}</strong>? הכסף הממומן שעדיין לא נוצל יחזור לסכום שטרם הוקצה. היסטוריית התקציב וההוצאות נשמרות.
       </>
     )}
-    confirmLabel="מחיקת התקציב"
+    confirmLabel="הסרת התקציב"
     cancelLabel="ביטול"
     variant="destructive"
-    errorMessage="מחיקת התקציב נכשלה. היעד נשאר ברשימה ואפשר לנסות שוב."
+    errorMessage="הסרת התקציב נכשלה. התקציב נשאר פעיל ואפשר לנסות שוב."
   />
 );

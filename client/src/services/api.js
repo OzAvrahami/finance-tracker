@@ -136,6 +136,13 @@ export const getLegoSetDetails = (setNum) => api.get(`/transactions/lego/details
 
 // Budget
 export const getBudgetsByMonth = (month) => api.get(`/budgets?month=${month}`);
+export const getFundedBudgetMonth = (month) => api.get('/budgets/funded', { params: { month } });
+export const addManualBudgetFunding = (data) => api.post('/budgets/funded/funding', data);
+export const establishFundedBudget = (data) => api.post('/budgets/funded/categories', data);
+export const adjustFundedBudget = (id, data) => api.patch(`/budgets/funded/categories/${id}`, data);
+export const removeFundedBudget = (id, data) => api.post(`/budgets/funded/categories/${id}/remove`, data);
+export const reactivateFundedBudget = (id, data) => api.post(`/budgets/funded/categories/${id}/reactivate`, data);
+export const reverseFundedBudgetOperation = (id, data) => api.post(`/budgets/funded/operations/${id}/reverse`, data);
 export const upsertBudget = (data) => api.post('/budgets', data);
 export const copyBudget = (data) => api.post('/budgets/copy', data);
 export const deleteBudget = (id) => api.delete(`/budgets/${id}`);

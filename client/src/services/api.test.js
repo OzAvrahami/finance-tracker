@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // interceptor at import time. Both are stubbed so these tests exercise only the
 // query-string construction.
 const getMock = vi.fn(() => Promise.resolve({ data: {} }));
+const postMock = vi.fn(() => Promise.resolve({ data: {} }));
+const patchMock = vi.fn(() => Promise.resolve({ data: {} }));
 
 vi.mock('../config/supabase', () => ({
   supabase: {
@@ -18,9 +20,9 @@ vi.mock('axios', () => ({
   default: {
     create: () => ({
       get: getMock,
-      post: vi.fn(),
+      post: postMock,
       put: vi.fn(),
-      patch: vi.fn(),
+      patch: patchMock,
       delete: vi.fn(),
       interceptors: {
         request: { use: vi.fn() },
@@ -30,7 +32,15 @@ vi.mock('axios', () => ({
   },
 }));
 
-const { getTransactions, getDashboardSummary } = await import('./api');
+const {
+  addManualBudgetFunding,
+  adjustFundedBudget,
+  establishFundedBudget,
+  getDashboardSummary,
+  getFundedBudgetMonth,
+  getTransactions,
+  removeFundedBudget,
+} = await import('./api');
 
 /** Returns the parsed query params of the most recent GET. */
 function lastQuery() {
@@ -181,5 +191,33 @@ describe('getDashboardSummary', () => {
     expect(getMock).toHaveBeenCalledWith('/dashboard/summary', {
       params: { from: '2026-08-01', to: '2026-08-31' },
     });
+  });
+});
+
+describe('funded budget API boundary', () => {
+  beforeEach(() => {
+    getMock.mockClear();
+    postMock.mockClear();
+    patchMock.mockClear();
+  });
+
+  it('reads the canonical month without constructing a legacy query string', () => {
+    getFundedBudgetMonth('2026-08');
+    expect(getMock).toHaveBeenCalledWith('/budgets/funded', { params: { month: '2026-08' } });
+  });
+
+  it('uses bounded commands for funding, first allocation, adjustment, and removal', () => {
+    const funding = { month: '2026-08', amount: '100.00', source_label: 'Confirmed', request_key: 'a' };
+    const first = { month: '2026-08', category_id: 2, starting_amount: '0.00', request_key: 'b' };
+    const adjustment = { target_amount: '50.00', request_key: 'c' };
+    const removal = { request_key: 'd' };
+    addManualBudgetFunding(funding);
+    establishFundedBudget(first);
+    adjustFundedBudget(7, adjustment);
+    removeFundedBudget(7, removal);
+    expect(postMock).toHaveBeenNthCalledWith(1, '/budgets/funded/funding', funding);
+    expect(postMock).toHaveBeenNthCalledWith(2, '/budgets/funded/categories', first);
+    expect(patchMock).toHaveBeenCalledWith('/budgets/funded/categories/7', adjustment);
+    expect(postMock).toHaveBeenNthCalledWith(3, '/budgets/funded/categories/7/remove', removal);
   });
 });

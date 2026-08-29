@@ -10,9 +10,19 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #17 / #26 — Migration 017 funded-budget foundation: canonical ILS months, immutable category opening snapshots, append-only funding/movement/lifecycle provenance, reconciled reads, and atomic idempotent RPC commands.
+- Minimum funded-budget API and client compatibility showing available, allocated, unallocated, all actual spending, and category deficits.
+- Disposable PostgreSQL migration/RPC verification and a production migration review runbook.
+
 ### Changed
 
+- Budget compatibility `amount` and annual planned totals now represent derived final funded amounts.
+- Budget removal and copy routes now preserve provenance and require destination funding rather than deleting history or inventing money.
+- Funded-budget money crosses PostgreSQL, JSON, Node, and React as canonical decimal strings; authoritative mutation requests reject JSON numbers and annual compatibility aggregation uses exact minor-unit arithmetic.
+
 ### Fixed
+
+- #17 / #26 — Reject non-finite funded values and transaction actuals, reserve idempotency keys for no-op adjustments, use rollback-safe sequence restart, standardize month-first locks, and narrow legacy budget privileges.
 
 ### Removed
 

@@ -307,3 +307,21 @@ Use `v1.0.0` as the first stable Finance Tracker release. Apply semantic-version
 ### Consequences
 
 Internal refactoring does not require a major version solely because implementation changes. Version impact follows externally meaningful compatibility, while new capabilities and fixes continue through deliberate changelog, package, and tag updates.
+
+## D-018 — Funded budgets use immutable provenance and derived current state
+
+**Status:** Accepted
+
+**Date:** 2026-08-29
+
+### Context
+
+The legacy `budgets.amount` value could be overwritten without explaining the source of money or why a category changed. The funded-budget initiative also needs a stable foundation for later defaults, overrides, carryover, savings, reallocations, unbudgeted expenses, and deficit resolution.
+
+### Decision
+
+Use a hybrid PostgreSQL model. Existing budget rows become immutable category/month opening snapshots. Append-only operations, funding entries, movements, and lifecycle events are authoritative for subsequent change; derived views provide efficient current state. Normal initial funding is confirmed manual available money with a required label. `legacy_import` is migration-only, and transaction income is not yet consumable funding. Transactions remain authoritative actual spending.
+
+### Consequences
+
+Active zero, inactive history, and no budget are distinct. Removal releases only eligible unspent funding and preserves the point-in-time actual-spending snapshot used; later ledger edits do not retroactively rewrite that funding history. All financial mutations use idempotent RPCs, exact finite numeric arithmetic, canonical month-first locks, constraints, and reconciliation. Canonical monetary reads and authoritative mutation inputs use decimal strings across the JSON/Node/React boundary; numeric JSON money is rejected before the RPC call because it may already be rounded. JavaScript `Number` is permitted only for non-authoritative visual geometry or percentages and cannot feed a financial mutation. Generic compensating reversal is intentionally limited to supported manual-funding and monetary-adjustment operations. Legacy `amount` remains only a compatibility field and cannot be rewritten after cutover. Production deployment requires a separately reviewed Migration 017 run; repository presence is not deployment evidence.

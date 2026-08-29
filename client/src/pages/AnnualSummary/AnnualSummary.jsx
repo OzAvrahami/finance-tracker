@@ -6,6 +6,7 @@ import {
   GlassCard,
 } from '../../components/ui';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
+import { compareMoney } from '../../utils/money';
 import { getAnnualBudgetSummary, getMonthlyCategoryBreakdown } from '../../services/api';
 import {
   AnnualBreakdownSection,
@@ -118,7 +119,9 @@ const AnnualSummary = () => {
   };
 
   const retryPage = () => setRequestVersion((version) => version + 1);
-  const isEmpty = data?.summary?.yearly_planned === 0 && data?.summary?.yearly_actual === 0;
+  const isEmpty = data
+    && compareMoney(data.summary.yearly_planned ?? '0.00') === 0
+    && compareMoney(data.summary.yearly_actual ?? '0.00') === 0;
   const insights = data ? buildAnnualInsights(data) : null;
 
   return (

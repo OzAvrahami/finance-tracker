@@ -73,7 +73,7 @@ const BudgetActions = ({ row, disabled, onEdit, onDelete }) => (
       type="button"
       size="sm"
       className="budget-row-actions__delete"
-      aria-label={`מחיקת תקציב עבור ${row.categoryName}`}
+      aria-label={`הסרת תקציב פעיל עבור ${row.categoryName}`}
       disabled={disabled}
       onClick={() => onDelete(row)}
     >
@@ -91,9 +91,9 @@ const CategoryIdentity = ({ row }) => (
 );
 
 const RemainingAmount = ({ row }) => (
-  <div className={`budget-remaining budget-remaining--${row.remaining < 0 ? 'negative' : 'positive'}`}>
-    <span className="budget-remaining__label">{row.remaining < 0 ? 'חריגה' : 'נותר'}</span>
-    <BudgetMoneyAmount value={row.remaining < 0 ? Math.abs(row.remaining) : row.remaining} />
+  <div className={`budget-remaining budget-remaining--${row.isDeficit ? 'negative' : 'positive'}`}>
+    <span className="budget-remaining__label">{row.isDeficit ? 'חריגה' : 'נותר'}</span>
+    <BudgetMoneyAmount value={row.remainingAbsolute} />
   </div>
 );
 
@@ -126,7 +126,7 @@ const BudgetList = ({
         <thead>
           <tr>
             <th scope="col">קטגוריה</th>
-            <th scope="col">מתוכנן</th>
+            <th scope="col">ממומן סופי</th>
             <th scope="col">בפועל</th>
             <th scope="col">נותר / חריגה</th>
             <th scope="col">ניצול</th>
@@ -204,9 +204,9 @@ const BudgetList = ({
               />
             ) : (
               <dl className="budget-mobile-card__amounts">
-                <div><dt>מתוכנן</dt><dd><BudgetMoneyAmount value={row.planned} /></dd></div>
+                <div><dt>ממומן סופי</dt><dd><BudgetMoneyAmount value={row.planned} /></dd></div>
                 <div><dt>בפועל</dt><dd className="budget-actual-amount"><BudgetMoneyAmount value={row.actual} /></dd></div>
-                <div><dt>{row.remaining < 0 ? 'חריגה' : 'נותר'}</dt><dd><RemainingAmount row={row} /></dd></div>
+                <div><dt>{row.isDeficit ? 'חריגה' : 'נותר'}</dt><dd><RemainingAmount row={row} /></dd></div>
               </dl>
             )}
             <BudgetProgress row={row} />

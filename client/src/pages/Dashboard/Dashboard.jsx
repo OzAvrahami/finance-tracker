@@ -9,6 +9,7 @@ import {
 } from '../../services/api';
 import { getMonthRange } from '../../utils/dateRange';
 import { formatMonthKeyShort } from '../../utils/dashboardHelpers';
+import { approximateMoneyRatio, subtractMoney } from '../../utils/money';
 import { isOverdue } from '../../utils/taskHelpers';
 import {
   DashboardBudgets,
@@ -133,9 +134,9 @@ const Dashboard = () => {
 
   const budgetProgress = useMemo(() => budgets.data
     .map((budgetItem) => {
-      const spent = Number(budgetItem.actual_spent) || 0;
-      const planned = Number(budgetItem.amount) || 0;
-      const utilization = planned > 0 ? (spent / planned) * 100 : 0;
+      const spent = budgetItem.actual_spent ?? '0.00';
+      const planned = budgetItem.amount ?? '0.00';
+      const utilization = approximateMoneyRatio(spent, planned);
 
       return {
         id: budgetItem.id,
@@ -144,7 +145,7 @@ const Dashboard = () => {
         spent,
         planned,
         utilization,
-        remaining: planned - spent,
+        remaining: subtractMoney(planned, spent),
       };
     })
     .sort((first, second) => second.utilization - first.utilization), [budgets.data]);

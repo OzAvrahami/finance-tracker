@@ -2,37 +2,82 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { Alert, ErrorState } from '../../components/ui';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
+  absoluteMoney,
+  approximateMoneyRatio,
+  compareMoney,
+  subtractMoney,
+} from '../../utils/money';
+import {
+  addManualBudgetFunding,
+  adjustFundedBudget,
   copyBudget,
-  deleteBudget,
-  getBudgetsByMonth,
+  establishFundedBudget,
   getCategories,
-  upsertBudget,
+  getFundedBudgetMonth,
+  removeFundedBudget,
 } from '../../services/api';
 import BudgetSummary from './BudgetSummary';
 import BudgetList from './BudgetList';
+import BudgetMoneyAmount from './BudgetMoneyAmount';
 import { CopyBudgetDialog, DeleteBudgetDialog } from './BudgetDialogs';
 import {
   AddBudgetPanel,
   BudgetEmpty,
   BudgetInsights,
   BudgetSkeleton,
+  ManualFundingPanel,
 } from './BudgetStates';
 import './Budget.css';
 
 const currentCalendarMonth = () => new Date().toISOString().slice(0, 7);
 
+const emptyState = (month) => ({
+  month,
+  currency: 'ILS',
+  funding: {
+    available: '0.00',
+    starting_total: '0.00',
+    total_allocated: '0.00',
+    active_allocated: '0.00',
+    inactive_retained_funding: '0.00',
+    unallocated: '0.00',
+  },
+  actuals: { total: '0.00', budgeted: '0.00', unbudgeted: '0.00' },
+  categories: [],
+  history: [],
+});
+
+const requestKey = () => globalThis.crypto.randomUUID();
+
+const domainMessage = (error, fallback) => {
+  const message = error?.response?.data?.error;
+  if (!message) return fallback;
+  if (/insufficient unallocated/i.test(message)) {
+    return 'אין מספיק כסף שטרם הוקצה בחודש היעד. יש להוסיף כסף זמין לפני ההקצאה.';
+  }
+  if (/already exists/i.test(message)) {
+    return 'כבר קיימת היסטוריית תקציב לקטגוריה בחודש זה.';
+  }
+  if (/inactive/i.test(message)) {
+    return 'התקציב אינו פעיל. יש להפעיל אותו מחדש לפני שינוי הסכום.';
+  }
+  return message;
+};
+
 const enrichBudget = (budget) => {
-  const planned = Number(budget.amount);
-  const actual = Number(budget.actual_spent);
-  const remaining = planned - actual;
-  const percent = planned > 0 ? Math.round((actual / planned) * 100) : 0;
+  const planned = budget.final_funded ?? '0.00';
+  const actual = budget.actual_spent ?? '0.00';
+  const remaining = budget.remaining ?? subtractMoney(planned, actual);
+  const plannedComparison = compareMoney(planned);
+  const remainingComparison = compareMoney(remaining);
+  const percent = plannedComparison > 0 ? Math.round(approximateMoneyRatio(actual, planned)) : 0;
 
   let tone = 'default';
   let statusLabel = 'תקין';
-  if (percent > 100) {
+  if (remainingComparison < 0) {
     tone = 'negative';
-    statusLabel = 'חריגה';
-  } else if (percent === 100) {
+    statusLabel = 'גירעון';
+  } else if (plannedComparison > 0 && percent === 100) {
     tone = 'warning';
     statusLabel = 'נוצל במלואו';
   } else if (percent >= 70) {
@@ -40,14 +85,20 @@ const enrichBudget = (budget) => {
     statusLabel = 'קרוב למגבלה';
   } else if (percent === 0) {
     tone = 'neutral';
-    statusLabel = planned === 0 ? 'תקציב אפס' : 'ללא הוצאה';
+    statusLabel = plannedComparison === 0 ? 'תקציב אפס פעיל' : 'ללא הוצאה';
   }
 
   return {
     ...budget,
+    id: budget.budget_id,
+    amount: planned,
     planned,
+    starting: budget.starting_amount ?? '0.00',
+    adjustments: budget.adjustment_total ?? '0.00',
     actual,
     remaining,
+    remainingAbsolute: absoluteMoney(remaining),
+    isDeficit: remainingComparison < 0,
     percent,
     tone,
     statusLabel,
@@ -59,7 +110,7 @@ const enrichBudget = (budget) => {
 const Budget = () => {
   const [selectedMonth, setSelectedMonth] = useState(currentCalendarMonth);
   const [requestVersion, setRequestVersion] = useState(0);
-  const [query, setQuery] = useState({ month: null, version: -1, budgets: [], error: null });
+  const [query, setQuery] = useState({ month: null, version: -1, state: emptyState(currentCalendarMonth()), error: null });
   const [categories, setCategories] = useState([]);
   const [categoriesError, setCategoriesError] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -68,25 +119,28 @@ const Budget = () => {
   const [editError, setEditError] = useState('');
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [showFundingPanel, setShowFundingPanel] = useState(false);
   const [newCategoryId, setNewCategoryId] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [addPending, setAddPending] = useState(false);
   const [addError, setAddError] = useState('');
+  const [fundingAmount, setFundingAmount] = useState('');
+  const [fundingSource, setFundingSource] = useState('');
+  const [fundingPending, setFundingPending] = useState(false);
+  const [fundingError, setFundingError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const { setPageHeader } = useContext(PageHeaderContext);
 
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
-  const budgets = useMemo(
-    () => (query.month === selectedMonth ? query.budgets : []),
-    [query.budgets, query.month, selectedMonth]
-  );
+  const state = query.month === selectedMonth ? query.state : emptyState(selectedMonth);
   const pageError = !loading && query.error;
+  const activeBudgets = useMemo(
+    () => state.categories.filter((category) => category.budget_id && category.lifecycle_state === 'active'),
+    [state.categories]
+  );
 
   useEffect(() => {
-    setPageHeader({
-      title: 'תקציב חודשי',
-      subtitle: 'מעקב תקציב חודשי לפי קטגוריה',
-    });
+    setPageHeader({ title: 'תקציב חודשי', subtitle: 'תקציב חודשי ממומן לפי קטגוריה' });
   }, [setPageHeader]);
 
   useEffect(() => {
@@ -109,17 +163,17 @@ const Budget = () => {
     const month = selectedMonth;
     const version = requestVersion;
 
-    getBudgetsByMonth(month)
+    getFundedBudgetMonth(month)
       .then((response) => {
         if (!active) return;
-        setQuery({ month, version, budgets: response.data, error: null });
+        setQuery({ month, version, state: response.data, error: null });
       })
       .catch(() => {
         if (!active) return;
         setQuery((current) => ({
           month,
           version,
-          budgets: current.month === month ? current.budgets : [],
+          state: current.month === month ? current.state : emptyState(month),
           error: 'לא ניתן היה לטעון את התקציב החודשי.',
         }));
       });
@@ -127,34 +181,38 @@ const Budget = () => {
     return () => { active = false; };
   }, [selectedMonth, requestVersion]);
 
-  const rows = useMemo(() => budgets.map(enrichBudget), [budgets]);
-
-  const summary = useMemo(() => {
-    const totalBudget = budgets.reduce((sum, budget) => sum + Number(budget.amount), 0);
-    const totalSpent = budgets.reduce((sum, budget) => sum + Number(budget.actual_spent), 0);
-    return { totalBudget, totalSpent, remaining: totalBudget - totalSpent };
-  }, [budgets]);
+  const rows = useMemo(() => activeBudgets.map(enrichBudget), [activeBudgets]);
+  const summary = useMemo(() => ({
+    available: state.funding.available,
+    allocated: state.funding.total_allocated,
+    unallocated: state.funding.unallocated,
+    totalSpent: state.actuals.total,
+  }), [state]);
 
   const insights = useMemo(() => {
-    const withDiff = budgets.map((budget) => ({
+    const withDiff = activeBudgets.map((budget) => ({
       ...budget,
-      diff: Number(budget.amount) - Number(budget.actual_spent),
+      id: budget.budget_id,
+      amount: budget.final_funded,
+      diff: subtractMoney(budget.final_funded, budget.actual_spent),
     }));
     const overBudget = withDiff
-      .filter((budget) => budget.diff < 0)
-      .sort((first, second) => first.diff - second.diff)
+      .filter((budget) => compareMoney(budget.diff) < 0)
+      .sort((a, b) => compareMoney(a.diff, b.diff))
       .slice(0, 3);
     const underUtilized = withDiff
-      .filter((budget) => budget.diff > 0 && Number(budget.amount) > 0)
-      .sort((first, second) => second.diff - first.diff)
+      .filter((budget) => compareMoney(budget.diff) > 0 && compareMoney(budget.final_funded) > 0)
+      .sort((a, b) => compareMoney(b.diff, a.diff))
       .slice(0, 3);
     return { overBudget, underUtilized };
-  }, [budgets]);
+  }, [activeBudgets]);
 
   const availableCategories = useMemo(() => {
-    const budgetedIds = new Set(budgets.map((budget) => budget.category_id));
-    return categories.filter((category) => category.type === 'expense' && !budgetedIds.has(category.id));
-  }, [budgets, categories]);
+    const snapshotCategoryIds = new Set(
+      state.categories.filter((category) => category.budget_id).map((category) => category.category_id)
+    );
+    return categories.filter((category) => category.type === 'expense' && !snapshotCategoryIds.has(category.id));
+  }, [categories, state.categories]);
 
   const refreshBudgets = () => setRequestVersion((version) => version + 1);
 
@@ -166,31 +224,64 @@ const Budget = () => {
     setAddError('');
   };
 
+  const closeFundingPanel = () => {
+    if (fundingPending) return;
+    setShowFundingPanel(false);
+    setFundingAmount('');
+    setFundingSource('');
+    setFundingError('');
+  };
+
   const changeMonth = (month) => {
     if (!month || month === selectedMonth) return;
     closeAddPanel();
+    closeFundingPanel();
     setEditingId(null);
     setEditAmount('');
     setEditError('');
     setSelectedMonth(month);
   };
 
+  const handleFunding = async () => {
+    if (!fundingSource.trim() || !fundingAmount || fundingPending) return;
+    setFundingPending(true);
+    setFundingError('');
+    try {
+      await addManualBudgetFunding({
+        month: selectedMonth,
+        amount: fundingAmount,
+        source_label: fundingSource.trim(),
+        request_key: requestKey(),
+      });
+      setShowFundingPanel(false);
+      setFundingAmount('');
+      setFundingSource('');
+      refreshBudgets();
+    } catch (error) {
+      setFundingError(domainMessage(error, 'הוספת הכסף הזמין נכשלה. הפרטים נשמרו ואפשר לנסות שוב.'));
+    } finally {
+      setFundingPending(false);
+    }
+  };
+
   const handleAdd = async () => {
-    if (!newCategoryId || !newAmount || addPending) return;
+    if (!newCategoryId || newAmount === '' || addPending) return;
     setAddPending(true);
     setAddError('');
     try {
-      await upsertBudget({
-        category_id: Number(newCategoryId),
+      await establishFundedBudget({
         month: selectedMonth,
-        amount: Number(newAmount),
+        category_id: Number(newCategoryId),
+        starting_amount: newAmount,
+        starting_kind: 'manual',
+        request_key: requestKey(),
       });
+      setShowAddPanel(false);
       setNewCategoryId('');
       setNewAmount('');
-      setShowAddPanel(false);
       refreshBudgets();
-    } catch {
-      setAddError('הוספת התקציב נכשלה. הבחירה והסכום נשמרו ואפשר לנסות שוב.');
+    } catch (error) {
+      setAddError(domainMessage(error, 'הוספת התקציב נכשלה. הבחירה והסכום נשמרו ואפשר לנסות שוב.'));
     } finally {
       setAddPending(false);
     }
@@ -198,7 +289,7 @@ const Budget = () => {
 
   const startEdit = (row) => {
     setEditingId(row.id);
-    setEditAmount(String(row.planned));
+    setEditAmount(row.planned);
     setEditError('');
   };
 
@@ -210,32 +301,31 @@ const Budget = () => {
   };
 
   const handleEdit = async (row) => {
-    if (editPending) return;
+    if (editPending || editAmount === '') return;
     setEditPending(true);
     setEditError('');
     try {
-      await upsertBudget({
-        category_id: row.category_id,
-        month: selectedMonth,
-        amount: Number(editAmount),
+      await adjustFundedBudget(row.id, {
+        target_amount: editAmount,
+        request_key: requestKey(),
       });
       setEditingId(null);
       setEditAmount('');
       refreshBudgets();
-    } catch {
-      setEditError('שמירת התקציב נכשלה. הסכום שהוזן נשמר ואפשר לנסות שוב.');
+    } catch (error) {
+      setEditError(domainMessage(error, 'שמירת התקציב נכשלה. הסכום שהוזן נשמר ואפשר לנסות שוב.'));
     } finally {
       setEditPending(false);
     }
   };
 
   const handleDelete = async (row) => {
-    await deleteBudget(row.id);
+    await removeFundedBudget(row.id, { request_key: requestKey() });
     refreshBudgets();
   };
 
   const handleCopy = async (targetMonth) => {
-    await copyBudget({ fromMonth: selectedMonth, toMonth: targetMonth });
+    await copyBudget({ fromMonth: selectedMonth, toMonth: targetMonth, request_key: requestKey() });
     refreshBudgets();
   };
 
@@ -246,9 +336,22 @@ const Budget = () => {
         onMonthChange={changeMonth}
         summary={summary}
         loading={loading}
-        unavailable={Boolean(pageError && budgets.length === 0)}
+        unavailable={Boolean(pageError && activeBudgets.length === 0)}
+        onOpenFunding={() => setShowFundingPanel(true)}
         onOpenCopy={() => setShowCopyDialog(true)}
         onOpenAdd={() => setShowAddPanel(true)}
+      />
+
+      <ManualFundingPanel
+        open={showFundingPanel}
+        amount={fundingAmount}
+        sourceLabel={fundingSource}
+        saving={fundingPending}
+        error={fundingError}
+        onAmountChange={setFundingAmount}
+        onSourceLabelChange={setFundingSource}
+        onSave={handleFunding}
+        onClose={closeFundingPanel}
       />
 
       <AddBudgetPanel
@@ -265,7 +368,14 @@ const Budget = () => {
         onClose={closeAddPanel}
       />
 
-      {pageError && budgets.length > 0 && (
+      {!loading && compareMoney(state.actuals.unbudgeted) > 0 && (
+        <Alert variant="warning" className="budget-refresh-error">
+          הוצאות ללא תקציב פעיל בחודש זה:{' '}
+          <BudgetMoneyAmount value={state.actuals.unbudgeted} />.
+        </Alert>
+      )}
+
+      {pageError && activeBudgets.length > 0 && (
         <Alert variant="error" className="budget-refresh-error">
           {pageError} הנתונים האחרונים נשארו מוצגים.
           <button type="button" onClick={refreshBudgets}>ניסיון נוסף</button>
@@ -274,13 +384,13 @@ const Budget = () => {
 
       {loading ? (
         <BudgetSkeleton />
-      ) : pageError && budgets.length === 0 ? (
+      ) : pageError && activeBudgets.length === 0 ? (
         <ErrorState
           title="לא ניתן לטעון את התקציב"
-          description="אירעה שגיאה בטעינת יעדי התקציב וההוצאות בפועל לחודש שנבחר."
+          description="אירעה שגיאה בטעינת התקציב הממומן וההוצאות בפועל לחודש שנבחר."
           onRetry={refreshBudgets}
         />
-      ) : budgets.length === 0 ? (
+      ) : activeBudgets.length === 0 ? (
         <BudgetEmpty
           month={selectedMonth}
           canAdd={availableCategories.length > 0}

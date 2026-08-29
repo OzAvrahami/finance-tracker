@@ -20,6 +20,7 @@ import {
   Skeleton,
   TechnicalValue,
 } from '../../components/ui';
+import { absoluteMoney, compareMoney, formatDecimalMoney } from '../../utils/money';
 import { isOverdue, PRIORITY_LABELS } from '../../utils/taskHelpers';
 import {
   Bar,
@@ -450,11 +451,15 @@ export const DashboardBudgets = ({ resource, currentMonthKey }) => (
     {resource.status === 'success' && resource.data.length > 0 && (
       <ul className="dashboard-budget-list">
         {resource.data.slice(0, 4).map((budget) => {
-          const isOver = budget.remaining < 0;
+          const isOver = compareMoney(budget.remaining) < 0;
           const isNear = !isOver && budget.utilization >= 85;
           const tone = isOver ? 'neg' : isNear ? 'warn' : 'pos';
           const stateLabel = isOver ? 'חריגה' : isNear ? 'קרוב למגבלה' : 'בתוך התקציב';
           const roundedUtilization = Math.round(budget.utilization);
+          const exactRemaining = formatDecimalMoney(absoluteMoney(budget.remaining), {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          });
 
           return (
             <li key={budget.id} className={`dashboard-budget-list--${tone}`}>
@@ -474,10 +479,10 @@ export const DashboardBudgets = ({ resource, currentMonthKey }) => (
                 <span>תוכנן <MoneyAmount value={budget.planned} /></span>
                 <span>בוצע <MoneyAmount value={budget.spent} /></span>
                 <span className="dashboard-budget-list__remaining">
-                  {isOver ? 'חריגה' : 'נותרו'} <MoneyAmount value={Math.abs(budget.remaining)} />
+                  {isOver ? 'חריגה' : 'נותרו'} <MoneyAmount value={absoluteMoney(budget.remaining)} />
                 </span>
                 <span className="dashboard-visually-hidden">
-                  {isOver ? 'חריגה של' : 'נותרו'} ₪{Math.abs(budget.remaining).toLocaleString('en-US')}
+                  {isOver ? 'חריגה של' : 'נותרו'} ₪{exactRemaining}
                 </span>
               </div>
             </li>

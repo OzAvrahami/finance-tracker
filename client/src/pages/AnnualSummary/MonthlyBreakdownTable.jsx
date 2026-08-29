@@ -1,12 +1,17 @@
 import { useMemo } from 'react';
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { Alert } from '../../components/ui';
+import {
+  absoluteMoney,
+  compareMoney,
+  subtractMoney,
+} from '../../utils/money';
 import AnnualMoneyAmount from './AnnualMoneyAmount';
 
 const getCellState = (planned, actual) => {
-  if (planned !== null && actual > 0) return 'normal';
-  if (planned !== null && actual === 0) return 'budgeted-no-spend';
-  if (planned === null && actual === 0) return 'no-data';
+  if (planned !== null && compareMoney(actual) > 0) return 'normal';
+  if (planned !== null && compareMoney(actual) === 0) return 'budgeted-no-spend';
+  if (planned === null && compareMoney(actual) === 0) return 'no-data';
   return 'unplanned';
 };
 
@@ -14,13 +19,13 @@ const computeTrend = (totals, months, currentYearMonth) => {
   const relevantMonths = months.filter((month) => {
     if (currentYearMonth && month >= currentYearMonth) return false;
     const total = totals.months[month];
-    return total && (total.planned > 0 || total.actual > 0);
+    return total && (compareMoney(total.planned) > 0 || compareMoney(total.actual) > 0);
   });
   if (relevantMonths.length < 2) return null;
   const olderMonth = relevantMonths[relevantMonths.length - 2];
   const recentMonth = relevantMonths[relevantMonths.length - 1];
-  const delta = totals.months[recentMonth].diff - totals.months[olderMonth].diff;
-  return delta === 0 ? null : { delta, recentMonth, olderMonth };
+  const delta = subtractMoney(totals.months[recentMonth].diff, totals.months[olderMonth].diff);
+  return compareMoney(delta) === 0 ? null : { delta, recentMonth, olderMonth };
 };
 
 const computeVisibleMonths = (data, monthRange, currentYearMonth) => {
@@ -29,7 +34,7 @@ const computeVisibleMonths = (data, monthRange, currentYearMonth) => {
   const relevant = data.months.filter((month) => {
     if (currentYearMonth && month >= currentYearMonth) return false;
     const total = data.totals.months[month];
-    return total && (total.planned > 0 || total.actual > 0);
+    return total && (compareMoney(total.planned) > 0 || compareMoney(total.actual) > 0);
   });
   if (!relevant.length) return data.months;
   const selected = new Set(relevant.slice(-count));
@@ -54,7 +59,7 @@ const MatrixCell = ({ cell, current = false }) => {
       </td>
     );
   }
-  const positive = cell.diff >= 0;
+  const positive = compareMoney(cell.diff) >= 0;
   const TrendIcon = positive ? TrendingDown : TrendingUp;
   return (
     <td className={`annual-matrix-cell${current ? ' is-current' : ''}`}>
@@ -63,7 +68,7 @@ const MatrixCell = ({ cell, current = false }) => {
       <div className={positive ? 'is-positive' : 'is-negative'}>
         <span className="u-sr-only">{positive ? 'נותר' : 'חריגה'}</span>
         <span aria-hidden="true">{positive ? '+' : '−'}</span>
-        <AnnualMoneyAmount value={Math.abs(cell.diff)} />
+        <AnnualMoneyAmount value={absoluteMoney(cell.diff)} />
       </div>
     </td>
   );
@@ -84,15 +89,15 @@ const MonthlyBreakdownTable = ({ data, monthRange }) => {
   );
   const hasAnyData = data.months.some((month) => {
     const total = data.totals.months[month];
-    return total && (total.planned > 0 || total.actual > 0);
+    return total && (compareMoney(total.planned) > 0 || compareMoney(total.actual) > 0);
   });
 
   return (
     <div className="annual-matrix-region">
       {trend && (
-        <Alert variant={trend.delta > 0 ? 'success' : 'warning'} className="annual-trend-alert">
-          בחודש {monthLabel(data, trend.recentMonth)} חל {trend.delta > 0 ? 'שיפור' : 'שינוי לרעה'} של{' '}
-          <AnnualMoneyAmount value={Math.abs(trend.delta)} /> בעמידה מול התקציב לעומת {monthLabel(data, trend.olderMonth)}.
+        <Alert variant={compareMoney(trend.delta) > 0 ? 'success' : 'warning'} className="annual-trend-alert">
+          בחודש {monthLabel(data, trend.recentMonth)} חל {compareMoney(trend.delta) > 0 ? 'שיפור' : 'שינוי לרעה'} של{' '}
+          <AnnualMoneyAmount value={absoluteMoney(trend.delta)} /> בעמידה מול התקציב לעומת {monthLabel(data, trend.olderMonth)}.
         </Alert>
       )}
       {!hasAnyData ? (

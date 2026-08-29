@@ -9,8 +9,10 @@ import {
   SecondaryButton,
   Select,
   Skeleton,
+  TextField,
 } from '../../components/ui';
 import { formatBudgetMonth } from './budgetMonth';
+import { absoluteMoney } from '../../utils/money';
 import BudgetMoneyAmount from './BudgetMoneyAmount';
 
 export const AddBudgetPanel = ({
@@ -80,7 +82,7 @@ export const AddBudgetPanel = ({
               type="button"
               loading={saving}
               loadingText="מוסיף..."
-              disabled={!categoryId || !amount}
+              disabled={!categoryId || amount === ''}
               onClick={onSave}
             >
               <Plus size={16} aria-hidden="true" />
@@ -89,6 +91,73 @@ export const AddBudgetPanel = ({
           </div>
         </div>
       )}
+      {error && <Alert variant="error" urgent>{error}</Alert>}
+    </GlassCard>
+  );
+};
+
+export const ManualFundingPanel = ({
+  open,
+  amount,
+  sourceLabel,
+  saving,
+  error,
+  onAmountChange,
+  onSourceLabelChange,
+  onSave,
+  onClose,
+}) => {
+  if (!open) return null;
+
+  return (
+    <GlassCard className="budget-add-panel" padding="18px">
+      <div className="budget-add-panel__heading">
+        <div>
+          <h2>הוספת כסף זמין לתקצוב</h2>
+          <p>רק כסף זמין שאושר ידנית נכנס למסגרת התקציב. הכנסה צפויה אינה מממנת את התקציב אוטומטית.</p>
+        </div>
+        <IconButton
+          type="button"
+          size="sm"
+          aria-label="סגירת הוספת כסף זמין"
+          disabled={saving}
+          onClick={onClose}
+        >
+          <X size={16} aria-hidden="true" />
+        </IconButton>
+      </div>
+      <div className="budget-add-panel__form">
+        <TextField
+          id="budget-funding-source"
+          label="מקור הכסף הזמין"
+          value={sourceLabel}
+          onChange={(event) => onSourceLabelChange(event.target.value)}
+          placeholder="לדוגמה: יתרה זמינה בחשבון"
+          disabled={saving}
+          required
+        />
+        <NumberField
+          id="budget-funding-amount"
+          label="סכום זמין"
+          value={amount}
+          onChange={(event) => onAmountChange(event.target.value)}
+          disabled={saving}
+          required
+        />
+        <div className="budget-add-panel__actions">
+          <SecondaryButton type="button" disabled={saving} onClick={onClose}>ביטול</SecondaryButton>
+          <PrimaryButton
+            type="button"
+            loading={saving}
+            loadingText="מוסיף..."
+            disabled={!sourceLabel.trim() || !amount}
+            onClick={onSave}
+          >
+            <Plus size={16} aria-hidden="true" />
+            הוספת כסף זמין
+          </PrimaryButton>
+        </div>
+      </div>
       {error && <Alert variant="error" urgent>{error}</Alert>}
     </GlassCard>
   );
@@ -135,7 +204,7 @@ const InsightList = ({ rows, emptyText, tone, remaining }) => (
         <li key={row.id}>
           <span>{row.categories?.icon} {row.categories?.name}</span>
           <span className={`budget-insight-list__amount budget-insight-list__amount--${tone}`}>
-            <BudgetMoneyAmount value={Math.abs(row.diff)} />
+            <BudgetMoneyAmount value={absoluteMoney(row.diff)} />
             {remaining && <span> נותר</span>}
           </span>
         </li>

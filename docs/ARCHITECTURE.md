@@ -82,6 +82,7 @@ Node currently owns:
 
 PostgreSQL owns consistency-sensitive operations including:
 
+- funded-budget month identity, immutable opening snapshots, provenance events, reconciliation, and bounded mutation RPCs;
 - atomic transaction and `loan_payments` mutations;
 - loan summary refresh and compatibility triggers;
 - loan-payment uniqueness and component reconciliation;
@@ -91,6 +92,16 @@ PostgreSQL owns consistency-sensitive operations including:
 - dashboard summary/monthly-series aggregation.
 
 This division is intentional: Node calculates and orchestrates, while PostgreSQL protects important financial mutation boundaries. Not every surrounding side effect is inside the same database transaction.
+
+## Funded monthly budgets
+
+Migration 017 changes the budget authority from an unexplained mutable category amount to a funded, provenance-based monthly domain. `budget_months` supplies canonical ILS month identity. Existing `budgets` IDs and compatibility columns remain, but each row is now an immutable category/month opening snapshot: `starting_amount` is established once and is never the mutable current value.
+
+`budget_operations` provides deterministic database ordering and request-key idempotency, including operation-only records for legitimate no-op commands. Append-only funding entries, funded movements, and lifecycle events explain every supported change. Current funded amounts and available/allocated/unallocated totals are derived by PostgreSQL views and `get_funded_budget_month`; the Express `budgetService` is the boundary used by controllers. Canonical monetary reads and mutation inputs are decimal strings, preserved unchanged through Node and form state. Mutation strings use ASCII digits with no leading zero except zero itself, an optional decimal point with one or two fractional digits, and no sign, whitespace, grouping separators, exponent, or non-finite token. JSON numbers are rejected before the service/RPC boundary because parsing may already have rounded them. Exact client/server aggregation uses integer minor units rather than JavaScript floating point; JavaScript `Number` is limited to non-authoritative visual geometry and percentages that never feed a mutation.
+
+Normal funding initially comes only from confirmed manual available funds with a required source label. `legacy_import` exists solely for deterministic migration of old planned amounts and does not assert a real historical source. Income transactions, expected income, and projected salary do not fund a budget. Transactions remain authoritative for actual spending and are never copied into budget history.
+
+An active zero-funded snapshot is distinct from an inactive historical snapshot and from a category that has never had a budget. Removal appends an inactive lifecycle event and releases only eligible unspent funding; it never deletes history. Its actual-spending value is a point-in-time calculation snapshot: later transaction edits, deletion, or backdating can change reporting but do not rewrite that historical release decision. Supported funding and adjustment corrections use compensating operations; lifecycle/copy/no-op operations are not generically reversible. Important commands execute as PostgreSQL RPCs with canonical month-first locks, stable budget-ID lock order, finite `NUMERIC(18,2)` arithmetic, idempotency, and post-command reconciliation.
 
 ## Transactions
 

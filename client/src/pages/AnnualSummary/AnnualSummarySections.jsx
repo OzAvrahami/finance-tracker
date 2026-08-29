@@ -29,12 +29,18 @@ import {
   Skeleton,
   TechnicalValue,
 } from '../../components/ui';
+import {
+  absoluteMoney,
+  addMoney,
+  approximateMoneyRatio,
+  compareMoney,
+  formatDecimalMoney,
+  subtractMoney,
+} from '../../utils/money';
 import AnnualMoneyAmount from './AnnualMoneyAmount';
 import MonthlyBreakdownTable from './MonthlyBreakdownTable';
 
-const moneyText = (value) => `₪${Number(value || 0).toLocaleString('en-US', {
-  maximumFractionDigits: 2,
-})}`;
+const moneyText = (value) => `₪${formatDecimalMoney(value || '0.00', { maximumFractionDigits: 2 })}`;
 
 const rangeOptions = [
   { value: '3', label: '3 חודשים' },
@@ -98,7 +104,8 @@ const AnnualKpi = ({ label, value, note, tone = 'neutral' }) => (
 );
 
 export const AnnualKpis = ({ summary }) => {
-  const remainingPositive = summary.remaining >= 0;
+  const remaining = summary.remaining ?? '0.00';
+  const remainingPositive = compareMoney(remaining) >= 0;
   return (
     <section aria-label="מדדי הסיכום השנתי" className="annual-kpi-grid">
       <AnnualKpi
@@ -114,7 +121,7 @@ export const AnnualKpis = ({ summary }) => {
       />
       <AnnualKpi
         label={remainingPositive ? 'נותר מהתקציב' : 'חריגה מהתקציב'}
-        value={Math.abs(summary.remaining)}
+        value={absoluteMoney(remaining)}
         note="תקציב פחות ביצוע"
         tone={remainingPositive ? 'positive' : 'expense'}
       />
@@ -139,7 +146,7 @@ const AnnualChartTooltip = ({ active, payload, label }) => {
           className={entry.dataKey === 'actual' && entry.payload?.actual > entry.payload?.planned ? 'is-over' : ''}
         >
           <span>{entry.name}</span>
-          <TechnicalValue>{moneyText(entry.value)}</TechnicalValue>
+          <TechnicalValue>{moneyText(entry.payload?.[`${entry.dataKey}Exact`] ?? entry.value)}</TechnicalValue>
         </div>
       ))}
     </div>
@@ -150,8 +157,10 @@ const AnnualChart = ({ monthly }) => {
   const chartData = monthly.map((month) => ({
     month: month.label,
     shortMonth: month.label.slice(0, 3),
-    planned: month.planned,
-    actual: month.actual,
+    planned: Number(month.planned),
+    actual: Number(month.actual),
+    plannedExact: month.planned,
+    actualExact: month.actual,
   }));
 
   return (
@@ -262,13 +271,13 @@ export const AnnualForecastAndChart = ({ data, insights }) => {
             label="תקרה חודשית לחודשים שנותרו"
             value={<AnnualMoneyAmount value={summary.allowance_per_remaining_month} />}
             unavailable={!hasAllowance}
-            tone={hasAllowance && summary.allowance_per_remaining_month < 0 ? 'expense' : 'neutral'}
+            tone={hasAllowance && compareMoney(summary.allowance_per_remaining_month) < 0 ? 'expense' : 'neutral'}
             note={hasAllowance ? 'היתרה השנתית מחולקת בחודשים שנותרו' : 'לא נותרו חודשים לחישוב תקרה חודשית'}
           />
           <ForecastItem
             icon={<CalendarDays size={17} aria-hidden="true" />}
             label="החודש היקר ביותר"
-            value={insights.mostExpensiveMonth?.actual > 0
+            value={insights.mostExpensiveMonth && compareMoney(insights.mostExpensiveMonth.actual) > 0
               ? <><span>{insights.mostExpensiveMonth.label}</span> · <AnnualMoneyAmount value={insights.mostExpensiveMonth.actual} /></>
               : 'אין נתונים'}
             unavailable={!insights.mostExpensiveMonth?.actual}
@@ -279,7 +288,7 @@ export const AnnualForecastAndChart = ({ data, insights }) => {
             icon={<AlertTriangle size={17} aria-hidden="true" />}
             label="החריגה הקטגוריאלית הגדולה ביותר"
             value={insights.biggestOverrun
-              ? <><span>{insights.biggestOverrun.name}</span> · <AnnualMoneyAmount value={Math.abs(insights.biggestOverrun.diff)} /></>
+              ? <><span>{insights.biggestOverrun.name}</span> · <AnnualMoneyAmount value={absoluteMoney(insights.biggestOverrun.diff)} /></>
               : 'אין חריגות'}
             note="מצטבר על פני השנה"
             tone={insights.biggestOverrun ? 'expense' : 'positive'}
@@ -301,12 +310,14 @@ const SpendingSourceRow = ({ label, value, tone = 'neutral', percent }) => (
 );
 
 export const AnnualSpendingAnalysis = ({ data }) => {
-  const total = Number(data.summary.yearly_actual);
+  const total = data.summary.yearly_actual;
   const uncategorized = data.non_budgeted.by_category
     .filter((item) => item.category_id == null)
-    .reduce((sum, item) => sum + Number(item.total), 0);
-  const namedNonBudgeted = Number(data.summary.non_budgeted_expenses) - uncategorized;
-  const percentage = (value) => total > 0 ? Math.round((Number(value) / total) * 100) : 0;
+    .reduce((sum, item) => addMoney(sum, item.total), '0.00');
+  const namedNonBudgeted = subtractMoney(data.summary.non_budgeted_expenses, uncategorized);
+  const percentage = (value) => compareMoney(total) > 0
+    ? Math.round(approximateMoneyRatio(value, total))
+    : 0;
   const namedRows = data.non_budgeted.by_category.filter((item) => item.category_id != null);
   const uncategorizedRows = data.non_budgeted.by_category.filter((item) => item.category_id == null);
 
@@ -334,7 +345,7 @@ export const AnnualSpendingAnalysis = ({ data }) => {
             <p>הוצאות בחודש שבו לא הוגדר לקטגוריה תקציב.</p>
           </div>
         </div>
-        {data.non_budgeted.total > 0 ? (
+        {compareMoney(data.non_budgeted.total) > 0 ? (
           <div
             className="annual-nonbudgeted-list"
             role="region"
@@ -416,10 +427,10 @@ export const AnnualCategoryAnalysis = ({ categories }) => {
                 <th scope="row"><span aria-hidden="true">{category.icon || '🏷️'}</span><span>{category.name}</span></th>
                 <td><AnnualMoneyAmount value={category.planned} /></td>
                 <td className="annual-category-actual"><AnnualMoneyAmount value={category.actual} /></td>
-                <td className={category.diff < 0 ? 'is-negative' : 'is-positive'}>
-                  <span aria-hidden="true">{category.diff < 0 ? '−' : '+'}</span>
-                  <AnnualMoneyAmount value={Math.abs(category.diff)} signed={false} />
-                  <span className="u-sr-only">{category.diff < 0 ? 'חריגה' : 'נותר'}</span>
+                <td className={compareMoney(category.diff) < 0 ? 'is-negative' : 'is-positive'}>
+                  <span aria-hidden="true">{compareMoney(category.diff) < 0 ? '−' : '+'}</span>
+                  <AnnualMoneyAmount value={absoluteMoney(category.diff)} signed={false} />
+                  <span className="u-sr-only">{compareMoney(category.diff) < 0 ? 'חריגה' : 'נותר'}</span>
                 </td>
                 <td><CategoryProgress category={category} /></td>
               </tr>
@@ -434,7 +445,7 @@ export const AnnualCategoryAnalysis = ({ categories }) => {
             <dl>
               <div><dt>מתוכנן</dt><dd><AnnualMoneyAmount value={category.planned} /></dd></div>
               <div><dt>בפועל</dt><dd><AnnualMoneyAmount value={category.actual} /></dd></div>
-              <div><dt>{category.diff < 0 ? 'חריגה' : 'נותר'}</dt><dd className={category.diff < 0 ? 'is-negative' : 'is-positive'}><AnnualMoneyAmount value={Math.abs(category.diff)} /></dd></div>
+              <div><dt>{compareMoney(category.diff) < 0 ? 'חריגה' : 'נותר'}</dt><dd className={compareMoney(category.diff) < 0 ? 'is-negative' : 'is-positive'}><AnnualMoneyAmount value={absoluteMoney(category.diff)} /></dd></div>
             </dl>
             <CategoryProgress category={category} />
           </article>

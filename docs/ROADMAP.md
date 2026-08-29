@@ -14,6 +14,12 @@ The next planned product capability is a substantial Savings module. Its product
 
 ## Post-1.0 stabilization
 
+### Active: funded-budget initiative
+
+- Foundation (#17 + #26): immutable monthly opening snapshots, confirmed manual funds, append-only provenance, reconciled reads, and bounded atomic commands are implemented locally in Migration 017; production rollout remains separately reviewed and unexecuted.
+- Next dependent work remains separate: recurring defaults (#18), monthly overrides (#19), carryover (#20), unused-budget/savings disposition (#21), unbudgeted-expense behavior (#22), reallocation/deficit resolution (#23), and the funded summary UX (#25).
+- Income-transaction funding requires a future source-consumption model so one realized income cannot fund multiple months or allocations.
+
 - Add a general CI workflow for client test/lint/build and server tests.
 - Introduce a canonical migration runner and applied-migration ledger.
 - Establish repeatable disposable or rollback-safe PostgreSQL migration rehearsals.
