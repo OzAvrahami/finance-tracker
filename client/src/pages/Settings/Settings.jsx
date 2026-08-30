@@ -1,7 +1,8 @@
 import { useContext, useEffect, useState } from 'react';
-import { CreditCard, ShoppingBasket, Tags } from 'lucide-react';
+import { CreditCard, PiggyBank, ShoppingBasket, Tags } from 'lucide-react';
 import { GlassCard, Tab, TabList, TabPanel, Tabs } from '../../components/ui';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
+import BudgetSettingsTab from './BudgetSettingsTab';
 import CategoriesTab from './CategoriesTab';
 import PaymentSourcesTab from './PaymentSourcesTab';
 import ShoppingSettingsTab from './ShoppingSettingsTab';
@@ -9,6 +10,7 @@ import './Settings.css';
 
 const TABS = [
   { key: 'categories', label: 'קטגוריות', icon: <Tags size={16} aria-hidden="true" /> },
+  { key: 'budget', label: 'תקציב', icon: <PiggyBank size={16} aria-hidden="true" /> },
   { key: 'payment-sources', label: 'אמצעי תשלום', icon: <CreditCard size={16} aria-hidden="true" /> },
   { key: 'shopping', label: 'הגדרות קניות', icon: <ShoppingBasket size={16} aria-hidden="true" /> },
 ];
@@ -20,7 +22,7 @@ const Settings = () => {
   useEffect(() => {
     setPageHeader({
       title: 'הגדרות',
-      subtitle: 'קטגוריות, אמצעי תשלום והגדרות קניות',
+      subtitle: 'קטגוריות, תקציב, אמצעי תשלום והגדרות קניות',
     });
   }, [setPageHeader]);
 
@@ -39,6 +41,9 @@ const Settings = () => {
 
           <TabPanel value="categories" className="settings-tabs__panel">
             {activeTab === 'categories' && <CategoriesTab />}
+          </TabPanel>
+          <TabPanel value="budget" className="settings-tabs__panel">
+            {activeTab === 'budget' && <BudgetSettingsTab />}
           </TabPanel>
           <TabPanel value="payment-sources" className="settings-tabs__panel">
             {activeTab === 'payment-sources' && <PaymentSourcesTab />}

@@ -340,6 +340,8 @@ Normal category plans repeat, but a stored default is not itself money and must 
 
 Store one optional exact recurring amount per expense category in restricted mutable configuration. Absence means disabled; zero is an explicit default. The monthly read only previews missing eligible defaults. A separate explicit, idempotent PostgreSQL command applies all eligible defaults atomically to a current or future month, using existing unallocated funding and creating immutable snapshots with `starting_kind = recurring_default`. Existing active or inactive snapshots always take precedence.
 
+Recurring amounts are managed centrally in the dedicated Settings → Budget area. Category Settings remains limited to category metadata; this keeps future budget-specific configuration in one extensible location without exposing unimplemented carryover, disposition, or override controls.
+
 ### Consequences
 
 Page loads are financially read-only, insufficient funds produce no partial allocation, and changing or disabling a default affects only months that have not been initialized. Migration 018 does not add carryover, savings, reallocation, deficit resolution, or monthly overrides. A future #19 override can be selected by the same month-initialization boundary without rewriting an existing opening snapshot.

@@ -10,7 +10,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
-- #18 — Migration 018 recurring monthly budget defaults, restricted Settings configuration, exact read-only month previews, and explicit idempotent funded initialization.
+- #18 — Migration 018 recurring monthly budget defaults, a dedicated Settings → Budget configuration area, exact read-only month previews, and explicit idempotent funded initialization.
 - Budget UI guidance for pending recurring defaults, exact required/unallocated/shortfall values, and a user-invoked “Apply recurring budgets” action; loading a month never applies them.
 
 - #17 / #26 — Migration 017 funded-budget foundation: canonical ILS months, immutable category opening snapshots, append-only funding/movement/lifecycle provenance, reconciled reads, and atomic idempotent RPC commands.
@@ -19,7 +19,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
-- Expense categories can enable, update, explicitly set to zero, or disable a recurring monthly opening amount without rewriting established months.
+- The dedicated Budget settings tab lets expense categories enable, update, explicitly set to zero, or disable a recurring monthly opening amount without mixing budget controls into category metadata or rewriting established months.
 
 - Budget compatibility `amount` and annual planned totals now represent derived final funded amounts.
 - Budget removal and copy routes now preserve provenance and require destination funding rather than deleting history or inventing money.

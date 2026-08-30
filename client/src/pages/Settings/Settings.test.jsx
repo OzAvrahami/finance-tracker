@@ -126,11 +126,13 @@ describe('Settings navigation and categories', () => {
     renderSettings();
 
     expect(await screen.findByText('מזון')).toBeInTheDocument();
-    expect(screen.getByTestId('page-header')).toHaveTextContent('הגדרות — קטגוריות, אמצעי תשלום והגדרות קניות');
+    expect(screen.getByTestId('page-header')).toHaveTextContent('הגדרות — קטגוריות, תקציב, אמצעי תשלום והגדרות קניות');
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'קטגוריות' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'תקציב' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'אמצעי תשלום' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'הגדרות קניות' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /תקציב חוזר/ })).not.toBeInTheDocument();
     expect(getSettingsCategories).toHaveBeenCalledTimes(1);
     expect(getSettingsPaymentSources).not.toHaveBeenCalled();
     expect(getAdminShoppingListTypes).not.toHaveBeenCalled();
@@ -186,44 +188,126 @@ describe('Settings navigation and categories', () => {
     await userEvent.click(screen.getByRole('button', { name: 'הפעלה מחדש' }));
     await waitFor(() => expect(updateSettingsCategory).toHaveBeenCalledWith(2, { is_active: true }));
   });
-  it('configures, displays, and disables an exact recurring budget only for an expense category', async () => {
-    getSettingsCategories
-      .mockResolvedValueOnce({ data: categories })
-      .mockResolvedValueOnce({ data: [{ ...categories[0], recurring_budget_amount: '9007199254740993.01' }, categories[1]] })
-      .mockResolvedValueOnce({ data: categories });
+});
+
+describe('Budget settings', () => {
+  const budgetCategories = [
+    { ...categories[0], recurring_budget_amount: null },
+    { id: 3, name: 'תחבורה', type: 'expense', icon: '🚌', keywords: [], is_active: true, recurring_budget_amount: '2000.00' },
+    { id: 4, name: 'מתנות', type: 'expense', icon: '🎁', keywords: [], is_active: false, recurring_budget_amount: '0.00' },
+    { ...categories[1], is_active: true, recurring_budget_amount: '5000.00' },
+  ];
+
+  const openBudgetSettings = async () => {
     renderSettings();
     await screen.findByText('מזון');
-    expect(screen.queryByRole('button', { name: 'הגדרת תקציב חוזר עבור משכורת' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'תקציב' }));
+    return screen.findByRole('heading', { name: 'תקציב חודשי חוזר' });
+  };
+
+  it('centralizes expense defaults, excludes income, and distinguishes zero from no default', async () => {
+    getSettingsCategories.mockResolvedValue({ data: budgetCategories });
+    await openBudgetSettings();
+
+    const food = screen.getByRole('article', { name: 'מזון — תקציב חודשי חוזר' });
+    const transport = screen.getByRole('article', { name: 'תחבורה — תקציב חודשי חוזר' });
+    const gifts = screen.getByRole('article', { name: 'מתנות — תקציב חודשי חוזר' });
+
+    expect(within(food).getByText('לא הוגדר')).toBeInTheDocument();
+    expect(within(transport).getByText('₪2,000')).toBeInTheDocument();
+    expect(within(transport).getByText('לחודש')).toBeInTheDocument();
+    expect(within(gifts).getByText('₪0')).toBeInTheDocument();
+    expect(within(gifts).queryByText('לא הוגדר')).not.toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: 'משכורת — תקציב חודשי חוזר' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'עריכת תקציב חוזר עבור תחבורה' })).toBeInTheDocument();
+    expect(food).toHaveClass('settings-budget-record');
+  });
+
+  it('creates an exact recurring default and refreshes the canonical value', async () => {
+    getSettingsCategories
+      .mockResolvedValueOnce({ data: categories })
+      .mockResolvedValueOnce({ data: budgetCategories })
+      .mockResolvedValueOnce({
+        data: [{ ...budgetCategories[0], recurring_budget_amount: '9007199254740993.01' }, ...budgetCategories.slice(1)],
+      });
+    await openBudgetSettings();
 
     await userEvent.click(screen.getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' }));
-    const createDialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
-    const amount = within(createDialog).getByLabelText(/^סכום חודשי חוזר/);
+    const dialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
+    const amount = within(dialog).getByLabelText(/^סכום חודשי חוזר/);
     await userEvent.type(amount, '9007199254740993.01');
-    await userEvent.click(within(createDialog).getByRole('button', { name: 'שמירת תקציב חוזר' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת תקציב חוזר' }));
+
     await waitFor(() => expect(setSettingsCategoryRecurringBudget).toHaveBeenCalledWith(1, {
       amount: '9007199254740993.01',
     }));
     expect(await screen.findByText('₪9,007,199,254,740,993.01')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' }));
-    const disableDialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
-    expect(within(disableDialog).getByLabelText(/^סכום חודשי חוזר/)).toHaveValue('9007199254740993.01');
-    await userEvent.click(within(disableDialog).getByRole('button', { name: 'השבתת תקציב חוזר' }));
-    await waitFor(() => expect(setSettingsCategoryRecurringBudget).toHaveBeenLastCalledWith(1, { amount: null }));
   });
 
-  it('preserves explicit zero and user input after a recurring-budget save failure', async () => {
+  it('edits and disables an existing recurring default', async () => {
+    const editedCategories = budgetCategories.map((category) => (
+      category.id === 3 ? { ...category, recurring_budget_amount: '2500.50' } : category
+    ));
+    const disabledCategories = editedCategories.map((category) => (
+      category.id === 3 ? { ...category, recurring_budget_amount: null } : category
+    ));
+    getSettingsCategories
+      .mockResolvedValueOnce({ data: categories })
+      .mockResolvedValueOnce({ data: budgetCategories })
+      .mockResolvedValueOnce({ data: editedCategories })
+      .mockResolvedValueOnce({ data: disabledCategories });
+    await openBudgetSettings();
+
+    await userEvent.click(screen.getByRole('button', { name: 'עריכת תקציב חוזר עבור תחבורה' }));
+    let dialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
+    let amount = within(dialog).getByLabelText(/^סכום חודשי חוזר/);
+    expect(amount).toHaveValue('2000.00');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '2500.50');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת תקציב חוזר' }));
+    await waitFor(() => expect(setSettingsCategoryRecurringBudget).toHaveBeenCalledWith(3, { amount: '2500.50' }));
+    expect(await screen.findByText('₪2,500.5')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'עריכת תקציב חוזר עבור תחבורה' }));
+    dialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'השבתת תקציב חוזר' }));
+    await waitFor(() => expect(setSettingsCategoryRecurringBudget).toHaveBeenLastCalledWith(3, { amount: null }));
+    expect(await within(screen.getByRole('article', { name: 'תחבורה — תקציב חודשי חוזר' })).findByText('לא הוגדר')).toBeInTheDocument();
+  });
+
+  it('preserves explicit zero input and dialog state after a save failure', async () => {
+    getSettingsCategories.mockResolvedValue({ data: budgetCategories });
     setSettingsCategoryRecurringBudget.mockRejectedValueOnce({ response: { data: { error: 'שגיאת תקציב חוזר' } } });
-    renderSettings();
-    await screen.findByText('מזון');
+    await openBudgetSettings();
+
     await userEvent.click(screen.getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' }));
     const dialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
     const amount = within(dialog).getByLabelText(/^סכום חודשי חוזר/);
     await userEvent.type(amount, '0');
     await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת תקציב חוזר' }));
+
     expect(await within(dialog).findByText('שגיאת תקציב חוזר')).toBeInTheDocument();
     expect(amount).toHaveValue('0');
     expect(setSettingsCategoryRecurringBudget).toHaveBeenCalledWith(1, { amount: '0' });
+  });
+
+  it('keeps the Budget tab and recurring actions accessible at a mobile Settings width', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 393 });
+    window.dispatchEvent(new Event('resize'));
+    getSettingsCategories.mockResolvedValue({ data: budgetCategories });
+
+    try {
+      await openBudgetSettings();
+      expect(screen.getByRole('tablist', { name: 'אזורי הגדרות' })).toBeInTheDocument();
+      const food = screen.getByRole('article', { name: 'מזון — תקציב חודשי חוזר' });
+      expect(within(food).getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' })).toBeInTheDocument();
+      expect(within(food).getByText('לא הוגדר')).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+      window.dispatchEvent(new Event('resize'));
+    }
   });
 });
 

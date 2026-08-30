@@ -17,7 +17,7 @@ The application is mature, operational across its principal product areas, and s
 |---|---|---|
 | Dashboard | Operational | Database-backed KPI summary and monthly series. |
 | Transactions | Operational with known limitations | Direct, itemized, installment, loan-linked, filtered, and paginated workflows. Core loan accounting is atomic; several surrounding item/LEGO/keyword operations are separate calls. |
-| Categories | Operational | Active state, keywords, quick creation, Settings CRUD, and optional exact recurring budget configuration for expense categories. |
+| Categories | Operational | Active state, keywords, quick creation, and Settings CRUD for category metadata. |
 | Payment sources | Operational | Managed in Settings and used by transactions, loans, budgets, and checkout. |
 | Monthly budgets | Recurring extension implemented locally, production migration pending | Funded month/read model, immutable opening snapshots and provenance, bounded commands, recurring-default preview, and explicit all-or-nothing initialization. Manual confirmed funds are the only normal source; overrides, carryover, savings, rich reallocation/deficit UX, and the full summary redesign remain future work. |
 | Annual summary | Operational | Dedicated annual view using API-backed financial aggregates. |
@@ -27,7 +27,7 @@ The application is mature, operational across its principal product areas, and s
 | Tasks | Operational | CRUD with optional transaction and loan links. |
 | Shopping lists | Operational with known limitations | Catalog/list/item management and financial checkout. Checkout is a multi-call mutation rather than one database transaction. |
 | LEGO collection | Operational with known limitations | Manual management, Rebrickable lookup, transaction synchronization, Purchase/Gift/GWP handling, and cost allocation. Some conventions remain application-enforced. |
-| Settings | Operational | Category, payment-source, and shopping reference-data management. |
+| Settings | Operational | Category metadata, dedicated recurring Budget configuration, payment-source, and shopping reference-data management. |
 | Loan simulator | Operational | Calculation utility within the loan area; not a separate persisted accounting system. |
 
 ## Current architecture state
