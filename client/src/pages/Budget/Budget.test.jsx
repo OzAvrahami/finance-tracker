@@ -4,13 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   addManualBudgetFunding, adjustFundedBudget, copyBudget, establishFundedBudget,
-  getCategories, getFundedBudgetMonth, removeFundedBudget,
+  getCategories, getFundedBudgetMonth, initializeRecurringBudgets, removeFundedBudget,
 } from '../../services/api';
 import Budget from './Budget';
 
 vi.mock('../../services/api', () => ({
   addManualBudgetFunding: vi.fn(), adjustFundedBudget: vi.fn(), copyBudget: vi.fn(),
   establishFundedBudget: vi.fn(), getCategories: vi.fn(), getFundedBudgetMonth: vi.fn(),
+  initializeRecurringBudgets: vi.fn(),
   removeFundedBudget: vi.fn(),
 }));
 
@@ -71,6 +72,7 @@ beforeEach(() => {
   adjustFundedBudget.mockResolvedValue({ data: {} });
   copyBudget.mockResolvedValue({ data: {} });
   removeFundedBudget.mockResolvedValue({ data: {} });
+  initializeRecurringBudgets.mockResolvedValue({ data: {} });
 });
 
 describe('canonical funded monthly read', () => {
@@ -200,6 +202,45 @@ describe('canonical funded monthly read', () => {
 });
 
 describe('funded budget commands', () => {
+  it('previews recurring defaults without mutation and applies them only after explicit confirmation', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      recurring: {
+        eligible: true, initialized: false, pending_count: 2,
+        pending_categories: [
+          { category_id: 1, category: categories[0], amount: '100.00' },
+          { category_id: 2, category: categories[1], amount: '0.00' },
+        ],
+        required: '100.00', unallocated: '300.00', shortfall: '0.00', can_apply: true,
+      },
+    }) });
+    await settle();
+    expect(initializeRecurringBudgets).not.toHaveBeenCalled();
+    expect(screen.getByText('תקציבים חוזרים ממתינים')).toBeInTheDocument();
+    expect(screen.getByLabelText('סיכום תקציבים חוזרים')).toHaveTextContent('₪100');
+    await userEvent.click(screen.getByRole('button', { name: 'החלת תקציבים חוזרים' }));
+    expect(initializeRecurringBudgets).toHaveBeenCalledWith({
+      month: new Date().toISOString().slice(0, 7), request_key: 'request-key',
+    });
+    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows the exact recurring shortfall and routes to manual funding without initializing', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      recurring: {
+        eligible: true, initialized: false, pending_count: 1,
+        pending_categories: [{ category_id: 2, category: categories[1], amount: '500.00' }],
+        required: '500.00', unallocated: '300.00', shortfall: '200.00', can_apply: false,
+      },
+    }) });
+    await settle();
+    expect(screen.getByText('חסר').parentElement).toHaveTextContent('₪200');
+    expect(screen.queryByRole('button', { name: 'החלת תקציבים חוזרים' })).not.toBeInTheDocument();
+    const fundingButtons = screen.getAllByRole('button', { name: 'הוספת כסף זמין' });
+    await userEvent.click(fundingButtons[fundingButtons.length - 1]);
+    expect(document.getElementById('budget-funding-source')).toBeInTheDocument();
+    expect(initializeRecurringBudgets).not.toHaveBeenCalled();
+  });
+
   it('adds confirmed manual funds with a source label and idempotency key', async () => {
     await settle();
     fireEvent.click(screen.getByRole('button', { name: 'הוספת כסף זמין' }));

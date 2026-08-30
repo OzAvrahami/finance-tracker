@@ -14,6 +14,7 @@ import {
   establishFundedBudget,
   getCategories,
   getFundedBudgetMonth,
+  initializeRecurringBudgets,
   removeFundedBudget,
 } from '../../services/api';
 import BudgetSummary from './BudgetSummary';
@@ -26,6 +27,7 @@ import {
   BudgetInsights,
   BudgetSkeleton,
   ManualFundingPanel,
+  RecurringBudgetPanel,
 } from './BudgetStates';
 import './Budget.css';
 
@@ -45,6 +47,10 @@ const emptyState = (month) => ({
   actuals: { total: '0.00', budgeted: '0.00', unbudgeted: '0.00' },
   categories: [],
   history: [],
+  recurring: {
+    eligible: false, initialized: false, pending_categories: [], pending_count: 0,
+    required: '0.00', unallocated: '0.00', shortfall: '0.00', can_apply: false,
+  },
 });
 
 const requestKey = () => globalThis.crypto.randomUUID();
@@ -129,6 +135,8 @@ const Budget = () => {
   const [fundingPending, setFundingPending] = useState(false);
   const [fundingError, setFundingError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [recurringPending, setRecurringPending] = useState(false);
+  const [recurringError, setRecurringError] = useState('');
   const { setPageHeader } = useContext(PageHeaderContext);
 
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
@@ -239,6 +247,7 @@ const Budget = () => {
     setEditingId(null);
     setEditAmount('');
     setEditError('');
+    setRecurringError('');
     setSelectedMonth(month);
   };
 
@@ -329,6 +338,23 @@ const Budget = () => {
     refreshBudgets();
   };
 
+  const handleRecurringInitialization = async () => {
+    if (recurringPending) return;
+    setRecurringPending(true);
+    setRecurringError('');
+    try {
+      await initializeRecurringBudgets({
+        month: selectedMonth,
+        request_key: requestKey(),
+      });
+      refreshBudgets();
+    } catch (error) {
+      setRecurringError(domainMessage(error, 'החלת התקציבים החוזרים נכשלה. לא בוצעה הקצאה חלקית.'));
+    } finally {
+      setRecurringPending(false);
+    }
+  };
+
   return (
     <div className="budget-page" dir="rtl">
       <BudgetSummary
@@ -367,6 +393,16 @@ const Budget = () => {
         onSave={handleAdd}
         onClose={closeAddPanel}
       />
+
+      {!loading && !pageError && state.recurring?.pending_count > 0 && (
+        <RecurringBudgetPanel
+          recurring={state.recurring}
+          applying={recurringPending}
+          error={recurringError}
+          onApply={handleRecurringInitialization}
+          onOpenFunding={() => setShowFundingPanel(true)}
+        />
+      )}
 
       {!loading && compareMoney(state.actuals.unbudgeted) > 0 && (
         <Alert variant="warning" className="budget-refresh-error">

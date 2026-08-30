@@ -12,6 +12,10 @@ const migration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '017_funded_budget_foundation.sql'),
   'utf8',
 );
+const recurringMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '018_recurring_budget_defaults.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -85,6 +89,11 @@ const expectMigrationFailure = (database, expected) => {
   assert.match(`${result.stdout}\n${result.stderr}`, expected);
   const rolledBack = psql(database, "SELECT to_regclass('public.budget_months') IS NULL;").stdout.trim();
   assert.equal(rolledBack, 't');
+};
+
+const applyRecurringFoundation = (database) => {
+  psql(database, migration);
+  psql(database, recurringMigration);
 };
 
 before(() => {
@@ -775,4 +784,263 @@ test('manual funding correction is compensating and copy requires destination fu
   assert.equal(reactivated.starting_amount, '100.00');
   assert.equal(reactivated.final_funded, '350.00');
   assert.equal(december.funding.unallocated, '100.00');
+});
+
+test('recurring defaults enforce exact money, explicit zero, expense categories, and disable semantics', () => {
+  createDatabase('recurring_configuration');
+  psql('recurring_configuration', `${fixture()}
+    INSERT INTO categories(id,name,type) VALUES (4,'Salary','income');
+  `);
+  applyRecurringFoundation('recurring_configuration');
+
+  assert.equal(
+    JSON.parse(psql('recurring_configuration', 'SELECT set_budget_recurring_default(1,0);').stdout.trim()).amount,
+    '0.00',
+  );
+  assert.equal(
+    JSON.parse(psql('recurring_configuration', "SELECT set_budget_recurring_default(1,9007199254740993.01);").stdout.trim()).amount,
+    '9007199254740993.01',
+  );
+  assert.equal(psql('recurring_configuration', 'SELECT amount_text FROM budget_recurring_defaults_read WHERE category_id=1;').stdout.trim(), '9007199254740993.01');
+
+  for (const [sql, diagnostic] of [
+    ["SELECT set_budget_recurring_default(4,100);", /expense categories/i],
+    ["SELECT set_budget_recurring_default(2,'NaN'::numeric);", /finite nonnegative/i],
+    ["SELECT set_budget_recurring_default(2,'Infinity'::numeric);", /finite nonnegative/i],
+    ["SELECT set_budget_recurring_default(2,'-Infinity'::numeric);", /finite nonnegative/i],
+    ['SELECT set_budget_recurring_default(2,-1);', /finite nonnegative/i],
+    ['SELECT set_budget_recurring_default(2,1.001);', /two-decimal/i],
+    ['SELECT set_budget_recurring_default(2,10000000000000000);', /two-decimal/i],
+  ]) {
+    const result = psql('recurring_configuration', sql, true);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, diagnostic);
+  }
+
+  const typeChange = psql('recurring_configuration', "UPDATE categories SET type='income' WHERE id=1;", true);
+  assert.notEqual(typeChange.status, 0);
+  assert.match(typeChange.stderr, /Disable the recurring budget/i);
+  const disabled = JSON.parse(psql('recurring_configuration', 'SELECT set_budget_recurring_default(1,NULL);').stdout.trim());
+  assert.equal(disabled.enabled, false);
+  assert.equal(psql('recurring_configuration', 'SELECT count(*) FROM budget_recurring_defaults;').stdout.trim(), '0');
+});
+
+test('explicit recurring initialization is exact, all-or-nothing, and preserves zero and inactive-category exclusion', () => {
+  createDatabase('recurring_initialization');
+  psql('recurring_initialization', `${fixture()}
+    UPDATE categories SET is_active=false WHERE id=3;
+  `);
+  applyRecurringFoundation('recurring_initialization');
+  psql('recurring_initialization', `
+    SELECT set_budget_recurring_default(1,100.00);
+    SELECT set_budget_recurring_default(2,0.00);
+    SELECT set_budget_recurring_default(3,50.00);
+    SELECT add_manual_budget_funding('2099-01',100.00,'Recurring funds','50101010-1010-4010-8010-101010101010');
+  `);
+
+  const preview = JSON.parse(psql('recurring_initialization', "SELECT get_funded_budget_month('2099-01');").stdout.trim());
+  assert.equal(preview.recurring.pending_count, 2);
+  assert.equal(preview.recurring.required, '100.00');
+  assert.equal(preview.recurring.unallocated, '100.00');
+  assert.equal(preview.recurring.shortfall, '0.00');
+  assert.equal(preview.recurring.can_apply, true);
+  assert.equal(psql('recurring_initialization', "SELECT count(*) FROM budget_operations WHERE operation_type='month_initialization';").stdout.trim(), '0');
+
+  const applied = JSON.parse(psql('recurring_initialization', "SELECT initialize_budget_recurring_defaults('2099-01','50101010-1010-4010-8010-101010101011');").stdout.trim());
+  assert.equal(applied.recurring.initialized, true);
+  assert.equal(applied.recurring.pending_count, 0);
+  assert.equal(applied.funding.total_allocated, '100.00');
+  assert.equal(applied.funding.unallocated, '0.00');
+  assert.equal(psql('recurring_initialization', "SELECT count(*) FROM budgets WHERE month='2099-01' AND starting_kind='recurring_default';").stdout.trim(), '2');
+  assert.equal(psql('recurring_initialization', "SELECT count(*) FROM budgets WHERE month='2099-01' AND category_id=2 AND starting_amount=0;").stdout.trim(), '1');
+  assert.equal(psql('recurring_initialization', "SELECT count(*) FROM budgets WHERE month='2099-01' AND category_id=3;").stdout.trim(), '0');
+  assert.equal(psql('recurring_initialization', "SELECT count(*) FROM budget_lifecycle_events le JOIN budgets b ON b.id=le.budget_id WHERE b.month='2099-01' AND le.state='active';").stdout.trim(), '2');
+
+  psql('recurring_initialization', 'SELECT set_budget_recurring_default(1,200.00);');
+  assert.equal(psql('recurring_initialization', "SELECT starting_amount FROM budgets WHERE month='2099-01' AND category_id=1;").stdout.trim(), '100.00');
+});
+
+test('insufficient recurring funding writes no initialization operation, snapshot, or lifecycle event', () => {
+  createDatabase('recurring_insufficient');
+  psql('recurring_insufficient', fixture());
+  applyRecurringFoundation('recurring_insufficient');
+  psql('recurring_insufficient', `
+    SELECT set_budget_recurring_default(1,200);
+    SELECT set_budget_recurring_default(2,100);
+    SELECT add_manual_budget_funding('2099-02',250,'Insufficient','50202020-2020-4020-8020-202020202020');
+  `);
+  const before = psql('recurring_insufficient', `SELECT
+    (SELECT count(*) FROM budget_operations),
+    (SELECT count(*) FROM budgets),
+    (SELECT count(*) FROM budget_lifecycle_events);`).stdout.trim();
+  const result = psql('recurring_insufficient', "SELECT initialize_budget_recurring_defaults('2099-02','50202020-2020-4020-8020-202020202021');", true);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /required 300.00, available 250.00, shortfall 50.00/i);
+  const afterState = psql('recurring_insufficient', `SELECT
+    (SELECT count(*) FROM budget_operations),
+    (SELECT count(*) FROM budgets),
+    (SELECT count(*) FROM budget_lifecycle_events);`).stdout.trim();
+  assert.equal(afterState, before);
+  const preview = JSON.parse(psql('recurring_insufficient', "SELECT get_funded_budget_month('2099-02');").stdout.trim());
+  assert.equal(preview.recurring.shortfall, '50.00');
+  assert.equal(preview.recurring.can_apply, false);
+});
+
+test('existing active and inactive snapshots take precedence over recurring defaults', () => {
+  createDatabase('recurring_precedence');
+  psql('recurring_precedence', fixture());
+  applyRecurringFoundation('recurring_precedence');
+  psql('recurring_precedence', `
+    SELECT set_budget_recurring_default(1,500);
+    SELECT set_budget_recurring_default(2,400);
+    SELECT set_budget_recurring_default(3,300);
+    SELECT add_manual_budget_funding('2099-03',1000,'Precedence','50303030-3030-4030-8030-303030303030');
+    SELECT establish_funded_budget('2099-03',1,100,'manual','50303030-3030-4030-8030-303030303031');
+    SELECT establish_funded_budget('2099-03',2,200,'manual','50303030-3030-4030-8030-303030303032');
+    SELECT remove_funded_budget(
+      (SELECT budget_id FROM budget_category_state WHERE month='2099-03' AND category_id=2),
+      '50303030-3030-4030-8030-303030303033'
+    );
+    SELECT initialize_budget_recurring_defaults('2099-03','50303030-3030-4030-8030-303030303034');
+  `);
+  assert.equal(psql('recurring_precedence', "SELECT string_agg(category_id || ':' || starting_amount || ':' || starting_kind,',' ORDER BY category_id) FROM budgets WHERE month='2099-03';").stdout.trim(), '1:100.00:manual,2:200.00:manual,3:300.00:recurring_default');
+  assert.equal(psql('recurring_precedence', "SELECT lifecycle_state FROM budget_category_state WHERE month='2099-03' AND category_id=2;").stdout.trim(), 'inactive');
+});
+
+test('recurring initialization is idempotent, rejects conflicting keys, and never applies historically', () => {
+  createDatabase('recurring_idempotency');
+  psql('recurring_idempotency', fixture());
+  applyRecurringFoundation('recurring_idempotency');
+  psql('recurring_idempotency', `
+    SELECT set_budget_recurring_default(1,100);
+    SELECT add_manual_budget_funding('2099-04',100,'Idempotency','50404040-4040-4040-8040-404040404040');
+    SELECT initialize_budget_recurring_defaults('2099-04','50404040-4040-4040-8040-404040404041');
+    SELECT initialize_budget_recurring_defaults('2099-04','50404040-4040-4040-8040-404040404041');
+  `);
+  assert.equal(psql('recurring_idempotency', "SELECT count(*) FROM budget_operations WHERE operation_type='month_initialization';").stdout.trim(), '1');
+  assert.equal(psql('recurring_idempotency', "SELECT count(*) FROM budget_movements WHERE operation_id=(SELECT id FROM budget_operations WHERE operation_type='month_initialization');").stdout.trim(), '0');
+
+  const conflict = psql('recurring_idempotency', "SELECT initialize_budget_recurring_defaults('2099-05','50404040-4040-4040-8040-404040404041');", true);
+  assert.notEqual(conflict.status, 0);
+  assert.match(conflict.stderr, /different budget operation/i);
+  const historical = psql('recurring_idempotency', "SELECT initialize_budget_recurring_defaults('2020-01','50404040-4040-4040-8040-404040404042');", true);
+  assert.notEqual(historical.status, 0);
+  assert.match(historical.stderr, /historical month/i);
+  assert.equal(psql('recurring_idempotency', "SELECT count(*) FROM budget_months WHERE month_start='2020-01-01';").stdout.trim(), '0');
+});
+
+test('recurring exact values above 2^53 remain exact through preview and initialization', () => {
+  createDatabase('recurring_exact');
+  psql('recurring_exact', fixture());
+  applyRecurringFoundation('recurring_exact');
+  psql('recurring_exact', `
+    SELECT set_budget_recurring_default(1,9007199254740993.01);
+    SELECT set_budget_recurring_default(2,0.10);
+    SELECT set_budget_recurring_default(3,0.20);
+    SELECT add_manual_budget_funding('2099-06',9007199254740993.31,'Exact','50606060-6060-4060-8060-606060606060');
+  `);
+  const preview = JSON.parse(psql('recurring_exact', "SELECT get_funded_budget_month('2099-06');").stdout.trim());
+  assert.equal(preview.recurring.required, '9007199254740993.31');
+  psql('recurring_exact', "SELECT initialize_budget_recurring_defaults('2099-06','50606060-6060-4060-8060-606060606061');");
+  assert.equal(psql('recurring_exact', "SELECT total_allocated || '|' || unallocated FROM budget_month_funding_state WHERE month='2099-06';").stdout.trim(), '9007199254740993.31|0.00');
+  assert.equal(psql('recurring_exact', "SELECT string_agg(starting_amount::text,',' ORDER BY category_id) FROM budgets WHERE month='2099-06';").stdout.trim(), '9007199254740993.01,0.10,0.20');
+});
+
+test('recurring initialization serializes safely with copy and concurrent funding', async () => {
+  createDatabase('recurring_concurrency');
+  psql('recurring_concurrency', fixture());
+  applyRecurringFoundation('recurring_concurrency');
+  psql('recurring_concurrency', `
+    SELECT set_budget_recurring_default(2,200);
+    SELECT add_manual_budget_funding('2099-07',100,'Source','50707070-7070-4070-8070-707070707070');
+    SELECT establish_funded_budget('2099-07',1,100,'manual','50707070-7070-4070-8070-707070707071');
+    SELECT add_manual_budget_funding('2099-08',300,'Target','50808080-8080-4080-8080-808080808080');
+  `);
+  const [copyResult, initializeResult] = await Promise.all([
+    psqlAsync('recurring_concurrency', "SELECT copy_funded_budget_month('2099-07','2099-08','50808080-8080-4080-8080-808080808081');"),
+    psqlAsync('recurring_concurrency', "SELECT initialize_budget_recurring_defaults('2099-08','50808080-8080-4080-8080-808080808082');"),
+  ]);
+  assert.equal(copyResult.status, 0, copyResult.stderr);
+  assert.equal(initializeResult.status, 0, initializeResult.stderr);
+  assert.equal(psql('recurring_concurrency', "SELECT total_allocated || '|' || unallocated FROM budget_month_funding_state WHERE month='2099-08';").stdout.trim(), '300.00|0.00');
+
+  psql('recurring_concurrency', `
+    SELECT set_budget_recurring_default(2,NULL);
+    SELECT set_budget_recurring_default(3,100);
+    SELECT add_manual_budget_funding('2099-09',150,'Initial','50909090-9090-4090-8090-909090909090');
+  `);
+  const [fundingResult, secondInitialization] = await Promise.all([
+    psqlAsync('recurring_concurrency', "SELECT add_manual_budget_funding('2099-09',50,'Concurrent','50909090-9090-4090-8090-909090909091');"),
+    psqlAsync('recurring_concurrency', "SELECT initialize_budget_recurring_defaults('2099-09','50909090-9090-4090-8090-909090909092');"),
+  ]);
+  assert.equal(fundingResult.status, 0, fundingResult.stderr);
+  assert.equal(secondInitialization.status, 0, secondInitialization.stderr);
+  assert.equal(psql('recurring_concurrency', "SELECT available || '|' || total_allocated || '|' || unallocated FROM budget_month_funding_state WHERE month='2099-09';").stdout.trim(), '200.00|100.00|100.00');
+});
+
+test('recurring default ACLs expose only bounded service-role reads and commands', () => {
+  createDatabase('recurring_acl');
+  psql('recurring_acl', fixture());
+  applyRecurringFoundation('recurring_acl');
+  const roles = ['public_probe', 'anon', 'authenticated', 'service_role'];
+  const sqlArray = (values) => `ARRAY[${values.map((value) => `'${value}'`).join(',')}]::text[]`;
+
+  const tablePrivileges = psql('recurring_acl', `
+    SELECT role_name,
+      has_table_privilege(role_name,'public.budget_recurring_defaults','SELECT'),
+      has_table_privilege(role_name,'public.budget_recurring_defaults','INSERT'),
+      has_table_privilege(role_name,'public.budget_recurring_defaults','UPDATE'),
+      has_table_privilege(role_name,'public.budget_recurring_defaults','DELETE'),
+      has_table_privilege(role_name,'public.budget_recurring_defaults_read','SELECT')
+    FROM unnest(${sqlArray(roles)}) role_name ORDER BY role_name;
+  `).stdout.trim().split('\n');
+  for (const row of tablePrivileges) {
+    const [role, read, insert, update, remove, viewRead] = row.split('|');
+    assert.deepEqual([insert, update, remove], ['f', 'f', 'f']);
+    assert.equal(read, role === 'service_role' ? 't' : 'f');
+    assert.equal(viewRead, role === 'service_role' ? 't' : 'f');
+  }
+
+  for (const signature of [
+    'get_funded_budget_month(text)',
+    'set_budget_recurring_default(bigint,numeric)',
+    'initialize_budget_recurring_defaults(text,uuid,text)',
+  ]) {
+    const privileges = psql('recurring_acl', `SELECT role_name,
+      has_function_privilege(role_name,'public.${signature}','EXECUTE')
+      FROM unnest(${sqlArray(roles)}) role_name ORDER BY role_name;`).stdout.trim().split('\n');
+    for (const row of privileges) {
+      const [role, execute] = row.split('|');
+      assert.equal(execute, role === 'service_role' ? 't' : 'f');
+    }
+  }
+
+  for (const signature of [
+    'validate_budget_recurring_default()',
+    'prevent_category_type_with_recurring_default()',
+    'get_budget_recurring_preview(text)',
+    'get_funded_budget_month_foundation(text)',
+  ]) {
+    const privileges = psql('recurring_acl', `SELECT bool_or(
+      has_function_privilege(role_name,'public.${signature}','EXECUTE'))
+      FROM unnest(${sqlArray(roles)}) role_name;`).stdout.trim();
+    assert.equal(privileges, 'f', signature);
+  }
+
+  psql('recurring_acl', `SET ROLE service_role;
+    SELECT set_budget_recurring_default(1,100);
+    SELECT amount_text FROM budget_recurring_defaults_read WHERE category_id=1;
+    SELECT add_manual_budget_funding('2099-10',100,'ACL','51010101-0101-4101-8101-010101010101');
+    SELECT initialize_budget_recurring_defaults('2099-10','51010101-0101-4101-8101-010101010102');
+    SELECT get_funded_budget_month('2099-10');
+    RESET ROLE;
+  `);
+  for (const role of ['public_probe', 'anon', 'authenticated']) {
+    const directRead = psql('recurring_acl', `SET ROLE ${role}; SELECT get_funded_budget_month('2099-10');`, true);
+    assert.notEqual(directRead.status, 0, `${role} unexpectedly executed get_funded_budget_month(text)`);
+    assert.match(directRead.stderr, /permission denied/i);
+  }
+  const directWrite = psql('recurring_acl', "SET ROLE service_role; UPDATE budget_recurring_defaults SET amount=200;", true);
+  assert.notEqual(directWrite.status, 0);
+  assert.match(directWrite.stderr, /permission denied/i);
 });

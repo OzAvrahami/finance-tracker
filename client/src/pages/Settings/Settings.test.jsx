@@ -18,6 +18,7 @@ import {
   getSettingsCategories,
   getSettingsPaymentSources,
   setAdminListTypeCategoryLinks,
+  setSettingsCategoryRecurringBudget,
   updateAdminShoppingCatalogCategory,
   updateAdminShoppingListType,
   updateSettingsCategory,
@@ -40,6 +41,7 @@ vi.mock('../../services/api', () => ({
   getSettingsCategories: vi.fn(),
   getSettingsPaymentSources: vi.fn(),
   setAdminListTypeCategoryLinks: vi.fn(),
+  setSettingsCategoryRecurringBudget: vi.fn(),
   updateAdminShoppingCatalogCategory: vi.fn(),
   updateAdminShoppingListType: vi.fn(),
   updateSettingsCategory: vi.fn(),
@@ -116,6 +118,7 @@ beforeEach(() => {
   updateAdminShoppingCatalogCategory.mockResolvedValue({ data: {} });
   deleteAdminShoppingCatalogCategory.mockResolvedValue({ data: {} });
   setAdminListTypeCategoryLinks.mockResolvedValue({ data: {} });
+  setSettingsCategoryRecurringBudget.mockResolvedValue({ data: {} });
 });
 
 describe('Settings navigation and categories', () => {
@@ -182,6 +185,45 @@ describe('Settings navigation and categories', () => {
     expect(screen.getByText('משכורת')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'הפעלה מחדש' }));
     await waitFor(() => expect(updateSettingsCategory).toHaveBeenCalledWith(2, { is_active: true }));
+  });
+  it('configures, displays, and disables an exact recurring budget only for an expense category', async () => {
+    getSettingsCategories
+      .mockResolvedValueOnce({ data: categories })
+      .mockResolvedValueOnce({ data: [{ ...categories[0], recurring_budget_amount: '9007199254740993.01' }, categories[1]] })
+      .mockResolvedValueOnce({ data: categories });
+    renderSettings();
+    await screen.findByText('מזון');
+    expect(screen.queryByRole('button', { name: 'הגדרת תקציב חוזר עבור משכורת' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' }));
+    const createDialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
+    const amount = within(createDialog).getByLabelText(/^סכום חודשי חוזר/);
+    await userEvent.type(amount, '9007199254740993.01');
+    await userEvent.click(within(createDialog).getByRole('button', { name: 'שמירת תקציב חוזר' }));
+    await waitFor(() => expect(setSettingsCategoryRecurringBudget).toHaveBeenCalledWith(1, {
+      amount: '9007199254740993.01',
+    }));
+    expect(await screen.findByText('₪9,007,199,254,740,993.01')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' }));
+    const disableDialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
+    expect(within(disableDialog).getByLabelText(/^סכום חודשי חוזר/)).toHaveValue('9007199254740993.01');
+    await userEvent.click(within(disableDialog).getByRole('button', { name: 'השבתת תקציב חוזר' }));
+    await waitFor(() => expect(setSettingsCategoryRecurringBudget).toHaveBeenLastCalledWith(1, { amount: null }));
+  });
+
+  it('preserves explicit zero and user input after a recurring-budget save failure', async () => {
+    setSettingsCategoryRecurringBudget.mockRejectedValueOnce({ response: { data: { error: 'שגיאת תקציב חוזר' } } });
+    renderSettings();
+    await screen.findByText('מזון');
+    await userEvent.click(screen.getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' }));
+    const dialog = screen.getByRole('dialog', { name: /תקציב חוזר/ });
+    const amount = within(dialog).getByLabelText(/^סכום חודשי חוזר/);
+    await userEvent.type(amount, '0');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת תקציב חוזר' }));
+    expect(await within(dialog).findByText('שגיאת תקציב חוזר')).toBeInTheDocument();
+    expect(amount).toHaveValue('0');
+    expect(setSettingsCategoryRecurringBudget).toHaveBeenCalledWith(1, { amount: '0' });
   });
 });
 

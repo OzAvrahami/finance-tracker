@@ -171,6 +171,21 @@ exports.reverseOperation = async (req, res) => {
   }
 };
 
+exports.initializeRecurringBudgets = async (req, res) => {
+  try {
+    const { month, request_key: requestKey, reason } = req.body || {};
+    if (!month) {
+      return res.status(400).json({ error: 'month is required' });
+    }
+    const state = await budgetService.initializeRecurringBudgets(supabase, {
+      month, requestKey, reason,
+    });
+    return res.status(200).json(state);
+  } catch (error) {
+    return sendBudgetError(res, 'initializeRecurringBudgets', error);
+  }
+};
+
 // POST /api/budgets — create or update a budget row
 exports.upsertBudget = async (req, res) => {
   try {

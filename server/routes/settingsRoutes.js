@@ -6,6 +6,7 @@ const shoppingSettingsController = require('../controllers/shoppingSettingsContr
 router.get('/categories',      settingsController.getCategories);
 router.post('/categories',     settingsController.createCategory);
 router.put('/categories/:id',  settingsController.updateCategory);
+router.put('/categories/:id/recurring-budget', settingsController.setCategoryRecurringBudget);
 router.delete('/categories/:id', settingsController.deleteCategory);
 
 router.get('/payment-sources',       settingsController.getPaymentSources);

@@ -1,5 +1,7 @@
 const supabase = require('../config/supabase');
 
+const RECURRING_MONEY_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
+
 // ========== Categories ==========
 
 // GET /api/settings/categories
@@ -13,10 +15,55 @@ exports.getCategories = async (req, res) => {
       .order('name', { ascending: true });
 
     if (error) throw error;
-    res.json(data);
+
+    const { data: recurringDefaults, error: recurringError } = await supabase
+      .from('budget_recurring_defaults_read')
+      .select('category_id,amount_text');
+    if (recurringError) throw recurringError;
+
+    const defaultsByCategory = new Map(
+      (recurringDefaults || []).map((entry) => [String(entry.category_id), entry.amount_text]),
+    );
+    res.json((data || []).map((category) => ({
+      ...category,
+      recurring_budget_amount: defaultsByCategory.get(String(category.id)) ?? null,
+    })));
   } catch (error) {
     console.error('settings.getCategories Error:', error);
     res.status(500).json({ error: error.message });
+  }
+};
+
+// PUT /api/settings/categories/:id/recurring-budget
+// `amount: null` disables future recurrence. Monetary values must otherwise be
+// exact decimal strings; JSON numbers may already have lost precision.
+exports.setCategoryRecurringBudget = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body || {};
+    if (amount === undefined) {
+      return res.status(400).json({
+        error: 'amount is required; use null to disable the recurring budget',
+        code: 'INVALID_RECURRING_BUDGET',
+      });
+    }
+    if (amount !== null && (typeof amount !== 'string' || !RECURRING_MONEY_PATTERN.test(amount))) {
+      return res.status(400).json({
+        error: 'amount must be null or a canonical nonnegative decimal string with at most two decimal places',
+        code: 'INVALID_MONEY_FORMAT',
+      });
+    }
+
+    const { data, error } = await supabase.rpc('set_budget_recurring_default', {
+      p_category_id: id,
+      p_amount: amount,
+    });
+    if (error) throw error;
+    return res.status(200).json(data);
+  } catch (error) {
+    console.error('settings.setCategoryRecurringBudget Error:', error);
+    const status = error?.code === 'P0002' ? 404 : ['23514', '22023'].includes(error?.code) ? 409 : 500;
+    return res.status(status).json({ error: error.message, code: error.code || 'SETTINGS_ERROR' });
   }
 };
 

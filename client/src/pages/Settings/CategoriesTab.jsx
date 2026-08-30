@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Tag } from 'lucide-react';
+import { CalendarClock, Tag } from 'lucide-react';
 import {
   Alert,
   ConfirmDialog,
   Dialog,
+  IconButton,
+  MoneyAmount,
+  PrimaryButton,
+  SecondaryButton,
   Select,
   TextArea,
   TextField,
@@ -12,6 +16,7 @@ import {
   createSettingsCategory,
   deleteSettingsCategory,
   getSettingsCategories,
+  setSettingsCategoryRecurringBudget,
   updateSettingsCategory,
 } from '../../services/api';
 import {
@@ -49,6 +54,10 @@ const CategoriesTab = () => {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [recurringTarget, setRecurringTarget] = useState(null);
+  const [recurringAmount, setRecurringAmount] = useState('');
+  const [recurringSaving, setRecurringSaving] = useState(false);
+  const [recurringError, setRecurringError] = useState('');
 
   const loadCategories = useCallback(async () => {
     setLoadError(false);
@@ -157,6 +166,35 @@ const CategoriesTab = () => {
     }
   };
 
+  const openRecurring = (category) => {
+    setRecurringTarget(category);
+    setRecurringAmount(category.recurring_budget_amount ?? '');
+    setRecurringError('');
+  };
+
+  const closeRecurring = () => {
+    if (recurringSaving) return;
+    setRecurringTarget(null);
+    setRecurringAmount('');
+    setRecurringError('');
+  };
+
+  const saveRecurring = async (amount) => {
+    if (!recurringTarget || recurringSaving) return;
+    setRecurringSaving(true);
+    setRecurringError('');
+    try {
+      await setSettingsCategoryRecurringBudget(recurringTarget.id, { amount });
+      setRecurringTarget(null);
+      setRecurringAmount('');
+      await loadCategories();
+    } catch (error) {
+      setRecurringError(error.response?.data?.error || 'שמירת התקציב החוזר נכשלה. הסכום נשמר וניתן לנסות שוב.');
+    } finally {
+      setRecurringSaving(false);
+    }
+  };
+
   if (loading) return <SettingsSkeleton label="טעינת קטגוריות" />;
 
   if (loadError) {
@@ -205,12 +243,27 @@ const CategoriesTab = () => {
                       {TYPE_LABELS[category.type] || category.type}
                     </span>
                     <SettingsStatusBadge active={category.is_active} feminine />
+                    {category.type === 'expense' && category.recurring_budget_amount != null && (
+                      <span className="settings-recurring-badge">
+                        חוזר: <MoneyAmount value={category.recurring_budget_amount} minimumFractionDigits={0} maximumFractionDigits={2} />
+                      </span>
+                    )}
                   </>
                 )}
                 editLabel={`עריכת הקטגוריה ${category.name}`}
                 onEdit={() => openEdit(category)}
                 onDeactivate={() => setDeactivateTarget(category)}
                 onReactivate={() => handleReactivate(category)}
+                extraActions={category.type === 'expense' ? (
+                  <IconButton
+                    type="button"
+                    size="touch"
+                    aria-label={`הגדרת תקציב חוזר עבור ${category.name}`}
+                    onClick={() => openRecurring(category)}
+                  >
+                    <CalendarClock size={15} aria-hidden="true" />
+                  </IconButton>
+                ) : null}
               />
             );
           })}
@@ -293,6 +346,58 @@ const CategoriesTab = () => {
         variant="warning"
         errorMessage="השבתת הקטגוריה נכשלה. הקטגוריה נשארה פעילה."
       />
+
+      <Dialog
+        open={Boolean(recurringTarget)}
+        onClose={closeRecurring}
+        title={recurringTarget ? `תקציב חוזר — ${recurringTarget.name}` : 'תקציב חוזר'}
+        size="sm"
+        className="settings-dialog"
+        closeDisabled={recurringSaving}
+        footer={(
+          <>
+            <PrimaryButton
+              type="button"
+              loading={recurringSaving}
+              loadingText="שומר..."
+              disabled={recurringAmount === ''}
+              onClick={() => saveRecurring(recurringAmount)}
+            >
+              שמירת תקציב חוזר
+            </PrimaryButton>
+            {recurringTarget?.recurring_budget_amount != null && (
+              <SecondaryButton
+                type="button"
+                disabled={recurringSaving}
+                onClick={() => saveRecurring(null)}
+              >
+                השבתת תקציב חוזר
+              </SecondaryButton>
+            )}
+            <SecondaryButton type="button" disabled={recurringSaving} onClick={closeRecurring}>
+              ביטול
+            </SecondaryButton>
+          </>
+        )}
+      >
+        <div className="settings-dialog__form">
+          <p>הסכום מוצע לחודש חדש בלבד ומוחל רק בפעולה מפורשת מעמוד התקציב. חודשים היסטוריים לא משתנים.</p>
+          <TextField
+            id="category-recurring-budget-amount"
+            label="סכום חודשי חוזר"
+            type="text"
+            inputMode="decimal"
+            technicalLtr
+            pattern="(?:0|[1-9]\d*)(?:\.\d{1,2})?"
+            value={recurringAmount}
+            onValueChange={setRecurringAmount}
+            disabled={recurringSaving}
+            required
+            helperText="אפס הוא תקציב חוזר מפורש; השבתה מסירה את ברירת המחדל בלבד."
+          />
+          {recurringError && <Alert variant="error" urgent>{recurringError}</Alert>}
+        </div>
+      </Dialog>
     </section>
   );
 };

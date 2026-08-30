@@ -98,6 +98,16 @@ const copyBudgetMonth = (supabase, {
   p_reason: reason,
 });
 
+const initializeRecurringBudgets = (supabase, {
+  month,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'initialize_budget_recurring_defaults', {
+  p_month: month,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
 const toCompatibilityRows = (state) => (state?.categories || [])
   .filter((category) => category.budget_id && category.lifecycle_state === 'active')
   .map((category) => ({
@@ -120,6 +130,7 @@ module.exports = {
   copyBudgetMonth,
   establishBudget,
   getFundedBudgetMonth,
+  initializeRecurringBudgets,
   reactivateBudget,
   removeBudget,
   reverseOperation,

@@ -10,6 +10,82 @@
   color: var(--ft-text-muted);
 }
 
+.budget-recurring-panel {
+  display: grid;
+  gap: var(--ft-space-4);
+  border-color: var(--ft-primary-border);
+}
+
+.budget-recurring-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ft-space-5);
+}
+
+.budget-recurring-panel__heading h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--ft-space-2);
+  margin: 0 0 var(--ft-space-1);
+  font-size: var(--ft-font-size-subtitle);
+}
+
+.budget-recurring-panel__heading p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--ft-text-muted);
+}
+
+.budget-recurring-panel__totals {
+  display: grid;
+  flex: 0 0 auto;
+  gap: var(--ft-space-1);
+  color: var(--ft-text-muted);
+  white-space: nowrap;
+}
+
+.budget-recurring-panel__totals .is-shortfall {
+  color: var(--ft-negative);
+}
+
+.budget-recurring-panel__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--ft-space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.budget-recurring-panel__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ft-space-3);
+  padding: var(--ft-space-2) var(--ft-space-3);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-md);
+  background: var(--ft-surface-solid-secondary);
+}
+
+.budget-recurring-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ft-space-3);
+}
+
+@media (max-width: 639.98px) {
+  .budget-recurring-panel__heading {
+    flex-direction: column;
+  }
+
+  .budget-recurring-panel__totals {
+    width: 100%;
+  }
+}
+
 /* Budget cards use the global glass sheen, while the repeated corner bloom is
    intentionally omitted here so nested surfaces do not form a vertical band. */
 .budget-page .ui-glass::after {

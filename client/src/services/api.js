@@ -138,6 +138,7 @@ export const getLegoSetDetails = (setNum) => api.get(`/transactions/lego/details
 export const getBudgetsByMonth = (month) => api.get(`/budgets?month=${month}`);
 export const getFundedBudgetMonth = (month) => api.get('/budgets/funded', { params: { month } });
 export const addManualBudgetFunding = (data) => api.post('/budgets/funded/funding', data);
+export const initializeRecurringBudgets = (data) => api.post('/budgets/funded/recurring/initialize', data);
 export const establishFundedBudget = (data) => api.post('/budgets/funded/categories', data);
 export const adjustFundedBudget = (id, data) => api.patch(`/budgets/funded/categories/${id}`, data);
 export const removeFundedBudget = (id, data) => api.post(`/budgets/funded/categories/${id}/remove`, data);
@@ -172,6 +173,7 @@ export const getSettingsCategories = () => api.get('/settings/categories');
 export const createSettingsCategory = (data) => api.post('/settings/categories', data);
 export const updateSettingsCategory = (id, data) => api.put(`/settings/categories/${id}`, data);
 export const deleteSettingsCategory = (id) => api.delete(`/settings/categories/${id}`);
+export const setSettingsCategoryRecurringBudget = (id, data) => api.put(`/settings/categories/${id}/recurring-budget`, data);
 
 // Settings — Payment Sources
 export const getSettingsPaymentSources   = ()        => api.get('/settings/payment-sources');

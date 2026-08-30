@@ -1,4 +1,4 @@
-import { AlertTriangle, Plus, TrendingDown, X } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, Plus, TrendingDown, X } from 'lucide-react';
 import {
   Alert,
   EmptyState,
@@ -12,7 +12,7 @@ import {
   TextField,
 } from '../../components/ui';
 import { formatBudgetMonth } from './budgetMonth';
-import { absoluteMoney } from '../../utils/money';
+import { absoluteMoney, compareMoney } from '../../utils/money';
 import BudgetMoneyAmount from './BudgetMoneyAmount';
 
 export const AddBudgetPanel = ({
@@ -158,6 +158,53 @@ export const ManualFundingPanel = ({
           </PrimaryButton>
         </div>
       </div>
+      {error && <Alert variant="error" urgent>{error}</Alert>}
+    </GlassCard>
+  );
+};
+
+export const RecurringBudgetPanel = ({ recurring, applying, error, onApply, onOpenFunding }) => {
+  const hasShortfall = compareMoney(recurring.shortfall) > 0;
+  return (
+    <GlassCard className="budget-recurring-panel" padding="18px">
+      <div className="budget-recurring-panel__heading">
+        <div>
+          <h2><CalendarCheck size={19} aria-hidden="true" /> תקציבים חוזרים ממתינים</h2>
+          <p>ההגדרות מוצגות לעיון בלבד. רק הפעולה המפורשת למטה תיצור תקציבי פתיחה ממומנים.</p>
+        </div>
+        <div className="budget-recurring-panel__totals" aria-label="סיכום תקציבים חוזרים">
+          <span>נדרש <strong><BudgetMoneyAmount value={recurring.required} /></strong></span>
+          <span>לא מוקצה <strong><BudgetMoneyAmount value={recurring.unallocated} /></strong></span>
+          {hasShortfall && <span className="is-shortfall">חסר <strong><BudgetMoneyAmount value={recurring.shortfall} /></strong></span>}
+        </div>
+      </div>
+      <ul className="budget-recurring-panel__list" aria-label="ברירות מחדל חוזרות ממתינות">
+        {recurring.pending_categories.map((item) => (
+          <li key={item.category_id}>
+            <span>{item.category?.icon} {item.category?.name}</span>
+            <BudgetMoneyAmount value={item.amount} />
+          </li>
+        ))}
+      </ul>
+      {hasShortfall ? (
+        <div className="budget-recurring-panel__actions">
+          <Alert variant="warning">
+            נדרש להוסיף כסף זמין לחודש לפני שניתן להחיל את כל התקציבים החוזרים.
+          </Alert>
+          <PrimaryButton type="button" onClick={onOpenFunding}>הוספת כסף זמין</PrimaryButton>
+        </div>
+      ) : (
+        <div className="budget-recurring-panel__actions">
+          <PrimaryButton
+            type="button"
+            loading={applying}
+            loadingText="מחיל..."
+            onClick={onApply}
+          >
+            החלת תקציבים חוזרים
+          </PrimaryButton>
+        </div>
+      )}
       {error && <Alert variant="error" urgent>{error}</Alert>}
     </GlassCard>
   );

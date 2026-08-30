@@ -189,6 +189,26 @@ test('copy maps the whole action to one atomic RPC with no controller-side write
   });
 });
 
+test('recurring initialization is an explicit command mapped to one RPC', async () => {
+  const { calls, res } = await call('initializeRecurringBudgets', { body: {
+    month: '2026-08', request_key: 'key-recurring',
+  } });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(calls, [{
+    name: 'initialize_budget_recurring_defaults',
+    params: { p_month: '2026-08', p_request_key: 'key-recurring', p_reason: null },
+  }]);
+});
+
+test('recurring initialization requires a month and never runs from a read', async () => {
+  const missing = await call('initializeRecurringBudgets', { body: { request_key: 'key-recurring' } });
+  assert.equal(missing.res.statusCode, 400);
+  assert.equal(missing.calls.length, 0);
+
+  const read = await call('getFundedBudgetMonth', { query: { month: '2026-08' } });
+  assert.deepEqual(read.calls.map((entry) => entry.name), ['get_funded_budget_month']);
+});
+
 const exactAnnualFake = () => {
   const rows = {
     budget_category_state: [

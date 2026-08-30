@@ -80,6 +80,7 @@ export const SettingsRecord = ({
   onDeactivate,
   onReactivate,
   reactivateLabel,
+  extraActions,
 }) => (
   <article className={`settings-record${active ? '' : ' is-inactive'}`} aria-label={title}>
     <span className="settings-record__icon" aria-hidden="true">{icon}</span>
@@ -89,6 +90,7 @@ export const SettingsRecord = ({
     </div>
     {badges && <div className="settings-record__badges">{badges}</div>}
     <div className="settings-record__actions">
+      {extraActions}
       <IconButton type="button" size="touch" aria-label={editLabel} onClick={onEdit}>
         <Pencil size={15} aria-hidden="true" />
       </IconButton>

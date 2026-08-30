@@ -325,3 +325,21 @@ Use a hybrid PostgreSQL model. Existing budget rows become immutable category/mo
 ### Consequences
 
 Active zero, inactive history, and no budget are distinct. Removal releases only eligible unspent funding and preserves the point-in-time actual-spending snapshot used; later ledger edits do not retroactively rewrite that funding history. All financial mutations use idempotent RPCs, exact finite numeric arithmetic, canonical month-first locks, constraints, and reconciliation. Canonical monetary reads and authoritative mutation inputs use decimal strings across the JSON/Node/React boundary; numeric JSON money is rejected before the RPC call because it may already be rounded. JavaScript `Number` is permitted only for non-authoritative visual geometry or percentages and cannot feed a financial mutation. Generic compensating reversal is intentionally limited to supported manual-funding and monetary-adjustment operations. Legacy `amount` remains only a compatibility field and cannot be rewritten after cutover. Production deployment requires a separately reviewed Migration 017 run; repository presence is not deployment evidence.
+
+## D-019 — Recurring defaults are configuration applied only by explicit funded initialization
+
+**Status:** Accepted
+
+**Date:** 2026-08-30
+
+### Context
+
+Normal category plans repeat, but a stored default is not itself money and must not mutate a month merely because the Budget page was viewed. Established monthly opening state must remain historically stable and future monthly overrides need a clean precedence point.
+
+### Decision
+
+Store one optional exact recurring amount per expense category in restricted mutable configuration. Absence means disabled; zero is an explicit default. The monthly read only previews missing eligible defaults. A separate explicit, idempotent PostgreSQL command applies all eligible defaults atomically to a current or future month, using existing unallocated funding and creating immutable snapshots with `starting_kind = recurring_default`. Existing active or inactive snapshots always take precedence.
+
+### Consequences
+
+Page loads are financially read-only, insufficient funds produce no partial allocation, and changing or disabling a default affects only months that have not been initialized. Migration 018 does not add carryover, savings, reallocation, deficit resolution, or monthly overrides. A future #19 override can be selected by the same month-initialization boundary without rewriting an existing opening snapshot.

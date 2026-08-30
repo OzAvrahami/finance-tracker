@@ -190,6 +190,7 @@
 
 .settings-status,
 .settings-type-badge,
+.settings-recurring-badge,
 .settings-method-badge {
   display: inline-flex;
   min-height: 24px;
@@ -200,6 +201,12 @@
   font-size: var(--ft-font-size-xs);
   font-weight: 700;
   white-space: nowrap;
+}
+
+.settings-recurring-badge {
+  color: var(--ft-primary-hover);
+  background: var(--ft-primary-weak);
+  border-color: var(--ft-primary-border);
 }
 
 .settings-status.is-active {

@@ -236,6 +236,8 @@ The application is effectively single-user. Financial tables do not contain a pe
 
 Ordered migrations in `server/migrations/` are schema history. `server/full_schema.sql` is the consolidated intended-schema reference.
 
+Migration 018 stores optional recurring planning amounts in the restricted `budget_recurring_defaults` configuration table. It does not treat configuration as funded state. The canonical monthly read is `STABLE` and reports eligible missing defaults, exact required funds, current unallocated funds, and shortfall without writing anything. Only the explicit `initialize_budget_recurring_defaults` command creates immutable `recurring_default` opening snapshots. The command is current/future-only, all-or-nothing, idempotent, month-first locked, and consumes existing unallocated funds without creating funding. Existing active or inactive snapshots take precedence, and later configuration edits never rewrite established months.
+
 Migration 016 canonicalizes three external-ingestion prerequisites that existed in production before they entered repository history: nullable `transactions.external_id`, its partial unique index, and `get_unique_tags()`. The canonical autocomplete function is a `SECURITY INVOKER` read RPC executable directly only by the service-role backend.
 
 There is currently no canonical repository migration runner or applied-migration ledger. A read-only production catalog verification on 2026-08-15 confirmed expected object state through Migration 015; Migration 016 was subsequently applied and independently verified read-only. Neither verification created an execution ledger. Consequently:

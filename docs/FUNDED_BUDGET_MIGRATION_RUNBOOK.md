@@ -36,3 +36,11 @@ Migration execution is all-or-nothing, including the budget ID sequence restart.
 Removal stores the expense total observed by that database operation and uses it to calculate the released amount. Later transaction edits, deletions, or backdating change current actual/unbudgeted reporting but never rewrite the removal snapshot or retroactively alter the funded movement. Review such ledger changes as a point-in-time reporting/reconciliation risk rather than mutating immutable budget provenance.
 
 As of this runbook revision, Migration 017 is still **not applied to production**.
+
+## Migration 018 recurring-default extension
+
+Migration 018 must be reviewed and applied only after Migration 017 has been successfully verified. It adds mutable future-planning configuration, a read-only recurring preview, and bounded configuration/initialization RPCs; it does not backfill defaults or mutate any existing monthly snapshot.
+
+Before any later production execution, verify the Migration 017 object boundary, rehearse `018_recurring_budget_defaults.sql` on a production-shaped disposable copy, and inspect effective table/view/function privileges. Deploy the server only after both migrations are verified, then deploy the client. Viewing a Budget month must remain read-only: only the explicit `initialize_budget_recurring_defaults` RPC may apply defaults, and insufficient funding must leave no partial operation, snapshot, or lifecycle event.
+
+As of this runbook revision, Migration 018 is **not applied to production**.

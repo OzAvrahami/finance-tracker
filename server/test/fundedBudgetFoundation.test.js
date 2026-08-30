@@ -9,12 +9,27 @@ const migration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '017_funded_budget_foundation.sql'),
   'utf8',
 );
+const recurringMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '018_recurring_budget_defaults.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 test('migration 017 and full_schema carry the same funded-budget foundation', () => {
   const marker = '-- Migration 017: funded monthly budget foundation';
   assert.match(migration, new RegExp(marker));
-  assert.equal(fullSchema.slice(fullSchema.indexOf(marker)).trim(), migration.trim());
+  assert.ok(fullSchema.includes(migration.trim()));
+});
+
+test('migration 018 and full_schema carry the same recurring-budget extension', () => {
+  const marker = '-- Migration 018: recurring monthly budget defaults';
+  assert.match(recurringMigration, new RegExp(marker));
+  assert.equal(fullSchema.slice(fullSchema.indexOf(marker)).trim(), recurringMigration.trim());
+  assert.match(recurringMigration, /budget_recurring_defaults/i);
+  assert.match(recurringMigration, /starting_kind IN \([^)]+recurring_default/is);
+  assert.match(recurringMigration, /month_initialization/i);
+  assert.match(recurringMigration, /Asia\/Jerusalem/i);
+  assert.doesNotMatch(recurringMigration, /source_transaction_id|carryover|monthly_override/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {
@@ -122,11 +137,14 @@ test('budget service maps commands to one database RPC each', async () => {
     month: '2026-08', categoryId: 1, startingAmount: '0.00', requestKey: 'key-b',
   });
   await budgetService.removeBudget(supabase, { budgetId: 5, requestKey: 'key-c' });
+  await budgetService.initializeRecurringBudgets(supabase, { month: '2026-08', requestKey: 'key-d' });
   assert.deepEqual(calls.map(({ name }) => name), [
     'add_manual_budget_funding', 'establish_funded_budget', 'remove_funded_budget',
+    'initialize_budget_recurring_defaults',
   ]);
   assert.equal(calls[0].params.p_source_label, 'Confirmed cash');
   assert.equal(calls[1].params.p_starting_amount, '0.00');
+  assert.equal(calls[3].params.p_request_key, 'key-d');
 });
 
 test('compatibility amount is final funded and inactive/no-budget categories are omitted', () => {
