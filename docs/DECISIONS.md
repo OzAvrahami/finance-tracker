@@ -345,3 +345,17 @@ Recurring amounts are managed centrally in the dedicated Settings → Budget are
 ### Consequences
 
 Page loads are financially read-only, insufficient funds produce no partial allocation, and changing or disabling a default affects only months that have not been initialized. Migration 018 does not add carryover, savings, reallocation, deficit resolution, or monthly overrides. A future #19 override can be selected by the same month-initialization boundary without rewriting an existing opening snapshot.
+
+## D-020 — Carryover is a balanced explicit cross-month transfer
+
+### Context
+
+Unused funded category money must not be copied into another month while remaining funded in its source month. Carryover is distinct from a recurring opening basis, and viewing a Budget month cannot authorize a financial mutation.
+
+### Decision
+
+Migration 019 transfers eligible positive unused funding through a linked operation pair. The source category releases the amount and the source month records an equal negative funding delta; the destination month records equal positive funding and allocates it to the same category. Apply first takes a short `SHARE` lock on `transactions`, then locks the two months and their budgets in stable ID order and reconciles them together. The transaction-table lock conflicts with transaction writers, making point-in-time actuals stable until apply commits. A read-only current-month preview reports ready, blocked, and already-applied categories with a deterministic fingerprint. The explicit idempotent command captures that same authoritative candidate material once inside its transaction, validates the approved fingerprint immediately, and writes from the captured rows. A mismatch raises `CARRYOVER_PREVIEW_STALE` and rolls back without financial state. A compensating command reverses a transfer only when destination funding remains safely releasable.
+
+### Consequences
+
+Carryover cannot create or double-count money. It never rewrites `starting_amount`, recurring defaults, or historical transactions. Each immutable transfer preserves both the raw actual-spending total observed at apply time and `max(raw actual, 0)`, the effective value used by eligibility; later transaction edits may change current reporting but cannot recalculate that history. A destination with no applicable base receives an active zero `carryover_only` snapshot before the incoming movement; pending recurring initialization, inactive state, unbudgeted actuals, and active deficits block application. Savings/disposition, monthly overrides, unbudgeted-expense resolution, and deficit resolution remain separate issues.

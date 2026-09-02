@@ -7,6 +7,7 @@ const money = require('../utils/money');
 // they may already have lost precision before controller validation runs.
 const FUNDED_MONEY_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const ZERO_MONEY_PATTERN = /^0(?:\.0{1,2})?$/;
+const CARRYOVER_FINGERPRINT_PATTERN = /^[0-9a-f]{32}$/;
 
 const validateFundedMoney = (res, field, value, { positive = false } = {}) => {
   if (typeof value !== 'string' || !FUNDED_MONEY_PATTERN.test(value)) {
@@ -28,15 +29,19 @@ const validateFundedMoney = (res, field, value, { positive = false } = {}) => {
 
 const budgetErrorStatus = (error) => {
   if (error?.code === 'P0002') return 404;
-  if (['23505', '23514', '55000', '0A000'].includes(error?.code)) return 409;
+  if (['23505', '23514', '40001', '55000', '0A000'].includes(error?.code)) return 409;
   return 400;
 };
 
 const sendBudgetError = (res, label, error) => {
   console.error(`${label} Error:`, error);
+  const code = error?.code === '40001'
+    && String(error?.message || '').startsWith('CARRYOVER_PREVIEW_STALE:')
+    ? 'CARRYOVER_PREVIEW_STALE'
+    : error?.code || 'BUDGET_ERROR';
   return res.status(budgetErrorStatus(error)).json({
     error: error.message,
-    code: error.code || 'BUDGET_ERROR',
+    code,
   });
 };
 
@@ -69,7 +74,11 @@ exports.getBudgetHistory = async (req, res) => {
     const { month } = req.query;
     if (!month) return res.status(400).json({ error: 'month query parameter is required' });
     const state = await budgetService.getFundedBudgetMonth(supabase, month);
-    return res.status(200).json({ month: state.month, history: state.history || [] });
+    return res.status(200).json({
+      month: state.month,
+      history: state.history || [],
+      carryover_history: state.carryover_history || [],
+    });
   } catch (error) {
     return sendBudgetError(res, 'getBudgetHistory', error);
   }
@@ -183,6 +192,55 @@ exports.initializeRecurringBudgets = async (req, res) => {
     return res.status(200).json(state);
   } catch (error) {
     return sendBudgetError(res, 'initializeRecurringBudgets', error);
+  }
+};
+
+exports.getCarryoverPreview = async (req, res) => {
+  try {
+    const { month } = req.query;
+    if (!month) return res.status(400).json({ error: 'month query parameter is required' });
+    const preview = await budgetService.getCarryoverPreview(supabase, month);
+    return res.status(200).json(preview);
+  } catch (error) {
+    return sendBudgetError(res, 'getCarryoverPreview', error);
+  }
+};
+
+exports.applyCarryover = async (req, res) => {
+  try {
+    const {
+      destination_month: destinationMonth,
+      preview_fingerprint: previewFingerprint,
+      request_key: requestKey,
+      reason,
+    } = req.body || {};
+    if (!destinationMonth || !requestKey || !CARRYOVER_FINGERPRINT_PATTERN.test(previewFingerprint || '')) {
+      return res.status(400).json({
+        error: 'destination_month, request_key, and a valid preview_fingerprint are required',
+        code: 'INVALID_CARRYOVER_REQUEST',
+      });
+    }
+    const result = await budgetService.applyCarryover(supabase, {
+      destinationMonth, previewFingerprint, requestKey, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'applyCarryover', error);
+  }
+};
+
+exports.reverseCarryover = async (req, res) => {
+  try {
+    const { request_key: requestKey, reason } = req.body || {};
+    if (!requestKey) {
+      return res.status(400).json({ error: 'request_key is required', code: 'INVALID_CARRYOVER_REQUEST' });
+    }
+    const result = await budgetService.reverseCarryover(supabase, {
+      transferId: req.params.id, requestKey, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'reverseCarryover', error);
   }
 };
 

@@ -19,6 +19,7 @@ import {
   getSettingsPaymentSources,
   setAdminListTypeCategoryLinks,
   setSettingsCategoryRecurringBudget,
+  setSettingsCategoryBudgetCarryover,
   updateAdminShoppingCatalogCategory,
   updateAdminShoppingListType,
   updateSettingsCategory,
@@ -42,6 +43,7 @@ vi.mock('../../services/api', () => ({
   getSettingsPaymentSources: vi.fn(),
   setAdminListTypeCategoryLinks: vi.fn(),
   setSettingsCategoryRecurringBudget: vi.fn(),
+  setSettingsCategoryBudgetCarryover: vi.fn(),
   updateAdminShoppingCatalogCategory: vi.fn(),
   updateAdminShoppingListType: vi.fn(),
   updateSettingsCategory: vi.fn(),
@@ -119,6 +121,7 @@ beforeEach(() => {
   deleteAdminShoppingCatalogCategory.mockResolvedValue({ data: {} });
   setAdminListTypeCategoryLinks.mockResolvedValue({ data: {} });
   setSettingsCategoryRecurringBudget.mockResolvedValue({ data: {} });
+  setSettingsCategoryBudgetCarryover.mockResolvedValue({ data: {} });
 });
 
 describe('Settings navigation and categories', () => {
@@ -192,10 +195,10 @@ describe('Settings navigation and categories', () => {
 
 describe('Budget settings', () => {
   const budgetCategories = [
-    { ...categories[0], recurring_budget_amount: null },
-    { id: 3, name: 'תחבורה', type: 'expense', icon: '🚌', keywords: [], is_active: true, recurring_budget_amount: '2000.00' },
-    { id: 4, name: 'מתנות', type: 'expense', icon: '🎁', keywords: [], is_active: false, recurring_budget_amount: '0.00' },
-    { ...categories[1], is_active: true, recurring_budget_amount: '5000.00' },
+    { ...categories[0], recurring_budget_amount: null, carryover_enabled: false },
+    { id: 3, name: 'תחבורה', type: 'expense', icon: '🚌', keywords: [], is_active: true, recurring_budget_amount: '2000.00', carryover_enabled: true },
+    { id: 4, name: 'מתנות', type: 'expense', icon: '🎁', keywords: [], is_active: false, recurring_budget_amount: '0.00', carryover_enabled: false },
+    { ...categories[1], is_active: true, recurring_budget_amount: '5000.00', carryover_enabled: false },
   ];
 
   const openBudgetSettings = async () => {
@@ -243,6 +246,39 @@ describe('Budget settings', () => {
       amount: '9007199254740993.01',
     }));
     expect(await screen.findByText('₪9,007,199,254,740,993.01')).toBeInTheDocument();
+  });
+
+  it('shows and toggles carryover only for expense categories', async () => {
+    const enabled = budgetCategories.map((category) => (
+      category.id === 1 ? { ...category, carryover_enabled: true } : category
+    ));
+    getSettingsCategories
+      .mockResolvedValueOnce({ data: categories })
+      .mockResolvedValueOnce({ data: budgetCategories })
+      .mockResolvedValueOnce({ data: enabled });
+    await openBudgetSettings();
+
+    const foodToggle = screen.getByRole('switch', { name: 'העברת יתרה לחודש הבא עבור מזון' });
+    const transportToggle = screen.getByRole('switch', { name: 'העברת יתרה לחודש הבא עבור תחבורה' });
+    expect(foodToggle).toHaveAttribute('aria-checked', 'false');
+    expect(transportToggle).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('switch', { name: /משכורת/ })).not.toBeInTheDocument();
+
+    await userEvent.click(foodToggle);
+    await waitFor(() => expect(setSettingsCategoryBudgetCarryover).toHaveBeenCalledWith(1, {
+      enabled: true,
+    }));
+    expect(await screen.findByRole('switch', { name: 'העברת יתרה לחודש הבא עבור מזון' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('retains carryover state and reports a failed toggle', async () => {
+    getSettingsCategories.mockResolvedValue({ data: budgetCategories });
+    setSettingsCategoryBudgetCarryover.mockRejectedValueOnce({ response: { data: { error: 'שגיאת העברת יתרה' } } });
+    await openBudgetSettings();
+    const toggle = screen.getByRole('switch', { name: 'העברת יתרה לחודש הבא עבור מזון' });
+    await userEvent.click(toggle);
+    expect(await screen.findByText('שגיאת העברת יתרה')).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
   });
 
   it('edits and disables an existing recurring default', async () => {
@@ -303,6 +339,7 @@ describe('Budget settings', () => {
       expect(screen.getByRole('tablist', { name: 'אזורי הגדרות' })).toBeInTheDocument();
       const food = screen.getByRole('article', { name: 'מזון — תקציב חודשי חוזר' });
       expect(within(food).getByRole('button', { name: 'הגדרת תקציב חוזר עבור מזון' })).toBeInTheDocument();
+      expect(within(food).getByRole('switch', { name: 'העברת יתרה לחודש הבא עבור מזון' })).toBeInTheDocument();
       expect(within(food).getByText('לא הוגדר')).toBeInTheDocument();
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });

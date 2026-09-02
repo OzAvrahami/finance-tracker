@@ -16,6 +16,10 @@ const recurringMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '018_recurring_budget_defaults.sql'),
   'utf8',
 );
+const carryoverMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '019_budget_category_carryover.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -47,6 +51,21 @@ const psqlAsync = (database, sql) => new Promise((resolve) => {
 });
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const waitForGrantedTableLock = async (database, table, mode) => {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const granted = psql(database, `SELECT EXISTS (
+      SELECT 1 FROM pg_locks
+      WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database())
+        AND relation = '${table}'::regclass
+        AND mode = '${mode}'
+        AND granted
+    );`).stdout.trim();
+    if (granted === 't') return;
+    await delay(50);
+  }
+  assert.fail(`timed out waiting for ${mode} on ${table}`);
+};
 
 const createDatabase = (name) => {
   psql('postgres', `CREATE DATABASE ${name};`);
@@ -94,6 +113,11 @@ const expectMigrationFailure = (database, expected) => {
 const applyRecurringFoundation = (database) => {
   psql(database, migration);
   psql(database, recurringMigration);
+};
+
+const applyCarryoverFoundation = (database) => {
+  applyRecurringFoundation(database);
+  psql(database, carryoverMigration);
 };
 
 before(() => {
@@ -1043,4 +1067,597 @@ test('recurring default ACLs expose only bounded service-role reads and commands
   const directWrite = psql('recurring_acl', "SET ROLE service_role; UPDATE budget_recurring_defaults SET amount=200;", true);
   assert.notEqual(directWrite.status, 0);
   assert.match(directWrite.stderr, /permission denied/i);
+});
+
+test('migration 019 installs carryover without rewriting funded history', () => {
+  createDatabase('carryover_migration');
+  psql('carryover_migration', `${fixture()}
+    INSERT INTO budgets(id,category_id,month,amount) VALUES (41,1,'2026-01',1000),(42,2,'2026-01',0);
+  `);
+  applyRecurringFoundation('carryover_migration');
+  const before = psql('carryover_migration', `
+    SELECT string_agg(id || ':' || starting_amount || ':' || starting_kind,',' ORDER BY id)
+    FROM budgets;
+  `).stdout.trim();
+  psql('carryover_migration', carryoverMigration);
+  const after = psql('carryover_migration', `
+    SELECT string_agg(id || ':' || starting_amount || ':' || starting_kind,',' ORDER BY id)
+    FROM budgets;
+  `).stdout.trim();
+  assert.equal(after, before);
+  assert.equal(psql('carryover_migration', `SELECT
+    to_regclass('public.budget_carryover_settings') IS NOT NULL,
+    to_regclass('public.budget_carryover_batches') IS NOT NULL,
+    to_regclass('public.budget_carryover_transfers') IS NOT NULL,
+    to_regprocedure('public.apply_budget_carryover(text,uuid,text,text)') IS NOT NULL;
+  `).stdout.trim(), 't|t|t|t');
+});
+
+test('carryover settings are expense-only and protect category type', () => {
+  createDatabase('carryover_settings');
+  psql('carryover_settings', `${fixture()} INSERT INTO categories(id,name,type) VALUES (4,'Salary','income');`);
+  applyCarryoverFoundation('carryover_settings');
+  assert.match(psql('carryover_settings', "SELECT set_budget_carryover_enabled(4,true);", true).stderr, /expense categories/i);
+  psql('carryover_settings', 'SELECT set_budget_carryover_enabled(1,true);');
+  assert.equal(psql('carryover_settings', 'SELECT count(*) FROM budget_carryover_settings WHERE category_id=1;').stdout.trim(), '1');
+  assert.match(psql('carryover_settings', "UPDATE categories SET type='income' WHERE id=1;", true).stderr, /disable budget carryover/i);
+  psql('carryover_settings', 'SELECT set_budget_carryover_enabled(1,false);');
+  assert.equal(psql('carryover_settings', 'SELECT count(*) FROM budget_carryover_settings WHERE category_id=1;').stdout.trim(), '0');
+});
+
+test('carryover preview is read-only and reports current-month eligibility exactly', () => {
+  createDatabase('carryover_preview');
+  psql('carryover_preview', fixture());
+  applyCarryoverFoundation('carryover_preview');
+  psql('carryover_preview', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1500,'Source','60101010-1010-4010-8010-101010101010');
+    SELECT establish_funded_budget(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1,1500,'manual','60101010-1010-4010-8010-101010101011');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES ((date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date,
+      'expense',600,1);
+    SELECT set_budget_carryover_enabled(1,true);
+  `);
+  const before = psql('carryover_preview', `SELECT
+    (SELECT count(*) FROM budget_months), (SELECT count(*) FROM budgets),
+    (SELECT count(*) FROM budget_operations), (SELECT count(*) FROM budget_funding_entries),
+    (SELECT count(*) FROM budget_movements), (SELECT count(*) FROM budget_lifecycle_events),
+    (SELECT count(*) FROM budget_carryover_batches), (SELECT count(*) FROM budget_carryover_transfers);
+  `).stdout.trim();
+  const preview = JSON.parse(psql('carryover_preview', `
+    SELECT get_budget_carryover_preview(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'));
+  `).stdout.trim());
+  assert.equal(preview.eligible, true);
+  assert.equal(preview.total_incoming, '900.00');
+  assert.equal(preview.ready_categories[0].amount, '900.00');
+  assert.equal(preview.ready_categories[0].source_final_funded, '1500.00');
+  assert.equal(preview.ready_categories[0].source_raw_actual_spent, '600.00');
+  assert.equal(preview.ready_categories[0].source_effective_actual_spent, '600.00');
+  assert.match(preview.fingerprint, /^[0-9a-f]{32}$/);
+  const after = psql('carryover_preview', `SELECT
+    (SELECT count(*) FROM budget_months), (SELECT count(*) FROM budgets),
+    (SELECT count(*) FROM budget_operations), (SELECT count(*) FROM budget_funding_entries),
+    (SELECT count(*) FROM budget_movements), (SELECT count(*) FROM budget_lifecycle_events),
+    (SELECT count(*) FROM budget_carryover_batches), (SELECT count(*) FROM budget_carryover_transfers);
+  `).stdout.trim();
+  assert.equal(after, before);
+  const historical = JSON.parse(psql('carryover_preview', "SELECT get_budget_carryover_preview('2020-01');").stdout.trim());
+  assert.equal(historical.eligible, false);
+  assert.equal(historical.reason, 'CURRENT_MONTH_ONLY');
+});
+
+test('carryover applies an exact balanced transfer and creates carryover-only opening state', () => {
+  createDatabase('carryover_balanced');
+  psql('carryover_balanced', fixture());
+  applyCarryoverFoundation('carryover_balanced');
+  psql('carryover_balanced', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1500,'Source','60202020-2020-4020-8020-202020202020');
+    SELECT establish_funded_budget(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1,1500,'manual','60202020-2020-4020-8020-202020202021');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES ((date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date,
+      'expense',600,1);
+    SELECT set_budget_carryover_enabled(1,true);
+    SELECT apply_budget_carryover(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+      '60202020-2020-4020-8020-202020202022',
+      get_budget_carryover_preview(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'))->>'fingerprint');
+  `);
+  const states = psql('carryover_balanced', `
+    SELECT available || ':' || total_allocated || ':' || unallocated
+    FROM budget_month_funding_state ORDER BY month;
+  `).stdout.trim().split('\n');
+  assert.deepEqual(states, [
+    '600.00:600.00:0.00',
+    '900.00:900.00:0.00',
+  ]);
+  const transfer = psql('carryover_balanced', `SELECT
+    t.amount, t.source_final_funded_snapshot, t.source_raw_actual_spent_snapshot,
+    t.source_effective_actual_spent_snapshot,
+    source_funding.amount_delta, destination_funding.amount_delta,
+    source_movement.source_budget_id IS NOT NULL AND source_movement.destination_budget_id IS NULL,
+    destination_movement.source_budget_id IS NULL AND destination_movement.destination_budget_id IS NOT NULL
+    FROM budget_carryover_transfers t
+    JOIN budget_funding_entries source_funding ON source_funding.operation_id=t.source_operation_id
+    JOIN budget_funding_entries destination_funding ON destination_funding.operation_id=t.destination_operation_id
+    JOIN budget_movements source_movement ON source_movement.operation_id=t.source_operation_id
+    JOIN budget_movements destination_movement ON destination_movement.operation_id=t.destination_operation_id;
+  `).stdout.trim();
+  assert.equal(transfer, '900.00|1500.00|600.00|600.00|-900.00|900.00|t|t');
+  assert.equal(psql('carryover_balanced', `SELECT sum(amount_delta)
+    FROM budget_funding_entries WHERE source_kind='carryover_transfer';
+  `).stdout.trim(), '0.00');
+  assert.equal(psql('carryover_balanced', `SELECT starting_amount || '|' || starting_kind || '|' || final_funded || '|' || incoming_carryover
+    FROM budget_category_state JOIN budget_category_carryover_state USING (budget_id)
+    WHERE month=to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM');
+  `).stdout.trim(), '0.00|carryover_only|900.00|900.00');
+
+  psql('carryover_balanced', 'UPDATE transactions SET total_amount=700 WHERE category_id=1;');
+  assert.equal(psql('carryover_balanced', `SELECT
+    amount || '|' || source_final_funded_snapshot || '|' || source_raw_actual_spent_snapshot
+      || '|' || source_effective_actual_spent_snapshot
+    FROM budget_carryover_transfers WHERE reverses_transfer_id IS NULL;
+  `).stdout.trim(), '900.00|1500.00|600.00|600.00');
+  const sourceMonth = psql('carryover_balanced', `SELECT to_char(
+    date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM');
+  `).stdout.trim();
+  const currentSource = JSON.parse(psql('carryover_balanced', `SELECT get_funded_budget_month('${sourceMonth}');`).stdout.trim());
+  assert.equal(currentSource.categories.find((row) => row.category_id === 1).actual_spent, '700.00');
+});
+
+test('carryover eligibility handles spent, overspent, negative actual, release, inactive, and disabled cases', () => {
+  createDatabase('carryover_eligibility');
+  psql('carryover_eligibility', fixture());
+  applyCarryoverFoundation('carryover_eligibility');
+  psql('carryover_eligibility', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      3000,'Source','60303030-3030-4030-8030-303030303030');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1,1000,'manual','60303030-3030-4030-8030-303030303031');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),2,1000,'manual','60303030-3030-4030-8030-303030303032');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),3,1000,'manual','60303030-3030-4030-8030-303030303033');
+    SELECT set_budget_carryover_enabled(1,true); SELECT set_budget_carryover_enabled(2,true); SELECT set_budget_carryover_enabled(3,true);
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      ((date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date,'expense',1000,1),
+      ((date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date,'expense',1200,2),
+      ((date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date,'expense',-200,3);
+  `);
+  const rows = psql('carryover_eligibility', `SELECT category_id || ':' || source_raw_actual_spent || ':'
+    || source_effective_actual_spent || ':' || eligible_amount || ':' || status || ':' || coalesce(blocked_reason,'')
+    FROM budget_carryover_candidate_rows(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM')) ORDER BY category_id;
+  `).stdout.trim().split('\n');
+  assert.deepEqual(rows, [
+    '1:1000.00:1000.00:0.00:blocked:NO_ELIGIBLE_BALANCE',
+    '2:1200.00:1200.00:0.00:blocked:NO_ELIGIBLE_BALANCE',
+    '3:-200.00:0.00:1000.00:ready:',
+  ]);
+
+  psql('carryover_eligibility', `
+    SELECT set_funded_budget_amount((SELECT budget_id FROM budget_category_state WHERE category_id=3),600,'60303030-3030-4030-8030-303030303034');
+  `);
+  assert.equal(psql('carryover_eligibility', `SELECT eligible_amount FROM budget_carryover_candidate_rows(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM')) WHERE category_id=3;
+  `).stdout.trim(), '600.00');
+  psql('carryover_eligibility', `SELECT apply_budget_carryover(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+    '60303030-3030-4030-8030-303030303035',
+    get_budget_carryover_preview(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'))->>'fingerprint');
+  `);
+  assert.equal(psql('carryover_eligibility', `SELECT amount || ':' || source_raw_actual_spent_snapshot
+    || ':' || source_effective_actual_spent_snapshot
+    FROM budget_carryover_transfers WHERE reverses_transfer_id IS NULL;
+  `).stdout.trim(), '600.00:-200.00:0.00');
+  psql('carryover_eligibility', 'SELECT set_budget_carryover_enabled(3,false);');
+  assert.equal(psql('carryover_eligibility', `SELECT count(*) FROM budget_carryover_candidate_rows(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM')) WHERE category_id=3;
+  `).stdout.trim(), '0');
+});
+
+test('destination precedence blocks recurring, inactive, unbudgeted, and deficit states', () => {
+  createDatabase('carryover_blocks');
+  psql('carryover_blocks', fixture());
+  applyCarryoverFoundation('carryover_blocks');
+  psql('carryover_blocks', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1200,'Source','60404040-4040-4040-8040-404040404040');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1,400,'manual','60404040-4040-4040-8040-404040404041');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),2,400,'manual','60404040-4040-4040-8040-404040404042');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),3,400,'manual','60404040-4040-4040-8040-404040404043');
+    SELECT set_budget_carryover_enabled(1,true); SELECT set_budget_carryover_enabled(2,true); SELECT set_budget_carryover_enabled(3,true);
+    SELECT set_budget_recurring_default(1,100);
+    SELECT add_manual_budget_funding(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),200,'Target','60404040-4040-4040-8040-404040404044');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),2,100,'manual','60404040-4040-4040-8040-404040404045');
+    SELECT remove_funded_budget((SELECT budget_id FROM budget_category_state WHERE month=to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM') AND category_id=2),'60404040-4040-4040-8040-404040404046');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),3,100,'manual','60404040-4040-4040-8040-404040404047');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      (date_trunc('month', timezone('Asia/Jerusalem', now()))::date,'expense',150,3);
+  `);
+  const rows = psql('carryover_blocks', `SELECT category_id || ':' || blocked_reason
+    FROM budget_carryover_candidate_rows(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM')) ORDER BY category_id;
+  `).stdout.trim().split('\n');
+  assert.deepEqual(rows, [
+    '1:RECURRING_INITIALIZATION_REQUIRED',
+    '2:DESTINATION_BUDGET_INACTIVE',
+    '3:DESTINATION_DEFICIT',
+  ]);
+});
+
+test('unbudgeted destination actuals block carryover when no destination snapshot exists', () => {
+  createDatabase('carryover_unbudgeted_destination');
+  psql('carryover_unbudgeted_destination', fixture());
+  applyCarryoverFoundation('carryover_unbudgeted_destination');
+  psql('carryover_unbudgeted_destination', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      500,'Source','60414141-4141-4141-8141-414141414140');
+    SELECT establish_funded_budget(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1,500,'manual','60414141-4141-4141-8141-414141414141');
+    SELECT set_budget_carryover_enabled(1,true);
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES (date_trunc('month', timezone('Asia/Jerusalem', now()))::date,'expense',25,1);
+  `);
+  assert.equal(psql('carryover_unbudgeted_destination', `SELECT
+    status || '|' || blocked_reason || '|' || (destination_budget_id IS NULL)::text
+    FROM budget_carryover_candidate_rows(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'))
+    WHERE category_id=1;
+  `).stdout.trim(), 'blocked|UNBUDGETED_ACTUAL_EXISTS|true');
+  assert.equal(psql('carryover_unbudgeted_destination', `SELECT
+    (SELECT count(*) FROM budget_carryover_batches) || '|'
+      || (SELECT count(*) FROM budget_carryover_transfers) || '|'
+      || (SELECT count(*) FROM budgets WHERE month=to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'));
+  `).stdout.trim(), '0|0|0');
+});
+
+test('carryover adjusts active manual, copied, and recurring destination bases without rewriting them', () => {
+  createDatabase('carryover_destination_bases');
+  psql('carryover_destination_bases', fixture());
+  applyCarryoverFoundation('carryover_destination_bases');
+  psql('carryover_destination_bases', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      3000,'Carry source','60424242-4242-4242-8242-424242424240');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1,1000,'manual','60424242-4242-4242-8242-424242424241');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),2,1000,'manual','60424242-4242-4242-8242-424242424242');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),3,1000,'manual','60424242-4242-4242-8242-424242424243');
+    SELECT set_budget_carryover_enabled(1,true);
+    SELECT set_budget_carryover_enabled(2,true);
+    SELECT set_budget_carryover_enabled(3,true);
+
+    SELECT add_manual_budget_funding(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),600,'Destination bases','60424242-4242-4242-8242-424242424244');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),1,100,'manual','60424242-4242-4242-8242-424242424245');
+
+    SELECT add_manual_budget_funding('2098-01',200,'Copy template','60424242-4242-4242-8242-424242424246');
+    SELECT establish_funded_budget('2098-01',2,200,'manual','60424242-4242-4242-8242-424242424247');
+    SELECT copy_funded_budget_month('2098-01',to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),'60424242-4242-4242-8242-424242424248');
+
+    SELECT set_budget_recurring_default(3,300);
+    SELECT initialize_budget_recurring_defaults(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),'60424242-4242-4242-8242-424242424249');
+    SELECT apply_budget_carryover(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+      '60424242-4242-4242-8242-424242424250',
+      get_budget_carryover_preview(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'))->>'fingerprint');
+  `);
+  const rows = psql('carryover_destination_bases', `SELECT category_id || ':' || starting_amount || ':'
+    || starting_kind || ':' || adjustment_total || ':' || final_funded || ':' || incoming_carryover
+    FROM budget_category_state JOIN budget_category_carryover_state USING (budget_id)
+    WHERE month=to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM')
+      AND category_id IN (1,2,3) ORDER BY category_id;
+  `).stdout.trim().split('\n');
+  assert.deepEqual(rows, [
+    '1:100.00:manual:1000.00:1100.00:1000.00',
+    '2:200.00:copied:1000.00:1200.00:1000.00',
+    '3:300.00:recurring_default:1000.00:1300.00:1000.00',
+  ]);
+});
+
+test('carryover batch month validation accepts December to January across a year boundary', () => {
+  createDatabase('carryover_year_boundary');
+  psql('carryover_year_boundary', fixture());
+  applyCarryoverFoundation('carryover_year_boundary');
+  psql('carryover_year_boundary', `
+    INSERT INTO budget_months(month_start) VALUES ('2026-12-01'),('2027-01-01'),('2027-02-01');
+    INSERT INTO budget_carryover_batches(
+      request_key,request_fingerprint,source_budget_month_id,destination_budget_month_id
+    ) SELECT '60434343-4343-4343-8343-434343434343','year-boundary',source.id,destination.id
+      FROM budget_months source CROSS JOIN budget_months destination
+      WHERE source.month_start='2026-12-01' AND destination.month_start='2027-01-01';
+  `);
+  assert.equal(psql('carryover_year_boundary', `SELECT
+    to_char(source.month_start,'YYYY-MM') || '->' || to_char(destination.month_start,'YYYY-MM')
+    FROM budget_carryover_batches batch
+    JOIN budget_months source ON source.id=batch.source_budget_month_id
+    JOIN budget_months destination ON destination.id=batch.destination_budget_month_id;
+  `).stdout.trim(), '2026-12->2027-01');
+  const skippedMonth = psql('carryover_year_boundary', `INSERT INTO budget_carryover_batches(
+    request_key,request_fingerprint,source_budget_month_id,destination_budget_month_id
+  ) SELECT '60434343-4343-4343-8343-434343434344','skipped-month',source.id,destination.id
+    FROM budget_months source CROSS JOIN budget_months destination
+    WHERE source.month_start='2026-12-01' AND destination.month_start='2027-02-01';`, true);
+  assert.notEqual(skippedMonth.status, 0);
+  assert.match(skippedMonth.stderr, /consecutive calendar months/i);
+});
+
+test('carryover preserves exact >2^53 money, idempotency, no-op keys, and duplicate prevention', () => {
+  createDatabase('carryover_exact_idempotent');
+  psql('carryover_exact_idempotent', fixture());
+  applyCarryoverFoundation('carryover_exact_idempotent');
+  psql('carryover_exact_idempotent', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),9007199254740993.01,'Exact','60505050-5050-4050-8050-505050505050');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1,9007199254740993.01,'manual','60505050-5050-4050-8050-505050505051');
+    SELECT set_budget_carryover_enabled(1,true);
+    SELECT apply_budget_carryover(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),'60505050-5050-4050-8050-505050505052',
+      get_budget_carryover_preview(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'))->>'fingerprint');
+  `);
+  assert.equal(psql('carryover_exact_idempotent', 'SELECT amount::text FROM budget_carryover_transfers;').stdout.trim(), '9007199254740993.01');
+  const retry = psql('carryover_exact_idempotent', `SELECT apply_budget_carryover(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+    '60505050-5050-4050-8050-505050505052',
+    (SELECT replace(request_fingerprint,'carryover_apply|' || to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM') || '|','') FROM budget_carryover_batches LIMIT 1));
+  `);
+  assert.equal(retry.status, 0);
+  assert.equal(psql('carryover_exact_idempotent', 'SELECT count(*) FROM budget_carryover_transfers;').stdout.trim(), '1');
+  assert.match(psql('carryover_exact_idempotent', `SELECT apply_budget_carryover(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+    '60505050-5050-4050-8050-505050505052','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+  `, true).stderr, /different carryover request/i);
+
+  psql('carryover_exact_idempotent', 'SELECT set_budget_carryover_enabled(2,true);');
+  const noOpFingerprint = JSON.parse(psql('carryover_exact_idempotent', `SELECT get_budget_carryover_preview(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'));
+  `).stdout.trim()).fingerprint;
+  psql('carryover_exact_idempotent', `SELECT apply_budget_carryover(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+    '60505050-5050-4050-8050-505050505053','${noOpFingerprint}');`);
+  assert.equal(psql('carryover_exact_idempotent', 'SELECT count(*) FROM budget_carryover_batches;').stdout.trim(), '2');
+});
+
+test('carryover rejects an approved preview made stale by a concurrent source transaction write', async () => {
+  createDatabase('carryover_transaction_race');
+  psql('carryover_transaction_race', fixture());
+  applyCarryoverFoundation('carryover_transaction_race');
+  psql('carryover_transaction_race', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1000,'Source','60515151-5151-4151-8151-515151515150');
+    SELECT establish_funded_budget(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1,1000,'manual','60515151-5151-4151-8151-515151515151');
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+      1,'Destination marker','60515151-5151-4151-8151-515151515152');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES ((date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date,'expense',100,1);
+    SELECT set_budget_carryover_enabled(1,true);
+  `);
+  const approved = JSON.parse(psql('carryover_transaction_race', `SELECT get_budget_carryover_preview(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'));
+  `).stdout.trim());
+  assert.equal(approved.ready_categories[0].amount, '900.00');
+
+  const writer = psqlAsync('carryover_transaction_race', `BEGIN;
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES ((date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date,'expense',100,1);
+    SELECT pg_sleep(2);
+    COMMIT;`);
+  await waitForGrantedTableLock('carryover_transaction_race', 'public.transactions', 'RowExclusiveLock');
+  const apply = psqlAsync('carryover_transaction_race', `SELECT apply_budget_carryover(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+    '60515151-5151-4151-8151-515151515153','${approved.fingerprint}');`);
+  const [writerResult, applyResult] = await Promise.all([writer, apply]);
+  assert.equal(writerResult.status, 0, writerResult.stderr);
+  assert.notEqual(applyResult.status, 0);
+  assert.match(applyResult.stderr, /CARRYOVER_PREVIEW_STALE/i);
+  assert.equal(psql('carryover_transaction_race', `SELECT
+    (SELECT count(*) FROM budget_carryover_batches) || '|'
+      || (SELECT count(*) FROM budget_carryover_transfers) || '|'
+      || (SELECT count(*) FROM budget_operations WHERE operation_type IN ('carryover_in','carryover_out')) || '|'
+      || (SELECT count(*) FROM budget_funding_entries WHERE source_kind='carryover_transfer') || '|'
+      || (SELECT count(*) FROM budget_movements movement JOIN budget_operations operation
+          ON operation.id=movement.operation_id
+          WHERE operation.operation_type IN ('carryover_in','carryover_out')) || '|'
+      || (SELECT count(*) FROM budgets WHERE starting_kind='carryover_only');
+  `).stdout.trim(), '0|0|0|0|0|0');
+  psql('carryover_transaction_race', 'SELECT budget_assert_reconciled(id) FROM budget_months ORDER BY id;');
+
+  const refreshed = JSON.parse(psql('carryover_transaction_race', `SELECT get_budget_carryover_preview(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'));
+  `).stdout.trim());
+  assert.equal(refreshed.ready_categories[0].amount, '800.00');
+  psql('carryover_transaction_race', `SELECT apply_budget_carryover(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+    '60515151-5151-4151-8151-515151515154','${refreshed.fingerprint}');`);
+  assert.equal(psql('carryover_transaction_race', `SELECT amount || '|'
+    || source_raw_actual_spent_snapshot || '|' || source_effective_actual_spent_snapshot
+    FROM budget_carryover_transfers WHERE reverses_transfer_id IS NULL;
+  `).stdout.trim(), '800.00|200.00|200.00');
+  psql('carryover_transaction_race', 'SELECT budget_assert_reconciled(id) FROM budget_months ORDER BY id;');
+});
+
+test('carryover reversal is compensating, safe, immutable, and rejects spent funding', () => {
+  createDatabase('carryover_reversal');
+  psql('carryover_reversal', fixture());
+  applyCarryoverFoundation('carryover_reversal');
+  psql('carryover_reversal', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1000,'Source','60606060-6060-4060-8060-606060606060');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1,1000,'manual','60606060-6060-4060-8060-606060606061');
+    SELECT set_budget_carryover_enabled(1,true);
+    SELECT apply_budget_carryover(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),'60606060-6060-4060-8060-606060606062',
+      get_budget_carryover_preview(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'))->>'fingerprint');
+    SELECT reverse_budget_carryover(1,'60606060-6060-4060-8060-606060606063');
+  `);
+  assert.equal(psql('carryover_reversal', 'SELECT count(*) FROM budget_carryover_transfers;').stdout.trim(), '2');
+  assert.equal(psql('carryover_reversal', 'SELECT incoming_carryover || \'|\' || outgoing_carryover FROM budget_category_carryover_state ORDER BY budget_id;').stdout.trim(), '0.00|0.00\n0.00|0.00');
+  assert.match(psql('carryover_reversal', 'UPDATE budget_carryover_transfers SET amount=1;', true).stderr, /append-only/i);
+
+  psql('carryover_reversal', `
+    SELECT apply_budget_carryover(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),'60606060-6060-4060-8060-606060606064',
+      get_budget_carryover_preview(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'))->>'fingerprint');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES (date_trunc('month', timezone('Asia/Jerusalem', now()))::date,'expense',1000,1);
+  `);
+  const unsafe = psql('carryover_reversal', "SELECT reverse_budget_carryover(3,'60606060-6060-4060-8060-606060606065');", true);
+  assert.notEqual(unsafe.status, 0);
+  assert.match(unsafe.stderr, /spent destination funding/i);
+  assert.equal(psql('carryover_reversal', 'SELECT count(*) FROM budget_carryover_transfers;').stdout.trim(), '3');
+});
+
+test('carryover ACLs expose reads and bounded commands only to service_role', () => {
+  createDatabase('carryover_acl');
+  psql('carryover_acl', fixture());
+  applyCarryoverFoundation('carryover_acl');
+  const roles = ['public_probe', 'anon', 'authenticated', 'service_role'];
+  const roleArray = `ARRAY[${roles.map((role) => `'${role}'`).join(',')}]::text[]`;
+  for (const table of [
+    'budget_carryover_settings', 'budget_carryover_batches', 'budget_carryover_transfers',
+    'budget_carryover_settings_read', 'budget_category_carryover_state',
+  ]) {
+    const rows = psql('carryover_acl', `SELECT role_name,
+      has_table_privilege(role_name,'public.${table}','SELECT'),
+      has_table_privilege(role_name,'public.${table}','INSERT'),
+      has_table_privilege(role_name,'public.${table}','UPDATE'),
+      has_table_privilege(role_name,'public.${table}','DELETE')
+      FROM unnest(${roleArray}) role_name ORDER BY role_name;
+    `).stdout.trim().split('\n');
+    for (const row of rows) {
+      const [role, read, insert, update, remove] = row.split('|');
+      assert.equal(read, role === 'service_role' ? 't' : 'f', `${role} read ${table}`);
+      assert.deepEqual([insert, update, remove], ['f', 'f', 'f'], `${role} mutate ${table}`);
+    }
+  }
+  for (const signature of [
+    'get_funded_budget_month(text)',
+    'set_budget_carryover_enabled(bigint,boolean)',
+    'apply_budget_carryover(text,uuid,text,text)',
+    'reverse_budget_carryover(bigint,uuid,text)',
+  ]) {
+    const rows = psql('carryover_acl', `SELECT role_name,
+      has_function_privilege(role_name,'public.${signature}','EXECUTE')
+      FROM unnest(${roleArray}) role_name ORDER BY role_name;
+    `).stdout.trim().split('\n');
+    for (const row of rows) {
+      const [role, execute] = row.split('|');
+      assert.equal(execute, role === 'service_role' ? 't' : 'f', `${role} execute ${signature}`);
+    }
+  }
+  for (const signature of [
+    'validate_budget_carryover_setting()',
+    'prevent_category_type_with_carryover()',
+    'validate_budget_carryover_batch_insert()',
+    'validate_budget_carryover_transfer_insert()',
+    'budget_carryover_candidate_rows(text)',
+    'get_budget_carryover_preview(text)',
+    'budget_derived_request_key(uuid,text)',
+    'get_funded_budget_month_recurring(text)',
+  ]) {
+    assert.equal(psql('carryover_acl', `SELECT bool_or(
+      has_function_privilege(role_name,'public.${signature}','EXECUTE'))
+      FROM unnest(${roleArray}) role_name;
+    `).stdout.trim(), 'f', signature);
+  }
+});
+
+test('carryover serializes with concurrent destination funding without duplicate transfer or deadlock', async () => {
+  createDatabase('carryover_concurrency');
+  psql('carryover_concurrency', fixture());
+  applyCarryoverFoundation('carryover_concurrency');
+  psql('carryover_concurrency', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1000,'Source','60707070-7070-4070-8070-707070707070');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),1,1000,'manual','60707070-7070-4070-8070-707070707071');
+    SELECT set_budget_carryover_enabled(1,true);
+  `);
+  const fingerprint = JSON.parse(psql('carryover_concurrency', `SELECT get_budget_carryover_preview(
+    to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'));
+  `).stdout.trim()).fingerprint;
+  const [carryover, funding] = await Promise.all([
+    psqlAsync('carryover_concurrency', `SELECT apply_budget_carryover(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+      '60707070-7070-4070-8070-707070707072','${fingerprint}');`),
+    psqlAsync('carryover_concurrency', `SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+      50,'Concurrent','60707070-7070-4070-8070-707070707073');`),
+  ]);
+  assert.equal(carryover.status, 0, carryover.stderr);
+  assert.equal(funding.status, 0, funding.stderr);
+  assert.equal(psql('carryover_concurrency', 'SELECT count(*) FROM budget_carryover_transfers WHERE reverses_transfer_id IS NULL;').stdout.trim(), '1');
+  assert.equal(psql('carryover_concurrency', `SELECT available || '|' || total_allocated || '|' || unallocated
+    FROM budget_month_funding_state WHERE month=to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM');
+  `).stdout.trim(), '1050.00|1000.00|50.00');
+});
+
+test('carryover shares canonical lock order with recurring, copy, adjustment, removal, and reactivation', async () => {
+  createDatabase('carryover_mutation_concurrency');
+  psql('carryover_mutation_concurrency', `${fixture()}
+    INSERT INTO categories(id,name,type) VALUES
+      (4,'Reactivated','expense'),(5,'Recurring','expense'),(6,'Copied','expense');
+  `);
+  applyCarryoverFoundation('carryover_mutation_concurrency');
+  psql('carryover_mutation_concurrency', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1000,'Carry source','60808080-8080-4080-8080-808080808080');
+    SELECT establish_funded_budget(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month','YYYY-MM'),
+      1,1000,'manual','60808080-8080-4080-8080-808080808081');
+    SELECT set_budget_carryover_enabled(1,true);
+
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),
+      1000,'Destination','60808080-8080-4080-8080-808080808082');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),2,100,'manual','60808080-8080-4080-8080-808080808083');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),3,100,'manual','60808080-8080-4080-8080-808080808084');
+    SELECT establish_funded_budget(to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM'),4,100,'manual','60808080-8080-4080-8080-808080808085');
+    SELECT remove_funded_budget((SELECT budget_id FROM budget_category_state WHERE month=to_char(date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM') AND category_id=4),'60808080-8080-4080-8080-808080808086');
+    SELECT set_budget_recurring_default(5,100);
+
+    SELECT add_manual_budget_funding('2098-02',100,'Copy source','60808080-8080-4080-8080-808080808087');
+    SELECT establish_funded_budget('2098-02',6,100,'manual','60808080-8080-4080-8080-808080808088');
+  `);
+  const destinationMonth = psql('carryover_mutation_concurrency', `SELECT to_char(
+    date_trunc('month', timezone('Asia/Jerusalem', now())),'YYYY-MM');
+  `).stdout.trim();
+  const preview = JSON.parse(psql('carryover_mutation_concurrency', `SELECT get_budget_carryover_preview('${destinationMonth}');`).stdout.trim());
+  const budgetIds = psql('carryover_mutation_concurrency', `SELECT category_id || ':' || budget_id
+    FROM budget_category_state WHERE month='${destinationMonth}' AND category_id IN (2,3,4)
+    ORDER BY category_id;
+  `).stdout.trim().split('\n').reduce((ids, row) => {
+    const [categoryId, budgetId] = row.split(':');
+    ids[categoryId] = budgetId;
+    return ids;
+  }, {});
+
+  const operations = [
+    psqlAsync('carryover_mutation_concurrency', `SELECT apply_budget_carryover('${destinationMonth}','60808080-8080-4080-8080-808080808089','${preview.fingerprint}');`),
+    psqlAsync('carryover_mutation_concurrency', `SELECT initialize_budget_recurring_defaults('${destinationMonth}','60808080-8080-4080-8080-808080808090');`),
+    psqlAsync('carryover_mutation_concurrency', `SELECT copy_funded_budget_month('2098-02','${destinationMonth}','60808080-8080-4080-8080-808080808091');`),
+    psqlAsync('carryover_mutation_concurrency', `SELECT set_funded_budget_amount(${budgetIds['2']},150,'60808080-8080-4080-8080-808080808092');`),
+    psqlAsync('carryover_mutation_concurrency', `SELECT remove_funded_budget(${budgetIds['3']},'60808080-8080-4080-8080-808080808093');`),
+    psqlAsync('carryover_mutation_concurrency', `SELECT reactivate_funded_budget(${budgetIds['4']},0,'60808080-8080-4080-8080-808080808094');`),
+  ];
+  const results = await Promise.all(operations);
+  for (const result of results) {
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /deadlock|40P01/i);
+  }
+  assert.equal(psql('carryover_mutation_concurrency', `SELECT
+    (SELECT count(*) FROM budget_carryover_transfers WHERE reverses_transfer_id IS NULL) || '|'
+      || (SELECT final_funded FROM budget_category_state WHERE budget_id=${budgetIds['2']}) || '|'
+      || (SELECT lifecycle_state FROM budget_category_state WHERE budget_id=${budgetIds['3']}) || '|'
+      || (SELECT lifecycle_state FROM budget_category_state WHERE budget_id=${budgetIds['4']}) || '|'
+      || (SELECT starting_kind FROM budget_category_state WHERE month='${destinationMonth}' AND category_id=5) || '|'
+      || (SELECT starting_kind FROM budget_category_state WHERE month='${destinationMonth}' AND category_id=6);
+  `).stdout.trim(), '1|150.00|inactive|active|recurring_default|copied');
+  psql('carryover_mutation_concurrency', `SELECT budget_assert_reconciled(id)
+    FROM budget_months WHERE month_start IN (
+      date_trunc('month', timezone('Asia/Jerusalem', now()))::date,
+      (date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date
+    ) ORDER BY id;
+  `);
 });

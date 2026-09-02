@@ -108,6 +108,33 @@ const initializeRecurringBudgets = (supabase, {
   p_reason: reason,
 });
 
+const getCarryoverPreview = async (supabase, month) => {
+  const state = await getFundedBudgetMonth(supabase, month);
+  return state?.carryover || null;
+};
+
+const applyCarryover = (supabase, {
+  destinationMonth,
+  previewFingerprint,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'apply_budget_carryover', {
+  p_destination_month: destinationMonth,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_preview_fingerprint: previewFingerprint,
+  p_reason: reason,
+});
+
+const reverseCarryover = (supabase, {
+  transferId,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'reverse_budget_carryover', {
+  p_transfer_id: transferId,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
 const toCompatibilityRows = (state) => (state?.categories || [])
   .filter((category) => category.budget_id && category.lifecycle_state === 'active')
   .map((category) => ({
@@ -127,12 +154,15 @@ const toCompatibilityRows = (state) => (state?.categories || [])
 
 module.exports = {
   addManualFunding,
+  applyCarryover,
   copyBudgetMonth,
   establishBudget,
+  getCarryoverPreview,
   getFundedBudgetMonth,
   initializeRecurringBudgets,
   reactivateBudget,
   removeBudget,
+  reverseCarryover,
   reverseOperation,
   setBudgetAmount,
   toCompatibilityRows,

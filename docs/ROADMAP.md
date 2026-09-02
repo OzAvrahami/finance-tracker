@@ -18,7 +18,8 @@ The next planned product capability is a substantial Savings module. Its product
 
 - Foundation (#17 + #26): immutable monthly opening snapshots, confirmed manual funds, append-only provenance, reconciled reads, and bounded atomic commands are implemented locally in Migration 017; production rollout remains separately reviewed.
 - Recurring defaults (#18): dedicated Settings → Budget configuration for expense categories, read-only pending previews, and explicit funded initialization are implemented locally in Migration 018. Production Migration 018 remains unexecuted.
-- Next dependent work remains separate: monthly overrides (#19), carryover (#20), unused-budget/savings disposition (#21), unbudgeted-expense behavior (#22), reallocation/deficit resolution (#23), and the funded summary UX (#25).
+- Carryover (#20): balanced previous/current-month transfers, immutable linkage, read-only preview, explicit application, and Settings → Budget configuration are implemented locally in Migration 019. Production Migration 019 remains unexecuted.
+- Next dependent work remains separate: monthly overrides (#19), unused-budget/savings disposition (#21), unbudgeted-expense behavior (#22), reallocation/deficit resolution (#23), and the funded summary UX (#25).
 - Income-transaction funding requires a future source-consumption model so one realized income cannot fund multiple months or allocations.
 
 - Add a general CI workflow for client test/lint/build and server tests.

@@ -263,7 +263,7 @@
   display: grid;
   min-width: 0;
   min-height: 68px;
-  grid-template-columns: 38px minmax(140px, 1fr) minmax(190px, auto) auto;
+  grid-template-columns: 38px minmax(140px, 1fr) minmax(190px, auto) minmax(150px, auto) auto;
   align-items: center;
   gap: var(--ft-space-3);
   padding: 12px;
@@ -302,6 +302,20 @@
   min-width: 0;
   flex-direction: column;
   gap: 2px;
+}
+
+.settings-budget-record__carryover {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.settings-carryover-toggle.is-active {
+  color: var(--ft-positive) !important;
+  border-color: var(--ft-positive-border) !important;
+  background: var(--ft-positive-weak) !important;
 }
 
 .settings-budget-record__label {
@@ -636,6 +650,10 @@
   }
 
   .settings-budget-record__configuration {
+    grid-column: 2 / -1;
+  }
+
+  .settings-budget-record__carryover {
     grid-column: 2 / -1;
   }
 

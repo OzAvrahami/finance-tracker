@@ -97,6 +97,20 @@ const RemainingAmount = ({ row }) => (
   </div>
 );
 
+const FundedComposition = ({ row }) => {
+  const hasCarryover = row.incomingCarryover && row.incomingCarryover !== '0.00';
+  if (!hasCarryover) return <BudgetMoneyAmount value={row.planned} />;
+  return (
+    <div className="budget-funded-composition">
+      <strong><BudgetMoneyAmount value={row.planned} /></strong>
+      <span>
+        בסיס <BudgetMoneyAmount value={row.starting} />
+        {' · '}יתרה מחודש קודם +<BudgetMoneyAmount value={row.incomingCarryover} />
+      </span>
+    </div>
+  );
+};
+
 const BudgetList = ({
   rows,
   editingId,
@@ -152,7 +166,7 @@ const BudgetList = ({
                       onCancel={onCancelEdit}
                     />
                   ) : (
-                    <BudgetMoneyAmount value={row.planned} />
+                    <FundedComposition row={row} />
                   )}
                 </td>
                 <td><span className="budget-actual-amount"><BudgetMoneyAmount value={row.actual} /></span></td>
@@ -204,7 +218,7 @@ const BudgetList = ({
               />
             ) : (
               <dl className="budget-mobile-card__amounts">
-                <div><dt>ממומן סופי</dt><dd><BudgetMoneyAmount value={row.planned} /></dd></div>
+                <div><dt>זמין</dt><dd><FundedComposition row={row} /></dd></div>
                 <div><dt>בפועל</dt><dd className="budget-actual-amount"><BudgetMoneyAmount value={row.actual} /></dd></div>
                 <div><dt>{row.isDeficit ? 'חריגה' : 'נותר'}</dt><dd><RemainingAmount row={row} /></dd></div>
               </dl>

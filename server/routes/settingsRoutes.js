@@ -7,6 +7,7 @@ router.get('/categories',      settingsController.getCategories);
 router.post('/categories',     settingsController.createCategory);
 router.put('/categories/:id',  settingsController.updateCategory);
 router.put('/categories/:id/recurring-budget', settingsController.setCategoryRecurringBudget);
+router.put('/categories/:id/budget-carryover', settingsController.setCategoryBudgetCarryover);
 router.delete('/categories/:id', settingsController.deleteCategory);
 
 router.get('/payment-sources',       settingsController.getPaymentSources);

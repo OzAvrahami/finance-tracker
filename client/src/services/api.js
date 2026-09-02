@@ -139,6 +139,9 @@ export const getBudgetsByMonth = (month) => api.get(`/budgets?month=${month}`);
 export const getFundedBudgetMonth = (month) => api.get('/budgets/funded', { params: { month } });
 export const addManualBudgetFunding = (data) => api.post('/budgets/funded/funding', data);
 export const initializeRecurringBudgets = (data) => api.post('/budgets/funded/recurring/initialize', data);
+export const getBudgetCarryoverPreview = (month) => api.get('/budgets/funded/carryover/preview', { params: { month } });
+export const applyBudgetCarryover = (data) => api.post('/budgets/funded/carryover/apply', data);
+export const reverseBudgetCarryover = (id, data) => api.post(`/budgets/funded/carryover/transfers/${id}/reverse`, data);
 export const establishFundedBudget = (data) => api.post('/budgets/funded/categories', data);
 export const adjustFundedBudget = (id, data) => api.patch(`/budgets/funded/categories/${id}`, data);
 export const removeFundedBudget = (id, data) => api.post(`/budgets/funded/categories/${id}/remove`, data);
@@ -174,6 +177,7 @@ export const createSettingsCategory = (data) => api.post('/settings/categories',
 export const updateSettingsCategory = (id, data) => api.put(`/settings/categories/${id}`, data);
 export const deleteSettingsCategory = (id) => api.delete(`/settings/categories/${id}`);
 export const setSettingsCategoryRecurringBudget = (id, data) => api.put(`/settings/categories/${id}/recurring-budget`, data);
+export const setSettingsCategoryBudgetCarryover = (id, data) => api.put(`/settings/categories/${id}/budget-carryover`, data);
 
 // Settings — Payment Sources
 export const getSettingsPaymentSources   = ()        => api.get('/settings/payment-sources');

@@ -13,6 +13,10 @@ const recurringMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '018_recurring_budget_defaults.sql'),
   'utf8',
 );
+const carryoverMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '019_budget_category_carryover.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 test('migration 017 and full_schema carry the same funded-budget foundation', () => {
@@ -24,12 +28,31 @@ test('migration 017 and full_schema carry the same funded-budget foundation', ()
 test('migration 018 and full_schema carry the same recurring-budget extension', () => {
   const marker = '-- Migration 018: recurring monthly budget defaults';
   assert.match(recurringMigration, new RegExp(marker));
-  assert.equal(fullSchema.slice(fullSchema.indexOf(marker)).trim(), recurringMigration.trim());
+  assert.ok(fullSchema.includes(recurringMigration.trim()));
   assert.match(recurringMigration, /budget_recurring_defaults/i);
   assert.match(recurringMigration, /starting_kind IN \([^)]+recurring_default/is);
   assert.match(recurringMigration, /month_initialization/i);
   assert.match(recurringMigration, /Asia\/Jerusalem/i);
   assert.doesNotMatch(recurringMigration, /source_transaction_id|carryover|monthly_override/i);
+});
+
+test('migration 019 and full_schema carry the balanced carryover extension', () => {
+  assert.match(carryoverMigration, /Migration 019: balanced category budget carryover/i);
+  assert.ok(fullSchema.includes(carryoverMigration.trim()));
+  for (const object of [
+    'budget_carryover_settings', 'budget_carryover_batches', 'budget_carryover_transfers',
+    'get_budget_carryover_preview', 'apply_budget_carryover', 'reverse_budget_carryover',
+  ]) assert.match(carryoverMigration, new RegExp(object, 'i'));
+  assert.match(carryoverMigration, /'carryover_out'/i);
+  assert.match(carryoverMigration, /'carryover_in'/i);
+  assert.match(carryoverMigration, /'carryover_transfer'/i);
+  assert.match(carryoverMigration, /'carryover_only'/i);
+  assert.match(carryoverMigration, /source_raw_actual_spent_snapshot\s+NUMERIC\(18,\s*2\)/i);
+  assert.match(carryoverMigration, /source_effective_actual_spent_snapshot\s+NUMERIC\(18,\s*2\)/i);
+  assert.match(carryoverMigration, /LOCK TABLE public\.transactions IN SHARE MODE/i);
+  assert.match(carryoverMigration, /jsonb_array_elements\(v_preview->'ready_categories'\)/i);
+  assert.match(carryoverMigration, /CARRYOVER_PREVIEW_STALE/i);
+  assert.doesNotMatch(carryoverMigration, /savings_destination|monthly_override/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {
@@ -138,13 +161,17 @@ test('budget service maps commands to one database RPC each', async () => {
   });
   await budgetService.removeBudget(supabase, { budgetId: 5, requestKey: 'key-c' });
   await budgetService.initializeRecurringBudgets(supabase, { month: '2026-08', requestKey: 'key-d' });
+  await budgetService.applyCarryover(supabase, {
+    destinationMonth: '2026-08', previewFingerprint: 'abc', requestKey: 'key-e',
+  });
   assert.deepEqual(calls.map(({ name }) => name), [
     'add_manual_budget_funding', 'establish_funded_budget', 'remove_funded_budget',
-    'initialize_budget_recurring_defaults',
+    'initialize_budget_recurring_defaults', 'apply_budget_carryover',
   ]);
   assert.equal(calls[0].params.p_source_label, 'Confirmed cash');
   assert.equal(calls[1].params.p_starting_amount, '0.00');
   assert.equal(calls[3].params.p_request_key, 'key-d');
+  assert.equal(calls[4].params.p_preview_fingerprint, 'abc');
 });
 
 test('compatibility amount is final funded and inactive/no-budget categories are omitted', () => {

@@ -66,7 +66,7 @@ Node handles HTTP validation, orchestration, pricing and amortization inputs. Po
 ```text
 client/                 React SPA, Finance v3 UI, tests, and Vercel SPA config
 server/                 Express API, business services, migrations, and server tests
-server/migrations/      Ordered schema history, currently 001 through 018
+server/migrations/      Ordered schema history, currently 001 through 019
 server/full_schema.sql  Consolidated schema reference
 docs/                   Canonical documentation and a retained read-only security audit
 .github/workflows/      Daily due-loan scheduler
@@ -146,7 +146,7 @@ Copy [client/.env.example](client/.env.example) and [server/.env.example](server
 
 ## Database and migrations
 
-Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 018. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migration 017 introduces the funded-budget foundation and Migration 018 adds recurring monthly defaults with explicit funded initialization. Migration 018 has not been applied to production.
+Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 019. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migration 017 introduces the funded-budget foundation, Migration 018 adds recurring monthly defaults with explicit funded initialization, and Migration 019 adds explicit balanced category carryover. Migration 019 has not been applied to production.
 
 Funded-budget monetary API values are exact canonical decimal strings. Authoritative mutation endpoints reject JSON numbers rather than stringifying values that may already have lost precision; PostgreSQL `NUMERIC` remains the authority. JavaScript numeric conversion is limited to non-authoritative visual geometry and percentages.
 

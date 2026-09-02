@@ -46,9 +46,9 @@ test('compatibility monthly API derives amount from final funded and omits inact
   assert.equal(res.body[0].starting_amount, '600.00');
 });
 
-test('history API exposes immutable operations without transaction duplication', async () => {
+test('history API exposes immutable operations and carryover linkage without transaction duplication', async () => {
   const { res } = await call('getBudgetHistory', { query: { month: '2026-08' } });
-  assert.deepEqual(res.body, { month: '2026-08', history: state.history });
+  assert.deepEqual(res.body, { month: '2026-08', history: state.history, carryover_history: [] });
   assert.equal(Object.hasOwn(res.body, 'transactions'), false);
 });
 
@@ -207,6 +207,82 @@ test('recurring initialization requires a month and never runs from a read', asy
 
   const read = await call('getFundedBudgetMonth', { query: { month: '2026-08' } });
   assert.deepEqual(read.calls.map((entry) => entry.name), ['get_funded_budget_month']);
+});
+
+test('carryover preview is read-only and application maps fingerprint to one bounded RPC', async () => {
+  const carryoverState = {
+    ...state,
+    carryover: {
+      eligible: true,
+      fingerprint: '0123456789abcdef0123456789abcdef',
+      ready_categories: [{ category_id: 2, amount: '400.00' }],
+      total_incoming: '400.00',
+    },
+  };
+  const preview = await call('getCarryoverPreview', {
+    query: { month: '2026-08' },
+  }, carryoverState);
+  assert.equal(preview.res.statusCode, 200);
+  assert.deepEqual(preview.calls, [{
+    name: 'get_funded_budget_month', params: { p_month: '2026-08' },
+  }]);
+  assert.equal(preview.res.body.total_incoming, '400.00');
+
+  const apply = await call('applyCarryover', { body: {
+    destination_month: '2026-08',
+    request_key: 'carryover-key',
+    preview_fingerprint: '0123456789abcdef0123456789abcdef',
+  } });
+  assert.equal(apply.res.statusCode, 200);
+  assert.deepEqual(apply.calls, [{
+    name: 'apply_budget_carryover',
+    params: {
+      p_destination_month: '2026-08',
+      p_request_key: 'carryover-key',
+      p_preview_fingerprint: '0123456789abcdef0123456789abcdef',
+      p_reason: null,
+    },
+  }]);
+});
+
+test('carryover application rejects malformed fingerprints before PostgreSQL', async () => {
+  for (const previewFingerprint of [undefined, '', 'short', 'G'.repeat(32)]) {
+    const { calls, res } = await call('applyCarryover', { body: {
+      destination_month: '2026-08', request_key: 'carryover-key',
+      preview_fingerprint: previewFingerprint,
+    } });
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.code, 'INVALID_CARRYOVER_REQUEST');
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('carryover stale-preview serialization failures expose a stable domain conflict', async () => {
+  const error = {
+    code: '40001',
+    message: 'CARRYOVER_PREVIEW_STALE: carryover candidate material changed; refresh before applying',
+  };
+  const { res } = await call('applyCarryover', { body: {
+    destination_month: '2026-08',
+    request_key: 'carryover-key',
+    preview_fingerprint: '0123456789abcdef0123456789abcdef',
+  } }, null, error);
+  assert.equal(res.statusCode, 409);
+  assert.deepEqual(res.body, {
+    error: error.message,
+    code: 'CARRYOVER_PREVIEW_STALE',
+  });
+});
+
+test('carryover reversal maps to the bounded compensating RPC', async () => {
+  const { calls, res } = await call('reverseCarryover', {
+    params: { id: '44' }, body: { request_key: 'reverse-key' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(calls, [{
+    name: 'reverse_budget_carryover',
+    params: { p_transfer_id: '44', p_request_key: 'reverse-key', p_reason: null },
+  }]);
 });
 
 const exactAnnualFake = () => {

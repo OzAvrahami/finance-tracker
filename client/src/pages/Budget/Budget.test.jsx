@@ -3,13 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
-  addManualBudgetFunding, adjustFundedBudget, copyBudget, establishFundedBudget,
+  addManualBudgetFunding, adjustFundedBudget, applyBudgetCarryover, copyBudget, establishFundedBudget,
   getCategories, getFundedBudgetMonth, initializeRecurringBudgets, removeFundedBudget,
 } from '../../services/api';
 import Budget from './Budget';
 
 vi.mock('../../services/api', () => ({
-  addManualBudgetFunding: vi.fn(), adjustFundedBudget: vi.fn(), copyBudget: vi.fn(),
+  addManualBudgetFunding: vi.fn(), adjustFundedBudget: vi.fn(), applyBudgetCarryover: vi.fn(), copyBudget: vi.fn(),
   establishFundedBudget: vi.fn(), getCategories: vi.fn(), getFundedBudgetMonth: vi.fn(),
   initializeRecurringBudgets: vi.fn(),
   removeFundedBudget: vi.fn(),
@@ -73,6 +73,7 @@ beforeEach(() => {
   copyBudget.mockResolvedValue({ data: {} });
   removeFundedBudget.mockResolvedValue({ data: {} });
   initializeRecurringBudgets.mockResolvedValue({ data: {} });
+  applyBudgetCarryover.mockResolvedValue({ data: {} });
 });
 
 describe('canonical funded monthly read', () => {
@@ -99,7 +100,7 @@ describe('canonical funded monthly read', () => {
     expect(within(table).getByText('₪450')).toBeInTheDocument();
     const mobile = screen.getByRole('list', { name: 'תקציבים לפי קטגוריית הוצאה' });
     expect(within(mobile).getByText('מזון')).toBeInTheDocument();
-    expect(within(mobile).getByText('ממומן סופי')).toBeInTheDocument();
+    expect(within(mobile).getByText('זמין')).toBeInTheDocument();
     expect(within(table).getByRole('button', { name: 'עריכת תקציב עבור מזון' })).toBeInTheDocument();
     expect(within(table).getByRole('button', { name: 'הסרת תקציב פעיל עבור מזון' })).toBeInTheDocument();
     expect(within(mobile).getByRole('button', { name: 'עריכת תקציב עבור מזון' })).toBeInTheDocument();
@@ -239,6 +240,98 @@ describe('funded budget commands', () => {
     await userEvent.click(fundingButtons[fundingButtons.length - 1]);
     expect(document.getElementById('budget-funding-source')).toBeInTheDocument();
     expect(initializeRecurringBudgets).not.toHaveBeenCalled();
+  });
+
+  it('previews balanced carryover without mutation and applies it only explicitly', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      carryover: {
+        eligible: true,
+        source_month: '2026-08',
+        destination_month: new Date().toISOString().slice(0, 7),
+        fingerprint: '0123456789abcdef0123456789abcdef',
+        ready_categories: [{ category_id: 1, category: categories[0], amount: '400.00' }],
+        ready_count: 1,
+        total_incoming: '400.00',
+        already_applied_categories: [],
+        blocked_categories: [],
+        can_apply: true,
+      },
+    }) });
+    await settle();
+    expect(applyBudgetCarryover).not.toHaveBeenCalled();
+    expect(screen.getByText('יתרות מהחודש הקודם')).toBeInTheDocument();
+    expect(screen.getByLabelText('סיכום יתרות להעברה')).toHaveTextContent('₪400');
+    await userEvent.click(screen.getByRole('button', { name: 'העבר יתרות מהחודש הקודם' }));
+    expect(applyBudgetCarryover).toHaveBeenCalledWith({
+      destination_month: new Date().toISOString().slice(0, 7),
+      request_key: 'request-key',
+      preview_fingerprint: '0123456789abcdef0123456789abcdef',
+    });
+    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
+  });
+
+  it('requires a refreshed review when PostgreSQL rejects a stale carryover preview', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      carryover: {
+        eligible: true,
+        source_month: '2026-08',
+        destination_month: new Date().toISOString().slice(0, 7),
+        fingerprint: '0123456789abcdef0123456789abcdef',
+        ready_categories: [{ category_id: 1, category: categories[0], amount: '400.00' }],
+        ready_count: 1,
+        total_incoming: '400.00',
+        already_applied_categories: [],
+        blocked_categories: [],
+        can_apply: true,
+      },
+    }) });
+    applyBudgetCarryover.mockRejectedValue({
+      response: { data: { code: 'CARRYOVER_PREVIEW_STALE' } },
+    });
+
+    await settle();
+    await userEvent.click(screen.getByRole('button', { name: 'העבר יתרות מהחודש הקודם' }));
+
+    expect(await screen.findByText('תצוגת העברת היתרות השתנתה. רעננו את החודש ונסו שוב.')).toBeInTheDocument();
+    expect(getFundedBudgetMonth).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows carryover composition separately from the immutable base', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      categories: [categoryState({
+        starting_amount: '1000.00',
+        adjustment_total: '400.00',
+        incoming_carryover: '400.00',
+        final_funded: '1400.00',
+        actual_spent: '600.00',
+        remaining: '800.00',
+      })],
+    }) });
+    await settle();
+    expect(screen.getAllByText(/בסיס/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/יתרה מחודש קודם/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('₪1,400').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('₪400').length).toBeGreaterThan(0);
+  });
+
+  it('shows stable carryover block reasons and never calls apply without a ready category', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      carryover: {
+        eligible: true,
+        source_month: '2026-08', destination_month: new Date().toISOString().slice(0, 7),
+        fingerprint: '0123456789abcdef0123456789abcdef', ready_categories: [], ready_count: 0,
+        total_incoming: '0.00', already_applied_categories: [], can_apply: false,
+        blocked_categories: [{
+          category_id: 1, category: categories[0], amount: '400.00',
+          reason: 'RECURRING_INITIALIZATION_REQUIRED',
+        }],
+      },
+    }) });
+    await settle();
+    await userEvent.click(screen.getByText(/קטגוריות אינן מוכנות/));
+    expect(screen.getByText('יש להחיל תחילה את התקציב החוזר')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'העבר יתרות מהחודש הקודם' })).not.toBeInTheDocument();
+    expect(applyBudgetCarryover).not.toHaveBeenCalled();
   });
 
   it('adds confirmed manual funds with a source label and idempotency key', async () => {

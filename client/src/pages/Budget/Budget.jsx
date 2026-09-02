@@ -9,6 +9,7 @@ import {
 } from '../../utils/money';
 import {
   addManualBudgetFunding,
+  applyBudgetCarryover,
   adjustFundedBudget,
   copyBudget,
   establishFundedBudget,
@@ -28,10 +29,20 @@ import {
   BudgetSkeleton,
   ManualFundingPanel,
   RecurringBudgetPanel,
+  CarryoverPanel,
 } from './BudgetStates';
 import './Budget.css';
 
-const currentCalendarMonth = () => new Date().toISOString().slice(0, 7);
+const currentCalendarMonth = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  return `${year}-${month}`;
+};
 
 const emptyState = (month) => ({
   month,
@@ -50,6 +61,11 @@ const emptyState = (month) => ({
   recurring: {
     eligible: false, initialized: false, pending_categories: [], pending_count: 0,
     required: '0.00', unallocated: '0.00', shortfall: '0.00', can_apply: false,
+  },
+  carryover: {
+    eligible: false, reason: 'CURRENT_MONTH_ONLY', source_month: null, destination_month: month,
+    fingerprint: '', ready_categories: [], ready_count: 0, total_incoming: '0.00',
+    already_applied_categories: [], blocked_categories: [], can_apply: false,
   },
 });
 
@@ -101,6 +117,8 @@ const enrichBudget = (budget) => {
     planned,
     starting: budget.starting_amount ?? '0.00',
     adjustments: budget.adjustment_total ?? '0.00',
+    incomingCarryover: budget.incoming_carryover ?? '0.00',
+    outgoingCarryover: budget.outgoing_carryover ?? '0.00',
     actual,
     remaining,
     remainingAbsolute: absoluteMoney(remaining),
@@ -137,6 +155,8 @@ const Budget = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [recurringPending, setRecurringPending] = useState(false);
   const [recurringError, setRecurringError] = useState('');
+  const [carryoverPending, setCarryoverPending] = useState(false);
+  const [carryoverError, setCarryoverError] = useState('');
   const { setPageHeader } = useContext(PageHeaderContext);
 
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
@@ -248,6 +268,7 @@ const Budget = () => {
     setEditAmount('');
     setEditError('');
     setRecurringError('');
+    setCarryoverError('');
     setSelectedMonth(month);
   };
 
@@ -355,6 +376,28 @@ const Budget = () => {
     }
   };
 
+  const handleCarryover = async () => {
+    if (carryoverPending || !state.carryover?.fingerprint) return;
+    setCarryoverPending(true);
+    setCarryoverError('');
+    try {
+      await applyBudgetCarryover({
+        destination_month: selectedMonth,
+        request_key: requestKey(),
+        preview_fingerprint: state.carryover.fingerprint,
+      });
+      refreshBudgets();
+    } catch (error) {
+      const code = error?.response?.data?.code;
+      const fallback = code === 'CARRYOVER_PREVIEW_STALE' || code === '40001'
+        ? 'תצוגת העברת היתרות השתנתה. רעננו את החודש ונסו שוב.'
+        : 'העברת היתרות נכשלה. לא בוצעה העברה חלקית.';
+      setCarryoverError(domainMessage(error, fallback));
+    } finally {
+      setCarryoverPending(false);
+    }
+  };
+
   return (
     <div className="budget-page" dir="rtl">
       <BudgetSummary
@@ -401,6 +444,19 @@ const Budget = () => {
           error={recurringError}
           onApply={handleRecurringInitialization}
           onOpenFunding={() => setShowFundingPanel(true)}
+        />
+      )}
+
+      {!loading && !pageError && state.carryover?.eligible && (
+        state.carryover.ready_categories?.length > 0
+        || state.carryover.blocked_categories?.length > 0
+        || state.carryover.already_applied_categories?.length > 0
+      ) && (
+        <CarryoverPanel
+          carryover={state.carryover}
+          applying={carryoverPending}
+          error={carryoverError}
+          onApply={handleCarryover}
         />
       )}
 

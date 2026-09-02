@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarCheck, Plus, TrendingDown, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CalendarCheck, Plus, TrendingDown, X } from 'lucide-react';
 import {
   Alert,
   EmptyState,
@@ -209,6 +209,79 @@ export const RecurringBudgetPanel = ({ recurring, applying, error, onApply, onOp
     </GlassCard>
   );
 };
+
+const carryoverReason = {
+  CATEGORY_INACTIVE: 'הקטגוריה אינה פעילה',
+  SOURCE_BUDGET_MISSING: 'אין תקציב פעיל בחודש הקודם',
+  SOURCE_BUDGET_INACTIVE: 'תקציב החודש הקודם אינו פעיל',
+  NO_ELIGIBLE_BALANCE: 'לא נותרה יתרה חיובית כשירה',
+  DESTINATION_BUDGET_INACTIVE: 'התקציב בחודש הנוכחי אינו פעיל',
+  RECURRING_INITIALIZATION_REQUIRED: 'יש להחיל תחילה את התקציב החוזר',
+  UNBUDGETED_ACTUAL_EXISTS: 'קיימת הוצאה ללא תקציב בחודש הנוכחי',
+  DESTINATION_DEFICIT: 'קיים גירעון פעיל הדורש טיפול נפרד',
+};
+
+export const CarryoverPanel = ({ carryover, applying, error, onApply }) => (
+  <GlassCard className="budget-carryover-panel" padding="18px">
+    <div className="budget-recurring-panel__heading">
+      <div>
+        <h2><ArrowLeftRight size={19} aria-hidden="true" /> יתרות מהחודש הקודם</h2>
+        <p>
+          יתרה כשירה עוברת רק לאחר אישור מפורש. ההעברה מקטינה את המימון בחודש המקור
+          ומגדילה אותו באותו סכום בחודש הנוכחי, בלי ליצור כסף חדש.
+        </p>
+      </div>
+      <div className="budget-recurring-panel__totals" aria-label="סיכום יתרות להעברה">
+        <span>מוכן להעברה <strong><BudgetMoneyAmount value={carryover.total_incoming} /></strong></span>
+      </div>
+    </div>
+
+    {carryover.ready_categories?.length > 0 && (
+      <ul className="budget-recurring-panel__list" aria-label="יתרות מוכנות להעברה">
+        {carryover.ready_categories.map((item) => (
+          <li key={item.category_id}>
+            <span>{item.category?.icon} {item.category?.name}</span>
+            <BudgetMoneyAmount value={item.amount} />
+          </li>
+        ))}
+      </ul>
+    )}
+
+    {carryover.blocked_categories?.length > 0 && (
+      <details className="budget-carryover-panel__blocked">
+        <summary>{carryover.blocked_categories.length} קטגוריות אינן מוכנות להעברה</summary>
+        <ul>
+          {carryover.blocked_categories.map((item) => (
+            <li key={item.category_id}>
+              <span>{item.category?.icon} {item.category?.name}</span>
+              <span>{carryoverReason[item.reason] || item.reason}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    )}
+
+    {carryover.already_applied_categories?.length > 0 && (
+      <p className="budget-carryover-panel__applied">
+        היתרות כבר הועברו עבור {carryover.already_applied_categories.length} קטגוריות בחודש זה.
+      </p>
+    )}
+
+    {carryover.ready_categories?.length > 0 && (
+      <div className="budget-recurring-panel__actions">
+        <PrimaryButton
+          type="button"
+          loading={applying}
+          loadingText="מעביר..."
+          onClick={onApply}
+        >
+          העבר יתרות מהחודש הקודם
+        </PrimaryButton>
+      </div>
+    )}
+    {error && <Alert variant="error" urgent>{error}</Alert>}
+  </GlassCard>
+);
 
 export const BudgetSkeleton = () => (
   <GlassCard className="budget-list-skeleton" padding="18px" aria-label="טעינת פירוט התקציב">

@@ -24,13 +24,46 @@ exports.getCategories = async (req, res) => {
     const defaultsByCategory = new Map(
       (recurringDefaults || []).map((entry) => [String(entry.category_id), entry.amount_text]),
     );
+
+    const { data: carryoverSettings, error: carryoverError } = await supabase
+      .from('budget_carryover_settings_read')
+      .select('category_id,enabled');
+    if (carryoverError) throw carryoverError;
+    const carryoverByCategory = new Set(
+      (carryoverSettings || []).filter((entry) => entry.enabled).map((entry) => String(entry.category_id)),
+    );
     res.json((data || []).map((category) => ({
       ...category,
       recurring_budget_amount: defaultsByCategory.get(String(category.id)) ?? null,
+      carryover_enabled: carryoverByCategory.has(String(category.id)),
     })));
   } catch (error) {
     console.error('settings.getCategories Error:', error);
     res.status(500).json({ error: error.message });
+  }
+};
+
+// PUT /api/settings/categories/:id/budget-carryover
+exports.setCategoryBudgetCarryover = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        error: 'enabled must be a boolean',
+        code: 'INVALID_CARRYOVER_SETTING',
+      });
+    }
+    const { data, error } = await supabase.rpc('set_budget_carryover_enabled', {
+      p_category_id: id,
+      p_enabled: enabled,
+    });
+    if (error) throw error;
+    return res.status(200).json(data);
+  } catch (error) {
+    console.error('settings.setCategoryBudgetCarryover Error:', error);
+    const status = error?.code === 'P0002' ? 404 : ['23514', '22023'].includes(error?.code) ? 409 : 500;
+    return res.status(status).json({ error: error.message, code: error.code || 'SETTINGS_ERROR' });
   }
 };
 

@@ -10,6 +10,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #20 — Migration 019 balanced category carryover: explicit current-month application, immutable linked source/destination provenance, exact read-only preview, bounded compensating reversal, and centralized Settings → Budget configuration.
+- Budget carryover presentation that keeps the immutable base separate from incoming prior-month funds and reports blocked categories without mutating on read.
 - #18 — Migration 018 recurring monthly budget defaults, a dedicated Settings → Budget configuration area, exact read-only month previews, and explicit idempotent funded initialization.
 - Budget UI guidance for pending recurring defaults, exact required/unallocated/shortfall values, and a user-invoked “Apply recurring budgets” action; loading a month never applies them.
 
@@ -27,6 +29,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- #20 — Serialize carryover application against transaction writes, reject stale approved previews atomically, and preserve distinct raw and effective actual-spending provenance.
 - #17 / #26 — Reject non-finite funded values and transaction actuals, reserve idempotency keys for no-op adjustments, use rollback-safe sequence restart, standardize month-first locks, and narrow legacy budget privileges.
 
 ### Removed

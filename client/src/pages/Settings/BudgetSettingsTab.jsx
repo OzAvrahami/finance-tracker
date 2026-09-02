@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import {
   getSettingsCategories,
+  setSettingsCategoryBudgetCarryover,
   setSettingsCategoryRecurringBudget,
 } from '../../services/api';
 import {
@@ -27,6 +28,8 @@ const BudgetSettingsTab = () => {
   const [recurringAmount, setRecurringAmount] = useState('');
   const [recurringSaving, setRecurringSaving] = useState(false);
   const [recurringError, setRecurringError] = useState('');
+  const [carryoverSavingId, setCarryoverSavingId] = useState(null);
+  const [carryoverError, setCarryoverError] = useState('');
 
   const loadCategories = useCallback(async () => {
     setLoadError(false);
@@ -82,6 +85,22 @@ const BudgetSettingsTab = () => {
       setRecurringError(error.response?.data?.error || 'שמירת התקציב החוזר נכשלה. הסכום נשמר וניתן לנסות שוב.');
     } finally {
       setRecurringSaving(false);
+    }
+  };
+
+  const toggleCarryover = async (category) => {
+    if (carryoverSavingId != null || !category.is_active) return;
+    setCarryoverSavingId(category.id);
+    setCarryoverError('');
+    try {
+      await setSettingsCategoryBudgetCarryover(category.id, {
+        enabled: !category.carryover_enabled,
+      });
+      await loadCategories();
+    } catch (error) {
+      setCarryoverError(error.response?.data?.error || 'שמירת הגדרת העברת היתרה נכשלה. אפשר לנסות שוב.');
+    } finally {
+      setCarryoverSavingId(null);
     }
   };
 
@@ -144,6 +163,22 @@ const BudgetSettingsTab = () => {
                     <span className="settings-budget-record__unset">לא הוגדר</span>
                   )}
                 </div>
+                <div className="settings-budget-record__carryover">
+                  <span className="settings-budget-record__label">העברת יתרה לחודש הבא</span>
+                  <SecondaryButton
+                    type="button"
+                    size="sm"
+                    role="switch"
+                    aria-checked={Boolean(category.carryover_enabled)}
+                    aria-label={`העברת יתרה לחודש הבא עבור ${category.name}`}
+                    className={`settings-carryover-toggle${category.carryover_enabled ? ' is-active' : ''}`}
+                    disabled={!category.is_active || carryoverSavingId === category.id}
+                    loading={carryoverSavingId === category.id}
+                    onClick={() => toggleCarryover(category)}
+                  >
+                    {category.carryover_enabled ? 'פעיל' : 'לא פעיל'}
+                  </SecondaryButton>
+                </div>
                 <SecondaryButton
                   type="button"
                   size="sm"
@@ -160,8 +195,10 @@ const BudgetSettingsTab = () => {
         </div>
       )}
 
+      {carryoverError && <Alert variant="error" urgent>{carryoverError}</Alert>}
+
       <div className="settings-note">
-        שינוי או השבתה משפיעים רק על חודשים שטרם אותחלו. תקציבי פתיחה שכבר נוצרו נשארים ללא שינוי.
+        שינוי תקציב חוזר משפיע רק על חודשים שטרם אותחלו. העברת יתרה מתבצעת רק בפעולה מפורשת בעמוד התקציב; שינוי ההגדרה אינו משנה חודשים או העברות היסטוריים.
       </div>
 
       <Dialog

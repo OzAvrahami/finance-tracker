@@ -49,6 +49,7 @@ test('settings category reads preserve recurring amounts as exact strings', asyn
   const tables = {
     categories: [{ id: 7, name: 'Large', type: 'expense', is_active: true }],
     budget_recurring_defaults_read: [{ category_id: 7, amount_text: '9007199254740993.01' }],
+    budget_carryover_settings_read: [{ category_id: 7, enabled: true }],
   };
   const fake = {
     from(name) {
@@ -71,4 +72,30 @@ test('settings category reads preserve recurring amounts as exact strings', asyn
   await controller.getCategories({}, res);
   assert.equal(res.statusCode, null);
   assert.equal(res.body[0].recurring_budget_amount, '9007199254740993.01');
+  assert.equal(res.body[0].carryover_enabled, true);
+});
+
+test('carryover category setting requires a boolean and calls only its bounded RPC', async () => {
+  const calls = [];
+  const fake = {
+    async rpc(name, params) {
+      calls.push({ name, params });
+      return { data: { category_id: 7, enabled: params.p_enabled }, error: null };
+    },
+  };
+  const controller = loadControllerWithFake('../../controllers/settingsController', fake);
+  for (const enabled of [true, false]) {
+    const res = createMockResponse();
+    await controller.setCategoryBudgetCarryover({ params: { id: '7' }, body: { enabled } }, res);
+    assert.equal(res.statusCode, 200);
+  }
+  assert.deepEqual(calls, [
+    { name: 'set_budget_carryover_enabled', params: { p_category_id: '7', p_enabled: true } },
+    { name: 'set_budget_carryover_enabled', params: { p_category_id: '7', p_enabled: false } },
+  ]);
+
+  const invalid = createMockResponse();
+  await controller.setCategoryBudgetCarryover({ params: { id: '7' }, body: { enabled: 'true' } }, invalid);
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(invalid.body.code, 'INVALID_CARRYOVER_SETTING');
 });
