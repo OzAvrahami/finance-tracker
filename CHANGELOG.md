@@ -10,6 +10,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #21 — Migration 021 unified unused-balance policies, explicit atomic month close, cross-month return-to-unallocated transfers, and one application-wide retained Savings reserve.
+- A bounded Budget month-close panel with read-only review, deficit/unbudgeted blockers, exact per-policy totals, explicit apply, and immutable disposition history.
 - #19 — Migration 020 month-specific base overrides with mutable planning configuration, immutable funded provenance, override-aware initialization, exact release safety, and current/future Asia/Jerusalem policy.
 - Budget month-base editing that keeps recurring defaults, incoming carryover, other adjustments, and final funded amounts visibly separate.
 - #20 — Migration 019 balanced category carryover: explicit current-month application, immutable linked source/destination provenance, exact read-only preview, bounded compensating reversal, and centralized Settings → Budget configuration.
@@ -23,6 +25,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- Replaced the overlapping carryover toggle with one Settings → Budget policy: carry forward, move to Savings, return to next-month unallocated funds, or unconfigured. Existing enabled carryover settings migrate deterministically to carry forward.
+- Carry-forward now participates in the unified close workflow while retaining Migration 019 transfer mechanics and historical provenance.
 - Copy preserves destination month overrides, recurring initialization gives an exact override precedence, and pending overrides block carryover-only snapshot creation.
 - The dedicated Budget settings tab lets expense categories enable, update, explicitly set to zero, or disable a recurring monthly opening amount without mixing budget controls into category metadata or rewriting established months.
 

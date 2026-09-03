@@ -377,3 +377,21 @@ Store one optional exact override per budget month/category. Before category ini
 ### Consequences
 
 Explicit zero differs from no override, no recurring default is required, and removal is a full compensating change or an atomic conflict. Manual, copied, recurring, monthly-override, and carryover-only openings remain explainable. Copy preserves destination overrides and pending overrides must initialize before carryover. Savings, disposition, deficit resolution, unbudgeted-expense resolution, and the full funded-budget redesign remain outside this decision.
+
+## D-022 — Month close disposes unused funding without treating Savings as expense
+
+**Status:** Accepted
+
+**Date:** 2026-09-03
+
+### Context
+
+Positive category headroom is funded money, but it is not automatically monthly surplus or an expense. A completed month needs one explicit, non-overlapping policy per category, and money must not remain simultaneously available in its source and destination.
+
+### Decision
+
+Use one policy row—carry forward, Savings, return to next-month unallocated, or no row—and one explicit close transaction for the immediately completed Asia/Jerusalem month. Carry-forward reuses Migration 019. Return-to-unallocated is a balanced cross-month funding pair with no destination category. Savings is one retained reserve outside monthly funded envelopes, derived from immutable signed ledger entries and excluded from expenses. Any active funded deficit or positive unbudgeted expense blocks the complete close.
+
+### Consequences
+
+Settings changes affect only future closes, previews write nothing, and apply writes exactly the fingerprinted candidate material or returns a stale-preview conflict. Historical policy, funded, raw-actual, and effective-actual snapshots are append-only. Corrections compensate rather than delete and must pass destination or Savings funding safety. Deficit resolution (#23), unbudgeted-expense resolution (#22), Savings withdrawals/accounts, and the full Budget redesign (#25) remain separate.

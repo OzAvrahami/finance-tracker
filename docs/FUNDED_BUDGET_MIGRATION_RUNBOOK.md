@@ -69,4 +69,16 @@ Financial override changes lock `transactions` in `SHARE` mode before the month 
 
 Deploy in order: establish a budget-write maintenance boundary, apply and verify Migration 020 transactionally, deploy the server, then deploy the client. A failed migration must leave the complete pre-020 schema intact; post-commit correction is forward-only through bounded commands.
 
-As of this runbook revision, Migration 020 is **not applied to production**.
+Migration 020 is the deployed month-override prerequisite for Migration 021. This runbook does not authorize reapplying it.
+
+## Migration 021 unused-budget disposition and Savings extension
+
+Migration 021 must be applied only after Migrations 017–020 are deployed and independently verified. It deterministically maps every existing carryover-setting row to `carry_forward`, leaves categories without a row unconfigured, and preserves every historical carryover batch/transfer. It creates no close batch, disposition event, Savings entry, budget operation, funding entry, movement, lifecycle event, snapshot, recurring default, override, or transaction.
+
+Rehearse the ordered migration on a production-shaped disposable database. Verify the read-only preview, immediately-completed/current Asia/Jerusalem boundary, exact candidate fingerprint, deficit and unbudgeted-expense blockers, mixed-policy atomicity, and transaction-write race. For return-to-unallocated, verify source funding/category both decrease, destination funding/unallocated both increase, neither source unallocated nor destination category allocation changes, and cross-month funding nets to zero. For Savings, verify source funding/category both decrease, source unallocated is unchanged, the retained immutable ledger increases, and expense totals do not change. Carry-forward must use the existing Migration 019 transfer rows and operations.
+
+Apply takes the `transactions` `SHARE` lock first, stabilizes the complete policy table against absent-row insert phantoms, takes the transaction-scoped application-wide Savings advisory mutex, then locks source/destination months and affected budgets in stable ID order. Reversal uses the same transaction/Savings/month order. Apply recomputes and captures exact candidates only after those boundaries, compares the approved fingerprint, and consumes that captured JSON. A stale preview must raise `MONTH_DISPOSITION_PREVIEW_STALE` with no writes. Corrections are compensating and must be blocked if destination unallocated, carryover destination headroom, or retained Savings is insufficient.
+
+Deploy in order: establish a budget-write maintenance boundary, apply and verify Migration 021 transactionally, deploy the server, then deploy the client. Do not deploy the unified Settings or month-close routes before their policy/read/RPC objects exist. A failed migration must restore the complete pre-021 state.
+
+As of this runbook revision, Migration 021 is **not applied to production**.

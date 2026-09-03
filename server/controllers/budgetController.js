@@ -76,6 +76,8 @@ exports.getBudgetHistory = async (req, res) => {
       month: state.month,
       history: state.history || [],
       carryover_history: state.carryover_history || [],
+      unused_disposition_history: state.unused_disposition_history || [],
+      savings: state.savings || { balance: '0.00' },
     });
   } catch (error) {
     return sendBudgetError(res, 'getBudgetHistory', error);
@@ -278,6 +280,57 @@ exports.reverseCarryover = async (req, res) => {
     return res.status(200).json(result);
   } catch (error) {
     return sendBudgetError(res, 'reverseCarryover', error);
+  }
+};
+
+exports.getMonthDispositionPreview = async (req, res) => {
+  try {
+    const { month } = req.query;
+    if (!month) return res.status(400).json({ error: 'month query parameter is required' });
+    const preview = await budgetService.getMonthDispositionPreview(supabase, month);
+    return res.status(200).json(preview);
+  } catch (error) {
+    return sendBudgetError(res, 'getMonthDispositionPreview', error);
+  }
+};
+
+exports.applyMonthDisposition = async (req, res) => {
+  try {
+    const {
+      source_month: sourceMonth,
+      preview_fingerprint: previewFingerprint,
+      request_key: requestKey,
+      reason,
+    } = req.body || {};
+    if (!sourceMonth || !requestKey || !CARRYOVER_FINGERPRINT_PATTERN.test(previewFingerprint || '')) {
+      return res.status(400).json({
+        error: 'source_month, request_key, and a valid preview_fingerprint are required',
+        code: 'INVALID_MONTH_DISPOSITION_REQUEST',
+      });
+    }
+    const result = await budgetService.applyMonthDisposition(supabase, {
+      sourceMonth, previewFingerprint, requestKey, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'applyMonthDisposition', error);
+  }
+};
+
+exports.reverseMonthDisposition = async (req, res) => {
+  try {
+    const { request_key: requestKey, reason } = req.body || {};
+    if (!requestKey) {
+      return res.status(400).json({
+        error: 'request_key is required', code: 'INVALID_MONTH_DISPOSITION_REQUEST',
+      });
+    }
+    const result = await budgetService.reverseMonthDisposition(supabase, {
+      batchId: req.params.id, requestKey, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'reverseMonthDisposition', error);
   }
 };
 

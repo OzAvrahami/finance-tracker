@@ -46,9 +46,12 @@ test('compatibility monthly API derives amount from final funded and omits inact
   assert.equal(res.body[0].starting_amount, '600.00');
 });
 
-test('history API exposes immutable operations and carryover linkage without transaction duplication', async () => {
+test('history API exposes immutable operations, carryover, disposition, and Savings without transaction duplication', async () => {
   const { res } = await call('getBudgetHistory', { query: { month: '2026-08' } });
-  assert.deepEqual(res.body, { month: '2026-08', history: state.history, carryover_history: [] });
+  assert.deepEqual(res.body, {
+    month: '2026-08', history: state.history, carryover_history: [],
+    unused_disposition_history: [], savings: { balance: '0.00' },
+  });
   assert.equal(Object.hasOwn(res.body, 'transactions'), false);
 });
 
@@ -329,6 +332,64 @@ test('carryover reversal maps to the bounded compensating RPC', async () => {
     name: 'reverse_budget_carryover',
     params: { p_transfer_id: '44', p_request_key: 'reverse-key', p_reason: null },
   }]);
+});
+
+test('month-close preview, apply, and reversal map to bounded RPCs with exact fingerprints', async () => {
+  const fingerprint = '1234567890abcdef1234567890abcdef';
+  const previewData = {
+    source_month: '2026-08', destination_month: '2026-09', fingerprint,
+    savings_total: '9007199254740993.01', can_apply: true,
+  };
+  const preview = await call('getMonthDispositionPreview', {
+    query: { month: '2026-08' },
+  }, previewData);
+  assert.equal(preview.res.statusCode, 200);
+  assert.deepEqual(preview.calls, [{
+    name: 'get_budget_month_disposition_preview', params: { p_source_month: '2026-08' },
+  }]);
+
+  const apply = await call('applyMonthDisposition', { body: {
+    source_month: '2026-08', request_key: 'close-key', preview_fingerprint: fingerprint,
+  } });
+  assert.equal(apply.res.statusCode, 200);
+  assert.deepEqual(apply.calls, [{
+    name: 'apply_budget_month_disposition',
+    params: {
+      p_source_month: '2026-08', p_request_key: 'close-key',
+      p_preview_fingerprint: fingerprint, p_reason: null,
+    },
+  }]);
+
+  const reverse = await call('reverseMonthDisposition', {
+    params: { id: '9' }, body: { request_key: 'close-reverse' },
+  });
+  assert.equal(reverse.res.statusCode, 200);
+  assert.deepEqual(reverse.calls, [{
+    name: 'reverse_budget_month_disposition',
+    params: { p_batch_id: '9', p_request_key: 'close-reverse', p_reason: null },
+  }]);
+});
+
+test('month-close rejects malformed fingerprints and retains stable domain conflicts', async () => {
+  const invalid = await call('applyMonthDisposition', { body: {
+    source_month: '2026-08', request_key: 'close-key', preview_fingerprint: 'bad',
+  } });
+  assert.equal(invalid.res.statusCode, 400);
+  assert.equal(invalid.res.body.code, 'INVALID_MONTH_DISPOSITION_REQUEST');
+  assert.equal(invalid.calls.length, 0);
+
+  for (const code of [
+    'MONTH_DISPOSITION_PREVIEW_STALE',
+    'MONTH_DISPOSITION_DEFICITS_UNRESOLVED',
+    'MONTH_DISPOSITION_UNBUDGETED_EXPENSES',
+  ]) {
+    const result = await call('applyMonthDisposition', { body: {
+      source_month: '2026-08', request_key: `close-${code}`,
+      preview_fingerprint: '1234567890abcdef1234567890abcdef',
+    } }, null, { code: '23514', message: `${code}: exact details` });
+    assert.equal(result.res.statusCode, 409);
+    assert.equal(result.res.body.code, code);
+  }
 });
 
 const exactAnnualFake = () => {

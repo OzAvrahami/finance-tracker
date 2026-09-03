@@ -25,17 +25,17 @@ exports.getCategories = async (req, res) => {
       (recurringDefaults || []).map((entry) => [String(entry.category_id), entry.amount_text]),
     );
 
-    const { data: carryoverSettings, error: carryoverError } = await supabase
-      .from('budget_carryover_settings_read')
-      .select('category_id,enabled');
-    if (carryoverError) throw carryoverError;
-    const carryoverByCategory = new Set(
-      (carryoverSettings || []).filter((entry) => entry.enabled).map((entry) => String(entry.category_id)),
+    const { data: policies, error: policyError } = await supabase
+      .from('budget_unused_balance_policies_read')
+      .select('category_id,policy');
+    if (policyError) throw policyError;
+    const policyByCategory = new Map(
+      (policies || []).map((entry) => [String(entry.category_id), entry.policy]),
     );
     res.json((data || []).map((category) => ({
       ...category,
       recurring_budget_amount: defaultsByCategory.get(String(category.id)) ?? null,
-      carryover_enabled: carryoverByCategory.has(String(category.id)),
+      unused_balance_policy: policyByCategory.get(String(category.id)) ?? null,
     })));
   } catch (error) {
     console.error('settings.getCategories Error:', error);
@@ -43,25 +43,25 @@ exports.getCategories = async (req, res) => {
   }
 };
 
-// PUT /api/settings/categories/:id/budget-carryover
-exports.setCategoryBudgetCarryover = async (req, res) => {
+// PUT /api/settings/categories/:id/unused-balance-policy
+exports.setCategoryUnusedBalancePolicy = async (req, res) => {
   try {
     const { id } = req.params;
-    const { enabled } = req.body || {};
-    if (typeof enabled !== 'boolean') {
+    const { policy } = req.body || {};
+    if (policy !== null && !['carry_forward', 'savings', 'return_to_unallocated'].includes(policy)) {
       return res.status(400).json({
-        error: 'enabled must be a boolean',
-        code: 'INVALID_CARRYOVER_SETTING',
+        error: 'policy must be carry_forward, savings, return_to_unallocated, or null',
+        code: 'INVALID_UNUSED_BALANCE_POLICY',
       });
     }
-    const { data, error } = await supabase.rpc('set_budget_carryover_enabled', {
+    const { data, error } = await supabase.rpc('set_budget_unused_balance_policy', {
       p_category_id: id,
-      p_enabled: enabled,
+      p_policy: policy,
     });
     if (error) throw error;
     return res.status(200).json(data);
   } catch (error) {
-    console.error('settings.setCategoryBudgetCarryover Error:', error);
+    console.error('settings.setCategoryUnusedBalancePolicy Error:', error);
     const status = error?.code === 'P0002' ? 404 : ['23514', '22023'].includes(error?.code) ? 409 : 500;
     return res.status(status).json({ error: error.message, code: error.code || 'SETTINGS_ERROR' });
   }

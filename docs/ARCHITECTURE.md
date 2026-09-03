@@ -259,7 +259,15 @@ Migration 020 stores pending month/category intent in `budget_month_overrides`; 
 
 The canonical composition is `effective_base = starting_amount + override adjustments` and `final_funded = effective_base + incoming carryover - outgoing carryover + other adjustments`. A decrease locks `transactions` in `SHARE` mode before month and budget locks, clamps actual spending at zero, and releases no more than both base and total-funded headroom. This prevents carryover from becoming release headroom and serializes transaction edits with the decision.
 
-Uninitialized current/future overrides are planning-only. Explicit initialization chooses an override before a recurring default and captures the recurring amount (or zero) as immutable fallback. Copy skips destination categories with override configuration; carryover treats a pending override as an initialization requirement rather than creating `carryover_only` state. Settings continues to own recurring defaults and carryover configuration, while overrides exist only in the selected Budget month.
+Uninitialized current/future overrides are planning-only. Explicit initialization chooses an override before a recurring default and captures the recurring amount (or zero) as immutable fallback. Copy skips destination categories with override configuration; carryover treats a pending override as an initialization requirement rather than creating `carryover_only` state. Settings continues to own recurring defaults and the unified unused-balance policy, while overrides exist only in the selected Budget month.
+
+## Unused-budget disposition and retained Savings
+
+Migration 021 evolves carryover configuration into one exclusive expense-category policy. Existing enabled rows become `carry_forward`; absence remains explicitly unconfigured. The close source is the immediately completed Asia/Jerusalem month and the destination is the current month. Preview is read-only, while apply takes the transaction-actual serialization lock, stabilizes policy rows, takes the short application-wide Savings advisory mutex, locks both months and affected budgets in canonical order, validates the exact preview fingerprint, and commits the captured batch atomically.
+
+`carry_forward` delegates to Migration 019. `return_to_unallocated` removes category funding and available funding from the source, adds equal available funding to the destination without a category movement, and therefore increases only destination unallocated funds. `savings` removes the same source funding into an immutable application-wide reserve outside every monthly envelope. Savings is not an expense and is never included in transaction expense totals. Every month continues to satisfy `available = category allocated + unallocated`; the Savings reserve is reconciled separately from signed immutable entries.
+
+An unresolved funded deficit or positive unbudgeted expense blocks the whole close; Migration 021 does not resolve either condition. Later settings or transaction edits do not rewrite disposition snapshots. Corrections are compensating and bounded by destination unallocated, destination carryover headroom, or retained Savings as applicable.
 
 ## Known architectural boundaries
 

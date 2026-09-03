@@ -161,6 +161,32 @@ const reverseCarryover = (supabase, {
   p_reason: reason,
 });
 
+const getMonthDispositionPreview = (supabase, sourceMonth) => (
+  callBudgetRpc(supabase, 'get_budget_month_disposition_preview', { p_source_month: sourceMonth })
+);
+
+const applyMonthDisposition = (supabase, {
+  sourceMonth,
+  previewFingerprint,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'apply_budget_month_disposition', {
+  p_source_month: sourceMonth,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_preview_fingerprint: previewFingerprint,
+  p_reason: reason,
+});
+
+const reverseMonthDisposition = (supabase, {
+  batchId,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'reverse_budget_month_disposition', {
+  p_batch_id: batchId,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
 const toCompatibilityRows = (state) => (state?.categories || [])
   .filter((category) => category.budget_id && category.lifecycle_state === 'active')
   .map((category) => ({
@@ -189,16 +215,19 @@ const toCompatibilityRows = (state) => (state?.categories || [])
 
 module.exports = {
   addManualFunding,
+  applyMonthDisposition,
   applyCarryover,
   copyBudgetMonth,
   establishBudget,
   getCarryoverPreview,
+  getMonthDispositionPreview,
   getFundedBudgetMonth,
   initializeRecurringBudgets,
   reactivateBudget,
   removeMonthOverride,
   removeBudget,
   reverseCarryover,
+  reverseMonthDisposition,
   reverseOperation,
   setBudgetAmount,
   setMonthOverride,

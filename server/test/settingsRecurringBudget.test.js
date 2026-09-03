@@ -49,7 +49,7 @@ test('settings category reads preserve recurring amounts as exact strings', asyn
   const tables = {
     categories: [{ id: 7, name: 'Large', type: 'expense', is_active: true }],
     budget_recurring_defaults_read: [{ category_id: 7, amount_text: '9007199254740993.01' }],
-    budget_carryover_settings_read: [{ category_id: 7, enabled: true }],
+    budget_unused_balance_policies_read: [{ category_id: 7, policy: 'carry_forward' }],
   };
   const fake = {
     from(name) {
@@ -72,30 +72,32 @@ test('settings category reads preserve recurring amounts as exact strings', asyn
   await controller.getCategories({}, res);
   assert.equal(res.statusCode, null);
   assert.equal(res.body[0].recurring_budget_amount, '9007199254740993.01');
-  assert.equal(res.body[0].carryover_enabled, true);
+  assert.equal(res.body[0].unused_balance_policy, 'carry_forward');
 });
 
-test('carryover category setting requires a boolean and calls only its bounded RPC', async () => {
+test('unused-balance category setting is exclusive and calls only its bounded RPC', async () => {
   const calls = [];
   const fake = {
     async rpc(name, params) {
       calls.push({ name, params });
-      return { data: { category_id: 7, enabled: params.p_enabled }, error: null };
+      return { data: { category_id: 7, policy: params.p_policy }, error: null };
     },
   };
   const controller = loadControllerWithFake('../../controllers/settingsController', fake);
-  for (const enabled of [true, false]) {
+  for (const policy of ['carry_forward', 'savings', 'return_to_unallocated', null]) {
     const res = createMockResponse();
-    await controller.setCategoryBudgetCarryover({ params: { id: '7' }, body: { enabled } }, res);
+    await controller.setCategoryUnusedBalancePolicy({ params: { id: '7' }, body: { policy } }, res);
     assert.equal(res.statusCode, 200);
   }
   assert.deepEqual(calls, [
-    { name: 'set_budget_carryover_enabled', params: { p_category_id: '7', p_enabled: true } },
-    { name: 'set_budget_carryover_enabled', params: { p_category_id: '7', p_enabled: false } },
+    { name: 'set_budget_unused_balance_policy', params: { p_category_id: '7', p_policy: 'carry_forward' } },
+    { name: 'set_budget_unused_balance_policy', params: { p_category_id: '7', p_policy: 'savings' } },
+    { name: 'set_budget_unused_balance_policy', params: { p_category_id: '7', p_policy: 'return_to_unallocated' } },
+    { name: 'set_budget_unused_balance_policy', params: { p_category_id: '7', p_policy: null } },
   ]);
 
   const invalid = createMockResponse();
-  await controller.setCategoryBudgetCarryover({ params: { id: '7' }, body: { enabled: 'true' } }, invalid);
+  await controller.setCategoryUnusedBalancePolicy({ params: { id: '7' }, body: { policy: 'other' } }, invalid);
   assert.equal(invalid.statusCode, 400);
-  assert.equal(invalid.body.code, 'INVALID_CARRYOVER_SETTING');
+  assert.equal(invalid.body.code, 'INVALID_UNUSED_BALANCE_POLICY');
 });

@@ -3,15 +3,15 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
-  addManualBudgetFunding, applyBudgetCarryover, copyBudget,
-  getCategories, getFundedBudgetMonth, initializeRecurringBudgets, removeBudgetMonthOverride,
+  addManualBudgetFunding, applyBudgetMonthClose, copyBudget,
+  getBudgetMonthClosePreview, getCategories, getFundedBudgetMonth, initializeRecurringBudgets, removeBudgetMonthOverride,
   removeFundedBudget, setBudgetMonthOverride, setSettingsCategoryRecurringBudget,
 } from '../../services/api';
 import Budget from './Budget';
 
 vi.mock('../../services/api', () => ({
-  addManualBudgetFunding: vi.fn(), applyBudgetCarryover: vi.fn(), copyBudget: vi.fn(),
-  getCategories: vi.fn(), getFundedBudgetMonth: vi.fn(),
+  addManualBudgetFunding: vi.fn(), applyBudgetMonthClose: vi.fn(), copyBudget: vi.fn(),
+  getBudgetMonthClosePreview: vi.fn(), getCategories: vi.fn(), getFundedBudgetMonth: vi.fn(),
   initializeRecurringBudgets: vi.fn(),
   removeBudgetMonthOverride: vi.fn(),
   removeFundedBudget: vi.fn(),
@@ -81,7 +81,8 @@ beforeEach(() => {
   copyBudget.mockResolvedValue({ data: {} });
   removeFundedBudget.mockResolvedValue({ data: {} });
   initializeRecurringBudgets.mockResolvedValue({ data: {} });
-  applyBudgetCarryover.mockResolvedValue({ data: {} });
+  applyBudgetMonthClose.mockResolvedValue({ data: {} });
+  getBudgetMonthClosePreview.mockResolvedValue({ data: null });
 });
 
 describe('canonical funded monthly read', () => {
@@ -251,58 +252,49 @@ describe('funded budget commands', () => {
     expect(initializeRecurringBudgets).not.toHaveBeenCalled();
   });
 
-  it('previews balanced carryover without mutation and applies it only explicitly', async () => {
-    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
-      carryover: {
-        eligible: true,
-        source_month: '2026-08',
-        destination_month: new Date().toISOString().slice(0, 7),
-        fingerprint: '0123456789abcdef0123456789abcdef',
-        ready_categories: [{ category_id: 1, category: categories[0], amount: '400.00' }],
-        ready_count: 1,
-        total_incoming: '400.00',
-        already_applied_categories: [],
-        blocked_categories: [],
-        can_apply: true,
-      },
-    }) });
+  it('previews a mixed month close without mutation and applies only after confirmation', async () => {
+    const preview = {
+      source_month: '2026-08', destination_month: '2026-09',
+      fingerprint: '0123456789abcdef0123456789abcdef',
+      categories: [{
+        category_id: 1, category: categories[0], policy: 'savings',
+        eligible_unused: '400.00', status: 'ready', blocked_reason: null,
+      }],
+      carry_forward_total: '0.00', return_to_unallocated_total: '0.00', savings_total: '400.00',
+      destination_unallocated_before: '300.00', destination_unallocated_after: '300.00',
+      savings_balance_after: '400.00', deficit_blockers: [], unbudgeted_expense_blockers: [],
+      can_apply: true,
+    };
+    getBudgetMonthClosePreview.mockResolvedValue({ data: preview });
     await settle();
-    expect(applyBudgetCarryover).not.toHaveBeenCalled();
-    expect(screen.getByText('יתרות מהחודש הקודם')).toBeInTheDocument();
-    expect(screen.getByLabelText('סיכום יתרות להעברה')).toHaveTextContent('₪400');
-    await userEvent.click(screen.getByRole('button', { name: 'העבר יתרות מהחודש הקודם' }));
-    expect(applyBudgetCarryover).toHaveBeenCalledWith({
-      destination_month: new Date().toISOString().slice(0, 7),
-      request_key: 'request-key',
-      preview_fingerprint: '0123456789abcdef0123456789abcdef',
+    await userEvent.click(screen.getByRole('button', { name: 'חודש קודם' }));
+    expect(await screen.findByText('סקירה וסגירת חודש')).toBeInTheDocument();
+    expect(applyBudgetMonthClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('סיכום סגירת חודש')).toHaveTextContent('₪400');
+    await userEvent.click(screen.getByRole('button', { name: 'אישור וסגירת החודש' }));
+    expect(applyBudgetMonthClose).toHaveBeenCalledWith({
+      source_month: expect.stringMatching(/^\d{4}-\d{2}$/),
+      request_key: 'request-key', preview_fingerprint: preview.fingerprint,
     });
-    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
   });
 
-  it('requires a refreshed review when PostgreSQL rejects a stale carryover preview', async () => {
-    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
-      carryover: {
-        eligible: true,
-        source_month: '2026-08',
-        destination_month: new Date().toISOString().slice(0, 7),
-        fingerprint: '0123456789abcdef0123456789abcdef',
-        ready_categories: [{ category_id: 1, category: categories[0], amount: '400.00' }],
-        ready_count: 1,
-        total_incoming: '400.00',
-        already_applied_categories: [],
-        blocked_categories: [],
-        can_apply: true,
-      },
-    }) });
-    applyBudgetCarryover.mockRejectedValue({
-      response: { data: { code: 'CARRYOVER_PREVIEW_STALE' } },
+  it('retains the close review when PostgreSQL reports a stale preview', async () => {
+    getBudgetMonthClosePreview.mockResolvedValue({ data: {
+      source_month: '2026-08', destination_month: '2026-09',
+      fingerprint: '0123456789abcdef0123456789abcdef',
+      categories: [{ category_id: 1, category: categories[0], policy: 'carry_forward', eligible_unused: '400.00', status: 'ready' }],
+      carry_forward_total: '400.00', return_to_unallocated_total: '0.00', savings_total: '0.00',
+      destination_unallocated_before: '0.00', destination_unallocated_after: '0.00', savings_balance_after: '0.00',
+      deficit_blockers: [], unbudgeted_expense_blockers: [], can_apply: true,
+    } });
+    applyBudgetMonthClose.mockRejectedValue({
+      response: { data: { code: 'MONTH_DISPOSITION_PREVIEW_STALE' } },
     });
-
     await settle();
-    await userEvent.click(screen.getByRole('button', { name: 'העבר יתרות מהחודש הקודם' }));
-
-    expect(await screen.findByText('תצוגת העברת היתרות השתנתה. רעננו את החודש ונסו שוב.')).toBeInTheDocument();
-    expect(getFundedBudgetMonth).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'חודש קודם' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'אישור וסגירת החודש' }));
+    expect(await screen.findByText('סקירת סגירת החודש השתנתה. רעננו ובדקו שוב לפני האישור.')).toBeInTheDocument();
+    expect(screen.getByText('סקירה וסגירת חודש')).toBeInTheDocument();
   });
 
   it('shows carryover composition separately from the immutable base', async () => {
@@ -323,24 +315,20 @@ describe('funded budget commands', () => {
     expect(screen.getAllByText('₪400').length).toBeGreaterThan(0);
   });
 
-  it('shows stable carryover block reasons and never calls apply without a ready category', async () => {
-    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
-      carryover: {
-        eligible: true,
-        source_month: '2026-08', destination_month: new Date().toISOString().slice(0, 7),
-        fingerprint: '0123456789abcdef0123456789abcdef', ready_categories: [], ready_count: 0,
-        total_incoming: '0.00', already_applied_categories: [], can_apply: false,
-        blocked_categories: [{
-          category_id: 1, category: categories[0], amount: '400.00',
-          reason: 'RECURRING_INITIALIZATION_REQUIRED',
-        }],
-      },
-    }) });
+  it('shows close blockers and never calls apply while deficits remain', async () => {
+    getBudgetMonthClosePreview.mockResolvedValue({ data: {
+      source_month: '2026-08', destination_month: '2026-09',
+      fingerprint: '0123456789abcdef0123456789abcdef', categories: [],
+      carry_forward_total: '0.00', return_to_unallocated_total: '0.00', savings_total: '0.00',
+      destination_unallocated_before: '0.00', destination_unallocated_after: '0.00', savings_balance_after: '0.00',
+      deficit_blockers: [{ category_id: 1 }], unbudgeted_expense_blockers: [{ category_id: 2 }],
+      can_apply: false,
+    } });
     await settle();
-    await userEvent.click(screen.getByText(/קטגוריות אינן מוכנות/));
-    expect(screen.getByText('יש להחיל תחילה את התקציב החוזר')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'העבר יתרות מהחודש הקודם' })).not.toBeInTheDocument();
-    expect(applyBudgetCarryover).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'חודש קודם' }));
+    expect(await screen.findByText(/לא ניתן לסגור את החודש/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'אישור וסגירת החודש' })).not.toBeInTheDocument();
+    expect(applyBudgetMonthClose).not.toHaveBeenCalled();
   });
 
   it('adds confirmed manual funds with a source label and idempotency key', async () => {

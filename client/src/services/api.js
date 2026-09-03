@@ -145,9 +145,10 @@ export const setBudgetMonthOverride = (month, categoryId, data) => (
 export const removeBudgetMonthOverride = (month, categoryId, data) => (
   api.post(`/budgets/funded/months/${month}/categories/${categoryId}/override/remove`, data)
 );
-export const getBudgetCarryoverPreview = (month) => api.get('/budgets/funded/carryover/preview', { params: { month } });
-export const applyBudgetCarryover = (data) => api.post('/budgets/funded/carryover/apply', data);
 export const reverseBudgetCarryover = (id, data) => api.post(`/budgets/funded/carryover/transfers/${id}/reverse`, data);
+export const getBudgetMonthClosePreview = (month) => api.get('/budgets/funded/month-close/preview', { params: { month } });
+export const applyBudgetMonthClose = (data) => api.post('/budgets/funded/month-close/apply', data);
+export const reverseBudgetMonthClose = (id, data) => api.post(`/budgets/funded/month-close/batches/${id}/reverse`, data);
 export const establishFundedBudget = (data) => api.post('/budgets/funded/categories', data);
 export const adjustFundedBudget = (id, data) => api.patch(`/budgets/funded/categories/${id}`, data);
 export const removeFundedBudget = (id, data) => api.post(`/budgets/funded/categories/${id}/remove`, data);
@@ -183,7 +184,7 @@ export const createSettingsCategory = (data) => api.post('/settings/categories',
 export const updateSettingsCategory = (id, data) => api.put(`/settings/categories/${id}`, data);
 export const deleteSettingsCategory = (id) => api.delete(`/settings/categories/${id}`);
 export const setSettingsCategoryRecurringBudget = (id, data) => api.put(`/settings/categories/${id}/recurring-budget`, data);
-export const setSettingsCategoryBudgetCarryover = (id, data) => api.put(`/settings/categories/${id}/budget-carryover`, data);
+export const setSettingsCategoryUnusedBalancePolicy = (id, data) => api.put(`/settings/categories/${id}/unused-balance-policy`, data);
 
 // Settings — Payment Sources
 export const getSettingsPaymentSources   = ()        => api.get('/settings/payment-sources');

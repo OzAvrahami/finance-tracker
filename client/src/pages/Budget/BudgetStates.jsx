@@ -283,6 +283,93 @@ export const CarryoverPanel = ({ carryover, applying, error, onApply }) => (
   </GlassCard>
 );
 
+const dispositionPolicyLabel = {
+  carry_forward: 'העבר לקטגוריה בחודש הבא',
+  savings: 'העבר לחיסכון',
+  return_to_unallocated: 'החזר לכסף פנוי בחודש הבא',
+};
+
+export const MonthClosePanel = ({ preview, history = [], loading, applying, error, onApply }) => {
+  const deficitCount = preview.deficit_blockers?.length || 0;
+  const unbudgetedCount = preview.unbudgeted_expense_blockers?.length || 0;
+  const blocked = (preview.categories || []).filter((item) => item.status === 'blocked');
+  const ready = (preview.categories || []).filter((item) => item.status === 'ready');
+  const applied = history.filter((item) => item.event_kind === 'apply');
+
+  return (
+    <GlassCard className="budget-carryover-panel budget-month-close-panel" padding="18px">
+      <div className="budget-recurring-panel__heading">
+        <div>
+          <h2><CalendarCheck size={19} aria-hidden="true" /> סקירה וסגירת חודש</h2>
+          <p>
+            הסגירה מתבצעת רק לאחר אישור מפורש. יתרות מועברות לחודש הנוכחי או לחיסכון,
+            בלי לשנות הוצאות, תקציבי פתיחה או היסטוריה קיימת.
+          </p>
+        </div>
+        <div className="budget-recurring-panel__totals" aria-label="סיכום סגירת חודש">
+          <span>העברה לקטגוריות <strong><BudgetMoneyAmount value={preview.carry_forward_total} /></strong></span>
+          <span>החזרה לכסף פנוי <strong><BudgetMoneyAmount value={preview.return_to_unallocated_total} /></strong></span>
+          <span>לחיסכון <strong><BudgetMoneyAmount value={preview.savings_total} /></strong></span>
+        </div>
+      </div>
+
+      {(deficitCount > 0 || unbudgetedCount > 0) && (
+        <Alert variant="warning" urgent>
+          לא ניתן לסגור את החודש: {deficitCount > 0 && `${deficitCount} קטגוריות בגירעון`}
+          {deficitCount > 0 && unbudgetedCount > 0 ? ' ו-' : ''}
+          {unbudgetedCount > 0 && `${unbudgetedCount} הוצאות ללא תקציב`}.
+        </Alert>
+      )}
+
+      {applied.length > 0 && (
+        <p className="budget-carryover-panel__applied">
+          סגירת החודש בוצעה ונשמרה בהיסטוריה עבור {applied.length} קטגוריות.
+        </p>
+      )}
+
+      {ready.length > 0 && (
+        <ul className="budget-recurring-panel__list" aria-label="יתרות לסגירת החודש">
+          {ready.map((item) => (
+            <li key={item.category_id}>
+              <span>{item.category?.icon} {item.category?.name} · {dispositionPolicyLabel[item.policy]}</span>
+              <BudgetMoneyAmount value={item.eligible_unused} />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {blocked.length > 0 && (
+        <details className="budget-carryover-panel__blocked">
+          <summary>{blocked.length} יתרות דורשות הגדרה או הכנת חודש היעד</summary>
+          <ul>
+            {blocked.map((item) => (
+              <li key={item.category_id}>
+                <span>{item.category?.icon} {item.category?.name}</span>
+                <span>{item.blocked_reason}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <p className="budget-carryover-panel__applied">
+        כסף פנוי בחודש {preview.destination_month}: <BudgetMoneyAmount value={preview.destination_unallocated_before} />
+        {' → '}<BudgetMoneyAmount value={preview.destination_unallocated_after} /> ·
+        חיסכון: <BudgetMoneyAmount value={preview.savings_balance_after} />
+      </p>
+
+      {preview.can_apply && (
+        <div className="budget-recurring-panel__actions">
+          <PrimaryButton type="button" loading={applying || loading} loadingText="סוגר..." onClick={onApply}>
+            אישור וסגירת החודש
+          </PrimaryButton>
+        </div>
+      )}
+      {error && <Alert variant="error" urgent>{error}</Alert>}
+    </GlassCard>
+  );
+};
+
 export const BudgetSkeleton = () => (
   <GlassCard className="budget-list-skeleton" padding="18px" aria-label="טעינת פירוט התקציב">
     <span className="u-sr-only" role="status">טוען את התקציב החודשי</span>

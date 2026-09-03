@@ -146,7 +146,7 @@ Copy [client/.env.example](client/.env.example) and [server/.env.example](server
 
 ## Database and migrations
 
-Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 019. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migration 017 introduces the funded-budget foundation, Migration 018 adds recurring monthly defaults with explicit funded initialization, and Migration 019 adds explicit balanced category carryover. Migration 019 has not been applied to production.
+Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 021. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migrations 017–020 provide funded budgets, recurring defaults, balanced carryover, and month overrides. Migration 021 adds unified unused-balance policies, explicit month close, next-month unallocated return, and retained Savings. Migration 021 has not been applied to production.
 
 Funded-budget monetary API values are exact canonical decimal strings. Authoritative mutation endpoints reject JSON numbers rather than stringifying values that may already have lost precision; PostgreSQL `NUMERIC` remains the authority. JavaScript numeric conversion is limited to non-authoritative visual geometry and percentages.
 

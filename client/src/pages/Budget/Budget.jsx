@@ -9,10 +9,11 @@ import {
 } from '../../utils/money';
 import {
   addManualBudgetFunding,
-  applyBudgetCarryover,
+  applyBudgetMonthClose,
   copyBudget,
   getCategories,
   getFundedBudgetMonth,
+  getBudgetMonthClosePreview,
   initializeRecurringBudgets,
   removeBudgetMonthOverride,
   removeFundedBudget,
@@ -30,7 +31,7 @@ import {
   BudgetSkeleton,
   ManualFundingPanel,
   RecurringBudgetPanel,
-  CarryoverPanel,
+  MonthClosePanel,
 } from './BudgetStates';
 import './Budget.css';
 
@@ -43,6 +44,13 @@ const currentCalendarMonth = () => {
   const year = parts.find((part) => part.type === 'year')?.value;
   const month = parts.find((part) => part.type === 'month')?.value;
   return `${year}-${month}`;
+};
+
+const previousCalendarMonth = (month) => {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return monthNumber === 1
+    ? `${year - 1}-12`
+    : `${year}-${String(monthNumber - 1).padStart(2, '0')}`;
 };
 
 const emptyState = (month) => ({
@@ -59,6 +67,8 @@ const emptyState = (month) => ({
   actuals: { total: '0.00', budgeted: '0.00', unbudgeted: '0.00' },
   categories: [],
   history: [],
+  unused_disposition_history: [],
+  savings: { balance: '0.00' },
   month_overrides: { eligible: false, month, overrides: [], count: 0 },
   recurring: {
     eligible: false, initialized: false, pending_categories: [], pending_count: 0,
@@ -164,8 +174,10 @@ const Budget = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [recurringPending, setRecurringPending] = useState(false);
   const [recurringError, setRecurringError] = useState('');
-  const [carryoverPending, setCarryoverPending] = useState(false);
-  const [carryoverError, setCarryoverError] = useState('');
+  const [closePreview, setClosePreview] = useState(null);
+  const [closePreviewLoading, setClosePreviewLoading] = useState(false);
+  const [closePending, setClosePending] = useState(false);
+  const [closeError, setCloseError] = useState('');
   const { setPageHeader } = useContext(PageHeaderContext);
 
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
@@ -215,6 +227,27 @@ const Budget = () => {
         }));
       });
 
+    return () => { active = false; };
+  }, [selectedMonth, requestVersion]);
+
+  useEffect(() => {
+    let active = true;
+    if (selectedMonth !== previousCalendarMonth(currentCalendarMonth())) {
+      setClosePreview(null);
+      setClosePreviewLoading(false);
+      return () => { active = false; };
+    }
+    setClosePreviewLoading(true);
+    getBudgetMonthClosePreview(selectedMonth)
+      .then((response) => {
+        if (active) setClosePreview(response.data);
+      })
+      .catch(() => {
+        if (active) setCloseError('לא ניתן לטעון את סקירת סגירת החודש.');
+      })
+      .finally(() => {
+        if (active) setClosePreviewLoading(false);
+      });
     return () => { active = false; };
   }, [selectedMonth, requestVersion]);
 
@@ -281,7 +314,7 @@ const Budget = () => {
     setEditAmount('');
     setEditError('');
     setRecurringError('');
-    setCarryoverError('');
+    setCloseError('');
     setSelectedMonth(month);
   };
 
@@ -420,25 +453,25 @@ const Budget = () => {
     }
   };
 
-  const handleCarryover = async () => {
-    if (carryoverPending || !state.carryover?.fingerprint) return;
-    setCarryoverPending(true);
-    setCarryoverError('');
+  const handleMonthClose = async () => {
+    if (closePending || !closePreview?.fingerprint) return;
+    setClosePending(true);
+    setCloseError('');
     try {
-      await applyBudgetCarryover({
-        destination_month: selectedMonth,
+      await applyBudgetMonthClose({
+        source_month: selectedMonth,
         request_key: requestKey(),
-        preview_fingerprint: state.carryover.fingerprint,
+        preview_fingerprint: closePreview.fingerprint,
       });
       refreshBudgets();
     } catch (error) {
       const code = error?.response?.data?.code;
-      const fallback = code === 'CARRYOVER_PREVIEW_STALE' || code === '40001'
-        ? 'תצוגת העברת היתרות השתנתה. רעננו את החודש ונסו שוב.'
-        : 'העברת היתרות נכשלה. לא בוצעה העברה חלקית.';
-      setCarryoverError(domainMessage(error, fallback));
+      const fallback = code === 'MONTH_DISPOSITION_PREVIEW_STALE' || code === '40001'
+        ? 'סקירת סגירת החודש השתנתה. רעננו ובדקו שוב לפני האישור.'
+        : 'סגירת החודש נכשלה. לא בוצעה פעולה חלקית.';
+      setCloseError(domainMessage(error, fallback));
     } finally {
-      setCarryoverPending(false);
+      setClosePending(false);
     }
   };
 
@@ -491,16 +524,14 @@ const Budget = () => {
         />
       )}
 
-      {!loading && !pageError && state.carryover?.eligible && (
-        state.carryover.ready_categories?.length > 0
-        || state.carryover.blocked_categories?.length > 0
-        || state.carryover.already_applied_categories?.length > 0
-      ) && (
-        <CarryoverPanel
-          carryover={state.carryover}
-          applying={carryoverPending}
-          error={carryoverError}
-          onApply={handleCarryover}
+      {!loading && !pageError && closePreview && (
+        <MonthClosePanel
+          preview={closePreview}
+          history={state.unused_disposition_history || []}
+          loading={closePreviewLoading}
+          applying={closePending}
+          error={closeError}
+          onApply={handleMonthClose}
         />
       )}
 

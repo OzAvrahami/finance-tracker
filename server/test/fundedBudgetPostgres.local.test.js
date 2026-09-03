@@ -24,6 +24,10 @@ const overrideMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '020_month_budget_overrides.sql'),
   'utf8',
 );
+const dispositionMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '021_unused_budget_disposition.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -129,6 +133,11 @@ const applyOverrideFoundation = (database) => {
   psql(database, overrideMigration);
 };
 
+const applyDispositionFoundation = (database) => {
+  applyOverrideFoundation(database);
+  psql(database, dispositionMigration);
+};
+
 before(() => {
   docker(['run', '--detach', '--rm', '--name', container, '-e', `POSTGRES_PASSWORD=${password}`, 'postgres:16-alpine']);
   let ready = false;
@@ -181,10 +190,13 @@ test('full_schema creates the funded foundation cleanly from an empty database',
       to_regclass('public.budget_months') IS NOT NULL,
       to_regclass('public.budget_operations') IS NOT NULL,
       to_regclass('public.budget_category_state') IS NOT NULL,
+      to_regclass('public.budget_unused_balance_policies') IS NOT NULL,
+      to_regclass('public.budget_savings_entries') IS NOT NULL,
       to_regprocedure('public.get_funded_budget_month(text)') IS NOT NULL,
+      to_regprocedure('public.apply_budget_month_disposition(text,uuid,text,text)') IS NOT NULL,
       to_regprocedure('public.remove_funded_budget(bigint,uuid,text)') IS NOT NULL;
   `).stdout.trim();
-  assert.equal(objects, 't|t|t|t|t');
+  assert.equal(objects, 't|t|t|t|t|t|t|t');
 });
 
 test('preflight rejects invalid month and rolls the transaction back', () => {
@@ -1810,9 +1822,9 @@ test('release limits clamp negative actuals and reject spent base atomically wit
 
   psql('month_override_release', "UPDATE transactions SET total_amount=-100 WHERE category_id=1;");
   psql('month_override_release', "SELECT set_budget_month_override('2026-09',1,0,'70000000-0000-4000-8000-000000000044');");
-  assert.equal(psql('month_override_release', `SELECT effective_base || '|' || final_funded || '|' || unallocated
-    FROM budget_category_base_state JOIN budget_month_funding_state USING (budget_month_id)
-    WHERE month='2026-09' AND category_id=1;`).stdout.trim(), '0.00|0.00|1500.00');
+  assert.equal(psql('month_override_release', `SELECT base.effective_base || '|' || base.final_funded || '|' || funding.unallocated
+    FROM budget_category_base_state base JOIN budget_month_funding_state funding USING (budget_month_id)
+    WHERE base.month='2026-09' AND base.category_id=1;`).stdout.trim(), '0.00|0.00|1500.00');
 });
 
 test('request retries, conflicts, copy preservation, year rollover, and exact large values are deterministic', () => {
@@ -1912,9 +1924,9 @@ test('manual, copied, recurring, and carryover-only snapshots layer overrides wi
     SELECT apply_budget_carryover('2026-09','70000000-0000-4000-8000-000000000081','${preview.fingerprint}');
     SELECT set_budget_month_override('2026-09',3,250,'70000000-0000-4000-8000-000000000082');
   `);
-  assert.equal(psql('month_override_starting_kinds', `SELECT starting_amount || '|' || starting_kind || '|' || effective_base || '|' || incoming_carryover || '|' || final_funded
-    FROM budget_category_base_state JOIN budget_category_state USING (budget_id,budget_month_id,month,category_id)
-    WHERE month='2026-09' AND category_id=3;`).stdout.trim(),
+  assert.equal(psql('month_override_starting_kinds', `SELECT state.starting_amount || '|' || state.starting_kind || '|' || base.effective_base || '|' || base.incoming_carryover || '|' || state.final_funded
+    FROM budget_category_base_state base JOIN budget_category_state state USING (budget_id,budget_month_id,month,category_id)
+    WHERE base.month='2026-09' AND base.category_id=3;`).stdout.trim(),
   '0.00|carryover_only|250.00|400.00|650.00');
   psql('month_override_starting_kinds', "SELECT remove_budget_month_override('2026-09',3,'70000000-0000-4000-8000-000000000083');");
   assert.equal(psql('month_override_starting_kinds', `SELECT effective_base || '|' || incoming_carryover || '|' || final_funded || '|' || lifecycle_state
@@ -1942,9 +1954,9 @@ test('pending override blocks carryover until override-aware initialization esta
   assert.equal(preview.ready_count, 1);
   psql('month_override_carryover_gate', `SELECT apply_budget_carryover(
     '2026-09','70000000-0000-4000-8000-000000000095','${preview.fingerprint}');`);
-  assert.equal(psql('month_override_carryover_gate', `SELECT starting_amount || '|' || starting_kind || '|' || effective_base || '|' || incoming_carryover || '|' || final_funded
-    FROM budget_category_base_state JOIN budget_category_state USING (budget_id,budget_month_id,month,category_id)
-    WHERE month='2026-09' AND category_id=1;`).stdout.trim(),
+  assert.equal(psql('month_override_carryover_gate', `SELECT state.starting_amount || '|' || state.starting_kind || '|' || base.effective_base || '|' || base.incoming_carryover || '|' || state.final_funded
+    FROM budget_category_base_state base JOIN budget_category_state state USING (budget_id,budget_month_id,month,category_id)
+    WHERE base.month='2026-09' AND base.category_id=1;`).stdout.trim(),
   '1500.00|monthly_override|1500.00|1000.00|2500.00');
 });
 
@@ -1988,4 +2000,487 @@ test('override, initialization, carryover, copy, and generic adjustment share on
     || (SELECT count(*) FROM budget_month_overrides mo JOIN budget_months bm ON bm.id=mo.budget_month_id WHERE bm.month_start='2026-09-01' AND mo.category_id=4);
   `).stdout.trim(), '350.00|200.00|250.00|monthly_override|1');
   psql('month_override_mutation_concurrency', "SELECT budget_assert_reconciled(id) FROM budget_months WHERE month_start IN ('2026-08-01','2026-09-01') ORDER BY id;");
+});
+
+test('migration 021 maps existing carryover settings to one policy without financial backfill', () => {
+  createDatabase('disposition_migration');
+  psql('disposition_migration', `${fixture()}
+    INSERT INTO categories(id,name,type) VALUES
+      (4,'Four','expense'),(5,'Five','expense'),(6,'Six','expense');
+  `);
+  applyOverrideFoundation('disposition_migration');
+  psql('disposition_migration', `
+    SELECT set_budget_carryover_enabled(1,true); SELECT set_budget_carryover_enabled(2,true);
+    SELECT set_budget_carryover_enabled(3,true); SELECT set_budget_carryover_enabled(4,true);
+    SELECT set_budget_carryover_enabled(5,true); SELECT set_budget_carryover_enabled(6,true);
+  `);
+  psql('disposition_migration', dispositionMigration);
+  assert.equal(psql('disposition_migration', `SELECT
+    (SELECT count(*) FROM budget_unused_balance_policies WHERE policy='carry_forward') || '|'
+    || (SELECT count(*) FROM budget_month_disposition_batches) || '|'
+    || (SELECT count(*) FROM budget_unused_disposition_events) || '|'
+    || (SELECT count(*) FROM budget_savings_entries) || '|'
+    || ((to_regprocedure('public.set_budget_carryover_enabled(bigint,boolean)') IS NULL)::integer)::text;
+  `).stdout.trim(), '6|0|0|0|1');
+  assert.equal(psql('disposition_migration', `SELECT
+    position('unused_return_out' in pg_get_constraintdef(oid))>0,
+    position('unused_to_savings' in pg_get_constraintdef(oid))>0
+    FROM pg_constraint WHERE conname='budget_operations_operation_type_check';
+  `).stdout.trim(), 't|t');
+  assert.equal(psql('disposition_migration', 'SELECT count(*) FROM budget_carryover_transfers;').stdout.trim(), '0');
+});
+
+test('unified policy is exclusive, preserves unconfigured, and enforces active expense categories', () => {
+  createDatabase('disposition_policy');
+  psql('disposition_policy', `${fixture()} INSERT INTO categories(id,name,type) VALUES (4,'Income','income');`);
+  applyDispositionFoundation('disposition_policy');
+  assert.equal(psql('disposition_policy', 'SELECT count(*) FROM budget_unused_balance_policies;').stdout.trim(), '0');
+  for (const policy of ['carry_forward', 'savings', 'return_to_unallocated']) {
+    psql('disposition_policy', `SELECT set_budget_unused_balance_policy(1,'${policy}');`);
+    assert.equal(psql('disposition_policy', 'SELECT policy FROM budget_unused_balance_policies WHERE category_id=1;').stdout.trim(), policy);
+    assert.equal(psql('disposition_policy', 'SELECT count(*) FROM budget_unused_balance_policies WHERE category_id=1;').stdout.trim(), '1');
+  }
+  psql('disposition_policy', 'SELECT set_budget_unused_balance_policy(1,NULL);');
+  assert.equal(psql('disposition_policy', 'SELECT count(*) FROM budget_unused_balance_policies;').stdout.trim(), '0');
+  assert.match(psql('disposition_policy', "SELECT set_budget_unused_balance_policy(4,'savings');", true).stderr, /active expense/i);
+  psql('disposition_policy', 'UPDATE categories SET is_active=false WHERE id=2;');
+  assert.match(psql('disposition_policy', "SELECT set_budget_unused_balance_policy(2,'savings');", true).stderr, /active expense/i);
+});
+
+test('month-close preview is read-only and a mixed policy batch reconciles all three destinations', () => {
+  createDatabase('disposition_mixed');
+  psql('disposition_mixed', fixture());
+  applyDispositionFoundation('disposition_mixed');
+  psql('disposition_mixed', `
+    SELECT add_manual_budget_funding(
+      to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+      3000,'Source','81000000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,1000,'manual','81000000-0000-4000-8000-000000000002');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),2,1000,'manual','81000000-0000-4000-8000-000000000003');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),3,1000,'manual','81000000-0000-4000-8000-000000000004');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',400,1),
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',500,2),
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',600,3);
+    SELECT set_budget_unused_balance_policy(1,'carry_forward');
+    SELECT set_budget_unused_balance_policy(2,'return_to_unallocated');
+    SELECT set_budget_unused_balance_policy(3,'savings');
+  `);
+  const before = psql('disposition_mixed', `SELECT
+    (SELECT count(*) FROM budget_months)::text||(SELECT count(*) FROM budgets)::text||
+    (SELECT count(*) FROM budget_operations)::text||(SELECT count(*) FROM budget_funding_entries)::text||
+    (SELECT count(*) FROM budget_movements)::text||(SELECT count(*) FROM budget_lifecycle_events)::text||
+    (SELECT count(*) FROM budget_month_disposition_batches)::text||(SELECT count(*) FROM budget_unused_disposition_events)::text||
+    (SELECT count(*) FROM budget_savings_entries)::text;
+  `).stdout.trim();
+  const preview = JSON.parse(psql('disposition_mixed', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));
+  `).stdout.trim());
+  assert.equal(preview.carry_forward_total, '600.00');
+  assert.equal(preview.return_to_unallocated_total, '500.00');
+  assert.equal(preview.savings_total, '400.00');
+  assert.equal(preview.can_apply, true);
+  const after = psql('disposition_mixed', `SELECT
+    (SELECT count(*) FROM budget_months)::text||(SELECT count(*) FROM budgets)::text||
+    (SELECT count(*) FROM budget_operations)::text||(SELECT count(*) FROM budget_funding_entries)::text||
+    (SELECT count(*) FROM budget_movements)::text||(SELECT count(*) FROM budget_lifecycle_events)::text||
+    (SELECT count(*) FROM budget_month_disposition_batches)::text||(SELECT count(*) FROM budget_unused_disposition_events)::text||
+    (SELECT count(*) FROM budget_savings_entries)::text;
+  `).stdout.trim();
+  assert.equal(after, before, 'preview created financial or provenance state');
+
+  psql('disposition_mixed', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '81000000-0000-4000-8000-000000000005','${preview.fingerprint}');`);
+  const months = psql('disposition_mixed', `SELECT available||':'||total_allocated||':'||unallocated
+    FROM budget_month_funding_state
+    WHERE month_start>=date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month'
+    ORDER BY month_start;
+  `).stdout.trim().split('\n');
+  assert.deepEqual(months, ['1500.00:1500.00:0.00','1100.00:600.00:500.00']);
+  assert.equal(psql('disposition_mixed', 'SELECT balance_text FROM budget_savings_state;').stdout.trim(), '400.00');
+  assert.equal(psql('disposition_mixed', 'SELECT count(*) FROM budget_carryover_transfers WHERE reverses_transfer_id IS NULL;').stdout.trim(), '1');
+  assert.equal(psql('disposition_mixed', `SELECT
+    (SELECT count(*) FROM budgets b JOIN budget_months bm ON bm.id=b.budget_month_id
+      WHERE bm.month_start=date_trunc('month',timezone('Asia/Jerusalem',now()))::date AND b.category_id IN(2,3))||'|'
+    ||(SELECT count(*) FROM budget_movements m JOIN budget_operations o ON o.id=m.operation_id
+      WHERE o.operation_type='unused_return_in')||'|'
+    ||(SELECT count(*) FROM budget_lifecycle_events le JOIN budget_operations o ON o.id=le.operation_id
+      WHERE o.operation_type='unused_return_in');
+  `).stdout.trim(), '0|0|0');
+  assert.equal(psql('disposition_mixed', 'SELECT count(*) FROM budget_unused_disposition_events;').stdout.trim(), '3');
+  assert.equal(psql('disposition_mixed', `SELECT
+    coalesce(sum(amount_delta) FILTER (WHERE source_kind='carryover_transfer'),0)||'|'
+    ||coalesce(sum(amount_delta) FILTER (WHERE source_kind='unused_disposition_transfer'),0)||'|'
+    ||coalesce(sum(amount_delta) FILTER (WHERE source_kind='savings_transfer'),0)
+    FROM budget_funding_entries;`).stdout.trim(), '0.00|0.00|-400.00');
+  assert.equal(psql('disposition_mixed', `SELECT coalesce(sum(total_amount),0) FROM transactions WHERE movement_type='expense';`).stdout.trim(), '1500');
+  psql('disposition_mixed', 'SELECT budget_assert_reconciled(id) FROM budget_months ORDER BY id;');
+
+  psql('disposition_mixed', 'UPDATE transactions SET total_amount=450 WHERE category_id=1;');
+  assert.equal(psql('disposition_mixed', `SELECT amount||'|'||source_raw_actual_snapshot||'|'||source_effective_actual_snapshot
+    FROM budget_unused_disposition_events WHERE event_kind='apply' AND category_id=1;
+  `).stdout.trim(), '600.00|400.00|400.00');
+  psql('disposition_mixed', `SELECT reverse_budget_month_disposition(
+    (SELECT id FROM budget_month_disposition_batches WHERE reverses_batch_id IS NULL),
+    '81000000-0000-4000-8000-000000000006');`);
+  assert.equal(psql('disposition_mixed', `SELECT
+    (SELECT balance_text FROM budget_savings_state)||'|'
+    ||(SELECT count(*) FROM budget_unused_disposition_events WHERE event_kind='reversal')||'|'
+    ||(SELECT available||':'||total_allocated||':'||unallocated FROM budget_month_funding_state
+       WHERE month_start=(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date)||'|'
+    ||(SELECT available||':'||total_allocated||':'||unallocated FROM budget_month_funding_state
+       WHERE month_start=date_trunc('month',timezone('Asia/Jerusalem',now()))::date);
+  `).stdout.trim(), '0.00|3|3000.00:3000.00:0.00|0.00:0.00:0.00');
+});
+
+test('month close blocks deficits and unbudgeted expenses atomically with stable conflicts', () => {
+  createDatabase('disposition_blockers');
+  psql('disposition_blockers', fixture());
+  applyDispositionFoundation('disposition_blockers');
+  psql('disposition_blockers', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),100,'Source','82000000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,100,'manual','82000000-0000-4000-8000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'savings');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',120,1),
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',25,2);
+  `);
+  let preview = JSON.parse(psql('disposition_blockers', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  assert.equal(preview.deficit_blockers.length, 1);
+  assert.equal(preview.unbudgeted_expense_blockers.length, 1);
+  let failed = psql('disposition_blockers', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '82000000-0000-4000-8000-000000000003','${preview.fingerprint}');`, true);
+  assert.match(failed.stderr, /MONTH_DISPOSITION_DEFICITS_UNRESOLVED/);
+  assert.equal(psql('disposition_blockers', 'SELECT count(*) FROM budget_month_disposition_batches;').stdout.trim(), '0');
+  psql('disposition_blockers', 'DELETE FROM transactions WHERE category_id=1;');
+  preview = JSON.parse(psql('disposition_blockers', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  failed = psql('disposition_blockers', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '82000000-0000-4000-8000-000000000004','${preview.fingerprint}');`, true);
+  assert.match(failed.stderr, /MONTH_DISPOSITION_UNBUDGETED_EXPENSES/);
+  assert.equal(psql('disposition_blockers', `SELECT
+    (SELECT count(*) FROM budget_month_disposition_batches)||'|'||(SELECT count(*) FROM budget_savings_entries);
+  `).stdout.trim(), '0|0');
+});
+
+test('month-close apply rejects a preview made stale by a concurrent transaction insert', async () => {
+  createDatabase('disposition_race');
+  psql('disposition_race', fixture());
+  applyDispositionFoundation('disposition_race');
+  psql('disposition_race', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1000,'Source','83000000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,1000,'manual','83000000-0000-4000-8000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'savings');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+      VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',100,1);
+  `);
+  const preview = JSON.parse(psql('disposition_race', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  const writer = psqlAsync('disposition_race', `BEGIN;
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+      VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',100,1);
+    SELECT pg_sleep(2); COMMIT;`);
+  await waitForGrantedTableLock('disposition_race','public.transactions','RowExclusiveLock');
+  const apply = psqlAsync('disposition_race', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '83000000-0000-4000-8000-000000000003','${preview.fingerprint}');`);
+  const [writerResult, applyResult] = await Promise.all([writer, apply]);
+  assert.equal(writerResult.status, 0, writerResult.stderr);
+  assert.notEqual(applyResult.status, 0);
+  assert.match(applyResult.stderr, /MONTH_DISPOSITION_PREVIEW_STALE/);
+  assert.equal(psql('disposition_race', `SELECT
+    (SELECT count(*) FROM budget_month_disposition_batches)||'|'
+    ||(SELECT count(*) FROM budget_unused_disposition_events)||'|'
+    ||(SELECT count(*) FROM budget_savings_entries);
+  `).stdout.trim(), '0|0|0');
+  const refreshed = JSON.parse(psql('disposition_race', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  assert.equal(refreshed.savings_total, '800.00');
+  psql('disposition_race', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '83000000-0000-4000-8000-000000000004','${refreshed.fingerprint}');`);
+  assert.equal(psql('disposition_race', 'SELECT balance_text FROM budget_savings_state;').stdout.trim(), '800.00');
+});
+
+test('transaction update and delete also invalidate approved close material without writes', () => {
+  for (const [database, mutation] of [
+    ['disposition_stale_update', 'UPDATE transactions SET total_amount=200 WHERE category_id=1'],
+    ['disposition_stale_delete', 'DELETE FROM transactions WHERE category_id=1'],
+  ]) {
+    createDatabase(database);
+    psql(database, fixture());
+    applyDispositionFoundation(database);
+    psql(database, `
+      SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1000,'Source','83100000-0000-4000-8000-000000000001');
+      SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,1000,'manual','83100000-0000-4000-8000-000000000002');
+      SELECT set_budget_unused_balance_policy(1,'savings');
+      INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+        VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',100,1);
+    `);
+    const preview = JSON.parse(psql(database, `SELECT get_budget_month_disposition_preview(
+      to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+    psql(database, `${mutation};`);
+    const failed = psql(database, `SELECT apply_budget_month_disposition(
+      to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+      '83100000-0000-4000-8000-000000000003','${preview.fingerprint}');`, true);
+    assert.match(failed.stderr, /MONTH_DISPOSITION_PREVIEW_STALE/);
+    assert.equal(psql(database, `SELECT
+      (SELECT count(*) FROM budget_month_disposition_batches)||'|'
+      ||(SELECT count(*) FROM budget_unused_disposition_events)||'|'
+      ||(SELECT count(*) FROM budget_savings_entries);`).stdout.trim(), '0|0|0');
+  }
+});
+
+test('negative actual totals are preserved raw but never manufacture additional Savings', () => {
+  createDatabase('disposition_negative_actual');
+  psql('disposition_negative_actual', fixture());
+  applyDispositionFoundation('disposition_negative_actual');
+  psql('disposition_negative_actual', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1000,'Source','83200000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,1000,'manual','83200000-0000-4000-8000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'savings');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+      VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',-200,1);
+  `);
+  const preview = JSON.parse(psql('disposition_negative_actual', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  assert.equal(preview.savings_total,'1000.00');
+  assert.equal(preview.categories[0].source_raw_actual,'-200.00');
+  assert.equal(preview.categories[0].source_effective_actual,'0.00');
+  psql('disposition_negative_actual', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '83200000-0000-4000-8000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('disposition_negative_actual', `SELECT amount||'|'||source_raw_actual_snapshot||'|'||source_effective_actual_snapshot
+    FROM budget_unused_disposition_events;`).stdout.trim(),'1000.00|-200.00|0.00');
+});
+
+test('a legitimate no-op month close reserves its request key without financial writes', () => {
+  createDatabase('disposition_noop');
+  psql('disposition_noop', fixture());
+  applyDispositionFoundation('disposition_noop');
+  psql('disposition_noop', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),100,'Source','83300000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,100,'manual','83300000-0000-4000-8000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'savings');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+      VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',100,1);
+  `);
+  const preview = JSON.parse(psql('disposition_noop', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  assert.equal(preview.can_apply,false);
+  psql('disposition_noop', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '83300000-0000-4000-8000-000000000003','${preview.fingerprint}');`);
+  psql('disposition_noop', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '83300000-0000-4000-8000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('disposition_noop', `SELECT
+    (SELECT count(*) FROM budget_month_disposition_batches)||'|'
+    ||(SELECT count(*) FROM budget_unused_disposition_events)||'|'
+    ||(SELECT count(*) FROM budget_savings_entries);`).stdout.trim(),'1|0|0');
+  assert.match(psql('disposition_noop', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '83300000-0000-4000-8000-000000000003','bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');`,true).stderr,
+    /different month disposition request/i);
+});
+
+test('month-close retries, exact large money, corrections, and destination reversal safety are deterministic', () => {
+  createDatabase('disposition_exact_reverse');
+  psql('disposition_exact_reverse', `${fixture()} INSERT INTO categories(id,name,type) VALUES(4,'Target','expense');`);
+  applyDispositionFoundation('disposition_exact_reverse');
+  psql('disposition_exact_reverse', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),9007199254740993.01,'Exact','84000000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,9007199254740993.01,'manual','84000000-0000-4000-8000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'return_to_unallocated');
+  `);
+  const preview = JSON.parse(psql('disposition_exact_reverse', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  assert.equal(preview.return_to_unallocated_total, '9007199254740993.01');
+  psql('disposition_exact_reverse', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '84000000-0000-4000-8000-000000000003','${preview.fingerprint}');`);
+  psql('disposition_exact_reverse', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '84000000-0000-4000-8000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('disposition_exact_reverse', 'SELECT count(*) FROM budget_month_disposition_batches;').stdout.trim(), '1');
+  assert.match(psql('disposition_exact_reverse', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '84000000-0000-4000-8000-000000000003','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');`, true).stderr, /different month disposition request/i);
+  psql('disposition_exact_reverse', `
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM'),4,1,'manual','84000000-0000-4000-8000-000000000004');
+  `);
+  const blocked = psql('disposition_exact_reverse', `SELECT reverse_budget_month_disposition(
+    1,'84000000-0000-4000-8000-000000000005');`, true);
+  assert.match(blocked.stderr, /REVERSAL_BLOCKED/);
+  assert.equal(psql('disposition_exact_reverse', 'SELECT count(*) FROM budget_unused_disposition_events;').stdout.trim(), '1');
+});
+
+test('month-close reversal is compensating and policy ACLs expose only intended service surfaces', () => {
+  createDatabase('disposition_reversal_acl');
+  psql('disposition_reversal_acl', fixture());
+  applyDispositionFoundation('disposition_reversal_acl');
+  psql('disposition_reversal_acl', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1000,'Source','85000000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,1000,'manual','85000000-0000-4000-8000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'savings');
+  `);
+  const preview = JSON.parse(psql('disposition_reversal_acl', `SELECT get_budget_month_disposition_preview(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'));`).stdout.trim());
+  psql('disposition_reversal_acl', `SELECT apply_budget_month_disposition(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),
+    '85000000-0000-4000-8000-000000000003','${preview.fingerprint}');
+    SELECT reverse_budget_month_disposition(1,'85000000-0000-4000-8000-000000000004');
+  `);
+  assert.equal(psql('disposition_reversal_acl', `SELECT
+    (SELECT balance_text FROM budget_savings_state)||'|'
+    ||(SELECT count(*) FROM budget_month_disposition_batches)||'|'
+    ||(SELECT count(*) FROM budget_unused_disposition_events)||'|'
+    ||(SELECT final_funded FROM budget_category_state WHERE category_id=1);
+  `).stdout.trim(), '0.00|2|2|1000.00');
+  assert.match(psql('disposition_reversal_acl', 'UPDATE budget_unused_disposition_events SET amount=1;', true).stderr, /append-only/i);
+  assert.match(psql('disposition_reversal_acl', 'DELETE FROM budget_savings_entries;', true).stderr, /append-only/i);
+
+  const roles = ['public_probe','anon','authenticated','service_role'];
+  const roleArray = `ARRAY[${roles.map((role) => `'${role}'`).join(',')}]::text[]`;
+  for (const table of ['budget_unused_balance_policies','budget_unused_balance_policies_read',
+    'budget_month_disposition_batches','budget_unused_disposition_events',
+    'budget_savings_entries','budget_savings_state','budget_month_disposition_history']) {
+    const rows = psql('disposition_reversal_acl', `SELECT role_name,
+      has_table_privilege(role_name,'public.${table}','SELECT'),
+      has_table_privilege(role_name,'public.${table}','INSERT')
+      FROM unnest(${roleArray}) role_name ORDER BY role_name;`).stdout.trim().split('\n');
+    for (const row of rows) {
+      const [role,read,write] = row.split('|');
+      assert.equal(read,role==='service_role'?'t':'f',`${role} read ${table}`);
+      assert.equal(write,'f',`${role} write ${table}`);
+    }
+  }
+  for (const table of ['budget_carryover_settings','budget_carryover_settings_read']) {
+    assert.equal(psql('disposition_reversal_acl', `SELECT bool_or(
+      has_table_privilege(role_name,'public.${table}','SELECT'))
+      FROM unnest(${roleArray}) role_name;`).stdout.trim(),'f',table);
+  }
+  for (const signature of [
+    'get_funded_budget_month(text)','set_budget_unused_balance_policy(bigint,text)',
+    'get_budget_month_disposition_preview(text)','apply_budget_month_disposition(text,uuid,text,text)',
+    'reverse_budget_month_disposition(bigint,uuid,text)'
+  ]) {
+    const rows = psql('disposition_reversal_acl', `SELECT role_name,
+      has_function_privilege(role_name,'public.${signature}','EXECUTE')
+      FROM unnest(${roleArray}) role_name ORDER BY role_name;`).stdout.trim().split('\n');
+    for (const row of rows) {
+      const [role,execute] = row.split('|');
+      assert.equal(execute,role==='service_role'?'t':'f',`${role} execute ${signature}`);
+    }
+  }
+  for (const signature of ['budget_month_disposition_candidate_rows(text)',
+    'validate_budget_disposition_event()','validate_budget_savings_entry()',
+    'get_funded_budget_month_overrides(text)',
+    'apply_budget_carryover(text,uuid,text,text)']) {
+    assert.equal(psql('disposition_reversal_acl', `SELECT bool_or(
+      has_function_privilege(role_name,'public.${signature}','EXECUTE'))
+      FROM unnest(${roleArray}) role_name;`).stdout.trim(),'f',signature);
+  }
+});
+
+test('disposition month-pair validation accepts December to January and pending override blocks carry-forward', () => {
+  createDatabase('disposition_boundary_pending');
+  psql('disposition_boundary_pending', fixture());
+  applyDispositionFoundation('disposition_boundary_pending');
+  psql('disposition_boundary_pending', `
+    INSERT INTO budget_months(month_start) VALUES('2026-12-01'),('2027-01-01');
+    INSERT INTO budget_month_disposition_batches(request_key,request_fingerprint,source_budget_month_id,destination_budget_month_id)
+    SELECT '86000000-0000-4000-8000-000000000001','boundary',s.id,d.id
+    FROM budget_months s,budget_months d WHERE s.month_start='2026-12-01' AND d.month_start='2027-01-01';
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),100,'Source','86000000-0000-4000-8000-000000000002');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,100,'manual','86000000-0000-4000-8000-000000000003');
+    SELECT set_budget_unused_balance_policy(1,'carry_forward');
+    SELECT set_budget_month_override(to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM'),1,50,'86000000-0000-4000-8000-000000000004');
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),100,'Source 2','86000000-0000-4000-8000-000000000005');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),2,100,'manual','86000000-0000-4000-8000-000000000006');
+    SELECT set_budget_unused_balance_policy(2,'carry_forward');
+    SELECT set_budget_recurring_default(2,50);
+  `);
+  assert.equal(psql('disposition_boundary_pending', `SELECT category_id||':'||blocked_reason
+    FROM budget_month_disposition_candidate_rows(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'))
+    WHERE category_id IN(1,2) ORDER BY category_id;
+  `).stdout.trim(), '1:MONTH_OVERRIDE_INITIALIZATION_REQUIRED\n2:RECURRING_INITIALIZATION_REQUIRED');
+});
+
+test('month close shares the established lock order with override, copy, adjustment, removal, and reactivation', async () => {
+  createDatabase('disposition_mutation_concurrency');
+  psql('disposition_mutation_concurrency', `${fixture()}
+    INSERT INTO categories(id,name,type) VALUES
+      (4,'Reactivated','expense'),(5,'Override','expense'),(6,'Copied','expense');
+  `);
+  applyDispositionFoundation('disposition_mutation_concurrency');
+  psql('disposition_mutation_concurrency', `
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1000,'Close source','87000000-0000-4000-8000-000000000001');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM'),1,1000,'manual','87000000-0000-4000-8000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'savings');
+
+    SELECT add_manual_budget_funding(to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM'),1000,'Destination','87000000-0000-4000-8000-000000000003');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM'),2,100,'manual','87000000-0000-4000-8000-000000000004');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM'),3,100,'manual','87000000-0000-4000-8000-000000000005');
+    SELECT establish_funded_budget(to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM'),4,100,'manual','87000000-0000-4000-8000-000000000006');
+    SELECT remove_funded_budget((SELECT budget_id FROM budget_category_state WHERE category_id=4 AND month=to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM')),'87000000-0000-4000-8000-000000000007');
+    SELECT add_manual_budget_funding('2098-02',100,'Copy source','87000000-0000-4000-8000-000000000008');
+    SELECT establish_funded_budget('2098-02',6,100,'manual','87000000-0000-4000-8000-000000000009');
+  `);
+  const sourceMonth = psql('disposition_mutation_concurrency', `SELECT to_char(
+    date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  const destinationMonth = psql('disposition_mutation_concurrency', `SELECT to_char(
+    date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const preview = JSON.parse(psql('disposition_mutation_concurrency', `SELECT get_budget_month_disposition_preview('${sourceMonth}');`).stdout.trim());
+  const ids = psql('disposition_mutation_concurrency', `SELECT category_id||':'||budget_id FROM budget_category_state
+    WHERE month='${destinationMonth}' AND category_id IN(2,3,4) ORDER BY category_id;`).stdout.trim().split('\n')
+    .reduce((result,row) => { const [category,budget] = row.split(':'); result[category]=budget; return result; }, {});
+  const results = await Promise.all([
+    psqlAsync('disposition_mutation_concurrency', `SELECT apply_budget_month_disposition('${sourceMonth}','87000000-0000-4000-8000-000000000010','${preview.fingerprint}');`),
+    psqlAsync('disposition_mutation_concurrency', `SELECT set_budget_month_override('${destinationMonth}',5,50,'87000000-0000-4000-8000-000000000011');`),
+    psqlAsync('disposition_mutation_concurrency', `SELECT copy_funded_budget_month('2098-02','${destinationMonth}','87000000-0000-4000-8000-000000000012');`),
+    psqlAsync('disposition_mutation_concurrency', `SELECT set_funded_budget_amount(${ids['2']},150,'87000000-0000-4000-8000-000000000013');`),
+    psqlAsync('disposition_mutation_concurrency', `SELECT remove_funded_budget(${ids['3']},'87000000-0000-4000-8000-000000000014');`),
+    psqlAsync('disposition_mutation_concurrency', `SELECT reactivate_funded_budget(${ids['4']},0,'87000000-0000-4000-8000-000000000015');`),
+  ]);
+  const [closeResult, ...mutationResults] = results;
+  for (const result of results) {
+    assert.doesNotMatch(result.stderr,/deadlock|40P01/i);
+  }
+  for (const result of mutationResults) assert.equal(result.status,0,result.stderr);
+
+  const closeApplied = closeResult.status === 0;
+  if (!closeApplied) {
+    assert.match(closeResult.stderr,/^ERROR:\s+MONTH_DISPOSITION_PREVIEW_STALE:/m);
+    assert.equal(psql('disposition_mutation_concurrency', `SELECT
+      (SELECT count(*) FROM budget_month_disposition_batches)||'|'
+      ||(SELECT count(*) FROM budget_unused_disposition_events)||'|'
+      ||(SELECT count(*) FROM budget_savings_entries)||'|'
+      ||(SELECT count(*) FROM budget_operations WHERE operation_type IN
+          ('unused_return_out','unused_return_in','unused_to_savings','unused_disposition_reversal'))||'|'
+      ||(SELECT count(*) FROM budget_funding_entries WHERE source_kind IN
+          ('unused_disposition_transfer','savings_transfer'));
+    `).stdout.trim(),'0|0|0|0|0');
+
+    const freshPreview = JSON.parse(psql('disposition_mutation_concurrency',
+      `SELECT get_budget_month_disposition_preview('${sourceMonth}');`).stdout.trim());
+    const currentDestinationUnallocated = psql('disposition_mutation_concurrency', `SELECT unallocated
+      FROM budget_month_funding_state WHERE month='${destinationMonth}';`).stdout.trim();
+    assert.notEqual(freshPreview.fingerprint,preview.fingerprint);
+    assert.equal(freshPreview.destination_unallocated_before,currentDestinationUnallocated);
+    assert.equal(freshPreview.can_apply,true);
+  }
+  assert.equal(psql('disposition_mutation_concurrency', `SELECT
+    (SELECT balance_text FROM budget_savings_state)||'|'
+    ||(SELECT final_funded FROM budget_category_state WHERE budget_id=${ids['2']})||'|'
+    ||(SELECT lifecycle_state FROM budget_category_state WHERE budget_id=${ids['3']})||'|'
+    ||(SELECT lifecycle_state FROM budget_category_state WHERE budget_id=${ids['4']})||'|'
+    ||(SELECT count(*) FROM budget_month_overrides WHERE category_id=5)||'|'
+    ||(SELECT count(*) FROM budget_category_state WHERE month='${destinationMonth}' AND category_id=6);
+  `).stdout.trim(),`${closeApplied ? '1000.00' : '0.00'}|150.00|inactive|active|1|1`);
+  psql('disposition_mutation_concurrency','SELECT budget_assert_reconciled(id) FROM budget_months ORDER BY id;');
 });

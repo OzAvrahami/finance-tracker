@@ -312,10 +312,26 @@
   gap: 4px;
 }
 
-.settings-carryover-toggle.is-active {
-  color: var(--ft-positive) !important;
-  border-color: var(--ft-positive-border) !important;
-  background: var(--ft-positive-weak) !important;
+.settings-budget-policy-select {
+  width: min(100%, 260px);
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--ft-text);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-md);
+  background: var(--ft-surface-solid-secondary);
+  font: inherit;
+  font-size: var(--ft-font-size-sm);
+}
+
+.settings-budget-policy-select:focus-visible {
+  outline: 2px solid var(--ft-primary);
+  outline-offset: 2px;
+}
+
+.settings-budget-policy-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .settings-budget-record__label {

@@ -10,7 +10,7 @@ import {
 } from '../../components/ui';
 import {
   getSettingsCategories,
-  setSettingsCategoryBudgetCarryover,
+  setSettingsCategoryUnusedBalancePolicy,
   setSettingsCategoryRecurringBudget,
 } from '../../services/api';
 import {
@@ -28,8 +28,8 @@ const BudgetSettingsTab = () => {
   const [recurringAmount, setRecurringAmount] = useState('');
   const [recurringSaving, setRecurringSaving] = useState(false);
   const [recurringError, setRecurringError] = useState('');
-  const [carryoverSavingId, setCarryoverSavingId] = useState(null);
-  const [carryoverError, setCarryoverError] = useState('');
+  const [policySavingId, setPolicySavingId] = useState(null);
+  const [policyError, setPolicyError] = useState('');
 
   const loadCategories = useCallback(async () => {
     setLoadError(false);
@@ -88,19 +88,19 @@ const BudgetSettingsTab = () => {
     }
   };
 
-  const toggleCarryover = async (category) => {
-    if (carryoverSavingId != null || !category.is_active) return;
-    setCarryoverSavingId(category.id);
-    setCarryoverError('');
+  const savePolicy = async (category, policy) => {
+    if (policySavingId != null || !category.is_active) return;
+    setPolicySavingId(category.id);
+    setPolicyError('');
     try {
-      await setSettingsCategoryBudgetCarryover(category.id, {
-        enabled: !category.carryover_enabled,
+      await setSettingsCategoryUnusedBalancePolicy(category.id, {
+        policy: policy || null,
       });
       await loadCategories();
     } catch (error) {
-      setCarryoverError(error.response?.data?.error || 'שמירת הגדרת העברת היתרה נכשלה. אפשר לנסות שוב.');
+      setPolicyError(error.response?.data?.error || 'שמירת מדיניות היתרה נכשלה. אפשר לנסות שוב.');
     } finally {
-      setCarryoverSavingId(null);
+      setPolicySavingId(null);
     }
   };
 
@@ -164,20 +164,21 @@ const BudgetSettingsTab = () => {
                   )}
                 </div>
                 <div className="settings-budget-record__carryover">
-                  <span className="settings-budget-record__label">העברת יתרה לחודש הבא</span>
-                  <SecondaryButton
-                    type="button"
-                    size="sm"
-                    role="switch"
-                    aria-checked={Boolean(category.carryover_enabled)}
-                    aria-label={`העברת יתרה לחודש הבא עבור ${category.name}`}
-                    className={`settings-carryover-toggle${category.carryover_enabled ? ' is-active' : ''}`}
-                    disabled={!category.is_active || carryoverSavingId === category.id}
-                    loading={carryoverSavingId === category.id}
-                    onClick={() => toggleCarryover(category)}
+                  <label className="settings-budget-record__label" htmlFor={`unused-policy-${category.id}`}>
+                    מה קורה ליתרה שלא נוצלה?
+                  </label>
+                  <select
+                    id={`unused-policy-${category.id}`}
+                    className="settings-budget-policy-select"
+                    value={category.unused_balance_policy || ''}
+                    disabled={!category.is_active || policySavingId === category.id}
+                    onChange={(event) => savePolicy(category, event.target.value)}
                   >
-                    {category.carryover_enabled ? 'פעיל' : 'לא פעיל'}
-                  </SecondaryButton>
+                    <option value="">לא הוגדר</option>
+                    <option value="carry_forward">העבר לקטגוריה בחודש הבא</option>
+                    <option value="savings">העבר לחיסכון</option>
+                    <option value="return_to_unallocated">החזר לכסף פנוי בחודש הבא</option>
+                  </select>
                 </div>
                 <SecondaryButton
                   type="button"
@@ -195,10 +196,10 @@ const BudgetSettingsTab = () => {
         </div>
       )}
 
-      {carryoverError && <Alert variant="error" urgent>{carryoverError}</Alert>}
+      {policyError && <Alert variant="error" urgent>{policyError}</Alert>}
 
       <div className="settings-note">
-        שינוי תקציב חוזר משפיע רק על חודשים שטרם אותחלו. העברת יתרה מתבצעת רק בפעולה מפורשת בעמוד התקציב; שינוי ההגדרה אינו משנה חודשים או העברות היסטוריים.
+        שינוי תקציב חוזר משפיע רק על חודשים שטרם אותחלו. מדיניות יתרה משפיעה רק על סגירות עתידיות; העברה או חיסכון מתבצעים רק באישור מפורש בעמוד התקציב ואינם משנים היסטוריה קיימת.
       </div>
 
       <Dialog
