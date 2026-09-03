@@ -302,8 +302,35 @@
 .budget-row-actions,
 .budget-inline-editor__actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.budget-inline-editor__actions > button:not(.ui-icon-btn) {
+  min-height: 32px;
+  padding: 5px 9px;
+  color: var(--ft-text-muted);
+  font: inherit;
+  font-size: 11px;
+  background: var(--ft-glass);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-control);
+  cursor: pointer;
+}
+
+.budget-inline-editor__actions > .budget-inline-editor__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ft-on-primary);
+  background: var(--ft-primary);
+  border-color: var(--ft-primary);
+}
+
+.budget-inline-editor__actions > button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .budget-add-panel__actions {
@@ -540,12 +567,13 @@
 .budget-inline-editor {
   display: flex;
   min-width: 0;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
   gap: 5px;
 }
 
 .budget-inline-editor__field {
-  width: 98px;
+  width: 140px;
 }
 
 .budget-inline-editor__field .ui-field-label {

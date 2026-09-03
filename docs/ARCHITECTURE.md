@@ -253,6 +253,14 @@ There is currently no canonical repository migration runner or applied-migration
 - ordered migration testing remains necessary; and
 - external database state must be verified before release or repair work.
 
+## Month-specific base overrides
+
+Migration 020 stores pending month/category intent in `budget_month_overrides`; absence and explicit zero are distinct. Once a snapshot exists, that configuration is never authoritative funded history. `budget_month_override_events`, budget operations, and movements preserve every set/removal decision while `starting_amount` and `starting_kind` remain immutable.
+
+The canonical composition is `effective_base = starting_amount + override adjustments` and `final_funded = effective_base + incoming carryover - outgoing carryover + other adjustments`. A decrease locks `transactions` in `SHARE` mode before month and budget locks, clamps actual spending at zero, and releases no more than both base and total-funded headroom. This prevents carryover from becoming release headroom and serializes transaction edits with the decision.
+
+Uninitialized current/future overrides are planning-only. Explicit initialization chooses an override before a recurring default and captures the recurring amount (or zero) as immutable fallback. Copy skips destination categories with override configuration; carryover treats a pending override as an initialization requirement rather than creating `carryover_only` state. Settings continues to own recurring defaults and carryover configuration, while overrides exist only in the selected Budget month.
+
 ## Known architectural boundaries
 
 - Legacy and principal-aware loan calculations coexist.

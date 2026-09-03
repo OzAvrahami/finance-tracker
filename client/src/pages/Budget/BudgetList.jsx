@@ -24,11 +24,13 @@ const BudgetProgress = ({ row }) => (
   </div>
 );
 
-const BudgetEditor = ({ row, view, value, pending, error, onChange, onSave, onCancel }) => (
+const BudgetEditor = ({
+  row, view, value, pending, error, onChange, onSave, onSaveRecurring, onRemoveOverride, onCancel,
+}) => (
   <div className="budget-inline-editor">
     <NumberField
       id={`budget-amount-${view}-${row.id}`}
-      label={`תקציב עבור ${row.categoryName}`}
+      label={`בסיס התקציב עבור ${row.categoryName}`}
       className="budget-inline-editor__field"
       value={value}
       onChange={(event) => onChange(event.target.value)}
@@ -36,15 +38,22 @@ const BudgetEditor = ({ row, view, value, pending, error, onChange, onSave, onCa
       error={error}
     />
     <div className="budget-inline-editor__actions">
-      <IconButton
+      <button
         type="button"
-        size="sm"
-        aria-label={`שמירת תקציב עבור ${row.categoryName}`}
+        className="budget-inline-editor__primary"
         disabled={pending}
         onClick={() => onSave(row)}
       >
-        <Check size={15} aria-hidden="true" />
-      </IconButton>
+        <Check size={15} aria-hidden="true" /> שינוי לחודש זה בלבד
+      </button>
+      <button type="button" disabled={pending} onClick={() => onSaveRecurring(row)}>
+        עדכון התקציב החודשי הקבוע
+      </button>
+      {row.monthOverride !== null && row.monthOverride !== undefined && (
+        <button type="button" disabled={pending} onClick={() => onRemoveOverride(row)}>
+          הסר שינוי לחודש זה
+        </button>
+      )}
       <IconButton
         type="button"
         size="sm"
@@ -98,15 +107,20 @@ const RemainingAmount = ({ row }) => (
 );
 
 const FundedComposition = ({ row }) => {
-  const hasCarryover = row.incomingCarryover && row.incomingCarryover !== '0.00';
-  if (!hasCarryover) return <BudgetMoneyAmount value={row.planned} />;
   return (
     <div className="budget-funded-composition">
       <strong><BudgetMoneyAmount value={row.planned} /></strong>
-      <span>
-        בסיס <BudgetMoneyAmount value={row.starting} />
-        {' · '}יתרה מחודש קודם +<BudgetMoneyAmount value={row.incomingCarryover} />
-      </span>
+      <span>בסיס מקורי <BudgetMoneyAmount value={row.fallbackBase} /></span>
+      {row.monthOverride !== null && row.monthOverride !== undefined && (
+        <span>שינוי לחודש זה <BudgetMoneyAmount value={row.monthOverride} /></span>
+      )}
+      <span>בסיס אפקטיבי <BudgetMoneyAmount value={row.effectiveBase} /></span>
+      {row.incomingCarryover !== '0.00' && (
+        <span>יתרה מחודש קודם +<BudgetMoneyAmount value={row.incomingCarryover} /></span>
+      )}
+      {row.otherAdjustments !== '0.00' && (
+        <span>התאמות אחרות <BudgetMoneyAmount value={row.otherAdjustments} /></span>
+      )}
     </div>
   );
 };
@@ -120,6 +134,8 @@ const BudgetList = ({
   onStartEdit,
   onEditAmountChange,
   onSaveEdit,
+  onSaveRecurring,
+  onRemoveOverride,
   onCancelEdit,
   onRequestDelete,
 }) => (
@@ -163,6 +179,8 @@ const BudgetList = ({
                       error={editError}
                       onChange={onEditAmountChange}
                       onSave={onSaveEdit}
+                      onSaveRecurring={onSaveRecurring}
+                      onRemoveOverride={onRemoveOverride}
                       onCancel={onCancelEdit}
                     />
                   ) : (
@@ -214,6 +232,8 @@ const BudgetList = ({
                 error={editError}
                 onChange={onEditAmountChange}
                 onSave={onSaveEdit}
+                onSaveRecurring={onSaveRecurring}
+                onRemoveOverride={onRemoveOverride}
                 onCancel={onCancelEdit}
               />
             ) : (

@@ -10,6 +10,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #19 — Migration 020 month-specific base overrides with mutable planning configuration, immutable funded provenance, override-aware initialization, exact release safety, and current/future Asia/Jerusalem policy.
+- Budget month-base editing that keeps recurring defaults, incoming carryover, other adjustments, and final funded amounts visibly separate.
 - #20 — Migration 019 balanced category carryover: explicit current-month application, immutable linked source/destination provenance, exact read-only preview, bounded compensating reversal, and centralized Settings → Budget configuration.
 - Budget carryover presentation that keeps the immutable base separate from incoming prior-month funds and reports blocked categories without mutating on read.
 - #18 — Migration 018 recurring monthly budget defaults, a dedicated Settings → Budget configuration area, exact read-only month previews, and explicit idempotent funded initialization.
@@ -21,6 +23,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- Copy preserves destination month overrides, recurring initialization gives an exact override precedence, and pending overrides block carryover-only snapshot creation.
 - The dedicated Budget settings tab lets expense categories enable, update, explicitly set to zero, or disable a recurring monthly opening amount without mixing budget controls into category metadata or rewriting established months.
 
 - Budget compatibility `amount` and annual planned totals now represent derived final funded amounts.

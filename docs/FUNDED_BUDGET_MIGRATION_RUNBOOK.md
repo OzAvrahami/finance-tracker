@@ -57,4 +57,16 @@ Recurring initialization, copy, funded adjustment, removal, and reactivation use
 
 Deploy in this order: establish a budget-write maintenance boundary, apply and verify Migration 019 transactionally, deploy the server, then deploy the client. A failed migration must leave the pre-019 schema intact. After commit, correction is forward-only and cannot edit original transfer history.
 
-As of this runbook revision, Migration 019 is **not applied to production**.
+Migration 019 is the deployed carryover prerequisite for Migration 020. This runbook does not authorize reapplying it.
+
+## Migration 020 month-override extension
+
+Migration 020 must be applied only after Migrations 017–019 are deployed and independently verified. It creates empty override configuration/provenance tables, extends bounded domains, replaces the recurring initializer and copy RPC with override-aware definitions, and wraps the canonical read. It performs no historical override backfill and must not rewrite existing snapshots, operations, movements, lifecycle events, recurring defaults, carryover rows, or transactions.
+
+Before production execution, rehearse `020_month_budget_overrides.sql` on the deployed 017/018/019 shape. Verify explicit zero versus absence, initialization precedence and exact shortfall, immutable fallback snapshots, carryover/other-adjustment preservation, full-or-nothing base release, idempotency, ACLs, copy skip reporting, pending-override carryover blocking, December/January handling, and exact values above 2^53. Confirm page reads and override preview create no state.
+
+Financial override changes lock `transactions` in `SHARE` mode before the month and budget locks. This makes the clamped transaction-authoritative actual stable through a decrease/removal write. Month rows and affected budgets then lock in stable ID order, followed by category and configuration rows. Representative concurrency tests cover initialization, carryover, copy, generic adjustment, lifecycle mutation, and transaction edits.
+
+Deploy in order: establish a budget-write maintenance boundary, apply and verify Migration 020 transactionally, deploy the server, then deploy the client. A failed migration must leave the complete pre-020 schema intact; post-commit correction is forward-only through bounded commands.
+
+As of this runbook revision, Migration 020 is **not applied to production**.

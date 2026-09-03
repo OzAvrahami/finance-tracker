@@ -209,6 +209,52 @@ test('recurring initialization requires a month and never runs from a read', asy
   assert.deepEqual(read.calls.map((entry) => entry.name), ['get_funded_budget_month']);
 });
 
+test('month override endpoints preserve exact string money and map to one bounded RPC', async () => {
+  const exact = '9007199254740993.01';
+  const set = await call('setMonthOverride', {
+    params: { month: '2026-09', categoryId: '2' },
+    body: { amount: exact, request_key: 'override-set' },
+  });
+  assert.equal(set.res.statusCode, 200);
+  assert.deepEqual(set.calls, [{
+    name: 'set_budget_month_override',
+    params: {
+      p_month: '2026-09', p_category_id: '2', p_amount: exact,
+      p_request_key: 'override-set', p_reason: null,
+    },
+  }]);
+
+  const remove = await call('removeMonthOverride', {
+    params: { month: '2026-09', categoryId: '2' },
+    body: { request_key: 'override-remove' },
+  });
+  assert.equal(remove.res.statusCode, 200);
+  assert.equal(remove.calls[0].name, 'remove_budget_month_override');
+});
+
+test('month override rejects numeric JSON and surfaces stable funded-domain conflicts', async () => {
+  const numeric = await call('setMonthOverride', {
+    params: { month: '2026-09', categoryId: '2' },
+    body: { amount: 1000, request_key: 'override-number' },
+  });
+  assert.equal(numeric.res.statusCode, 400);
+  assert.equal(numeric.res.body.code, 'INVALID_MONEY_FORMAT');
+  assert.equal(numeric.calls.length, 0);
+
+  for (const code of [
+    'MONTH_OVERRIDE_INSUFFICIENT_FUNDS',
+    'MONTH_OVERRIDE_RELEASE_BLOCKED',
+    'HISTORICAL_MONTH_OVERRIDE_FORBIDDEN',
+  ]) {
+    const result = await call('setMonthOverride', {
+      params: { month: '2026-09', categoryId: '2' },
+      body: { amount: '1000.00', request_key: `override-${code}` },
+    }, null, { code: '23514', message: `${code}: exact details` });
+    assert.equal(result.res.statusCode, 409);
+    assert.equal(result.res.body.code, code);
+  }
+});
+
 test('carryover preview is read-only and application maps fingerprint to one bounded RPC', async () => {
   const carryoverState = {
     ...state,

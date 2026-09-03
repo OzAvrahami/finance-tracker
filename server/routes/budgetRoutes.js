@@ -13,6 +13,8 @@ const {
   reactivateBudget,
   reverseOperation,
   initializeRecurringBudgets,
+  setMonthOverride,
+  removeMonthOverride,
   getCarryoverPreview,
   applyCarryover,
   reverseCarryover,
@@ -27,6 +29,8 @@ router.get('/funded/history', getBudgetHistory);
 router.get('/funded', getFundedBudgetMonth);
 router.post('/funded/funding', addManualFunding);
 router.post('/funded/recurring/initialize', initializeRecurringBudgets);
+router.put('/funded/months/:month/categories/:categoryId/override', setMonthOverride);
+router.post('/funded/months/:month/categories/:categoryId/override/remove', removeMonthOverride);
 router.get('/funded/carryover/preview', getCarryoverPreview);
 router.post('/funded/carryover/apply', applyCarryover);
 router.post('/funded/carryover/transfers/:id/reverse', reverseCarryover);

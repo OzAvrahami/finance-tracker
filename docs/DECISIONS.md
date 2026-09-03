@@ -359,3 +359,21 @@ Migration 019 transfers eligible positive unused funding through a linked operat
 ### Consequences
 
 Carryover cannot create or double-count money. It never rewrites `starting_amount`, recurring defaults, or historical transactions. Each immutable transfer preserves both the raw actual-spending total observed at apply time and `max(raw actual, 0)`, the effective value used by eligibility; later transaction edits may change current reporting but cannot recalculate that history. A destination with no applicable base receives an active zero `carryover_only` snapshot before the incoming movement; pending recurring initialization, inactive state, unbudgeted actuals, and active deficits block application. Savings/disposition, monthly overrides, unbudgeted-expense resolution, and deficit resolution remain separate issues.
+
+## D-021 — Month overrides are base-only configuration with immutable funded effects
+
+**Status:** Accepted
+
+**Date:** 2026-09-02
+
+### Context
+
+A one-month planning choice must override a recurring or existing base without changing the recurring setting, rewriting the opening snapshot, or absorbing carryover.
+
+### Decision
+
+Store one optional exact override per budget month/category. Before category initialization it is planning configuration only. Initialization selects it ahead of the recurring default and captures the then-current recurring amount or zero as fallback. After initialization, set and remove commands append operations, movements, and immutable override events; effective base is derived from the opening snapshot plus override deltas. Actual-dependent releases use the carryover transaction-first serialization boundary and exclude carryover from base headroom. Normal changes are forbidden for past Asia/Jerusalem months.
+
+### Consequences
+
+Explicit zero differs from no override, no recurring default is required, and removal is a full compensating change or an atomic conflict. Manual, copied, recurring, monthly-override, and carryover-only openings remain explainable. Copy preserves destination overrides and pending overrides must initialize before carryover. Savings, disposition, deficit resolution, unbudgeted-expense resolution, and the full funded-budget redesign remain outside this decision.

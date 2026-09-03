@@ -35,11 +35,9 @@ const budgetErrorStatus = (error) => {
 
 const sendBudgetError = (res, label, error) => {
   console.error(`${label} Error:`, error);
-  const code = error?.code === '40001'
-    && String(error?.message || '').startsWith('CARRYOVER_PREVIEW_STALE:')
-    ? 'CARRYOVER_PREVIEW_STALE'
-    : error?.code || 'BUDGET_ERROR';
-  return res.status(budgetErrorStatus(error)).json({
+  const domainCode = String(error?.message || '').match(/^([A-Z][A-Z0-9_]+):/)?.[1];
+  const code = domainCode || error?.code || 'BUDGET_ERROR';
+  return res.status(domainCode ? 409 : budgetErrorStatus(error)).json({
     error: error.message,
     code,
   });
@@ -192,6 +190,45 @@ exports.initializeRecurringBudgets = async (req, res) => {
     return res.status(200).json(state);
   } catch (error) {
     return sendBudgetError(res, 'initializeRecurringBudgets', error);
+  }
+};
+
+exports.setMonthOverride = async (req, res) => {
+  try {
+    const { amount, request_key: requestKey, reason } = req.body || {};
+    const { month, categoryId } = req.params;
+    if (!month || !categoryId || amount === undefined || !requestKey) {
+      return res.status(400).json({
+        error: 'month, categoryId, amount, and request_key are required',
+        code: 'INVALID_MONTH_OVERRIDE_REQUEST',
+      });
+    }
+    if (!validateFundedMoney(res, 'amount', amount)) return undefined;
+    const state = await budgetService.setMonthOverride(supabase, {
+      month, categoryId, amount, requestKey, reason,
+    });
+    return res.status(200).json(state);
+  } catch (error) {
+    return sendBudgetError(res, 'setMonthOverride', error);
+  }
+};
+
+exports.removeMonthOverride = async (req, res) => {
+  try {
+    const { request_key: requestKey, reason } = req.body || {};
+    const { month, categoryId } = req.params;
+    if (!month || !categoryId || !requestKey) {
+      return res.status(400).json({
+        error: 'month, categoryId, and request_key are required',
+        code: 'INVALID_MONTH_OVERRIDE_REQUEST',
+      });
+    }
+    const state = await budgetService.removeMonthOverride(supabase, {
+      month, categoryId, requestKey, reason,
+    });
+    return res.status(200).json(state);
+  } catch (error) {
+    return sendBudgetError(res, 'removeMonthOverride', error);
   }
 };
 

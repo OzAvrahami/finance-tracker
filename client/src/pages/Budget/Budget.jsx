@@ -10,13 +10,14 @@ import {
 import {
   addManualBudgetFunding,
   applyBudgetCarryover,
-  adjustFundedBudget,
   copyBudget,
-  establishFundedBudget,
   getCategories,
   getFundedBudgetMonth,
   initializeRecurringBudgets,
+  removeBudgetMonthOverride,
   removeFundedBudget,
+  setBudgetMonthOverride,
+  setSettingsCategoryRecurringBudget,
 } from '../../services/api';
 import BudgetSummary from './BudgetSummary';
 import BudgetList from './BudgetList';
@@ -58,6 +59,7 @@ const emptyState = (month) => ({
   actuals: { total: '0.00', budgeted: '0.00', unbudgeted: '0.00' },
   categories: [],
   history: [],
+  month_overrides: { eligible: false, month, overrides: [], count: 0 },
   recurring: {
     eligible: false, initialized: false, pending_categories: [], pending_count: 0,
     required: '0.00', unallocated: '0.00', shortfall: '0.00', can_apply: false,
@@ -117,8 +119,15 @@ const enrichBudget = (budget) => {
     planned,
     starting: budget.starting_amount ?? '0.00',
     adjustments: budget.adjustment_total ?? '0.00',
+    fallbackBase: budget.fallback_base ?? budget.starting_amount ?? '0.00',
+    fallbackSource: budget.fallback_source ?? budget.starting_kind ?? 'none',
+    recurringDefault: budget.recurring_default,
+    monthOverride: budget.month_override,
+    effectiveBase: budget.effective_base ?? budget.starting_amount ?? '0.00',
+    overrideAdjustments: budget.override_adjustment_total ?? '0.00',
     incomingCarryover: budget.incoming_carryover ?? '0.00',
     outgoingCarryover: budget.outgoing_carryover ?? '0.00',
+    otherAdjustments: budget.other_adjustments ?? '0.00',
     actual,
     remaining,
     remainingAbsolute: absoluteMoney(remaining),
@@ -239,8 +248,12 @@ const Budget = () => {
     const snapshotCategoryIds = new Set(
       state.categories.filter((category) => category.budget_id).map((category) => category.category_id)
     );
-    return categories.filter((category) => category.type === 'expense' && !snapshotCategoryIds.has(category.id));
-  }, [categories, state.categories]);
+    const overrideCategoryIds = new Set(
+      (state.month_overrides?.overrides || []).map((override) => override.category_id)
+    );
+    return categories.filter((category) => category.type === 'expense'
+      && !snapshotCategoryIds.has(category.id) && !overrideCategoryIds.has(category.id));
+  }, [categories, state.categories, state.month_overrides]);
 
   const refreshBudgets = () => setRequestVersion((version) => version + 1);
 
@@ -299,11 +312,8 @@ const Budget = () => {
     setAddPending(true);
     setAddError('');
     try {
-      await establishFundedBudget({
-        month: selectedMonth,
-        category_id: Number(newCategoryId),
-        starting_amount: newAmount,
-        starting_kind: 'manual',
+      await setBudgetMonthOverride(selectedMonth, Number(newCategoryId), {
+        amount: newAmount,
         request_key: requestKey(),
       });
       setShowAddPanel(false);
@@ -319,7 +329,7 @@ const Budget = () => {
 
   const startEdit = (row) => {
     setEditingId(row.id);
-    setEditAmount(row.planned);
+    setEditAmount(row.effectiveBase);
     setEditError('');
   };
 
@@ -335,8 +345,8 @@ const Budget = () => {
     setEditPending(true);
     setEditError('');
     try {
-      await adjustFundedBudget(row.id, {
-        target_amount: editAmount,
+      await setBudgetMonthOverride(selectedMonth, row.category_id, {
+        amount: editAmount,
         request_key: requestKey(),
       });
       setEditingId(null);
@@ -344,6 +354,40 @@ const Budget = () => {
       refreshBudgets();
     } catch (error) {
       setEditError(domainMessage(error, 'שמירת התקציב נכשלה. הסכום שהוזן נשמר ואפשר לנסות שוב.'));
+    } finally {
+      setEditPending(false);
+    }
+  };
+
+  const handleRecurringEdit = async (row) => {
+    if (editPending || editAmount === '') return;
+    setEditPending(true);
+    setEditError('');
+    try {
+      await setSettingsCategoryRecurringBudget(row.category_id, { amount: editAmount });
+      setEditingId(null);
+      setEditAmount('');
+      refreshBudgets();
+    } catch (error) {
+      setEditError(domainMessage(error, 'עדכון התקציב החודשי הקבוע נכשל. השינוי לחודש זה לא בוצע.'));
+    } finally {
+      setEditPending(false);
+    }
+  };
+
+  const handleRemoveOverride = async (row) => {
+    if (editPending) return;
+    setEditPending(true);
+    setEditError('');
+    try {
+      await removeBudgetMonthOverride(selectedMonth, row.category_id, {
+        request_key: requestKey(),
+      });
+      setEditingId(null);
+      setEditAmount('');
+      refreshBudgets();
+    } catch (error) {
+      setEditError(domainMessage(error, 'הסרת השינוי לחודש זה נכשלה. לא בוצע שינוי חלקי.'));
     } finally {
       setEditPending(false);
     }
@@ -500,6 +544,8 @@ const Budget = () => {
             onStartEdit={startEdit}
             onEditAmountChange={setEditAmount}
             onSaveEdit={handleEdit}
+            onSaveRecurring={handleRecurringEdit}
+            onRemoveOverride={handleRemoveOverride}
             onCancelEdit={cancelEdit}
             onRequestDelete={setDeleteTarget}
           />

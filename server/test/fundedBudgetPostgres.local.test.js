@@ -20,6 +20,10 @@ const carryoverMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '019_budget_category_carryover.sql'),
   'utf8',
 );
+const overrideMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '020_month_budget_overrides.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -118,6 +122,11 @@ const applyRecurringFoundation = (database) => {
 const applyCarryoverFoundation = (database) => {
   applyRecurringFoundation(database);
   psql(database, carryoverMigration);
+};
+
+const applyOverrideFoundation = (database) => {
+  applyCarryoverFoundation(database);
+  psql(database, overrideMigration);
 };
 
 before(() => {
@@ -1660,4 +1669,323 @@ test('carryover shares canonical lock order with recurring, copy, adjustment, re
       (date_trunc('month', timezone('Asia/Jerusalem', now())) - interval '1 month')::date
     ) ORDER BY id;
   `);
+});
+
+test('migration 020 installs exact override domains, ACL boundaries, and append-only provenance', () => {
+  createDatabase('month_override_schema');
+  psql('month_override_schema', fixture());
+  applyOverrideFoundation('month_override_schema');
+  assert.equal(psql('month_override_schema', `SELECT
+    to_regclass('public.budget_month_overrides') IS NOT NULL,
+    to_regclass('public.budget_month_override_events') IS NOT NULL,
+    pg_get_constraintdef(oid) LIKE '%monthly_override%'
+    FROM pg_constraint WHERE conname='budgets_starting_kind_check';`).stdout.trim(), 't|t|t');
+  assert.equal(psql('month_override_schema', `SELECT
+    has_table_privilege('anon','budget_month_overrides','INSERT'),
+    has_table_privilege('authenticated','budget_month_override_events','UPDATE'),
+    has_table_privilege('service_role','budget_month_overrides','SELECT'),
+    has_function_privilege('service_role','set_budget_month_override(text,bigint,numeric,uuid,text)','EXECUTE'),
+    has_function_privilege('authenticated','set_budget_month_override(text,bigint,numeric,uuid,text)','EXECUTE'),
+    has_function_privilege('service_role','validate_budget_month_override()','EXECUTE');`).stdout.trim(), 'f|f|t|t|f|f');
+  const invalid = psql('month_override_schema', `
+    INSERT INTO categories(id,name,type) VALUES (4,'Income','income');
+    SELECT set_budget_month_override('2027-01',4,10,'70000000-0000-4000-8000-000000000001');
+  `, true);
+  assert.notEqual(invalid.status, 0);
+  assert.match(invalid.stderr, /active expense categories/i);
+});
+
+test('uninitialized overrides preserve zero-vs-none and initialize ahead of recurring defaults', () => {
+  createDatabase('month_override_initialization');
+  psql('month_override_initialization', fixture());
+  applyOverrideFoundation('month_override_initialization');
+  psql('month_override_initialization', `
+    SELECT set_budget_recurring_default(1,1000);
+    SELECT add_manual_budget_funding('2027-01',2500,'Future envelope','70000000-0000-4000-8000-000000000010');
+    SELECT set_budget_month_override('2027-01',1,1500,'70000000-0000-4000-8000-000000000011');
+    SELECT set_budget_month_override('2027-01',2,0,'70000000-0000-4000-8000-000000000012');
+  `);
+  assert.equal(psql('month_override_initialization', `SELECT
+    (SELECT count(*) FROM budgets b JOIN budget_months bm ON bm.id=b.budget_month_id WHERE bm.month_start='2027-01-01') || '|'
+    || (SELECT count(*) FROM budget_movements m JOIN budget_operations o ON o.id=m.operation_id JOIN budget_months bm ON bm.id=o.budget_month_id WHERE bm.month_start='2027-01-01') || '|'
+    || (SELECT count(*) FROM budget_month_overrides mo JOIN budget_months bm ON bm.id=mo.budget_month_id WHERE bm.month_start='2027-01-01') || '|'
+    || (SELECT amount FROM budget_month_overrides mo JOIN budget_months bm ON bm.id=mo.budget_month_id WHERE bm.month_start='2027-01-01' AND category_id=2);
+  `).stdout.trim(), '0|0|2|0.00');
+  const preview = JSON.parse(psql('month_override_initialization', "SELECT get_budget_recurring_preview('2027-01');").stdout.trim());
+  assert.equal(preview.required, '1500.00');
+  assert.equal(preview.pending_categories.find((row) => row.category_id === 1).starting_kind, 'monthly_override');
+  assert.equal(preview.pending_categories.find((row) => row.category_id === 2).amount, '0.00');
+  psql('month_override_initialization', "SELECT set_budget_month_override('2027-01',3,2000,'70000000-0000-4000-8000-000000000014');");
+  const insufficient = psql('month_override_initialization', "SELECT initialize_budget_recurring_defaults('2027-01','70000000-0000-4000-8000-000000000015');", true);
+  assert.notEqual(insufficient.status, 0);
+  assert.match(insufficient.stderr, /MONTH_OVERRIDE_INSUFFICIENT_FUNDS: required 3500.00, available 2500.00, shortfall 1000.00/);
+  assert.equal(psql('month_override_initialization', "SELECT count(*) FROM budgets b JOIN budget_months bm ON bm.id=b.budget_month_id WHERE bm.month_start='2027-01-01';").stdout.trim(), '0');
+  psql('month_override_initialization', "SELECT remove_budget_month_override('2027-01',3,'70000000-0000-4000-8000-000000000016');");
+  psql('month_override_initialization', "SELECT initialize_budget_recurring_defaults('2027-01','70000000-0000-4000-8000-000000000013');");
+  assert.equal(psql('month_override_initialization', `SELECT category_id || ':' || starting_amount || ':' || starting_kind
+    FROM budget_category_state WHERE month='2027-01' ORDER BY category_id;`).stdout.trim(),
+  '1:1500.00:monthly_override\n2:0.00:monthly_override');
+  assert.equal(psql('month_override_initialization', `SELECT fallback_base || '|' || fallback_source || '|' || effective_base
+    FROM budget_category_base_state WHERE month='2027-01' AND category_id=1;`).stdout.trim(),
+  '1000.00|recurring_default|1500.00');
+  assert.equal(psql('month_override_initialization', 'SELECT amount FROM budget_recurring_defaults WHERE category_id=1;').stdout.trim(), '1000.00');
+});
+
+test('pre-initialization removal is configuration-only and no-recurring removal restores no-active-budget state', () => {
+  createDatabase('month_override_removal');
+  psql('month_override_removal', fixture());
+  applyOverrideFoundation('month_override_removal');
+  psql('month_override_removal', `
+    SELECT set_budget_month_override('2027-02',1,750,'70000000-0000-4000-8000-000000000020');
+    SELECT remove_budget_month_override('2027-02',1,'70000000-0000-4000-8000-000000000021');
+  `);
+  assert.equal(psql('month_override_removal', `SELECT
+    (SELECT count(*) FROM budget_month_overrides) || '|'
+    || (SELECT count(*) FROM budget_operations o JOIN budget_months bm ON bm.id=o.budget_month_id WHERE bm.month_start='2027-02-01') || '|'
+    || (SELECT count(*) FROM budget_month_override_events WHERE financial_operation_id IS NULL);
+  `).stdout.trim(), '0|0|2');
+
+  psql('month_override_removal', `
+    SELECT add_manual_budget_funding('2027-03',750,'Month only','70000000-0000-4000-8000-000000000022');
+    SELECT set_budget_month_override('2027-03',1,750,'70000000-0000-4000-8000-000000000023');
+    SELECT initialize_budget_recurring_defaults('2027-03','70000000-0000-4000-8000-000000000024');
+    SELECT remove_budget_month_override('2027-03',1,'70000000-0000-4000-8000-000000000025');
+  `);
+  assert.equal(psql('month_override_removal', `SELECT starting_amount || '|' || starting_kind || '|' || final_funded || '|' || lifecycle_state
+    FROM budget_category_state WHERE month='2027-03' AND category_id=1;`).stdout.trim(),
+  '750.00|monthly_override|0.00|inactive');
+});
+
+test('initialized override accounting preserves carryover, other adjustments, and immutable starting state', () => {
+  createDatabase('month_override_composition');
+  psql('month_override_composition', fixture());
+  applyOverrideFoundation('month_override_composition');
+  psql('month_override_composition', `
+    SELECT add_manual_budget_funding('2026-08',1000,'Source','70000000-0000-4000-8000-000000000030');
+    SELECT establish_funded_budget('2026-08',1,1000,'manual','70000000-0000-4000-8000-000000000031');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES ('2026-08-12','expense',600,1);
+    SELECT set_budget_carryover_enabled(1,true);
+    SELECT add_manual_budget_funding('2026-09',1600,'Destination','70000000-0000-4000-8000-000000000032');
+    SELECT establish_funded_budget('2026-09',1,1000,'manual','70000000-0000-4000-8000-000000000033');
+  `);
+  const preview = JSON.parse(psql('month_override_composition', "SELECT get_budget_carryover_preview('2026-09');").stdout.trim());
+  psql('month_override_composition', `
+    SELECT apply_budget_carryover('2026-09','70000000-0000-4000-8000-000000000034','${preview.fingerprint}');
+    SELECT set_budget_month_override('2026-09',1,1500,'70000000-0000-4000-8000-000000000035');
+    SELECT add_manual_budget_funding('2026-09',100,'Other adjustment','70000000-0000-4000-8000-000000000036');
+    SELECT set_funded_budget_amount((SELECT budget_id FROM budget_category_state WHERE month='2026-09' AND category_id=1),2000,'70000000-0000-4000-8000-000000000037');
+    SELECT set_budget_month_override('2026-09',1,1400,'70000000-0000-4000-8000-000000000038');
+  `);
+  assert.equal(psql('month_override_composition', `SELECT fallback_base || '|' || fallback_source || '|' || effective_base || '|'
+    || incoming_carryover || '|' || other_adjustments || '|' || final_funded
+    FROM budget_category_base_state WHERE month='2026-09' AND category_id=1;`).stdout.trim(),
+  '1000.00|manual|1400.00|400.00|100.00|1900.00');
+  assert.equal(psql('month_override_composition', `SELECT starting_amount || '|' || starting_kind
+    FROM budget_category_state WHERE month='2026-09' AND category_id=1;`).stdout.trim(), '1000.00|manual');
+  psql('month_override_composition', "SELECT remove_budget_month_override('2026-09',1,'70000000-0000-4000-8000-000000000039');");
+  assert.equal(psql('month_override_composition', `SELECT effective_base || '|' || incoming_carryover || '|' || other_adjustments || '|' || final_funded
+    FROM budget_category_base_state WHERE month='2026-09' AND category_id=1;`).stdout.trim(),
+  '1000.00|400.00|100.00|1500.00');
+  assert.equal(psql('month_override_composition', `SELECT available || '|' || total_allocated || '|' || unallocated
+    FROM budget_month_funding_state WHERE month='2026-09';`).stdout.trim(), '2100.00|1500.00|600.00');
+});
+
+test('release limits clamp negative actuals and reject spent base atomically with exact details', () => {
+  createDatabase('month_override_release');
+  psql('month_override_release', fixture());
+  applyOverrideFoundation('month_override_release');
+  psql('month_override_release', `
+    SELECT add_manual_budget_funding('2026-09',1500,'Envelope','70000000-0000-4000-8000-000000000040');
+    SELECT establish_funded_budget('2026-09',1,1000,'manual','70000000-0000-4000-8000-000000000041');
+    SELECT set_budget_month_override('2026-09',1,1500,'70000000-0000-4000-8000-000000000042');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+      VALUES ('2026-09-05','expense',1200,1);
+  `);
+  const blocked = psql('month_override_release', "SELECT set_budget_month_override('2026-09',1,1000,'70000000-0000-4000-8000-000000000043');", true);
+  assert.notEqual(blocked.status, 0);
+  assert.match(blocked.stderr, /MONTH_OVERRIDE_RELEASE_BLOCKED: requested release 500.00, eligible release 300.00, shortfall 200.00/);
+  assert.equal(psql('month_override_release', `SELECT effective_base || '|' || current_override || '|'
+    || (SELECT count(*) FROM budget_month_override_events WHERE request_key='70000000-0000-4000-8000-000000000043')
+    FROM budget_category_base_state WHERE month='2026-09' AND category_id=1;`).stdout.trim(), '1500.00|1500.00|0');
+
+  psql('month_override_release', "UPDATE transactions SET total_amount=-100 WHERE category_id=1;");
+  psql('month_override_release', "SELECT set_budget_month_override('2026-09',1,0,'70000000-0000-4000-8000-000000000044');");
+  assert.equal(psql('month_override_release', `SELECT effective_base || '|' || final_funded || '|' || unallocated
+    FROM budget_category_base_state JOIN budget_month_funding_state USING (budget_month_id)
+    WHERE month='2026-09' AND category_id=1;`).stdout.trim(), '0.00|0.00|1500.00');
+});
+
+test('request retries, conflicts, copy preservation, year rollover, and exact large values are deterministic', () => {
+  createDatabase('month_override_edges');
+  psql('month_override_edges', fixture());
+  applyOverrideFoundation('month_override_edges');
+  psql('month_override_edges', `
+    SELECT set_budget_month_override('2026-12',1,0,'70000000-0000-4000-8000-000000000050');
+    SELECT set_budget_month_override('2026-12',1,0,'70000000-0000-4000-8000-000000000050');
+    SELECT set_budget_month_override('2027-01',1,9007199254740993.01,'70000000-0000-4000-8000-000000000051');
+    SELECT add_manual_budget_funding('2027-01',9007199254740993.01,'Exact','70000000-0000-4000-8000-000000000052');
+    SELECT initialize_budget_recurring_defaults('2027-01','70000000-0000-4000-8000-000000000053');
+    SELECT add_manual_budget_funding('2027-02',100,'Copy source','70000000-0000-4000-8000-000000000054');
+    SELECT establish_funded_budget('2027-02',1,100,'manual','70000000-0000-4000-8000-000000000055');
+    SELECT copy_funded_budget_month('2027-02','2026-12','70000000-0000-4000-8000-000000000056');
+  `);
+  assert.equal(psql('month_override_edges', `SELECT
+    to_char((date '2027-01-01' - interval '1 month')::date,'YYYY-MM') || '|'
+    || (SELECT starting_amount::text FROM budget_category_state WHERE month='2027-01' AND category_id=1) || '|'
+    || (SELECT count(*) FROM budget_month_override_events WHERE request_key='70000000-0000-4000-8000-000000000050') || '|'
+    || (SELECT amount::text FROM budget_month_overrides mo JOIN budget_months bm ON bm.id=mo.budget_month_id WHERE bm.month_start='2026-12-01' AND category_id=1);
+  `).stdout.trim(), '2026-12|9007199254740993.01|1|0.00');
+  const copy = JSON.parse(psql('month_override_edges', "SELECT copy_funded_budget_month('2027-02','2026-12','70000000-0000-4000-8000-000000000056');").stdout.trim());
+  assert.equal(copy.copy_preserved_overrides[0].reason, 'MONTH_OVERRIDE_PRESERVED');
+  const conflict = psql('month_override_edges', "SELECT set_budget_month_override('2026-12',1,1,'70000000-0000-4000-8000-000000000050');", true);
+  assert.notEqual(conflict.status, 0);
+  assert.match(conflict.stderr, /different month override request/i);
+  const historical = psql('month_override_edges', "SELECT set_budget_month_override('2026-08',1,1,'70000000-0000-4000-8000-000000000057');", true);
+  assert.notEqual(historical.status, 0);
+  assert.match(historical.stderr, /HISTORICAL_MONTH_OVERRIDE_FORBIDDEN/);
+});
+
+test('transaction changes serialize before override release and cannot produce a stale safe-release decision', async () => {
+  createDatabase('month_override_transaction_race');
+  psql('month_override_transaction_race', fixture());
+  applyOverrideFoundation('month_override_transaction_race');
+  psql('month_override_transaction_race', `
+    SELECT add_manual_budget_funding('2026-09',1500,'Envelope','70000000-0000-4000-8000-000000000060');
+    SELECT establish_funded_budget('2026-09',1,1000,'manual','70000000-0000-4000-8000-000000000061');
+    SELECT set_budget_month_override('2026-09',1,1500,'70000000-0000-4000-8000-000000000062');
+  `);
+  const transaction = psqlAsync('month_override_transaction_race', `BEGIN;
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+      VALUES ('2026-09-10','expense',1200,1);
+    SELECT pg_sleep(0.5); COMMIT;`);
+  await waitForGrantedTableLock('month_override_transaction_race', 'transactions', 'RowExclusiveLock');
+  const release = psqlAsync('month_override_transaction_race',
+    "SELECT set_budget_month_override('2026-09',1,1000,'70000000-0000-4000-8000-000000000063');");
+  const [transactionResult, releaseResult] = await Promise.all([transaction, release]);
+  assert.equal(transactionResult.status, 0, transactionResult.stderr);
+  assert.notEqual(releaseResult.status, 0);
+  assert.match(releaseResult.stderr, /MONTH_OVERRIDE_RELEASE_BLOCKED/);
+  assert.equal(psql('month_override_transaction_race', `SELECT effective_base || '|'
+    || (SELECT count(*) FROM budget_month_override_events WHERE request_key='70000000-0000-4000-8000-000000000063')
+    FROM budget_category_base_state WHERE month='2026-09' AND category_id=1;`).stdout.trim(), '1500.00|0');
+  psql('month_override_transaction_race', `SELECT budget_assert_reconciled(id)
+    FROM budget_months WHERE month_start='2026-09-01';`);
+});
+
+test('manual, copied, recurring, and carryover-only snapshots layer overrides without rewriting openings', () => {
+  createDatabase('month_override_starting_kinds');
+  psql('month_override_starting_kinds', `${fixture()}
+    INSERT INTO categories(id,name,type) VALUES (4,'Copied','expense');
+  `);
+  applyOverrideFoundation('month_override_starting_kinds');
+  psql('month_override_starting_kinds', `
+    SELECT add_manual_budget_funding('2026-09',3000,'Bases','70000000-0000-4000-8000-000000000070');
+    SELECT establish_funded_budget('2026-09',1,500,'manual','70000000-0000-4000-8000-000000000071');
+    SELECT set_budget_recurring_default(2,600);
+    SELECT initialize_budget_recurring_defaults('2026-09','70000000-0000-4000-8000-000000000072');
+    SELECT add_manual_budget_funding('2027-04',700,'Copy source','70000000-0000-4000-8000-000000000073');
+    SELECT establish_funded_budget('2027-04',4,700,'manual','70000000-0000-4000-8000-000000000074');
+    SELECT copy_funded_budget_month('2027-04','2026-09','70000000-0000-4000-8000-000000000075');
+    SELECT set_budget_month_override('2026-09',1,800,'70000000-0000-4000-8000-000000000076');
+    SELECT set_budget_month_override('2026-09',2,900,'70000000-0000-4000-8000-000000000077');
+    SELECT set_budget_month_override('2026-09',4,1000,'70000000-0000-4000-8000-000000000078');
+  `);
+  assert.equal(psql('month_override_starting_kinds', `SELECT category_id || ':' || starting_amount || ':' || starting_kind || ':' || effective_base
+    FROM budget_category_state JOIN budget_category_base_state USING (budget_id,budget_month_id,month,category_id)
+    WHERE month='2026-09' AND category_id IN (1,2,4) ORDER BY category_id;`).stdout.trim(),
+  '1:500.00:manual:800.00\n2:600.00:recurring_default:900.00\n4:700.00:copied:1000.00');
+  psql('month_override_starting_kinds', `
+    SELECT set_budget_recurring_default(2,50);
+    SELECT remove_budget_month_override('2026-09',2,'70000000-0000-4000-8000-000000000084');
+  `);
+  assert.equal(psql('month_override_starting_kinds', `SELECT fallback_base || '|' || effective_base || '|'
+    || (SELECT amount FROM budget_recurring_defaults WHERE category_id=2)
+    FROM budget_category_base_state WHERE month='2026-09' AND category_id=2;`).stdout.trim(),
+  '600.00|600.00|50.00');
+  psql('month_override_starting_kinds', `
+    SELECT set_budget_carryover_enabled(3,true);
+    SELECT add_manual_budget_funding('2026-08',400,'Carry','70000000-0000-4000-8000-000000000079');
+    SELECT establish_funded_budget('2026-08',3,400,'manual','70000000-0000-4000-8000-000000000080');
+  `);
+  const preview = JSON.parse(psql('month_override_starting_kinds', "SELECT get_budget_carryover_preview('2026-09');").stdout.trim());
+  psql('month_override_starting_kinds', `
+    SELECT apply_budget_carryover('2026-09','70000000-0000-4000-8000-000000000081','${preview.fingerprint}');
+    SELECT set_budget_month_override('2026-09',3,250,'70000000-0000-4000-8000-000000000082');
+  `);
+  assert.equal(psql('month_override_starting_kinds', `SELECT starting_amount || '|' || starting_kind || '|' || effective_base || '|' || incoming_carryover || '|' || final_funded
+    FROM budget_category_base_state JOIN budget_category_state USING (budget_id,budget_month_id,month,category_id)
+    WHERE month='2026-09' AND category_id=3;`).stdout.trim(),
+  '0.00|carryover_only|250.00|400.00|650.00');
+  psql('month_override_starting_kinds', "SELECT remove_budget_month_override('2026-09',3,'70000000-0000-4000-8000-000000000083');");
+  assert.equal(psql('month_override_starting_kinds', `SELECT effective_base || '|' || incoming_carryover || '|' || final_funded || '|' || lifecycle_state
+    FROM budget_category_base_state WHERE month='2026-09' AND category_id=3;`).stdout.trim(),
+  '0.00|400.00|400.00|active');
+});
+
+test('pending override blocks carryover until override-aware initialization establishes its base', () => {
+  createDatabase('month_override_carryover_gate');
+  psql('month_override_carryover_gate', fixture());
+  applyOverrideFoundation('month_override_carryover_gate');
+  psql('month_override_carryover_gate', `
+    SELECT add_manual_budget_funding('2026-08',1000,'Source','70000000-0000-4000-8000-000000000090');
+    SELECT establish_funded_budget('2026-08',1,1000,'manual','70000000-0000-4000-8000-000000000091');
+    SELECT set_budget_carryover_enabled(1,true);
+    SELECT add_manual_budget_funding('2026-09',1500,'Destination','70000000-0000-4000-8000-000000000092');
+    SELECT set_budget_month_override('2026-09',1,1500,'70000000-0000-4000-8000-000000000093');
+  `);
+  let preview = JSON.parse(psql('month_override_carryover_gate', "SELECT get_budget_carryover_preview('2026-09');").stdout.trim());
+  assert.equal(preview.ready_count, 0);
+  assert.equal(preview.blocked_categories[0].reason, 'MONTH_OVERRIDE_INITIALIZATION_REQUIRED');
+  assert.equal(psql('month_override_carryover_gate', "SELECT count(*) FROM budgets b JOIN budget_months bm ON bm.id=b.budget_month_id WHERE bm.month_start='2026-09-01';").stdout.trim(), '0');
+  psql('month_override_carryover_gate', "SELECT initialize_budget_recurring_defaults('2026-09','70000000-0000-4000-8000-000000000094');");
+  preview = JSON.parse(psql('month_override_carryover_gate', "SELECT get_budget_carryover_preview('2026-09');").stdout.trim());
+  assert.equal(preview.ready_count, 1);
+  psql('month_override_carryover_gate', `SELECT apply_budget_carryover(
+    '2026-09','70000000-0000-4000-8000-000000000095','${preview.fingerprint}');`);
+  assert.equal(psql('month_override_carryover_gate', `SELECT starting_amount || '|' || starting_kind || '|' || effective_base || '|' || incoming_carryover || '|' || final_funded
+    FROM budget_category_base_state JOIN budget_category_state USING (budget_id,budget_month_id,month,category_id)
+    WHERE month='2026-09' AND category_id=1;`).stdout.trim(),
+  '1500.00|monthly_override|1500.00|1000.00|2500.00');
+});
+
+test('override, initialization, carryover, copy, and generic adjustment share one deadlock-safe month order', async () => {
+  createDatabase('month_override_mutation_concurrency');
+  psql('month_override_mutation_concurrency', `${fixture()}
+    INSERT INTO categories(id,name,type) VALUES (4,'Planned copy','expense');
+  `);
+  applyOverrideFoundation('month_override_mutation_concurrency');
+  psql('month_override_mutation_concurrency', `
+    SELECT add_manual_budget_funding('2026-08',200,'Carry source','70000000-0000-4000-8000-000000000100');
+    SELECT establish_funded_budget('2026-08',2,200,'manual','70000000-0000-4000-8000-000000000101');
+    SELECT set_budget_carryover_enabled(2,true);
+    SELECT add_manual_budget_funding('2026-09',2000,'Destination','70000000-0000-4000-8000-000000000102');
+    SELECT establish_funded_budget('2026-09',1,200,'manual','70000000-0000-4000-8000-000000000103');
+    SELECT establish_funded_budget('2026-09',2,200,'manual','70000000-0000-4000-8000-000000000104');
+    SELECT establish_funded_budget('2026-09',3,200,'manual','70000000-0000-4000-8000-000000000105');
+    SELECT set_budget_month_override('2026-09',1,300,'70000000-0000-4000-8000-000000000106');
+    SELECT set_budget_month_override('2026-09',4,100,'70000000-0000-4000-8000-000000000107');
+    SELECT add_manual_budget_funding('2027-05',100,'Copy source','70000000-0000-4000-8000-000000000108');
+    SELECT establish_funded_budget('2027-05',4,100,'manual','70000000-0000-4000-8000-000000000109');
+  `);
+  const preview = JSON.parse(psql('month_override_mutation_concurrency', "SELECT get_budget_carryover_preview('2026-09');").stdout.trim());
+  const category3 = psql('month_override_mutation_concurrency', "SELECT budget_id FROM budget_category_state WHERE month='2026-09' AND category_id=3;").stdout.trim();
+  const results = await Promise.all([
+    psqlAsync('month_override_mutation_concurrency', `SELECT apply_budget_carryover('2026-09','70000000-0000-4000-8000-000000000110','${preview.fingerprint}');`),
+    psqlAsync('month_override_mutation_concurrency', "SELECT initialize_budget_recurring_defaults('2026-09','70000000-0000-4000-8000-000000000111');"),
+    psqlAsync('month_override_mutation_concurrency', "SELECT copy_funded_budget_month('2027-05','2026-09','70000000-0000-4000-8000-000000000112');"),
+    psqlAsync('month_override_mutation_concurrency', "SELECT set_budget_month_override('2026-09',1,350,'70000000-0000-4000-8000-000000000113');"),
+    psqlAsync('month_override_mutation_concurrency', `SELECT set_funded_budget_amount(${category3},250,'70000000-0000-4000-8000-000000000114');`),
+  ]);
+  for (const result of results) {
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /deadlock|40P01/i);
+  }
+  assert.equal(psql('month_override_mutation_concurrency', `SELECT
+    (SELECT effective_base FROM budget_category_base_state WHERE month='2026-09' AND category_id=1) || '|'
+    || (SELECT incoming_carryover FROM budget_category_base_state WHERE month='2026-09' AND category_id=2) || '|'
+    || (SELECT final_funded FROM budget_category_state WHERE budget_id=${category3}) || '|'
+    || (SELECT starting_kind FROM budget_category_state WHERE month='2026-09' AND category_id=4) || '|'
+    || (SELECT count(*) FROM budget_month_overrides mo JOIN budget_months bm ON bm.id=mo.budget_month_id WHERE bm.month_start='2026-09-01' AND mo.category_id=4);
+  `).stdout.trim(), '350.00|200.00|250.00|monthly_override|1');
+  psql('month_override_mutation_concurrency', "SELECT budget_assert_reconciled(id) FROM budget_months WHERE month_start IN ('2026-08-01','2026-09-01') ORDER BY id;");
 });

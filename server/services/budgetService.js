@@ -108,6 +108,32 @@ const initializeRecurringBudgets = (supabase, {
   p_reason: reason,
 });
 
+const setMonthOverride = (supabase, {
+  month,
+  categoryId,
+  amount,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'set_budget_month_override', {
+  p_month: month,
+  p_category_id: categoryId,
+  p_amount: amount,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
+const removeMonthOverride = (supabase, {
+  month,
+  categoryId,
+  requestKey: suppliedRequestKey,
+  reason = null,
+}) => callBudgetRpc(supabase, 'remove_budget_month_override', {
+  p_month: month,
+  p_category_id: categoryId,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
 const getCarryoverPreview = async (supabase, month) => {
   const state = await getFundedBudgetMonth(supabase, month);
   return state?.carryover || null;
@@ -145,6 +171,15 @@ const toCompatibilityRows = (state) => (state?.categories || [])
     starting_amount: category.starting_amount,
     starting_kind: category.starting_kind,
     adjustment_total: category.adjustment_total,
+    fallback_base: category.fallback_base,
+    fallback_source: category.fallback_source,
+    recurring_default: category.recurring_default,
+    month_override: category.month_override,
+    override_adjustment_total: category.override_adjustment_total,
+    effective_base: category.effective_base,
+    incoming_carryover: category.incoming_carryover,
+    outgoing_carryover: category.outgoing_carryover,
+    other_adjustments: category.other_adjustments,
     actual_spent: category.actual_spent,
     remaining: category.remaining,
     deficit: category.deficit,
@@ -161,9 +196,11 @@ module.exports = {
   getFundedBudgetMonth,
   initializeRecurringBudgets,
   reactivateBudget,
+  removeMonthOverride,
   removeBudget,
   reverseCarryover,
   reverseOperation,
   setBudgetAmount,
+  setMonthOverride,
   toCompatibilityRows,
 };

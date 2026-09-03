@@ -139,6 +139,12 @@ export const getBudgetsByMonth = (month) => api.get(`/budgets?month=${month}`);
 export const getFundedBudgetMonth = (month) => api.get('/budgets/funded', { params: { month } });
 export const addManualBudgetFunding = (data) => api.post('/budgets/funded/funding', data);
 export const initializeRecurringBudgets = (data) => api.post('/budgets/funded/recurring/initialize', data);
+export const setBudgetMonthOverride = (month, categoryId, data) => (
+  api.put(`/budgets/funded/months/${month}/categories/${categoryId}/override`, data)
+);
+export const removeBudgetMonthOverride = (month, categoryId, data) => (
+  api.post(`/budgets/funded/months/${month}/categories/${categoryId}/override/remove`, data)
+);
 export const getBudgetCarryoverPreview = (month) => api.get('/budgets/funded/carryover/preview', { params: { month } });
 export const applyBudgetCarryover = (data) => api.post('/budgets/funded/carryover/apply', data);
 export const reverseBudgetCarryover = (id, data) => api.post(`/budgets/funded/carryover/transfers/${id}/reverse`, data);

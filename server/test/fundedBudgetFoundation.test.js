@@ -17,6 +17,10 @@ const carryoverMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '019_budget_category_carryover.sql'),
   'utf8',
 );
+const overrideMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '020_month_budget_overrides.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 test('migration 017 and full_schema carry the same funded-budget foundation', () => {
@@ -53,6 +57,21 @@ test('migration 019 and full_schema carry the balanced carryover extension', () 
   assert.match(carryoverMigration, /jsonb_array_elements\(v_preview->'ready_categories'\)/i);
   assert.match(carryoverMigration, /CARRYOVER_PREVIEW_STALE/i);
   assert.doesNotMatch(carryoverMigration, /savings_destination|monthly_override/i);
+});
+
+test('migration 020 and full_schema carry the month-base override extension', () => {
+  assert.match(overrideMigration, /Migration 020: month-specific funded-budget base overrides/i);
+  assert.ok(fullSchema.includes(overrideMigration.trim()));
+  for (const object of [
+    'budget_month_overrides', 'budget_month_override_events', 'budget_category_base_state',
+    'set_budget_month_override', 'remove_budget_month_override',
+  ]) assert.match(overrideMigration, new RegExp(object, 'i'));
+  assert.match(overrideMigration, /LOCK TABLE public\.transactions IN SHARE MODE/i);
+  assert.match(overrideMigration, /MONTH_OVERRIDE_INSUFFICIENT_FUNDS/i);
+  assert.match(overrideMigration, /MONTH_OVERRIDE_RELEASE_BLOCKED/i);
+  assert.match(overrideMigration, /HISTORICAL_MONTH_OVERRIDE_FORBIDDEN/i);
+  assert.match(overrideMigration, /MONTH_OVERRIDE_INITIALIZATION_REQUIRED/i);
+  assert.doesNotMatch(overrideMigration, /savings_destination|month_close_disposition/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {
@@ -164,14 +183,22 @@ test('budget service maps commands to one database RPC each', async () => {
   await budgetService.applyCarryover(supabase, {
     destinationMonth: '2026-08', previewFingerprint: 'abc', requestKey: 'key-e',
   });
+  await budgetService.setMonthOverride(supabase, {
+    month: '2026-09', categoryId: 1, amount: '12.34', requestKey: 'key-f',
+  });
+  await budgetService.removeMonthOverride(supabase, {
+    month: '2026-09', categoryId: 1, requestKey: 'key-g',
+  });
   assert.deepEqual(calls.map(({ name }) => name), [
     'add_manual_budget_funding', 'establish_funded_budget', 'remove_funded_budget',
     'initialize_budget_recurring_defaults', 'apply_budget_carryover',
+    'set_budget_month_override', 'remove_budget_month_override',
   ]);
   assert.equal(calls[0].params.p_source_label, 'Confirmed cash');
   assert.equal(calls[1].params.p_starting_amount, '0.00');
   assert.equal(calls[3].params.p_request_key, 'key-d');
   assert.equal(calls[4].params.p_preview_fingerprint, 'abc');
+  assert.equal(calls[5].params.p_amount, '12.34');
 });
 
 test('compatibility amount is final funded and inactive/no-budget categories are omitted', () => {
