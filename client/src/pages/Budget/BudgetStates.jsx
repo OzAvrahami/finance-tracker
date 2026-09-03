@@ -221,6 +221,35 @@ const carryoverReason = {
   DESTINATION_DEFICIT: 'קיים גירעון פעיל הדורש טיפול נפרד',
 };
 
+export const DestinationCarryoverNotice = ({ carryover, onReviewSource }) => {
+  const readyCount = carryover.ready_count ?? carryover.ready_categories?.length ?? 0;
+  const blockedCount = carryover.blocked_categories?.length || 0;
+  const sourceMonth = formatBudgetMonth(carryover.source_month);
+
+  return (
+    <GlassCard className="budget-carryover-panel budget-destination-carryover" padding="18px">
+      <div className="budget-recurring-panel__heading">
+        <div>
+          <h2><ArrowLeftRight size={19} aria-hidden="true" /> יש יתרות מ{sourceMonth} שממתינות לטיפול</h2>
+          <p>
+            זהו מידע בלבד. סקירת היתרות והפעולה הכספית מתבצעות מחודש המקור במסגרת סגירת החודש.
+          </p>
+        </div>
+        <div className="budget-recurring-panel__totals" aria-label="סיכום יתרות שממתינות לטיפול">
+          <span>מוכן להעברה <strong><BudgetMoneyAmount value={carryover.total_incoming} /></strong></span>
+          <span>קטגוריות מוכנות <strong>{readyCount}</strong></span>
+          {blockedCount > 0 && <span>קטגוריות חסומות <strong>{blockedCount}</strong></span>}
+        </div>
+      </div>
+      <div className="budget-recurring-panel__actions">
+        <SecondaryButton type="button" onClick={() => onReviewSource(carryover.source_month)}>
+          סקירה וסגירת {sourceMonth}
+        </SecondaryButton>
+      </div>
+    </GlassCard>
+  );
+};
+
 export const CarryoverPanel = ({ carryover, applying, error, onApply }) => (
   <GlassCard className="budget-carryover-panel" padding="18px">
     <div className="budget-recurring-panel__heading">
@@ -280,6 +309,29 @@ export const CarryoverPanel = ({ carryover, applying, error, onApply }) => (
       </div>
     )}
     {error && <Alert variant="error" urgent>{error}</Alert>}
+  </GlassCard>
+);
+
+export const UnbudgetedExpensesPanel = ({ categories, total }) => (
+  <GlassCard className="budget-unbudgeted-panel" padding="18px">
+    <div className="budget-unbudgeted-panel__heading">
+      <div>
+        <h2><AlertTriangle size={19} aria-hidden="true" /> הוצאות מחוץ לתקציב</h2>
+        <p>ההוצאות הבאות אינן משויכות לתקציב קטגוריה פעיל. הטיפול בהן ייעשה בתהליך נפרד.</p>
+      </div>
+      <div className="budget-unbudgeted-panel__total" aria-label="סך הוצאות מחוץ לתקציב">
+        <span>סך הכול</span>
+        <strong><BudgetMoneyAmount value={total} /></strong>
+      </div>
+    </div>
+    <ul className="budget-unbudgeted-panel__list" aria-label="פירוט הוצאות מחוץ לתקציב">
+      {categories.map((item) => (
+        <li key={item.category_id ?? 'uncategorized'}>
+          <span>{item.categories?.icon} {item.categories?.name || 'ללא קטגוריה'}</span>
+          <BudgetMoneyAmount value={item.actual_spent} />
+        </li>
+      ))}
+    </ul>
   </GlassCard>
 );
 

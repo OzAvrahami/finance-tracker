@@ -111,6 +111,14 @@ const BudgetSummary = ({
         loading={loading}
         unavailable={unavailable}
       />
+      <SummaryMetric
+        label="נותר בתקציבים"
+        value={summary.fundedRemaining}
+        note="מימון בקטגוריות פעילות פחות הוצאות ששויכו לתקציב"
+        tone={compareMoney(summary.fundedRemaining) < 0 ? 'negative' : 'positive'}
+        loading={loading}
+        unavailable={unavailable}
+      />
     </div>
   </GlassCard>
 );

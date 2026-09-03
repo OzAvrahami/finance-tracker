@@ -50,6 +50,13 @@ const fundedState = (overrides = {}) => ({
   history: [], ...overrides,
 });
 
+const previousMonth = (month) => {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return monthNumber === 1
+    ? `${year - 1}-12`
+    : `${year}-${String(monthNumber - 1).padStart(2, '0')}`;
+};
+
 const deferred = () => {
   let resolve;
   let reject;
@@ -97,8 +104,105 @@ describe('canonical funded monthly read', () => {
     expect(within(summary).getByText('₪1,200')).toBeInTheDocument();
     expect(within(summary).getByText('₪300')).toBeInTheDocument();
     expect(within(summary).getByText('₪825')).toBeInTheDocument();
-    expect(screen.getByText(/^הוצאות ללא תקציב פעיל/)).toBeInTheDocument();
-    expect(screen.getAllByText('₪75').length).toBeGreaterThan(0);
+    expect(within(summary).getByText('נותר בתקציבים')).toBeInTheDocument();
+    expect(within(summary).getByText('₪450')).toBeInTheDocument();
+    expect(within(summary).getByText('טרם הוקצה')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'הוצאות מחוץ לתקציב' })).toBeInTheDocument();
+    expect(screen.getByText(/תחבורה/)).toBeInTheDocument();
+    expect(within(screen.getByLabelText('סך הוצאות מחוץ לתקציב')).getByText('₪75')).toBeInTheDocument();
+  });
+
+  it('renders every active funded row in both desktop and mobile views', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      funding: { ...fundedState().funding, total_allocated: '1700.00', active_allocated: '1700.00' },
+      categories: [
+        categoryState(),
+        categoryState({
+          budget_id: 12, category_id: 2, categories: categories[1],
+          starting_amount: '500.00', fallback_base: '500.00', effective_base: '500.00',
+          adjustment_total: '0.00', other_adjustments: '0.00', final_funded: '500.00',
+          amount: '500.00', actual_spent: '0.00', remaining: '500.00',
+        }),
+      ],
+    }) });
+
+    const table = await settle();
+    const mobile = screen.getByRole('list', { name: 'תקציבים לפי קטגוריית הוצאה' });
+    expect(within(table).getByText('מזון')).toBeInTheDocument();
+    expect(within(table).getByText('תחבורה')).toBeInTheDocument();
+    expect(within(mobile).getByText('מזון')).toBeInTheDocument();
+    expect(within(mobile).getByText('תחבורה')).toBeInTheDocument();
+  });
+
+  it('shows each no-budget expense and its canonical total without resolution actions', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      actuals: { total: '777.36', budgeted: '750.00', unbudgeted: '27.36' },
+      categories: [
+        categoryState(),
+        {
+          budget_id: null, category_id: 31,
+          categories: { name: 'Electronics', icon: '🔌', type: 'expense' },
+          lifecycle_state: 'no_budget', actual_spent: '9.46', is_unbudgeted: true,
+        },
+        {
+          budget_id: null, category_id: 32,
+          categories: { name: 'מנוי', icon: '🧾', type: 'expense' },
+          lifecycle_state: 'no_budget', actual_spent: '17.90', is_unbudgeted: true,
+        },
+      ],
+    }) });
+
+    await settle();
+    const details = screen.getByRole('list', { name: 'פירוט הוצאות מחוץ לתקציב' });
+    expect(within(details).getByText(/Electronics/)).toBeInTheDocument();
+    expect(within(details).getByText('₪9.46')).toBeInTheDocument();
+    expect(within(details).getByText(/מנוי/)).toBeInTheDocument();
+    expect(within(details).getByText('₪17.9')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('סך הוצאות מחוץ לתקציב')).getByText('₪27.36')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /פתרון|הקצאה/ })).not.toBeInTheDocument();
+  });
+
+  it('shows pending carryover read-only and navigates to the source month close workflow', async () => {
+    const destinationMonth = fundedState().month;
+    const sourceMonth = previousMonth(destinationMonth);
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      carryover: {
+        eligible: true,
+        source_month: sourceMonth,
+        destination_month: destinationMonth,
+        total_incoming: '11100.09',
+        ready_count: 4,
+        ready_categories: [
+          { category_id: 1, category: categories[0], amount: '264.09' },
+          { category_id: 2, category: categories[1], amount: '10836.00' },
+        ],
+        blocked_categories: [{ category_id: 23, reason: 'SOURCE_BUDGET_MISSING' }],
+        already_applied_categories: [],
+      },
+    }) });
+    getBudgetMonthClosePreview.mockResolvedValue({ data: {
+      source_month: sourceMonth, destination_month: destinationMonth,
+      fingerprint: '0123456789abcdef0123456789abcdef', categories: [],
+      carry_forward_total: '0.00', return_to_unallocated_total: '0.00', savings_total: '0.00',
+      destination_unallocated_before: '0.00', destination_unallocated_after: '0.00',
+      savings_balance_after: '0.00', deficit_blockers: [], unbudgeted_expense_blockers: [],
+      can_apply: false,
+    } });
+
+    await settle();
+    expect(screen.getByText(/יש יתרות מ.*שממתינות לטיפול/)).toBeInTheDocument();
+    const carryoverSummary = screen.getByLabelText('סיכום יתרות שממתינות לטיפול');
+    expect(within(carryoverSummary).getByText('₪11,100.09')).toBeInTheDocument();
+    expect(within(carryoverSummary).getByText('4')).toBeInTheDocument();
+    expect(within(carryoverSummary).getByText('1')).toBeInTheDocument();
+    expect(applyBudgetMonthClose).not.toHaveBeenCalled();
+    expect(getBudgetMonthClosePreview).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /סקירה וסגירת/ }));
+    await waitFor(() => expect(getBudgetMonthClosePreview).toHaveBeenCalledWith(sourceMonth));
+    expect(screen.getByLabelText('חודש התקציב')).toHaveValue(sourceMonth);
+    expect(await screen.findByText('סקירה וסגירת חודש')).toBeInTheDocument();
+    expect(applyBudgetMonthClose).not.toHaveBeenCalled();
   });
 
   it('renders final funded, actual, remaining, and the responsive duplicate', async () => {

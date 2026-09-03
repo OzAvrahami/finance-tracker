@@ -22,16 +22,17 @@ import {
 } from '../../services/api';
 import BudgetSummary from './BudgetSummary';
 import BudgetList from './BudgetList';
-import BudgetMoneyAmount from './BudgetMoneyAmount';
 import { CopyBudgetDialog, DeleteBudgetDialog } from './BudgetDialogs';
 import {
   AddBudgetPanel,
   BudgetEmpty,
   BudgetInsights,
   BudgetSkeleton,
+  DestinationCarryoverNotice,
   ManualFundingPanel,
   RecurringBudgetPanel,
   MonthClosePanel,
+  UnbudgetedExpensesPanel,
 } from './BudgetStates';
 import './Budget.css';
 
@@ -252,11 +253,18 @@ const Budget = () => {
   }, [selectedMonth, requestVersion]);
 
   const rows = useMemo(() => activeBudgets.map(enrichBudget), [activeBudgets]);
+  const unbudgetedExpenses = useMemo(
+    () => state.categories.filter((category) => !category.budget_id
+      && category.lifecycle_state === 'no_budget'
+      && compareMoney(category.actual_spent ?? '0.00') > 0),
+    [state.categories]
+  );
   const summary = useMemo(() => ({
     available: state.funding.available,
     allocated: state.funding.total_allocated,
     unallocated: state.funding.unallocated,
     totalSpent: state.actuals.total,
+    fundedRemaining: subtractMoney(state.funding.active_allocated, state.actuals.budgeted),
   }), [state]);
 
   const insights = useMemo(() => {
@@ -524,6 +532,16 @@ const Budget = () => {
         />
       )}
 
+      {!loading && !pageError && state.carryover?.eligible && state.carryover.source_month && (
+        (state.carryover.ready_categories?.length || 0) > 0
+        || (state.carryover.blocked_categories?.length || 0) > 0
+      ) && (
+        <DestinationCarryoverNotice
+          carryover={state.carryover}
+          onReviewSource={changeMonth}
+        />
+      )}
+
       {!loading && !pageError && closePreview && (
         <MonthClosePanel
           preview={closePreview}
@@ -535,11 +553,11 @@ const Budget = () => {
         />
       )}
 
-      {!loading && compareMoney(state.actuals.unbudgeted) > 0 && (
-        <Alert variant="warning" className="budget-refresh-error">
-          הוצאות ללא תקציב פעיל בחודש זה:{' '}
-          <BudgetMoneyAmount value={state.actuals.unbudgeted} />.
-        </Alert>
+      {!loading && !pageError && unbudgetedExpenses.length > 0 && (
+        <UnbudgetedExpensesPanel
+          categories={unbudgetedExpenses}
+          total={state.actuals.unbudgeted}
+        />
       )}
 
       {pageError && activeBudgets.length > 0 && (

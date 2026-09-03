@@ -53,6 +53,69 @@
   font-weight: 700;
 }
 
+.budget-destination-carryover {
+  border-color: var(--ft-info-border, var(--ft-border));
+}
+
+.budget-unbudgeted-panel {
+  display: grid;
+  gap: var(--ft-space-4);
+  border-color: var(--ft-warning-border);
+}
+
+.budget-unbudgeted-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ft-space-5);
+}
+
+.budget-unbudgeted-panel__heading h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--ft-space-2);
+  margin: 0 0 var(--ft-space-1);
+  font-size: var(--ft-font-size-lg);
+}
+
+.budget-unbudgeted-panel__heading p {
+  margin: 0;
+  color: var(--ft-text-muted);
+  font-size: var(--ft-font-size-sm);
+}
+
+.budget-unbudgeted-panel__total {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 2px;
+  text-align: end;
+}
+
+.budget-unbudgeted-panel__total span {
+  color: var(--ft-text-muted);
+  font-size: var(--ft-font-size-xs);
+}
+
+.budget-unbudgeted-panel__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--ft-space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.budget-unbudgeted-panel__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ft-space-3);
+  padding: var(--ft-space-2) var(--ft-space-3);
+  border: 1px solid var(--ft-warning-border);
+  border-radius: var(--ft-radius-md);
+  background: var(--ft-surface-solid-secondary);
+}
+
 .budget-recurring-panel__heading {
   display: flex;
   align-items: flex-start;
@@ -210,7 +273,7 @@
 
 .budget-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   margin-block-start: 16px;
 }
@@ -726,6 +789,10 @@
 }
 
 @media (max-width: 1080px) {
+  .budget-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .budget-table th,
   .budget-table td {
     padding-inline: 12px;
@@ -768,6 +835,17 @@
     grid-template-columns: 1fr;
     gap: 8px;
     margin-block-start: 12px;
+  }
+
+  .budget-unbudgeted-panel__heading {
+    flex-direction: column;
+  }
+
+  .budget-unbudgeted-panel__total {
+    width: 100%;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    text-align: start;
   }
 
   .budget-summary-metric {
