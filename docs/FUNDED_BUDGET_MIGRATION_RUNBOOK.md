@@ -94,3 +94,15 @@ Apply takes the transaction `SHARE` lock first, the Savings advisory mutex when 
 Deploy in order: establish the budget-write maintenance boundary, apply and verify Migration 022 transactionally, deploy the server, then deploy the client. Do not deploy #23 routes or UI before its RPCs and canonical read wrapper exist. Migration 022 must not be applied by an application deployment command.
 
 As of this runbook revision, Migration 022 is **not applied to production**.
+
+## Migration 023 unbudgeted-expense resolution extension
+
+Migration 023 requires the exact Migration 017–022 funded, recurring, carryover, override, disposition/Savings, and action/leg shape. It adds a zero-opening `unbudgeted_resolution` starting kind, bounded preview/apply/reversal RPCs, one append-only resolution-event table, and a shared source-capacity helper. It performs no historical snapshot, action, event, movement, Savings, lifecycle, transaction, recurring, override, carryover, or disposition backfill.
+
+Rehearsal must prove missing-snapshot creation at zero, explicit inactive-snapshot reactivation, partial and full allocation, atomic mixed source legs, exact Savings and month reconciliation, pending-override protection, current/immediately-completed-unclosed lifecycle rules, and permanent closed-month rejection. Preview must write nothing. A transaction, funding, lifecycle, Savings, initialization, override, or duplicate-snapshot race must either serialize before capture or return `UNBUDGETED_RESOLUTION_PREVIEW_STALE` with no partial snapshot or provenance.
+
+Apply takes the transaction `SHARE` lock first, then the Savings advisory mutex when selected, the month, all affected budgets, and categories in stable ID order. It recomputes one authoritative preview under those boundaries and writes only after the approved fingerprint matches. Reversal compensates funding and lifecycle history; it never deletes the late snapshot or original event.
+
+Deploy in order: establish the budget-write maintenance boundary, apply and verify Migration 023 transactionally, deploy the server, then deploy the client. Do not deploy #22 routes or UI before the RPCs and canonical read wrapper exist. Migration 023 must not be applied by an application deployment command.
+
+As of this runbook revision, Migration 023 is **not applied to production**.

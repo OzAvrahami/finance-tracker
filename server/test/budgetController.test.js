@@ -487,6 +487,81 @@ test('funding action stale previews and lifecycle conflicts remain stable HTTP c
   }
 });
 
+test('unbudgeted resolution preview/apply preserve exact multi-source strings and request material', async () => {
+  const fingerprint = 'abcdefabcdefabcdefabcdefabcdefab';
+  const legs = [
+    { source_kind: 'unallocated', amount: '500.00' },
+    { source_kind: 'category', category_id: 7, amount: '600.00' },
+    { source_kind: 'savings', amount: '9007199254739893.01' },
+  ];
+  const body = { requested_amount: '9007199254740993.01', legs };
+  const preview = await call('getUnbudgetedResolutionPreview', {
+    params: { month: '2026-09', categoryId: '3' }, body,
+  }, { fingerprint, can_apply: true });
+  assert.equal(preview.res.statusCode, 200);
+  assert.deepEqual(preview.calls[0], {
+    name: 'get_budget_unbudgeted_resolution_preview',
+    params: {
+      p_month: '2026-09', p_category_id: '3',
+      p_requested_amount: '9007199254740993.01', p_legs: legs,
+    },
+  });
+  const apply = await call('applyUnbudgetedResolution', {
+    params: { month: '2026-09', categoryId: '3' },
+    body: { ...body, request_key: 'resolve-no-budget', preview_fingerprint: fingerprint },
+  });
+  assert.equal(apply.res.statusCode, 200);
+  assert.equal(apply.calls[0].name, 'apply_budget_unbudgeted_resolution');
+  assert.equal(apply.calls[0].params.p_requested_amount, '9007199254740993.01');
+  assert.deepEqual(apply.calls[0].params.p_legs, legs);
+});
+
+test('unbudgeted resolution rejects numeric JSON, duplicates, and malformed apply before RPC', async () => {
+  for (const body of [
+    { requested_amount: 10, legs: [{ source_kind: 'unallocated', amount: '10.00' }] },
+    { requested_amount: '10.00', legs: [{ source_kind: 'unallocated', amount: 10 }] },
+    { requested_amount: '10.00', legs: [
+      { source_kind: 'savings', amount: '5.00' }, { source_kind: 'savings', amount: '5.00' },
+    ] },
+  ]) {
+    const result = await call('getUnbudgetedResolutionPreview', {
+      params: { month: '2026-09', categoryId: '3' }, body,
+    });
+    assert.equal(result.res.statusCode, 400);
+    assert.equal(result.calls.length, 0);
+  }
+  const malformed = await call('applyUnbudgetedResolution', {
+    params: { month: '2026-09', categoryId: '3' },
+    body: { requested_amount: '0.00', legs: [], request_key: 'key', preview_fingerprint: 'bad' },
+  });
+  assert.equal(malformed.res.statusCode, 400);
+  assert.equal(malformed.calls.length, 0);
+});
+
+test('zero-funding reactivation and stable unbudgeted conflicts map through bounded RPCs', async () => {
+  const fingerprint = '1234567890abcdef1234567890abcdef';
+  const zero = await call('getUnbudgetedResolutionPreview', {
+    params: { month: '2026-09', categoryId: '3' },
+    body: { requested_amount: '0.00', legs: [] },
+  }, { fingerprint, can_apply: true, resolution_mode: 'reactivated' });
+  assert.equal(zero.res.statusCode, 200);
+  assert.deepEqual(zero.calls[0].params.p_legs, []);
+  for (const code of [
+    'UNBUDGETED_RESOLUTION_PREVIEW_STALE', 'NO_UNBUDGETED_EXPENSE',
+    'UNBUDGETED_RESOLUTION_EXCEEDS_ACTUAL', 'BUDGET_MONTH_ALREADY_CLOSED',
+  ]) {
+    const result = await call('applyUnbudgetedResolution', {
+      params: { month: '2026-09', categoryId: '3' },
+      body: {
+        requested_amount: '10.00', legs: [{ source_kind: 'unallocated', amount: '10.00' }],
+        request_key: `key-${code}`, preview_fingerprint: fingerprint,
+      },
+    }, null, { code: '23514', message: `${code}: exact details` });
+    assert.equal(result.res.statusCode, 409);
+    assert.equal(result.res.body.code, code);
+  }
+});
+
 const exactAnnualFake = () => {
   const rows = {
     budget_category_state: [

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   addManualBudgetFunding, applyBudgetMonthClose, applyBudgetReallocation, applyDeficitResolution, copyBudget,
+  applyUnbudgetedResolution,
   getBudgetReallocationPreview, getDeficitResolutionPreview,
+  getUnbudgetedResolutionPreview,
   getBudgetMonthClosePreview, getCategories, getFundedBudgetMonth, initializeRecurringBudgets, removeBudgetMonthOverride,
   removeFundedBudget, setBudgetMonthOverride, setSettingsCategoryRecurringBudget,
 } from '../../services/api';
@@ -13,7 +16,9 @@ import Budget from './Budget';
 vi.mock('../../services/api', () => ({
   addManualBudgetFunding: vi.fn(), applyBudgetMonthClose: vi.fn(),
   applyBudgetReallocation: vi.fn(), applyDeficitResolution: vi.fn(), copyBudget: vi.fn(),
+  applyUnbudgetedResolution: vi.fn(),
   getBudgetReallocationPreview: vi.fn(), getDeficitResolutionPreview: vi.fn(),
+  getUnbudgetedResolutionPreview: vi.fn(),
   getBudgetMonthClosePreview: vi.fn(), getCategories: vi.fn(), getFundedBudgetMonth: vi.fn(),
   initializeRecurringBudgets: vi.fn(),
   removeBudgetMonthOverride: vi.fn(),
@@ -75,7 +80,7 @@ const deferred = () => {
 
 const setPageHeader = vi.fn();
 const renderPage = () => render(
-  <PageHeaderContext.Provider value={{ setPageHeader }}><Budget /></PageHeaderContext.Provider>
+  <MemoryRouter><PageHeaderContext.Provider value={{ setPageHeader }}><Budget /></PageHeaderContext.Provider></MemoryRouter>
 );
 const settle = async () => {
   renderPage();
@@ -97,6 +102,7 @@ beforeEach(() => {
   applyBudgetMonthClose.mockResolvedValue({ data: {} });
   applyBudgetReallocation.mockResolvedValue({ data: {} });
   applyDeficitResolution.mockResolvedValue({ data: {} });
+  applyUnbudgetedResolution.mockResolvedValue({ data: {} });
   getBudgetReallocationPreview.mockResolvedValue({ data: {
     can_apply: true, fingerprint: '1234567890abcdef1234567890abcdef',
     source_capacity: '450.00', destination_before: '0.00', destination_after: '100.00',
@@ -105,6 +111,10 @@ beforeEach(() => {
   getDeficitResolutionPreview.mockResolvedValue({ data: {
     can_apply: true, fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
     requested_resolution: '350.00', resulting_funded: '1350.00', remaining_deficit: '150.00',
+  } });
+  getUnbudgetedResolutionPreview.mockResolvedValue({ data: {
+    can_apply: true, fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+    resolution_mode: 'created', resulting_funded: '75.00', remaining_deficit: '0.00',
   } });
   getBudgetMonthClosePreview.mockResolvedValue({ data: null });
 });
@@ -740,5 +750,53 @@ describe('funded budget commands', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: /לא הוגדר תקציב/ })).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'תקציבים לפי קטגוריית הוצאה' })).not.toBeInTheDocument();
+  });
+
+  it('previews and applies an explicit allocation from an unbudgeted row', async () => {
+    await settle();
+    expect(screen.getByRole('button', { name: 'בדוק / תקן תנועות' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב לחודש זה' }));
+    const dialog = screen.getByRole('dialog', { name: /יצירת תקציב חודשי/ });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByLabelText('סכום להקצאה')).toHaveValue(75);
+    await userEvent.type(screen.getByLabelText(/כסף פנוי/), '75');
+    await userEvent.click(screen.getByRole('button', { name: 'סקירת ההקצאה' }));
+    await waitFor(() => expect(getUnbudgetedResolutionPreview).toHaveBeenCalledWith(
+      new Date().toISOString().slice(0, 7), 2,
+      { requested_amount: '75.00', legs: [{ source_kind: 'unallocated', amount: '75' }] }
+    ));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'הקצה תקציב לחודש זה' }));
+    await waitFor(() => expect(applyUnbudgetedResolution).toHaveBeenCalledWith(
+      new Date().toISOString().slice(0, 7), 2,
+      expect.objectContaining({
+        requested_amount: '75.00', legs: [{ source_kind: 'unallocated', amount: '75' }],
+        request_key: 'request-key', preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+      })
+    ));
+  });
+
+  it('labels inactive resolution as reactivation and retains inputs after stale failure', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      categories: [categoryState(), {
+        budget_id: 22, category_id: 2, categories: categories[1], lifecycle_state: 'inactive',
+        final_funded: '100.00', actual_spent: '175.00', is_unbudgeted: true,
+      }],
+      actuals: { total: '925.00', budgeted: '750.00', unbudgeted: '175.00' },
+    }) });
+    applyUnbudgetedResolution.mockRejectedValue({ response: { data: {
+      error: 'UNBUDGETED_RESOLUTION_PREVIEW_STALE: refresh',
+    } } });
+    await settle();
+    await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב לחודש זה' }));
+    const dialog = screen.getByRole('dialog', { name: /הפעלת תקציב מחדש/ });
+    expect(dialog).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText('סכום להקצאה'));
+    await userEvent.type(screen.getByLabelText('סכום להקצאה'), '75');
+    await userEvent.type(screen.getByLabelText(/כסף פנוי/), '75');
+    await userEvent.click(screen.getByRole('button', { name: 'סקירת ההקצאה' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'הקצה תקציב לחודש זה' }));
+    expect(await screen.findByText(/UNBUDGETED_RESOLUTION_PREVIEW_STALE/)).toBeInTheDocument();
+    expect(screen.getByLabelText('סכום להקצאה')).toHaveValue(75);
+    expect(screen.getByLabelText(/כסף פנוי/)).toHaveValue(75);
   });
 });

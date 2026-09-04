@@ -69,6 +69,39 @@ const validateDeficitLegs = (res, legs) => {
   return true;
 };
 
+const validateUnbudgetedResolutionLegs = (res, legs, requestedAmount) => {
+  if (!Array.isArray(legs) || (legs.length === 0 && !ZERO_MONEY_PATTERN.test(requestedAmount))) {
+    res.status(400).json({
+      error: 'legs must fund the requested allocation (an empty array is valid only for zero-funding reactivation)',
+      code: 'INVALID_UNBUDGETED_RESOLUTION_REQUEST',
+    });
+    return false;
+  }
+  const seen = new Set();
+  for (const leg of legs) {
+    if (!leg || !DEFICIT_SOURCE_KINDS.has(leg.source_kind)
+        || !validateFundedMoney(res, 'legs[].amount', leg.amount, { positive: true })) return false;
+    const categoryId = leg.source_kind === 'category' ? leg.category_id : null;
+    if (leg.source_kind === 'category' && !categoryId) {
+      res.status(400).json({
+        error: 'category source legs require category_id',
+        code: 'INVALID_UNBUDGETED_RESOLUTION_REQUEST',
+      });
+      return false;
+    }
+    const key = `${leg.source_kind}:${categoryId || ''}`;
+    if (seen.has(key)) {
+      res.status(400).json({
+        error: 'duplicate unbudgeted-resolution funding source',
+        code: 'INVALID_UNBUDGETED_RESOLUTION_REQUEST',
+      });
+      return false;
+    }
+    seen.add(key);
+  }
+  return true;
+};
+
 // GET /api/budgets?month=2026-02
 exports.getBudgetsByMonth = async (req, res) => {
   try {
@@ -449,6 +482,59 @@ exports.reverseBudgetFundingAction = async (req, res) => {
     return res.status(200).json(result);
   } catch (error) {
     return sendBudgetError(res, 'reverseBudgetFundingAction', error);
+  }
+};
+
+exports.getUnbudgetedResolutionPreview = async (req, res) => {
+  try {
+    const { requested_amount: requestedAmount, legs } = req.body || {};
+    if (!validateFundedMoney(res, 'requested_amount', requestedAmount)) return undefined;
+    if (!validateUnbudgetedResolutionLegs(res, legs, requestedAmount)) return undefined;
+    const preview = await budgetService.getUnbudgetedResolutionPreview(supabase, {
+      month: req.params.month, categoryId: req.params.categoryId, requestedAmount, legs,
+    });
+    return res.status(200).json(preview);
+  } catch (error) {
+    return sendBudgetError(res, 'getUnbudgetedResolutionPreview', error);
+  }
+};
+
+exports.applyUnbudgetedResolution = async (req, res) => {
+  try {
+    const {
+      requested_amount: requestedAmount, legs, request_key: requestKey,
+      preview_fingerprint: previewFingerprint, reason,
+    } = req.body || {};
+    if (!validateFundedMoney(res, 'requested_amount', requestedAmount)) return undefined;
+    if (!validateUnbudgetedResolutionLegs(res, legs, requestedAmount)) return undefined;
+    if (!requestKey || !CARRYOVER_FINGERPRINT_PATTERN.test(previewFingerprint || '')) {
+      return res.status(400).json({
+        error: 'request_key and a valid preview_fingerprint are required',
+        code: 'INVALID_UNBUDGETED_RESOLUTION_REQUEST',
+      });
+    }
+    const result = await budgetService.applyUnbudgetedResolution(supabase, {
+      month: req.params.month, categoryId: req.params.categoryId, requestedAmount,
+      legs, requestKey, previewFingerprint, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'applyUnbudgetedResolution', error);
+  }
+};
+
+exports.reverseUnbudgetedResolution = async (req, res) => {
+  try {
+    const { request_key: requestKey, reason } = req.body || {};
+    if (!requestKey) return res.status(400).json({
+      error: 'request_key is required', code: 'INVALID_UNBUDGETED_RESOLUTION_REQUEST',
+    });
+    const result = await budgetService.reverseUnbudgetedResolution(supabase, {
+      eventId: req.params.id, requestKey, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'reverseUnbudgetedResolution', error);
   }
 };
 

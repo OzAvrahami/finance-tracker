@@ -22,7 +22,8 @@ The next planned product capability is a substantial Savings module. Its product
 - Month overrides (#19): current/future month-only base configuration, immutable funded adjustments, override-aware initialization, carryover-safe composition, and explicit Budget-page actions are deployed through Migration 020.
 - Unused budget and Savings (#21): one category policy, explicit immediately-completed-month close, Migration 019 carry-forward reuse, next-month unallocated transfer, and one retained Savings reserve are deployed through Migration 021.
 - Reallocation and deficit resolution (#23): current-month funded moves, immediately-completed-month close preparation, atomic multi-source resolution, and deficit-only Savings withdrawal are implemented locally in Migration 022.
-- Next dependent work remains separate: unbudgeted-expense behavior (#22), general Savings withdrawals/accounts, historical correction, and the funded summary UX (#25).
+- Unbudgeted-expense resolution (#22): explicit zero-opening late snapshots, inactive-snapshot reactivation, multi-source funding, and filtered transaction review are implemented locally in Migration 023.
+- Next dependent work remains separate: general Savings withdrawals/accounts, historical correction, and the funded summary UX (#25).
 - Income-transaction funding requires a future source-consumption model so one realized income cannot fund multiple months or allocations.
 
 - Add a general CI workflow for client test/lint/build and server tests.

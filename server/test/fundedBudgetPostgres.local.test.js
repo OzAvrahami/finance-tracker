@@ -32,6 +32,10 @@ const reallocationMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '022_budget_reallocation_deficit_resolution.sql'),
   'utf8',
 );
+const unbudgetedResolutionMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '023_unbudgeted_expense_resolution.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -147,6 +151,11 @@ const applyReallocationFoundation = (database) => {
   psql(database, reallocationMigration);
 };
 
+const applyUnbudgetedResolutionFoundation = (database) => {
+  applyReallocationFoundation(database);
+  psql(database, unbudgetedResolutionMigration);
+};
+
 before(() => {
   docker(['run', '--detach', '--rm', '--name', container, '-e', `POSTGRES_PASSWORD=${password}`, 'postgres:16-alpine']);
   let ready = false;
@@ -202,12 +211,14 @@ test('full_schema creates the funded foundation cleanly from an empty database',
       to_regclass('public.budget_unused_balance_policies') IS NOT NULL,
       to_regclass('public.budget_savings_entries') IS NOT NULL,
       to_regclass('public.budget_funding_actions') IS NOT NULL,
+      to_regclass('public.budget_unbudgeted_resolution_events') IS NOT NULL,
       to_regprocedure('public.get_funded_budget_month(text)') IS NOT NULL,
       to_regprocedure('public.apply_budget_month_disposition(text,uuid,text,text)') IS NOT NULL,
       to_regprocedure('public.apply_budget_deficit_resolution(text,bigint,jsonb,uuid,text,text)') IS NOT NULL,
+      to_regprocedure('public.apply_budget_unbudgeted_resolution(text,bigint,numeric,jsonb,uuid,text,text)') IS NOT NULL,
       to_regprocedure('public.remove_funded_budget(bigint,uuid,text)') IS NOT NULL;
   `).stdout.trim();
-  assert.equal(objects, 't|t|t|t|t|t|t|t|t|t');
+  assert.equal(objects, 't|t|t|t|t|t|t|t|t|t|t|t');
 });
 
 test('preflight rejects invalid month and rolls the transaction back', () => {
@@ -2838,4 +2849,160 @@ test('concurrent funding mutation either precedes an exact resolution or makes i
     assert.notEqual(fresh.fingerprint,preview.fingerprint);
     assert.equal(fresh.unallocated_capacity,'150.00');
   }
+});
+
+test('migration 023 adds bounded append-only resolution objects without historical backfill', () => {
+  createDatabase('unbudgeted_migration');
+  psql('unbudgeted_migration', fixture());
+  applyUnbudgetedResolutionFoundation('unbudgeted_migration');
+  assert.equal(psql('unbudgeted_migration', `SELECT
+    (SELECT count(*) FROM budget_unbudgeted_resolution_events)||'|'
+    ||(SELECT count(*) FROM budgets WHERE starting_kind='unbudgeted_resolution')||'|'
+    ||(SELECT count(*) FROM budget_funding_actions WHERE action_kind='unbudgeted_resolution')||'|'
+    ||has_function_privilege('service_role','apply_budget_unbudgeted_resolution(text,bigint,numeric,jsonb,uuid,text,text)','EXECUTE')||'|'
+    ||has_function_privilege('authenticated','apply_budget_unbudgeted_resolution(text,bigint,numeric,jsonb,uuid,text,text)','EXECUTE')||'|'
+    ||has_function_privilege('service_role','budget_funding_source_rows(text,bigint)','EXECUTE');
+  `).stdout.trim(),'0|0|0|true|false|false');
+  assert.match(psql('unbudgeted_migration', `INSERT INTO budget_unbudgeted_resolution_events(
+    operation_id,budget_month_id,category_id,budget_id,event_kind,resolution_mode,
+    raw_actual_snapshot,existing_funded_snapshot,applied_funding,resulting_final_funded,resulting_deficit)
+    VALUES(1,1,1,1,'apply','created',1,0,0,0,1);`,true).stderr,/provenance|permission|foreign key|violates/i);
+});
+
+test('missing no-budget spending becomes a zero-opening snapshot with atomic partial multi-source funding', () => {
+  createDatabase('unbudgeted_missing_partial');
+  psql('unbudgeted_missing_partial', fixture());
+  applyUnbudgetedResolutionFoundation('unbudgeted_missing_partial');
+  const month = psql('unbudgeted_missing_partial', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_missing_partial', `
+    SELECT add_manual_budget_funding('${month}',1000,'test','a1000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,400,'manual','a1000000-0000-0000-0000-000000000002');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',500,3);
+  `);
+  const legs = `jsonb_build_array(
+    jsonb_build_object('source_kind','unallocated','amount','100.00'),
+    jsonb_build_object('source_kind','category','category_id',1,'amount','100.00'))`;
+  const preview = JSON.parse(psql('unbudgeted_missing_partial', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,200,${legs});`).stdout.trim());
+  assert.equal(`${preview.resolution_mode}|${preview.raw_actual}|${preview.resulting_funded}|${preview.remaining_deficit}|${preview.can_apply}`,'created|500.00|200.00|300.00|true');
+  psql('unbudgeted_missing_partial', `SELECT apply_budget_unbudgeted_resolution('${month}',3,200,${legs},
+    'a1000000-0000-0000-0000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('unbudgeted_missing_partial', `SELECT starting_amount||'|'||starting_kind||'|'||final_funded||'|'
+    ||(SELECT coalesce(sum(total_amount),0) FROM transactions WHERE movement_type='expense' AND category_id=3)||'|'
+    ||greatest((SELECT coalesce(sum(total_amount),0) FROM transactions WHERE movement_type='expense' AND category_id=3)-final_funded,0)
+    FROM budget_category_state WHERE month='${month}' AND category_id=3;`).stdout.trim(),'0.00|unbudgeted_resolution|200.00|500|300.00');
+  assert.equal(psql('unbudgeted_missing_partial', `SELECT
+    (SELECT count(*) FROM budget_funding_action_legs l JOIN budget_funding_actions a ON a.id=l.action_id WHERE a.action_kind='unbudgeted_resolution')||'|'
+    ||(SELECT incoming_unbudgeted_resolution FROM budget_category_funding_action_state a JOIN budget_category_state s USING(budget_id) WHERE s.month='${month}' AND s.category_id=3);
+  `).stdout.trim(),'2|200.00');
+  const close = JSON.parse(psql('unbudgeted_missing_partial', `SELECT get_budget_month_disposition_preview('${month}');`).stdout.trim());
+  assert.equal(close.deficit_blockers[0].deficit,'300.00');
+  psql('unbudgeted_missing_partial','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('inactive no-budget snapshot is explicitly reactivated with retained funding and zero additional funding', () => {
+  createDatabase('unbudgeted_reactivate');
+  psql('unbudgeted_reactivate', fixture());
+  applyUnbudgetedResolutionFoundation('unbudgeted_reactivate');
+  const month = psql('unbudgeted_reactivate', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_reactivate', `
+    SELECT add_manual_budget_funding('${month}',500,'test','a2000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',3,300,'manual','a2000000-0000-0000-0000-000000000002');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',200,3);
+    SELECT remove_funded_budget((SELECT budget_id FROM budget_category_state WHERE month='${month}' AND category_id=3),'a2000000-0000-0000-0000-000000000003');
+  `);
+  const preview = JSON.parse(psql('unbudgeted_reactivate', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,0,'[]');`).stdout.trim());
+  assert.equal(`${preview.resolution_mode}|${preview.existing_funded}|${preview.can_apply}`,'reactivated|200.00|true');
+  psql('unbudgeted_reactivate', `SELECT apply_budget_unbudgeted_resolution('${month}',3,0,'[]',
+    'a2000000-0000-0000-0000-000000000004','${preview.fingerprint}');`);
+  assert.equal(psql('unbudgeted_reactivate', `SELECT starting_amount||'|'||starting_kind||'|'||lifecycle_state||'|'||final_funded
+    FROM budget_category_state WHERE month='${month}' AND category_id=3;`).stdout.trim(),'300.00|manual|active|200.00');
+  assert.equal(psql('unbudgeted_reactivate', `SELECT resolution_mode||'|'||applied_funding||'|'||(funding_action_id IS NULL)
+    FROM budget_unbudgeted_resolution_events;`).stdout.trim(),'reactivated|0.00|true');
+});
+
+test('resolution enforces actual cap, pending overrides, category validity, and duplicate source rules', () => {
+  createDatabase('unbudgeted_validation');
+  psql('unbudgeted_validation', fixture());
+  applyUnbudgetedResolutionFoundation('unbudgeted_validation');
+  const month = psql('unbudgeted_validation', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_validation', `
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',100,3);
+    INSERT INTO budget_months(month_start) VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date) ON CONFLICT DO NOTHING;
+    INSERT INTO budget_month_overrides(budget_month_id,category_id,amount)
+    SELECT id,3,50 FROM budget_months WHERE month_start=date_trunc('month',timezone('Asia/Jerusalem',now()))::date;
+  `);
+  let result = JSON.parse(psql('unbudgeted_validation', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,50,
+    jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','50.00')));`).stdout.trim());
+  assert.equal(result.reason,'UNBUDGETED_RESOLUTION_PENDING_OVERRIDE');
+  psql('unbudgeted_validation','DELETE FROM budget_month_overrides;');
+  result = JSON.parse(psql('unbudgeted_validation', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,101,
+    jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','101.00')));`).stdout.trim());
+  assert.equal(result.reason,'UNBUDGETED_RESOLUTION_EXCEEDS_ACTUAL');
+  const duplicate = psql('unbudgeted_validation', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,20,
+    jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','10.00'),jsonb_build_object('source_kind','unallocated','amount','10.00')));`,true);
+  assert.match(duplicate.stderr,/Duplicate unbudgeted funding source/);
+  psql('unbudgeted_validation', `UPDATE categories SET is_active=false WHERE id=3;`);
+  result = JSON.parse(psql('unbudgeted_validation', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,10,
+    jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','10.00')));`).stdout.trim());
+  assert.equal(result.reason,'CATEGORY_NOT_ACTIVE');
+});
+
+test('transaction changes make an approved unbudgeted preview stale with zero partial writes', () => {
+  createDatabase('unbudgeted_stale');
+  psql('unbudgeted_stale', fixture());
+  applyUnbudgetedResolutionFoundation('unbudgeted_stale');
+  const month = psql('unbudgeted_stale', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_stale', `SELECT add_manual_budget_funding('${month}',500,'test','a3000000-0000-0000-0000-000000000001');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',200,3);`);
+  const legs = `jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','100.00'))`;
+  const preview = JSON.parse(psql('unbudgeted_stale', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,100,${legs});`).stdout.trim());
+  psql('unbudgeted_stale',`UPDATE transactions SET total_amount=250 WHERE category_id=3;`);
+  const failed = psql('unbudgeted_stale', `SELECT apply_budget_unbudgeted_resolution('${month}',3,100,${legs},
+    'a3000000-0000-0000-0000-000000000002','${preview.fingerprint}');`,true);
+  assert.match(failed.stderr,/UNBUDGETED_RESOLUTION_PREVIEW_STALE/);
+  assert.equal(psql('unbudgeted_stale', `SELECT
+    (SELECT count(*) FROM budgets WHERE category_id=3)||'|'||(SELECT count(*) FROM budget_unbudgeted_resolution_events)||'|'
+    ||(SELECT count(*) FROM budget_funding_actions WHERE action_kind='unbudgeted_resolution');`).stdout.trim(),'0|0|0');
+  const fresh = JSON.parse(psql('unbudgeted_stale', `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,100,${legs});`).stdout.trim());
+  assert.equal(fresh.raw_actual,'250.00');
+});
+
+test('mixed Savings resolution is exact, idempotent, reversible, and preserves expense totals', () => {
+  createDatabase('unbudgeted_savings_exact');
+  psql('unbudgeted_savings_exact', fixture());
+  applyUnbudgetedResolutionFoundation('unbudgeted_savings_exact');
+  const current = psql('unbudgeted_savings_exact', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const previous = psql('unbudgeted_savings_exact', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_savings_exact', `
+    SELECT add_manual_budget_funding('${previous}',300,'test','a4000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',1,300,'manual','a4000000-0000-0000-0000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'savings');
+  `);
+  const close = JSON.parse(psql('unbudgeted_savings_exact',`SELECT get_budget_month_disposition_preview('${previous}');`).stdout.trim());
+  psql('unbudgeted_savings_exact',`SELECT apply_budget_month_disposition('${previous}','a4000000-0000-0000-0000-000000000003','${close.fingerprint}');
+    SELECT add_manual_budget_funding('${current}',9007199254740993.99,'test','a4000000-0000-0000-0000-000000000004');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',9007199254740993.99,3);`);
+  const legs = `jsonb_build_array(
+    jsonb_build_object('source_kind','unallocated','amount','9007199254740893.99'),
+    jsonb_build_object('source_kind','savings','amount','100.00'))`;
+  const preview = JSON.parse(psql('unbudgeted_savings_exact',`SELECT get_budget_unbudgeted_resolution_preview('${current}',3,9007199254740993.99,${legs});`).stdout.trim());
+  assert.equal(`${preview.can_apply}|${preview.remaining_deficit}`,'true|0.00');
+  const applySql = `SELECT apply_budget_unbudgeted_resolution('${current}',3,9007199254740993.99,${legs},
+    'a4000000-0000-0000-0000-000000000005','${preview.fingerprint}');`;
+  psql('unbudgeted_savings_exact',applySql); psql('unbudgeted_savings_exact',applySql);
+  assert.equal(psql('unbudgeted_savings_exact',`SELECT final_funded||'|'
+    ||(SELECT sum(total_amount) FROM transactions WHERE category_id=3)||'|'||(SELECT balance_text FROM budget_savings_state)
+    FROM budget_category_state WHERE month='${current}' AND category_id=3;`).stdout.trim(),'9007199254740993.99|9007199254740993.99|200.00');
+  assert.equal(psql('unbudgeted_savings_exact',`SELECT count(*) FROM budget_unbudgeted_resolution_events WHERE event_kind='apply';`).stdout.trim(),'1');
+  psql('unbudgeted_savings_exact',`SELECT reverse_budget_unbudgeted_resolution((SELECT id FROM budget_unbudgeted_resolution_events WHERE event_kind='apply'),
+    'a4000000-0000-0000-0000-000000000006');`);
+  assert.equal(psql('unbudgeted_savings_exact',`SELECT lifecycle_state||'|'||(SELECT balance_text FROM budget_savings_state)
+    FROM budget_category_state WHERE month='${current}' AND category_id=3;`).stdout.trim(),'inactive|300.00');
+  assert.equal(psql('unbudgeted_savings_exact',`SELECT sum(total_amount) FROM transactions WHERE category_id=3;`).stdout.trim(),'9007199254740993.99');
+  psql('unbudgeted_savings_exact','SELECT budget_assert_reconciled(id) FROM budget_months;');
 });

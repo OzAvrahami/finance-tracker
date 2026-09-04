@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, ErrorState } from '../../components/ui';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
@@ -23,7 +24,11 @@ import {
 import BudgetSummary from './BudgetSummary';
 import BudgetList from './BudgetList';
 import { CopyBudgetDialog, DeleteBudgetDialog } from './BudgetDialogs';
-import { BudgetReallocationDialog, DeficitResolutionDialog } from './BudgetFundingActions';
+import {
+  BudgetReallocationDialog,
+  DeficitResolutionDialog,
+  UnbudgetedResolutionDialog,
+} from './BudgetFundingActions';
 import {
   AddBudgetPanel,
   BudgetEmpty,
@@ -149,6 +154,8 @@ const enrichBudget = (budget) => {
     incomingReallocationResolution: budget.incoming_reallocation_resolution ?? '0.00',
     outgoingReallocation: budget.outgoing_reallocation ?? '0.00',
     fundingActionAdjustment: budget.funding_action_adjustment_total ?? '0.00',
+    incomingUnbudgetedResolution: budget.incoming_unbudgeted_resolution ?? '0.00',
+    outgoingUnbudgetedResolution: budget.outgoing_unbudgeted_resolution ?? '0.00',
     actual,
     remaining,
     remainingAbsolute: absoluteMoney(remaining),
@@ -192,7 +199,9 @@ const Budget = () => {
   const [closeError, setCloseError] = useState('');
   const [showReallocation, setShowReallocation] = useState(false);
   const [deficitTarget, setDeficitTarget] = useState(null);
+  const [unbudgetedTarget, setUnbudgetedTarget] = useState(null);
   const { setPageHeader } = useContext(PageHeaderContext);
+  const navigate = useNavigate();
 
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
   const state = query.month === selectedMonth ? query.state : emptyState(selectedMonth);
@@ -274,8 +283,7 @@ const Budget = () => {
         : 'historical_forbidden'
   );
   const unbudgetedExpenses = useMemo(
-    () => state.categories.filter((category) => !category.budget_id
-      && category.lifecycle_state === 'no_budget'
+    () => state.categories.filter((category) => category.is_unbudgeted
       && compareMoney(category.actual_spent ?? '0.00') > 0),
     [state.categories]
   );
@@ -579,6 +587,14 @@ const Budget = () => {
         <UnbudgetedExpensesPanel
           categories={unbudgetedExpenses}
           total={state.actuals.unbudgeted}
+          canAllocate={['current', 'immediately_completed_unclosed'].includes(actionLifecycle)}
+          onAllocate={setUnbudgetedTarget}
+          onReviewTransactions={(category) => {
+            const query = new URLSearchParams({ month: selectedMonth });
+            if (category.category_id) query.set('categoryId', String(category.category_id));
+            else query.set('uncategorized', '1');
+            navigate(`/transactions?${query.toString()}`);
+          }}
         />
       )}
 
@@ -653,6 +669,16 @@ const Budget = () => {
         unallocated={state.funding.unallocated}
         savings={state.savings?.balance || '0.00'}
         onClose={() => setDeficitTarget(null)}
+        onApplied={refreshBudgets}
+      />
+      <UnbudgetedResolutionDialog
+        open={Boolean(unbudgetedTarget)}
+        month={selectedMonth}
+        category={unbudgetedTarget}
+        rows={rows}
+        unallocated={state.funding.unallocated}
+        savings={state.savings?.balance || '0.00'}
+        onClose={() => setUnbudgetedTarget(null)}
         onApplied={refreshBudgets}
       />
     </div>

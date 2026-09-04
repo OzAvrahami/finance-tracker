@@ -67,9 +67,9 @@ function deferred() {
 
 const setPageHeader = vi.fn();
 
-function renderPage() {
+function renderPage(initialEntries = ['/transactions']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <PageHeaderContext.Provider value={{ setPageHeader }}>
         <Transactions />
       </PageHeaderContext.Provider>
@@ -930,5 +930,29 @@ describe('Finance v3 delete confirmation', () => {
     expect(deleteTransaction).toHaveBeenCalledTimes(1);
     await act(async () => deletion.resolve({}));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'מחיקת תנועה' })).not.toBeInTheDocument());
+  });
+});
+
+describe('Budget deep-link filters', () => {
+  it('hydrates the canonical month and category filters from the URL', async () => {
+    getTransactions.mockResolvedValue(page([]));
+    getCategories.mockResolvedValue({ data: [{ id: 7, name: 'מנוי', type: 'expense' }] });
+    getPaymentSources.mockResolvedValue({ data: [] });
+    renderPage(['/transactions?month=2026-08&categoryId=7']);
+    await waitFor(() => expect(getTransactions).toHaveBeenCalled());
+    expect(callArgs(0)).toEqual(expect.objectContaining({
+      from: '2026-08-01', to: '2026-08-31', categoryId: '7', uncategorizedOnly: false,
+    }));
+  });
+
+  it('hydrates the existing uncategorized-only filter without creating a budget', async () => {
+    getTransactions.mockResolvedValue(page([]));
+    getCategories.mockResolvedValue({ data: [] });
+    getPaymentSources.mockResolvedValue({ data: [] });
+    renderPage(['/transactions?month=2026-08&uncategorized=1']);
+    await waitFor(() => expect(getTransactions).toHaveBeenCalled());
+    expect(callArgs(0)).toEqual(expect.objectContaining({
+      from: '2026-08-01', to: '2026-08-31', categoryId: 'all', uncategorizedOnly: true,
+    }));
   });
 });

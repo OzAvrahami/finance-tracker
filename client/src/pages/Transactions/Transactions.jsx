@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getCategories, getPaymentSources, getTransactions, deleteTransaction } from '../../services/api';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import { getMonthRange, getRelativeMonthRange } from '../../utils/dateRange';
@@ -41,7 +42,17 @@ const formatPeriodMonth = (value) => {
   }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)));
 };
 
+const rangeFromMonthKey = (month) => {
+  const match = String(month || '').match(/^(\d{4})-(\d{2})$/);
+  if (!match) return getMonthRange();
+  return getMonthRange(new Date(Number(match[1]), Number(match[2]) - 1, 1));
+};
+
 const Transactions = () => {
+  const [searchParams] = useSearchParams();
+  const initialMonth = searchParams.get('month');
+  const initialCategory = searchParams.get('categoryId');
+  const initialUncategorized = searchParams.get('uncategorized') === '1';
   // The query result stays in one object so a filter/sort change resets rows,
   // whole-filter totals, cursor, and error atomically.
   const [list, setList] = useState(EMPTY_LIST);
@@ -57,11 +68,11 @@ const Transactions = () => {
 
   // Filters remain page-owned. Only free text is debounced.
   const [searchText, setSearchText] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
   const [selectedPaymentSource, setSelectedPaymentSource] = useState('all');
-  const [dateRange, setDateRange] = useState(() => getMonthRange());
+  const [dateRange, setDateRange] = useState(() => rangeFromMonthKey(initialMonth));
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
-  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(false);
+  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(initialUncategorized);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
 
   const { setPageHeader } = useContext(PageHeaderContext);

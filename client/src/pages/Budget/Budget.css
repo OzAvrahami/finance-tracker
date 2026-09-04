@@ -116,6 +116,28 @@
   background: var(--ft-surface-solid-secondary);
 }
 
+.budget-unbudgeted-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--ft-space-2);
+}
+
+@media (max-width: 640px) {
+  .budget-unbudgeted-panel__list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .budget-unbudgeted-panel__actions {
+    justify-content: stretch;
+  }
+
+  .budget-unbudgeted-panel__actions > * {
+    flex: 1 1 100%;
+  }
+}
+
 .budget-recurring-panel__heading {
   display: flex;
   align-items: flex-start;

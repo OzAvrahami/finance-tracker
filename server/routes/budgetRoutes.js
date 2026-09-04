@@ -24,6 +24,9 @@ const {
   getDeficitResolutionPreview,
   applyDeficitResolution,
   reverseBudgetFundingAction,
+  getUnbudgetedResolutionPreview,
+  applyUnbudgetedResolution,
+  reverseUnbudgetedResolution,
   upsertBudget,
   copyBudget,
   deleteBudget
@@ -45,6 +48,9 @@ router.post('/funded/months/:month/reallocations', applyBudgetReallocation);
 router.post('/funded/months/:month/categories/:categoryId/deficit-resolution/preview', getDeficitResolutionPreview);
 router.post('/funded/months/:month/categories/:categoryId/deficit-resolution', applyDeficitResolution);
 router.post('/funded/funding-actions/:id/reverse', reverseBudgetFundingAction);
+router.post('/funded/months/:month/categories/:categoryId/unbudgeted-resolution/preview', getUnbudgetedResolutionPreview);
+router.post('/funded/months/:month/categories/:categoryId/unbudgeted-resolution', applyUnbudgetedResolution);
+router.post('/funded/unbudgeted-resolutions/:id/reverse', reverseUnbudgetedResolution);
 router.post('/funded/carryover/transfers/:id/reverse', reverseCarryover);
 router.post('/funded/categories', establishBudget);
 router.patch('/funded/categories/:id', adjustBudget);

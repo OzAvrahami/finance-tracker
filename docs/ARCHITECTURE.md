@@ -58,6 +58,8 @@ The server is a CommonJS Express application organized into:
 - **routes** for HTTP endpoints and route-specific middleware;
 - **controllers** for validation and orchestration;
 - **services** for domain operations such as amortization and due-loan processing;
+
+Funded-budget writes are PostgreSQL-authoritative. Migration 023 resolves positive `no_budget` actuals with a zero-opening or explicitly reactivated snapshot and reuses the Migration 022 action/leg ledger for unallocated, category, and Savings sources. The canonical read exposes this late-allocation component separately. React only previews and submits explicit user choices; transaction correction deep-links to the existing Transactions filters and never creates funding.
 - **middleware** for Supabase authentication, API keys, and job-secret protection; and
 - **utilities** for reusable pricing and transaction-query rules.
 

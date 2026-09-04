@@ -154,6 +154,9 @@ export const applyBudgetReallocation = (month, data) => api.post(`/budgets/funde
 export const getDeficitResolutionPreview = (month, categoryId, data) => api.post(`/budgets/funded/months/${month}/categories/${categoryId}/deficit-resolution/preview`, data);
 export const applyDeficitResolution = (month, categoryId, data) => api.post(`/budgets/funded/months/${month}/categories/${categoryId}/deficit-resolution`, data);
 export const reverseBudgetFundingAction = (id, data) => api.post(`/budgets/funded/funding-actions/${id}/reverse`, data);
+export const getUnbudgetedResolutionPreview = (month, categoryId, data) => api.post(`/budgets/funded/months/${month}/categories/${categoryId}/unbudgeted-resolution/preview`, data);
+export const applyUnbudgetedResolution = (month, categoryId, data) => api.post(`/budgets/funded/months/${month}/categories/${categoryId}/unbudgeted-resolution`, data);
+export const reverseUnbudgetedResolution = (id, data) => api.post(`/budgets/funded/unbudgeted-resolutions/${id}/reverse`, data);
 export const establishFundedBudget = (data) => api.post('/budgets/funded/categories', data);
 export const adjustFundedBudget = (id, data) => api.patch(`/budgets/funded/categories/${id}`, data);
 export const removeFundedBudget = (id, data) => api.post(`/budgets/funded/categories/${id}/remove`, data);

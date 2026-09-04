@@ -312,12 +312,14 @@ export const CarryoverPanel = ({ carryover, applying, error, onApply }) => (
   </GlassCard>
 );
 
-export const UnbudgetedExpensesPanel = ({ categories, total }) => (
+export const UnbudgetedExpensesPanel = ({
+  categories, total, canAllocate, onAllocate, onReviewTransactions,
+}) => (
   <GlassCard className="budget-unbudgeted-panel" padding="18px">
     <div className="budget-unbudgeted-panel__heading">
       <div>
         <h2><AlertTriangle size={19} aria-hidden="true" /> הוצאות מחוץ לתקציב</h2>
-        <p>ההוצאות הבאות אינן משויכות לתקציב קטגוריה פעיל. הטיפול בהן ייעשה בתהליך נפרד.</p>
+        <p>ההוצאות הבאות אינן משויכות לתקציב קטגוריה פעיל. יש להקצות להן תקציב או לבדוק את התנועות.</p>
       </div>
       <div className="budget-unbudgeted-panel__total" aria-label="סך הוצאות מחוץ לתקציב">
         <span>סך הכול</span>
@@ -329,6 +331,21 @@ export const UnbudgetedExpensesPanel = ({ categories, total }) => (
         <li key={item.category_id ?? 'uncategorized'}>
           <span>{item.categories?.icon} {item.categories?.name || 'ללא קטגוריה'}</span>
           <BudgetMoneyAmount value={item.actual_spent} />
+          <div className="budget-unbudgeted-panel__actions">
+            {item.category_id && (
+              <PrimaryButton
+                type="button"
+                size="sm"
+                disabled={!canAllocate || item.categories?.is_active === false || item.categories?.type !== 'expense'}
+                onClick={() => onAllocate(item)}
+              >
+                הקצה תקציב לחודש זה
+              </PrimaryButton>
+            )}
+            <SecondaryButton type="button" size="sm" onClick={() => onReviewTransactions(item)}>
+              בדוק / תקן תנועות
+            </SecondaryButton>
+          </div>
         </li>
       ))}
     </ul>

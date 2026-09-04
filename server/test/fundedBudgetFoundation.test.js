@@ -29,6 +29,10 @@ const reallocationMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '022_budget_reallocation_deficit_resolution.sql'),
   'utf8',
 );
+const unbudgetedResolutionMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '023_unbudgeted_expense_resolution.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 test('migration 017 and full_schema carry the same funded-budget foundation', () => {
@@ -96,6 +100,19 @@ test('migrations 021 and 022 remain ordered and exact in full_schema', () => {
   assert.match(reallocationMigration, /finance_tracker_budget_savings/i);
   assert.match(reallocationMigration, /DEFICIT_RESOLUTION_PREVIEW_STALE/i);
   assert.match(reallocationMigration, /COMPLETED_MONTH_REALLOCATION_FORBIDDEN/i);
+});
+
+test('migration 023 remains ordered and exact in full_schema', () => {
+  assert.ok(fullSchema.includes(unbudgetedResolutionMigration.trim()));
+  assert.ok(fullSchema.indexOf(reallocationMigration.trim())
+    < fullSchema.indexOf(unbudgetedResolutionMigration.trim()));
+  for (const object of [
+    'budget_unbudgeted_resolution_events', 'budget_funding_source_rows',
+    'get_budget_unbudgeted_resolution_preview', 'apply_budget_unbudgeted_resolution',
+    'reverse_budget_unbudgeted_resolution', 'unbudgeted_resolution',
+  ]) assert.match(unbudgetedResolutionMigration, new RegExp(object, 'i'));
+  assert.match(unbudgetedResolutionMigration, /LOCK TABLE public\.transactions IN SHARE MODE/i);
+  assert.match(unbudgetedResolutionMigration, /UNBUDGETED_RESOLUTION_PREVIEW_STALE/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {

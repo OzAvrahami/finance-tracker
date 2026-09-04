@@ -132,6 +132,12 @@ const FundedComposition = ({ row }) => {
       {row.outgoingReallocation !== '0.00' && (
         <span>הועבר ליעד אחר −<BudgetMoneyAmount value={row.outgoingReallocation} /></span>
       )}
+      {row.incomingUnbudgetedResolution !== '0.00' && (
+        <span>הקצאה מאוחרת להוצאה ללא תקציב +<BudgetMoneyAmount value={row.incomingUnbudgetedResolution} /></span>
+      )}
+      {row.outgoingUnbudgetedResolution !== '0.00' && (
+        <span>מימון הקצאה מאוחרת −<BudgetMoneyAmount value={row.outgoingUnbudgetedResolution} /></span>
+      )}
     </div>
   );
 };

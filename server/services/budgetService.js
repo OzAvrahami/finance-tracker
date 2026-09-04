@@ -243,6 +243,36 @@ const reverseBudgetFundingAction = (supabase, {
   p_reason: reason,
 });
 
+const getUnbudgetedResolutionPreview = (supabase, {
+  month, categoryId, requestedAmount, legs,
+}) => callBudgetRpc(supabase, 'get_budget_unbudgeted_resolution_preview', {
+  p_month: month,
+  p_category_id: categoryId,
+  p_requested_amount: requestedAmount,
+  p_legs: legs,
+});
+
+const applyUnbudgetedResolution = (supabase, {
+  month, categoryId, requestedAmount, legs, requestKey: suppliedRequestKey,
+  previewFingerprint, reason = null,
+}) => callBudgetRpc(supabase, 'apply_budget_unbudgeted_resolution', {
+  p_month: month,
+  p_category_id: categoryId,
+  p_requested_amount: requestedAmount,
+  p_legs: legs,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_preview_fingerprint: previewFingerprint,
+  p_reason: reason,
+});
+
+const reverseUnbudgetedResolution = (supabase, {
+  eventId, requestKey: suppliedRequestKey, reason = null,
+}) => callBudgetRpc(supabase, 'reverse_budget_unbudgeted_resolution', {
+  p_event_id: eventId,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
 const toCompatibilityRows = (state) => (state?.categories || [])
   .filter((category) => category.budget_id && category.lifecycle_state === 'active')
   .map((category) => ({
@@ -264,6 +294,8 @@ const toCompatibilityRows = (state) => (state?.categories || [])
     incoming_reallocation_resolution: category.incoming_reallocation_resolution,
     outgoing_reallocation: category.outgoing_reallocation,
     funding_action_adjustment_total: category.funding_action_adjustment_total,
+    incoming_unbudgeted_resolution: category.incoming_unbudgeted_resolution,
+    outgoing_unbudgeted_resolution: category.outgoing_unbudgeted_resolution,
     other_adjustments: category.other_adjustments,
     actual_spent: category.actual_spent,
     remaining: category.remaining,
@@ -274,6 +306,7 @@ const toCompatibilityRows = (state) => (state?.categories || [])
 
 module.exports = {
   addManualFunding,
+  applyUnbudgetedResolution,
   applyBudgetReallocation,
   applyDeficitResolution,
   applyMonthDisposition,
@@ -284,6 +317,7 @@ module.exports = {
   getBudgetReallocationPreview,
   getDeficitResolutionPreview,
   getMonthDispositionPreview,
+  getUnbudgetedResolutionPreview,
   getFundedBudgetMonth,
   initializeRecurringBudgets,
   reactivateBudget,
@@ -293,6 +327,7 @@ module.exports = {
   reverseBudgetFundingAction,
   reverseMonthDisposition,
   reverseOperation,
+  reverseUnbudgetedResolution,
   setBudgetAmount,
   setMonthOverride,
   toCompatibilityRows,
