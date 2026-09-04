@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { readFileSync } from 'node:fs';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   addManualBudgetFunding, applyBudgetMonthClose, applyBudgetReallocation, applyDeficitResolution, copyBudget,
@@ -12,6 +13,8 @@ import {
   removeFundedBudget, setBudgetMonthOverride, setSettingsCategoryRecurringBudget,
 } from '../../services/api';
 import Budget from './Budget';
+
+const budgetStyles = readFileSync('src/pages/Budget/Budget.css', 'utf8');
 
 vi.mock('../../services/api', () => ({
   addManualBudgetFunding: vi.fn(), applyBudgetMonthClose: vi.fn(),
@@ -161,32 +164,64 @@ describe('canonical funded monthly read', () => {
     expect(within(mobile).getByText('תחבורה')).toBeInTheDocument();
   });
 
-  it('shows each no-budget expense and its canonical total without resolution actions', async () => {
+  it('renders all unbudgeted expenses as one responsive financial list with bounded actions', async () => {
+    const unbudgeted = [
+      [3, 'Electronics', '🔌', '17.90', '₪17.9'],
+      [10, 'לא ידוע', '❓', '2607.70', '₪2,607.7'],
+      [11, 'תחבורה ציבורית', '🚌', '264.00', '₪264'],
+      [14, 'בילוי ופנאי', '🎭', '536.00', '₪536'],
+      [15, 'סופר פארם', '🧴', '466.86', '₪466.86'],
+      [16, 'מנוי', '🧾', '1602.72', '₪1,602.72'],
+      [20, 'צעצועים ומשחקים', '🧸', '1160.86', '₪1,160.86'],
+      [31, 'קניות באינטרנט', '🛒', '492.87', '₪492.87'],
+      [32, 'פיננסי / עמלות / ריביות', '🏦', '68.00', '₪68'],
+      [37, 'כבישי אגרה', '🛣️', '17.49', '₪17.49'],
+      [40, 'אינטרנט', '🌐', '439.92', '₪439.92'],
+      [47, 'רפואה פרטית', '🩺', '2980.00', '₪2,980'],
+    ];
     getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
-      actuals: { total: '777.36', budgeted: '750.00', unbudgeted: '27.36' },
+      actuals: { total: '11404.32', budgeted: '750.00', unbudgeted: '10654.32' },
       categories: [
         categoryState(),
-        {
-          budget_id: null, category_id: 31,
-          categories: { name: 'Electronics', icon: '🔌', type: 'expense' },
-          lifecycle_state: 'no_budget', actual_spent: '9.46', is_unbudgeted: true,
-        },
-        {
-          budget_id: null, category_id: 32,
-          categories: { name: 'מנוי', icon: '🧾', type: 'expense' },
-          lifecycle_state: 'no_budget', actual_spent: '17.90', is_unbudgeted: true,
-        },
+        ...unbudgeted.map(([categoryId, name, icon, actualSpent]) => ({
+          budget_id: null,
+          category_id: categoryId,
+          categories: { name, icon, type: 'expense', is_active: true },
+          lifecycle_state: 'no_budget',
+          actual_spent: actualSpent,
+          is_unbudgeted: true,
+        })),
       ],
     }) });
 
     await settle();
-    const details = screen.getByRole('list', { name: 'פירוט הוצאות מחוץ לתקציב' });
-    expect(within(details).getByText(/Electronics/)).toBeInTheDocument();
-    expect(within(details).getByText('₪9.46')).toBeInTheDocument();
-    expect(within(details).getByText(/מנוי/)).toBeInTheDocument();
-    expect(within(details).getByText('₪17.9')).toBeInTheDocument();
-    expect(within(screen.getByLabelText('סך הוצאות מחוץ לתקציב')).getByText('₪27.36')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /פתרון|הקצאה/ })).not.toBeInTheDocument();
+    const details = screen.getByRole('table', { name: 'פירוט הוצאות מחוץ לתקציב' });
+    expect(details).toHaveAttribute('data-responsive-layout', 'table-to-stacked-rows');
+    expect(within(details).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      'קטגוריה', 'סכום בפועל', 'מצב', 'פעולות',
+    ]);
+    expect(within(details).getAllByRole('row')).toHaveLength(13);
+    unbudgeted.forEach(([, name, , , displayedAmount]) => {
+      const row = within(details).getByRole('row', { name: `${name}, ללא תקציב` });
+      expect(within(row).getByText(name)).toBeInTheDocument();
+      expect(row).toHaveTextContent(displayedAmount);
+      expect(within(row).getByText('ללא תקציב')).toBeInTheDocument();
+      expect(row.querySelector('.budget-unbudgeted-panel__category')).toBeInTheDocument();
+      expect(row.querySelector('.budget-unbudgeted-panel__amount')).toBeInTheDocument();
+      expect(row.querySelector('.budget-unbudgeted-panel__actions')).toBeInTheDocument();
+      expect(within(row).getByText('סכום בפועל')).toHaveClass('budget-unbudgeted-panel__mobile-label');
+    });
+    expect(within(details).getAllByRole('button', { name: 'הקצה תקציב' })).toHaveLength(12);
+    expect(within(details).getAllByRole('button', { name: 'בדוק / תקן תנועות' })).toHaveLength(12);
+    expect(within(screen.getByLabelText('סך הוצאות מחוץ לתקציב')).getByText('₪10,654.32')).toBeInTheDocument();
+    expect(getUnbudgetedResolutionPreview).not.toHaveBeenCalled();
+    expect(applyUnbudgetedResolution).not.toHaveBeenCalled();
+  });
+
+  it('stacks unbudgeted rows on mobile without a forced horizontal table', () => {
+    expect(budgetStyles).toMatch(/@media \(max-width: 820px\)[\s\S]*\.budget-unbudgeted-panel__row[\s\S]*grid-template-areas:/);
+    expect(budgetStyles).toMatch(/\.budget-unbudgeted-panel__actions > \*[\s\S]*width: 100% !important/);
+    expect(budgetStyles).not.toMatch(/\.budget-unbudgeted-panel__table\s*\{[^}]*overflow-x\s*:/);
   });
 
   it('shows pending carryover read-only and navigates to the source month close workflow', async () => {
@@ -755,7 +790,7 @@ describe('funded budget commands', () => {
   it('previews and applies an explicit allocation from an unbudgeted row', async () => {
     await settle();
     expect(screen.getByRole('button', { name: 'בדוק / תקן תנועות' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב לחודש זה' }));
+    await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב' }));
     const dialog = screen.getByRole('dialog', { name: /יצירת תקציב חודשי/ });
     expect(dialog).toBeInTheDocument();
     expect(screen.getByLabelText('סכום להקצאה')).toHaveValue(75);
@@ -787,7 +822,7 @@ describe('funded budget commands', () => {
       error: 'UNBUDGETED_RESOLUTION_PREVIEW_STALE: refresh',
     } } });
     await settle();
-    await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב לחודש זה' }));
+    await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב' }));
     const dialog = screen.getByRole('dialog', { name: /הפעלת תקציב מחדש/ });
     expect(dialog).toBeInTheDocument();
     await userEvent.clear(screen.getByLabelText('סכום להקצאה'));

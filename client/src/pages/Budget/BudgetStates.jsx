@@ -326,29 +326,57 @@ export const UnbudgetedExpensesPanel = ({
         <strong><BudgetMoneyAmount value={total} /></strong>
       </div>
     </div>
-    <ul className="budget-unbudgeted-panel__list" aria-label="פירוט הוצאות מחוץ לתקציב">
-      {categories.map((item) => (
-        <li key={item.category_id ?? 'uncategorized'}>
-          <span>{item.categories?.icon} {item.categories?.name || 'ללא קטגוריה'}</span>
-          <BudgetMoneyAmount value={item.actual_spent} />
-          <div className="budget-unbudgeted-panel__actions">
-            {item.category_id && (
-              <PrimaryButton
-                type="button"
-                size="sm"
-                disabled={!canAllocate || item.categories?.is_active === false || item.categories?.type !== 'expense'}
-                onClick={() => onAllocate(item)}
-              >
-                הקצה תקציב לחודש זה
-              </PrimaryButton>
-            )}
-            <SecondaryButton type="button" size="sm" onClick={() => onReviewTransactions(item)}>
-              בדוק / תקן תנועות
-            </SecondaryButton>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div
+      className="budget-unbudgeted-panel__table"
+      role="table"
+      aria-label="פירוט הוצאות מחוץ לתקציב"
+      data-responsive-layout="table-to-stacked-rows"
+    >
+      <div className="budget-unbudgeted-panel__table-head" role="row">
+        <span role="columnheader">קטגוריה</span>
+        <span role="columnheader">סכום בפועל</span>
+        <span role="columnheader">מצב</span>
+        <span role="columnheader" className="budget-unbudgeted-panel__actions-heading">פעולות</span>
+      </div>
+      <div role="rowgroup">
+        {categories.map((item) => {
+          const categoryName = item.categories?.name || 'ללא קטגוריה';
+          return (
+            <div
+              className="budget-unbudgeted-panel__row"
+              role="row"
+              aria-label={`${categoryName}, ללא תקציב`}
+              key={item.category_id ?? 'uncategorized'}
+            >
+              <div className="budget-unbudgeted-panel__category" role="cell">
+                {item.categories?.icon && <span aria-hidden="true">{item.categories.icon}</span>}
+                <span className="budget-unbudgeted-panel__category-name">{categoryName}</span>
+              </div>
+              <div className="budget-unbudgeted-panel__amount" role="cell">
+                <span className="budget-unbudgeted-panel__mobile-label">סכום בפועל</span>
+                <BudgetMoneyAmount value={item.actual_spent} />
+              </div>
+              <span className="budget-unbudgeted-panel__status" role="cell">ללא תקציב</span>
+              <div className="budget-unbudgeted-panel__actions" role="cell">
+                {item.category_id && (
+                  <PrimaryButton
+                    type="button"
+                    size="sm"
+                    disabled={!canAllocate || item.categories?.is_active === false || item.categories?.type !== 'expense'}
+                    onClick={() => onAllocate(item)}
+                  >
+                    הקצה תקציב
+                  </PrimaryButton>
+                )}
+                <SecondaryButton type="button" size="sm" onClick={() => onReviewTransactions(item)}>
+                  בדוק / תקן תנועות
+                </SecondaryButton>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   </GlassCard>
 );
 
