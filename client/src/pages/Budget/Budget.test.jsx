@@ -3,14 +3,17 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
-  addManualBudgetFunding, applyBudgetMonthClose, copyBudget,
+  addManualBudgetFunding, applyBudgetMonthClose, applyBudgetReallocation, applyDeficitResolution, copyBudget,
+  getBudgetReallocationPreview, getDeficitResolutionPreview,
   getBudgetMonthClosePreview, getCategories, getFundedBudgetMonth, initializeRecurringBudgets, removeBudgetMonthOverride,
   removeFundedBudget, setBudgetMonthOverride, setSettingsCategoryRecurringBudget,
 } from '../../services/api';
 import Budget from './Budget';
 
 vi.mock('../../services/api', () => ({
-  addManualBudgetFunding: vi.fn(), applyBudgetMonthClose: vi.fn(), copyBudget: vi.fn(),
+  addManualBudgetFunding: vi.fn(), applyBudgetMonthClose: vi.fn(),
+  applyBudgetReallocation: vi.fn(), applyDeficitResolution: vi.fn(), copyBudget: vi.fn(),
+  getBudgetReallocationPreview: vi.fn(), getDeficitResolutionPreview: vi.fn(),
   getBudgetMonthClosePreview: vi.fn(), getCategories: vi.fn(), getFundedBudgetMonth: vi.fn(),
   initializeRecurringBudgets: vi.fn(),
   removeBudgetMonthOverride: vi.fn(),
@@ -32,6 +35,8 @@ const categoryState = (overrides = {}) => ({
   fallback_base: '1000.00', fallback_source: 'manual', recurring_default: '900.00',
   month_override: null, override_adjustment_total: '0.00', effective_base: '1000.00',
   incoming_carryover: '0.00', outgoing_carryover: '0.00', other_adjustments: '200.00',
+  incoming_reallocation_resolution: '0.00', outgoing_reallocation: '0.00',
+  funding_action_adjustment_total: '0.00',
   final_funded: '1200.00', amount: '1200.00', actual_spent: '750.00',
   remaining: '450.00', deficit: '0.00', ...overrides,
 });
@@ -47,7 +52,8 @@ const fundedState = (overrides = {}) => ({
     categoryState(),
     { budget_id: null, category_id: 2, categories: categories[1], lifecycle_state: 'no_budget', actual_spent: '75.00', is_unbudgeted: true },
   ],
-  history: [], ...overrides,
+  history: [], funding_action_history: [], action_lifecycle: 'current',
+  savings: { balance: '0.00' }, ...overrides,
 });
 
 const previousMonth = (month) => {
@@ -89,6 +95,17 @@ beforeEach(() => {
   removeFundedBudget.mockResolvedValue({ data: {} });
   initializeRecurringBudgets.mockResolvedValue({ data: {} });
   applyBudgetMonthClose.mockResolvedValue({ data: {} });
+  applyBudgetReallocation.mockResolvedValue({ data: {} });
+  applyDeficitResolution.mockResolvedValue({ data: {} });
+  getBudgetReallocationPreview.mockResolvedValue({ data: {
+    can_apply: true, fingerprint: '1234567890abcdef1234567890abcdef',
+    source_capacity: '450.00', destination_before: '0.00', destination_after: '100.00',
+    unallocated_after: '300.00',
+  } });
+  getDeficitResolutionPreview.mockResolvedValue({ data: {
+    can_apply: true, fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+    requested_resolution: '350.00', resulting_funded: '1350.00', remaining_deficit: '150.00',
+  } });
   getBudgetMonthClosePreview.mockResolvedValue({ data: null });
 });
 
@@ -601,6 +618,114 @@ describe('funded budget commands', () => {
     });
     await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('previews and applies a current-month category reallocation without mutating on open', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      categories: [
+        categoryState({ sourceCapacity: '450.00' }),
+        categoryState({
+          budget_id: 12, category_id: 2, categories: categories[1],
+          starting_amount: '500.00', fallback_base: '500.00', effective_base: '500.00',
+          adjustment_total: '0.00', other_adjustments: '0.00', final_funded: '500.00',
+          actual_spent: '0.00', remaining: '500.00', sourceCapacity: '500.00',
+        }),
+      ],
+    }) });
+    await settle();
+    await userEvent.click(screen.getByRole('button', { name: 'העברת תקציב' }));
+    expect(getBudgetReallocationPreview).not.toHaveBeenCalled();
+    fireEvent.change(document.getElementById('budget-reallocation-source'), { target: { value: 'category:1' } });
+    fireEvent.change(document.getElementById('budget-reallocation-destination'), { target: { value: 'category:2' } });
+    fireEvent.change(document.getElementById('budget-reallocation-amount'), { target: { value: '100.00' } });
+    await userEvent.click(screen.getByRole('button', { name: 'סקירת ההעברה' }));
+    expect(getBudgetReallocationPreview).toHaveBeenCalledWith(fundedState().month, {
+      source_kind: 'category', source_category_id: 1,
+      destination_kind: 'category', destination_category_id: 2, amount: '100.00',
+    });
+    expect(applyBudgetReallocation).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'העברת התקציב' }));
+    expect(applyBudgetReallocation).toHaveBeenCalledWith(fundedState().month, {
+      source_kind: 'category', source_category_id: 1,
+      destination_kind: 'category', destination_category_id: 2, amount: '100.00',
+      request_key: 'request-key', preview_fingerprint: '1234567890abcdef1234567890abcdef',
+    });
+  });
+
+  it('submits an exact multi-source partial deficit resolution and retains choices on stale preview', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      savings: { balance: '500.00' },
+      categories: [
+        categoryState({
+          budget_id: 11, category_id: 1, final_funded: '1000.00', actual_spent: '1500.00',
+          remaining: '-500.00', deficit: '500.00', sourceCapacity: '0.00',
+        }),
+        categoryState({
+          budget_id: 12, category_id: 2, categories: categories[1],
+          starting_amount: '500.00', fallback_base: '500.00', effective_base: '500.00',
+          adjustment_total: '0.00', other_adjustments: '0.00', final_funded: '500.00',
+          actual_spent: '100.00', remaining: '400.00', sourceCapacity: '400.00',
+        }),
+      ],
+    }) });
+    applyDeficitResolution.mockRejectedValue({
+      response: { data: { error: 'DEFICIT_RESOLUTION_PREVIEW_STALE: refresh' } },
+    });
+    await settle();
+    const resolveButtons = screen.getAllByRole('button', { name: 'פתרון חריגה' });
+    expect(resolveButtons).toHaveLength(2);
+    await userEvent.click(resolveButtons[0]);
+    fireEvent.change(document.getElementById('deficit-source-unallocated'), { target: { value: '100.00' } });
+    fireEvent.change(document.getElementById('deficit-source-savings'), { target: { value: '100.00' } });
+    fireEvent.change(document.getElementById('deficit-source-12'), { target: { value: '150.00' } });
+    await userEvent.click(screen.getByRole('button', { name: 'סקירת המימון' }));
+    const legs = [
+      { source_kind: 'unallocated', amount: '100.00' },
+      { source_kind: 'savings', amount: '100.00' },
+      { source_kind: 'category', category_id: 2, amount: '150.00' },
+    ];
+    expect(getDeficitResolutionPreview).toHaveBeenCalledWith(fundedState().month, 1, { legs });
+    expect(screen.getByLabelText('סקירת פתרון חריגה')).toHaveTextContent('150');
+    await userEvent.click(screen.getByRole('button', { name: 'פתרון החריגה' }));
+    expect(applyDeficitResolution).toHaveBeenCalledWith(fundedState().month, 1, {
+      legs, request_key: 'request-key', preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+    });
+    expect(await screen.findByText('DEFICIT_RESOLUTION_PREVIEW_STALE: refresh')).toBeInTheDocument();
+    expect(document.getElementById('deficit-source-unallocated')).toHaveValue(100);
+    expect(document.getElementById('deficit-source-savings')).toHaveValue(100);
+    expect(document.getElementById('deficit-source-12')).toHaveValue(150);
+  });
+
+  it('limits Move budget to current month while keeping deficit resolution in the completed unclosed month', async () => {
+    const current = fundedState().month;
+    getFundedBudgetMonth.mockImplementation((month) => Promise.resolve({ data: fundedState({
+      month,
+      action_lifecycle: month === current ? 'current' : 'immediately_completed_unclosed',
+      categories: [categoryState({
+        final_funded: '1000.00', actual_spent: '1200.00', remaining: '-200.00', deficit: '200.00',
+      })],
+    }) }));
+    await settle();
+    expect(screen.getByRole('button', { name: 'העברת תקציב' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'חודש קודם' }));
+    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenLastCalledWith(previousMonth(current)));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'העברת תקציב' })).not.toBeInTheDocument());
+    expect(screen.getAllByRole('button', { name: 'פתרון חריגה' })).toHaveLength(2);
+  });
+
+  it('keeps reallocation and resolution provenance separate from base, carryover, and residual adjustments', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      categories: [categoryState({
+        incoming_carryover: '400.00', other_adjustments: '100.00',
+        incoming_reallocation_resolution: '200.00', outgoing_reallocation: '50.00',
+        funding_action_adjustment_total: '150.00', final_funded: '1650.00', remaining: '900.00',
+      })],
+    }) });
+    await settle();
+    expect(screen.getAllByText(/יתרה מחודש קודם/)).toHaveLength(2);
+    expect(screen.getAllByText(/הקצאה מחדש \/ פתרון חריגה/)).toHaveLength(2);
+    expect(screen.getAllByText(/הועבר ליעד אחר/)).toHaveLength(2);
+    expect(screen.getAllByText(/התאמות אחרות/)).toHaveLength(2);
   });
 
   it('renders an empty funded month distinctly from a zero active budget', async () => {

@@ -16,12 +16,13 @@ The next planned product capability is a substantial Savings module. Its product
 
 ### Active: funded-budget initiative
 
-- Foundation (#17 + #26): immutable monthly opening snapshots, confirmed manual funds, append-only provenance, reconciled reads, and bounded atomic commands are implemented locally in Migration 017; production rollout remains separately reviewed.
-- Recurring defaults (#18): dedicated Settings → Budget configuration for expense categories, read-only pending previews, and explicit funded initialization are implemented locally in Migration 018. Production Migration 018 remains unexecuted.
+- Foundation (#17 + #26): immutable monthly opening snapshots, confirmed manual funds, append-only provenance, reconciled reads, and bounded atomic commands are deployed through Migration 017.
+- Recurring defaults (#18): dedicated Settings → Budget configuration for expense categories, read-only pending previews, and explicit funded initialization are deployed through Migration 018.
 - Carryover (#20): balanced previous/current-month transfers, immutable linkage, read-only preview, explicit application, and Settings → Budget configuration are deployed through Migration 019.
 - Month overrides (#19): current/future month-only base configuration, immutable funded adjustments, override-aware initialization, carryover-safe composition, and explicit Budget-page actions are deployed through Migration 020.
-- Unused budget and Savings (#21): one category policy, explicit immediately-completed-month close, Migration 019 carry-forward reuse, next-month unallocated transfer, and one retained Savings reserve are implemented locally in Migration 021. Production Migration 021 remains unexecuted.
-- Next dependent work remains separate: unbudgeted-expense behavior (#22), reallocation/deficit resolution (#23), Savings withdrawals/accounts, and the funded summary UX (#25).
+- Unused budget and Savings (#21): one category policy, explicit immediately-completed-month close, Migration 019 carry-forward reuse, next-month unallocated transfer, and one retained Savings reserve are deployed through Migration 021.
+- Reallocation and deficit resolution (#23): current-month funded moves, immediately-completed-month close preparation, atomic multi-source resolution, and deficit-only Savings withdrawal are implemented locally in Migration 022.
+- Next dependent work remains separate: unbudgeted-expense behavior (#22), general Savings withdrawals/accounts, historical correction, and the funded summary UX (#25).
 - Income-transaction funding requires a future source-consumption model so one realized income cannot fund multiple months or allocations.
 
 - Add a general CI workflow for client test/lint/build and server tests.

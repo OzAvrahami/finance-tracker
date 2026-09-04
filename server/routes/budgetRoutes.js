@@ -19,6 +19,11 @@ const {
   getMonthDispositionPreview,
   applyMonthDisposition,
   reverseMonthDisposition,
+  getBudgetReallocationPreview,
+  applyBudgetReallocation,
+  getDeficitResolutionPreview,
+  applyDeficitResolution,
+  reverseBudgetFundingAction,
   upsertBudget,
   copyBudget,
   deleteBudget
@@ -35,6 +40,11 @@ router.post('/funded/months/:month/categories/:categoryId/override/remove', remo
 router.get('/funded/month-close/preview', getMonthDispositionPreview);
 router.post('/funded/month-close/apply', applyMonthDisposition);
 router.post('/funded/month-close/batches/:id/reverse', reverseMonthDisposition);
+router.post('/funded/months/:month/reallocations/preview', getBudgetReallocationPreview);
+router.post('/funded/months/:month/reallocations', applyBudgetReallocation);
+router.post('/funded/months/:month/categories/:categoryId/deficit-resolution/preview', getDeficitResolutionPreview);
+router.post('/funded/months/:month/categories/:categoryId/deficit-resolution', applyDeficitResolution);
+router.post('/funded/funding-actions/:id/reverse', reverseBudgetFundingAction);
 router.post('/funded/carryover/transfers/:id/reverse', reverseCarryover);
 router.post('/funded/categories', establishBudget);
 router.patch('/funded/categories/:id', adjustBudget);

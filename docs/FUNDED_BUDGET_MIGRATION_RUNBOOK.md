@@ -1,6 +1,6 @@
 # Funded Budget Migration 017 — Review and Verification Runbook
 
-This is a review procedure, not authorization to execute against production. Migration 017 has not been applied to production.
+This is a review procedure, not authorization to execute against production. Migration 017 is already deployed; these instructions remain its verification record and do not authorize reapplication.
 
 ## Before approval
 
@@ -35,7 +35,7 @@ Migration execution is all-or-nothing, including the budget ID sequence restart.
 
 Removal stores the expense total observed by that database operation and uses it to calculate the released amount. Later transaction edits, deletions, or backdating change current actual/unbudgeted reporting but never rewrite the removal snapshot or retroactively alter the funded movement. Review such ledger changes as a point-in-time reporting/reconciliation risk rather than mutating immutable budget provenance.
 
-As of this runbook revision, Migration 017 is still **not applied to production**.
+Migration 017 is the deployed funded-budget prerequisite for all later budget migrations. This runbook does not authorize reapplying it.
 
 ## Migration 018 recurring-default extension
 
@@ -43,7 +43,7 @@ Migration 018 must be reviewed and applied only after Migration 017 has been suc
 
 Before any later production execution, verify the Migration 017 object boundary, rehearse `018_recurring_budget_defaults.sql` on a production-shaped disposable copy, and inspect effective table/view/function privileges. Deploy the server only after both migrations are verified, then deploy the client. Viewing a Budget month must remain read-only: only the explicit `initialize_budget_recurring_defaults` RPC may apply defaults, and insufficient funding must leave no partial operation, snapshot, or lifecycle event.
 
-As of this runbook revision, Migration 018 is **not applied to production**.
+Migration 018 is the deployed recurring-default prerequisite for Migration 019. This runbook does not authorize reapplying it.
 
 ## Migration 019 carryover extension
 
@@ -81,4 +81,16 @@ Apply takes the `transactions` `SHARE` lock first, stabilizes the complete polic
 
 Deploy in order: establish a budget-write maintenance boundary, apply and verify Migration 021 transactionally, deploy the server, then deploy the client. Do not deploy the unified Settings or month-close routes before their policy/read/RPC objects exist. A failed migration must restore the complete pre-021 state.
 
-As of this runbook revision, Migration 021 is **not applied to production**.
+Migration 021 is the deployed unused-disposition/Savings prerequisite for Migration 022. This runbook does not authorize reapplying it.
+
+## Migration 022 reallocation and deficit-resolution extension
+
+Migration 022 requires the exact deployed Migration 017–021 ledger, override, carryover, disposition, and Savings shape. It extends operation and funding-source domains, adds immutable funding-action headers and source legs, and extends Savings entries for deficit-only withdrawals. It performs no historical reallocation, resolution, withdrawal, budget, transaction, carryover, override, or disposition backfill.
+
+Rehearsal must prove all three planned movement forms, transaction-authoritative source headroom, atomic mixed category/unallocated/Savings deficit legs, partial resolution, Savings and monthly reconciliation, exact strings above 2^53, and rejection of inactive or `no_budget` destinations. Current-month planned moves and current/immediately-completed-unclosed deficit resolution must use Asia/Jerusalem lifecycle classification; any original close batch permanently blocks normal actions.
+
+Apply takes the transaction `SHARE` lock first, the Savings advisory mutex when Savings participates, then the month, affected budgets, and affected categories in stable ID order. It captures one authoritative candidate, validates the approved fingerprint immediately, and writes from that material. Transaction, funding, lifecycle, category-active, or Savings races must return the specific stale-preview conflict with no partial provenance.
+
+Deploy in order: establish the budget-write maintenance boundary, apply and verify Migration 022 transactionally, deploy the server, then deploy the client. Do not deploy #23 routes or UI before its RPCs and canonical read wrapper exist. Migration 022 must not be applied by an application deployment command.
+
+As of this runbook revision, Migration 022 is **not applied to production**.

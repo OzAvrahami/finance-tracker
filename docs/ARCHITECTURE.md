@@ -269,6 +269,12 @@ Migration 021 evolves carryover configuration into one exclusive expense-categor
 
 An unresolved funded deficit or positive unbudgeted expense blocks the whole close; Migration 021 does not resolve either condition. Later settings or transaction edits do not rewrite disposition snapshots. Corrections are compensating and bounded by destination unallocated, destination carryover headroom, or retained Savings as applicable.
 
+## Reallocation and deficit resolution
+
+Migration 022 adds one immutable funding-action header with per-source legs over the existing operation and movement ledger. Planned moves are limited to the current Asia/Jerusalem month and support category-to-category, unallocated-to-category, and category-to-unallocated accounting without changing available funding. Deficit resolution may also operate on the immediately completed month while no original Migration 021 close batch exists; that exception is close preparation only, not general historical planning.
+
+Category source capacity is `max(final_funded - max(raw_actual, 0), 0)`. A resolution may combine unallocated funding, eligible categories, and one explicit Savings withdrawal atomically, and may resolve only part of a deficit. Savings withdrawal adds equal monthly funding and category allocation while subtracting the retained reserve, so it is neither income nor expense. Previews are read-only. Apply locks transaction actuals, the Savings mutex when applicable, the month, affected budgets, and category-active rows in stable order, then validates and writes one captured fingerprinted candidate set or returns a stale-preview conflict.
+
 ## Known architectural boundaries
 
 - Legacy and principal-aware loan calculations coexist.

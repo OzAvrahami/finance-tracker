@@ -1,4 +1,4 @@
-import { CalendarRange, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ArrowLeftRight, CalendarRange, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   GlassCard,
   IconButton,
@@ -33,6 +33,8 @@ const BudgetSummary = ({
   onOpenCopy,
   onOpenAdd,
   onOpenFunding,
+  onOpenReallocation,
+  canReallocate,
 }) => (
   <GlassCard className="budget-overview" padding="20px">
     <div className="budget-toolbar">
@@ -70,6 +72,12 @@ const BudgetSummary = ({
         <Plus size={16} aria-hidden="true" />
         הוספת כסף זמין
       </SecondaryButton>
+      {canReallocate && (
+        <SecondaryButton type="button" className="budget-toolbar__action" onClick={onOpenReallocation}>
+          <ArrowLeftRight size={16} aria-hidden="true" />
+          העברת תקציב
+        </SecondaryButton>
+      )}
       <SecondaryButton type="button" className="budget-toolbar__action" onClick={onOpenCopy}>
         <CalendarRange size={16} aria-hidden="true" />
         העתקת התקציב לחודש אחר

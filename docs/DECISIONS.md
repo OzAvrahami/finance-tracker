@@ -395,3 +395,21 @@ Use one policy row—carry forward, Savings, return to next-month unallocated, o
 ### Consequences
 
 Settings changes affect only future closes, previews write nothing, and apply writes exactly the fingerprinted candidate material or returns a stale-preview conflict. Historical policy, funded, raw-actual, and effective-actual snapshots are append-only. Corrections compensate rather than delete and must pass destination or Savings funding safety. Deficit resolution (#23), unbudgeted-expense resolution (#22), Savings withdrawals/accounts, and the full Budget redesign (#25) remain separate.
+
+## D-023 — Reallocation and deficit resolution move only funded money
+
+**Status:** Accepted
+
+**Date:** 2026-09-04
+
+### Context
+
+Changing category priorities and funding actual overspending require explicit sources. A completed month with a funded deficit must remain repairable before Migration 021 can close it, without enabling arbitrary historical planning.
+
+### Decision
+
+Represent planned moves and multi-source deficit funding through immutable funding actions and source legs backed by the existing operation/movement ledger. Source eligibility is funded headroom after nonnegative transaction-authoritative actuals. Current-month actions may move between categories and unallocated funds; the immediately completed unclosed month permits only deficit resolution. Savings is an explicit deficit-only source that subtracts the retained reserve while adding equal monthly funding and allocation.
+
+### Consequences
+
+Opening state, recurring defaults, overrides, carryover, disposition, and transactions remain unchanged. Partial resolution remains visibly deficient. An original month-close batch permanently blocks normal actions even if later compensated. Unbudgeted categories remain #22 work, while named Savings accounts, general withdrawals, and the full Budget redesign remain out of scope.

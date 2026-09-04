@@ -149,6 +149,11 @@ export const reverseBudgetCarryover = (id, data) => api.post(`/budgets/funded/ca
 export const getBudgetMonthClosePreview = (month) => api.get('/budgets/funded/month-close/preview', { params: { month } });
 export const applyBudgetMonthClose = (data) => api.post('/budgets/funded/month-close/apply', data);
 export const reverseBudgetMonthClose = (id, data) => api.post(`/budgets/funded/month-close/batches/${id}/reverse`, data);
+export const getBudgetReallocationPreview = (month, data) => api.post(`/budgets/funded/months/${month}/reallocations/preview`, data);
+export const applyBudgetReallocation = (month, data) => api.post(`/budgets/funded/months/${month}/reallocations`, data);
+export const getDeficitResolutionPreview = (month, categoryId, data) => api.post(`/budgets/funded/months/${month}/categories/${categoryId}/deficit-resolution/preview`, data);
+export const applyDeficitResolution = (month, categoryId, data) => api.post(`/budgets/funded/months/${month}/categories/${categoryId}/deficit-resolution`, data);
+export const reverseBudgetFundingAction = (id, data) => api.post(`/budgets/funded/funding-actions/${id}/reverse`, data);
 export const establishFundedBudget = (data) => api.post('/budgets/funded/categories', data);
 export const adjustFundedBudget = (id, data) => api.patch(`/budgets/funded/categories/${id}`, data);
 export const removeFundedBudget = (id, data) => api.post(`/budgets/funded/categories/${id}/remove`, data);

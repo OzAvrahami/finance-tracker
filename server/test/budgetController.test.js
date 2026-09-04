@@ -50,7 +50,7 @@ test('history API exposes immutable operations, carryover, disposition, and Savi
   const { res } = await call('getBudgetHistory', { query: { month: '2026-08' } });
   assert.deepEqual(res.body, {
     month: '2026-08', history: state.history, carryover_history: [],
-    unused_disposition_history: [], savings: { balance: '0.00' },
+    unused_disposition_history: [], funding_action_history: [], savings: { balance: '0.00' },
   });
   assert.equal(Object.hasOwn(res.body, 'transactions'), false);
 });
@@ -387,6 +387,101 @@ test('month-close rejects malformed fingerprints and retains stable domain confl
       source_month: '2026-08', request_key: `close-${code}`,
       preview_fingerprint: '1234567890abcdef1234567890abcdef',
     } }, null, { code: '23514', message: `${code}: exact details` });
+    assert.equal(result.res.statusCode, 409);
+    assert.equal(result.res.body.code, code);
+  }
+});
+
+test('reallocation preview and apply map exact money and approved material to bounded RPCs', async () => {
+  const fingerprint = 'abcdefabcdefabcdefabcdefabcdefab';
+  const body = {
+    source_kind: 'category', source_category_id: 1,
+    destination_kind: 'category', destination_category_id: 2,
+    amount: '9007199254740993.01',
+  };
+  const preview = await call('getBudgetReallocationPreview', {
+    params: { month: '2026-09' }, body,
+  }, { fingerprint, can_apply: true });
+  assert.equal(preview.res.statusCode, 200);
+  assert.deepEqual(preview.calls, [{
+    name: 'get_budget_reallocation_preview',
+    params: {
+      p_month: '2026-09', p_source_kind: 'category', p_source_category_id: 1,
+      p_destination_kind: 'category', p_destination_category_id: 2,
+      p_amount: '9007199254740993.01',
+    },
+  }]);
+
+  const apply = await call('applyBudgetReallocation', {
+    params: { month: '2026-09' },
+    body: { ...body, request_key: 'move-key', preview_fingerprint: fingerprint },
+  });
+  assert.equal(apply.res.statusCode, 200);
+  assert.equal(apply.calls[0].name, 'apply_budget_reallocation');
+  assert.equal(apply.calls[0].params.p_amount, '9007199254740993.01');
+  assert.equal(apply.calls[0].params.p_preview_fingerprint, fingerprint);
+});
+
+test('deficit resolution preserves canonical multi-source legs and rejects ambiguous input', async () => {
+  const fingerprint = '1234567890abcdef1234567890abcdef';
+  const legs = [
+    { source_kind: 'unallocated', amount: '100.00' },
+    { source_kind: 'category', category_id: 7, amount: '150.00' },
+    { source_kind: 'savings', amount: '9007199254740993.01' },
+  ];
+  const preview = await call('getDeficitResolutionPreview', {
+    params: { month: '2026-09', categoryId: '2' }, body: { legs },
+  }, { fingerprint, can_apply: true });
+  assert.equal(preview.res.statusCode, 200);
+  assert.deepEqual(preview.calls[0], {
+    name: 'get_budget_deficit_resolution_preview',
+    params: { p_month: '2026-09', p_destination_category_id: '2', p_legs: legs },
+  });
+
+  const apply = await call('applyDeficitResolution', {
+    params: { month: '2026-09', categoryId: '2' },
+    body: { legs, request_key: 'resolve-key', preview_fingerprint: fingerprint },
+  });
+  assert.equal(apply.res.statusCode, 200);
+  assert.equal(apply.calls[0].name, 'apply_budget_deficit_resolution');
+  assert.deepEqual(apply.calls[0].params.p_legs, legs);
+
+  for (const invalidLegs of [
+    [{ source_kind: 'savings', amount: 10 }],
+    [{ source_kind: 'category', amount: '10.00' }],
+    [{ source_kind: 'unallocated', amount: '1.00' }, { source_kind: 'unallocated', amount: '2.00' }],
+  ]) {
+    const invalid = await call('getDeficitResolutionPreview', {
+      params: { month: '2026-09', categoryId: '2' }, body: { legs: invalidLegs },
+    });
+    assert.equal(invalid.res.statusCode, 400);
+    assert.equal(invalid.calls.length, 0);
+  }
+});
+
+test('funding action stale previews and lifecycle conflicts remain stable HTTP conflicts', async () => {
+  for (const [method, code] of [
+    ['applyBudgetReallocation', 'BUDGET_REALLOCATION_PREVIEW_STALE'],
+    ['applyDeficitResolution', 'DEFICIT_RESOLUTION_PREVIEW_STALE'],
+    ['applyDeficitResolution', 'BUDGET_MONTH_ALREADY_CLOSED'],
+  ]) {
+    const request = method === 'applyBudgetReallocation'
+      ? {
+        params: { month: '2026-09' },
+        body: {
+          source_kind: 'unallocated', destination_kind: 'category', destination_category_id: 2,
+          amount: '10.00', request_key: `key-${code}`,
+          preview_fingerprint: '1234567890abcdef1234567890abcdef',
+        },
+      }
+      : {
+        params: { month: '2026-09', categoryId: '2' },
+        body: {
+          legs: [{ source_kind: 'unallocated', amount: '10.00' }], request_key: `key-${code}`,
+          preview_fingerprint: '1234567890abcdef1234567890abcdef',
+        },
+      };
+    const result = await call(method, request, null, { code: '40001', message: `${code}: refresh` });
     assert.equal(result.res.statusCode, 409);
     assert.equal(result.res.body.code, code);
   }

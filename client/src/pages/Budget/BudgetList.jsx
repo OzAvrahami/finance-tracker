@@ -1,4 +1,4 @@
-import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { Check, Pencil, ShieldCheck, Trash2, X } from 'lucide-react';
 import {
   IconButton,
   NumberField,
@@ -67,8 +67,13 @@ const BudgetEditor = ({
   </div>
 );
 
-const BudgetActions = ({ row, disabled, onEdit, onDelete }) => (
+const BudgetActions = ({ row, disabled, onEdit, onDelete, onResolveDeficit, canResolveDeficit }) => (
   <div className="budget-row-actions">
+    {row.isDeficit && canResolveDeficit && (
+      <button type="button" className="budget-row-actions__resolve" disabled={disabled} onClick={() => onResolveDeficit(row)}>
+        <ShieldCheck size={14} aria-hidden="true" /> פתרון חריגה
+      </button>
+    )}
     <IconButton
       type="button"
       size="sm"
@@ -121,6 +126,12 @@ const FundedComposition = ({ row }) => {
       {row.otherAdjustments !== '0.00' && (
         <span>התאמות אחרות <BudgetMoneyAmount value={row.otherAdjustments} /></span>
       )}
+      {row.incomingReallocationResolution !== '0.00' && (
+        <span>הקצאה מחדש / פתרון חריגה +<BudgetMoneyAmount value={row.incomingReallocationResolution} /></span>
+      )}
+      {row.outgoingReallocation !== '0.00' && (
+        <span>הועבר ליעד אחר −<BudgetMoneyAmount value={row.outgoingReallocation} /></span>
+      )}
     </div>
   );
 };
@@ -138,6 +149,8 @@ const BudgetList = ({
   onRemoveOverride,
   onCancelEdit,
   onRequestDelete,
+  onResolveDeficit,
+  canResolveDeficit,
 }) => (
   <section className="budget-list-region" aria-labelledby="budget-list-title">
     <h2 id="budget-list-title" className="u-sr-only">פירוט התקציב</h2>
@@ -197,6 +210,8 @@ const BudgetList = ({
                       disabled={editPending}
                       onEdit={onStartEdit}
                       onDelete={onRequestDelete}
+                      onResolveDeficit={onResolveDeficit}
+                      canResolveDeficit={canResolveDeficit}
                     />
                   )}
                 </td>
@@ -220,6 +235,8 @@ const BudgetList = ({
                   disabled={editPending}
                   onEdit={onStartEdit}
                   onDelete={onRequestDelete}
+                  onResolveDeficit={onResolveDeficit}
+                  canResolveDeficit={canResolveDeficit}
                 />
               )}
             </header>

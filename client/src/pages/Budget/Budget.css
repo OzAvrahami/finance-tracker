@@ -627,6 +627,53 @@
   color: var(--ft-negative) !important;
 }
 
+.budget-row-actions__resolve {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  color: var(--ft-negative);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 750;
+  background: var(--ft-negative-weak);
+  border: 1px solid var(--ft-negative-border);
+  border-radius: var(--ft-radius-control);
+  cursor: pointer;
+}
+
+.budget-funding-dialog__fields,
+.budget-deficit-sources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ft-space-3);
+}
+
+.budget-funding-dialog__fields > :last-child {
+  grid-column: 1 / -1;
+}
+
+.budget-funding-preview,
+.budget-deficit-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--ft-space-2);
+  margin-block-start: var(--ft-space-4);
+  padding: var(--ft-space-3);
+  background: var(--ft-glass-hover);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-control);
+}
+
+.budget-funding-preview .ui-alert { grid-column: 1 / -1; }
+.budget-funding-dialog__selected { margin: var(--ft-space-4) 0 0; color: var(--ft-text-muted); }
+
+@media (max-width: 639.98px) {
+  .budget-funding-dialog__fields,
+  .budget-deficit-sources { grid-template-columns: 1fr; }
+}
+
 .budget-inline-editor {
   display: flex;
   min-width: 0;

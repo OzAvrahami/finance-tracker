@@ -187,6 +187,62 @@ const reverseMonthDisposition = (supabase, {
   p_reason: reason,
 });
 
+const getBudgetReallocationPreview = (supabase, {
+  month, sourceKind, sourceCategoryId = null, destinationKind,
+  destinationCategoryId = null, amount,
+}) => callBudgetRpc(supabase, 'get_budget_reallocation_preview', {
+  p_month: month,
+  p_source_kind: sourceKind,
+  p_source_category_id: sourceCategoryId,
+  p_destination_kind: destinationKind,
+  p_destination_category_id: destinationCategoryId,
+  p_amount: amount,
+});
+
+const applyBudgetReallocation = (supabase, {
+  month, sourceKind, sourceCategoryId = null, destinationKind,
+  destinationCategoryId = null, amount, requestKey: suppliedRequestKey,
+  previewFingerprint, reason = null,
+}) => callBudgetRpc(supabase, 'apply_budget_reallocation', {
+  p_month: month,
+  p_source_kind: sourceKind,
+  p_source_category_id: sourceCategoryId,
+  p_destination_kind: destinationKind,
+  p_destination_category_id: destinationCategoryId,
+  p_amount: amount,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_preview_fingerprint: previewFingerprint,
+  p_reason: reason,
+});
+
+const getDeficitResolutionPreview = (supabase, { month, categoryId, legs }) => (
+  callBudgetRpc(supabase, 'get_budget_deficit_resolution_preview', {
+    p_month: month,
+    p_destination_category_id: categoryId,
+    p_legs: legs,
+  })
+);
+
+const applyDeficitResolution = (supabase, {
+  month, categoryId, legs, requestKey: suppliedRequestKey,
+  previewFingerprint, reason = null,
+}) => callBudgetRpc(supabase, 'apply_budget_deficit_resolution', {
+  p_month: month,
+  p_destination_category_id: categoryId,
+  p_legs: legs,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_preview_fingerprint: previewFingerprint,
+  p_reason: reason,
+});
+
+const reverseBudgetFundingAction = (supabase, {
+  actionId, requestKey: suppliedRequestKey, reason = null,
+}) => callBudgetRpc(supabase, 'reverse_budget_funding_action', {
+  p_action_id: actionId,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_reason: reason,
+});
+
 const toCompatibilityRows = (state) => (state?.categories || [])
   .filter((category) => category.budget_id && category.lifecycle_state === 'active')
   .map((category) => ({
@@ -205,6 +261,9 @@ const toCompatibilityRows = (state) => (state?.categories || [])
     effective_base: category.effective_base,
     incoming_carryover: category.incoming_carryover,
     outgoing_carryover: category.outgoing_carryover,
+    incoming_reallocation_resolution: category.incoming_reallocation_resolution,
+    outgoing_reallocation: category.outgoing_reallocation,
+    funding_action_adjustment_total: category.funding_action_adjustment_total,
     other_adjustments: category.other_adjustments,
     actual_spent: category.actual_spent,
     remaining: category.remaining,
@@ -215,11 +274,15 @@ const toCompatibilityRows = (state) => (state?.categories || [])
 
 module.exports = {
   addManualFunding,
+  applyBudgetReallocation,
+  applyDeficitResolution,
   applyMonthDisposition,
   applyCarryover,
   copyBudgetMonth,
   establishBudget,
   getCarryoverPreview,
+  getBudgetReallocationPreview,
+  getDeficitResolutionPreview,
   getMonthDispositionPreview,
   getFundedBudgetMonth,
   initializeRecurringBudgets,
@@ -227,6 +290,7 @@ module.exports = {
   removeMonthOverride,
   removeBudget,
   reverseCarryover,
+  reverseBudgetFundingAction,
   reverseMonthDisposition,
   reverseOperation,
   setBudgetAmount,

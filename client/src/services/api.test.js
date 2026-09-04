@@ -34,8 +34,12 @@ vi.mock('axios', () => ({
 
 const {
   addManualBudgetFunding,
+  applyBudgetReallocation,
+  applyDeficitResolution,
   adjustFundedBudget,
   establishFundedBudget,
+  getBudgetReallocationPreview,
+  getDeficitResolutionPreview,
   getDashboardSummary,
   getFundedBudgetMonth,
   getTransactions,
@@ -219,5 +223,25 @@ describe('funded budget API boundary', () => {
     expect(postMock).toHaveBeenNthCalledWith(2, '/budgets/funded/categories', first);
     expect(patchMock).toHaveBeenCalledWith('/budgets/funded/categories/7', adjustment);
     expect(postMock).toHaveBeenNthCalledWith(3, '/budgets/funded/categories/7/remove', removal);
+  });
+
+  it('uses month-scoped preview/apply routes for reallocation and deficit resolution', () => {
+    const move = {
+      source_kind: 'category', source_category_id: 1,
+      destination_kind: 'category', destination_category_id: 2, amount: '10.00',
+    };
+    const resolution = { legs: [{ source_kind: 'savings', amount: '5.00' }] };
+    getBudgetReallocationPreview('2026-09', move);
+    applyBudgetReallocation('2026-09', { ...move, request_key: 'move-key', preview_fingerprint: 'fingerprint' });
+    getDeficitResolutionPreview('2026-09', 2, resolution);
+    applyDeficitResolution('2026-09', 2, { ...resolution, request_key: 'resolve-key', preview_fingerprint: 'fingerprint' });
+    expect(postMock).toHaveBeenNthCalledWith(1, '/budgets/funded/months/2026-09/reallocations/preview', move);
+    expect(postMock).toHaveBeenNthCalledWith(2, '/budgets/funded/months/2026-09/reallocations', {
+      ...move, request_key: 'move-key', preview_fingerprint: 'fingerprint',
+    });
+    expect(postMock).toHaveBeenNthCalledWith(3, '/budgets/funded/months/2026-09/categories/2/deficit-resolution/preview', resolution);
+    expect(postMock).toHaveBeenNthCalledWith(4, '/budgets/funded/months/2026-09/categories/2/deficit-resolution', {
+      ...resolution, request_key: 'resolve-key', preview_fingerprint: 'fingerprint',
+    });
   });
 });

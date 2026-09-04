@@ -21,6 +21,14 @@ const overrideMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '020_month_budget_overrides.sql'),
   'utf8',
 );
+const dispositionMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '021_unused_budget_disposition.sql'),
+  'utf8',
+);
+const reallocationMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '022_budget_reallocation_deficit_resolution.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 test('migration 017 and full_schema carry the same funded-budget foundation', () => {
@@ -72,6 +80,22 @@ test('migration 020 and full_schema carry the month-base override extension', ()
   assert.match(overrideMigration, /HISTORICAL_MONTH_OVERRIDE_FORBIDDEN/i);
   assert.match(overrideMigration, /MONTH_OVERRIDE_INITIALIZATION_REQUIRED/i);
   assert.doesNotMatch(overrideMigration, /savings_destination|month_close_disposition/i);
+});
+
+test('migrations 021 and 022 remain ordered and exact in full_schema', () => {
+  assert.ok(fullSchema.includes(dispositionMigration.trim()));
+  assert.ok(fullSchema.includes(reallocationMigration.trim()));
+  assert.ok(fullSchema.indexOf(dispositionMigration.trim()) < fullSchema.indexOf(reallocationMigration.trim()));
+  for (const object of [
+    'budget_funding_actions', 'budget_funding_action_legs', 'budget_action_month_lifecycle',
+    'get_budget_reallocation_preview', 'apply_budget_reallocation',
+    'get_budget_deficit_resolution_preview', 'apply_budget_deficit_resolution',
+    'reverse_budget_funding_action',
+  ]) assert.match(reallocationMigration, new RegExp(object, 'i'));
+  assert.match(reallocationMigration, /LOCK TABLE public\.transactions IN SHARE MODE/i);
+  assert.match(reallocationMigration, /finance_tracker_budget_savings/i);
+  assert.match(reallocationMigration, /DEFICIT_RESOLUTION_PREVIEW_STALE/i);
+  assert.match(reallocationMigration, /COMPLETED_MONTH_REALLOCATION_FORBIDDEN/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {
@@ -189,16 +213,28 @@ test('budget service maps commands to one database RPC each', async () => {
   await budgetService.removeMonthOverride(supabase, {
     month: '2026-09', categoryId: 1, requestKey: 'key-g',
   });
+  await budgetService.getBudgetReallocationPreview(supabase, {
+    month: '2026-09', sourceKind: 'category', sourceCategoryId: 1,
+    destinationKind: 'unallocated', destinationCategoryId: null, amount: '1.00',
+  });
+  await budgetService.applyDeficitResolution(supabase, {
+    month: '2026-09', categoryId: 2,
+    legs: [{ source_kind: 'unallocated', amount: '1.00' }], requestKey: 'key-h',
+    previewFingerprint: 'fingerprint',
+  });
   assert.deepEqual(calls.map(({ name }) => name), [
     'add_manual_budget_funding', 'establish_funded_budget', 'remove_funded_budget',
     'initialize_budget_recurring_defaults', 'apply_budget_carryover',
     'set_budget_month_override', 'remove_budget_month_override',
+    'get_budget_reallocation_preview', 'apply_budget_deficit_resolution',
   ]);
   assert.equal(calls[0].params.p_source_label, 'Confirmed cash');
   assert.equal(calls[1].params.p_starting_amount, '0.00');
   assert.equal(calls[3].params.p_request_key, 'key-d');
   assert.equal(calls[4].params.p_preview_fingerprint, 'abc');
   assert.equal(calls[5].params.p_amount, '12.34');
+  assert.equal(calls[7].params.p_amount, '1.00');
+  assert.equal(calls[8].params.p_legs[0].amount, '1.00');
 });
 
 test('compatibility amount is final funded and inactive/no-budget categories are omitted', () => {

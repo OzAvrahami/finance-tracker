@@ -23,6 +23,7 @@ import {
 import BudgetSummary from './BudgetSummary';
 import BudgetList from './BudgetList';
 import { CopyBudgetDialog, DeleteBudgetDialog } from './BudgetDialogs';
+import { BudgetReallocationDialog, DeficitResolutionDialog } from './BudgetFundingActions';
 import {
   AddBudgetPanel,
   BudgetEmpty,
@@ -80,6 +81,8 @@ const emptyState = (month) => ({
     fingerprint: '', ready_categories: [], ready_count: 0, total_incoming: '0.00',
     already_applied_categories: [], blocked_categories: [], can_apply: false,
   },
+  funding_action_history: [],
+  action_lifecycle: null,
 });
 
 const requestKey = () => globalThis.crypto.randomUUID();
@@ -106,6 +109,10 @@ const enrichBudget = (budget) => {
   const plannedComparison = compareMoney(planned);
   const remainingComparison = compareMoney(remaining);
   const percent = plannedComparison > 0 ? Math.round(approximateMoneyRatio(actual, planned)) : 0;
+  const effectiveActual = compareMoney(actual) < 0 ? '0.00' : actual;
+  const sourceCapacity = compareMoney(planned, effectiveActual) > 0
+    ? subtractMoney(planned, effectiveActual)
+    : '0.00';
 
   let tone = 'default';
   let statusLabel = 'תקין';
@@ -139,6 +146,9 @@ const enrichBudget = (budget) => {
     incomingCarryover: budget.incoming_carryover ?? '0.00',
     outgoingCarryover: budget.outgoing_carryover ?? '0.00',
     otherAdjustments: budget.other_adjustments ?? '0.00',
+    incomingReallocationResolution: budget.incoming_reallocation_resolution ?? '0.00',
+    outgoingReallocation: budget.outgoing_reallocation ?? '0.00',
+    fundingActionAdjustment: budget.funding_action_adjustment_total ?? '0.00',
     actual,
     remaining,
     remainingAbsolute: absoluteMoney(remaining),
@@ -146,6 +156,7 @@ const enrichBudget = (budget) => {
     percent,
     tone,
     statusLabel,
+    sourceCapacity,
     categoryName: budget.categories?.name || 'קטגוריה ללא שם',
     categoryIcon: budget.categories?.icon || '',
   };
@@ -179,6 +190,8 @@ const Budget = () => {
   const [closePreviewLoading, setClosePreviewLoading] = useState(false);
   const [closePending, setClosePending] = useState(false);
   const [closeError, setCloseError] = useState('');
+  const [showReallocation, setShowReallocation] = useState(false);
+  const [deficitTarget, setDeficitTarget] = useState(null);
   const { setPageHeader } = useContext(PageHeaderContext);
 
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
@@ -253,6 +266,13 @@ const Budget = () => {
   }, [selectedMonth, requestVersion]);
 
   const rows = useMemo(() => activeBudgets.map(enrichBudget), [activeBudgets]);
+  const actionLifecycle = state.action_lifecycle || (
+    selectedMonth === currentCalendarMonth()
+      ? 'current'
+      : selectedMonth === previousCalendarMonth(currentCalendarMonth())
+        ? 'immediately_completed_unclosed'
+        : 'historical_forbidden'
+  );
   const unbudgetedExpenses = useMemo(
     () => state.categories.filter((category) => !category.budget_id
       && category.lifecycle_state === 'no_budget'
@@ -494,6 +514,8 @@ const Budget = () => {
         onOpenFunding={() => setShowFundingPanel(true)}
         onOpenCopy={() => setShowCopyDialog(true)}
         onOpenAdd={() => setShowAddPanel(true)}
+        onOpenReallocation={() => setShowReallocation(true)}
+        canReallocate={actionLifecycle === 'current'}
       />
 
       <ManualFundingPanel
@@ -597,6 +619,8 @@ const Budget = () => {
             onRemoveOverride={handleRemoveOverride}
             onCancelEdit={cancelEdit}
             onRequestDelete={setDeleteTarget}
+            onResolveDeficit={setDeficitTarget}
+            canResolveDeficit={['current', 'immediately_completed_unclosed'].includes(actionLifecycle)}
           />
           <BudgetInsights insights={insights} />
         </>
@@ -612,6 +636,24 @@ const Budget = () => {
         budget={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
+      />
+      <BudgetReallocationDialog
+        open={showReallocation}
+        month={selectedMonth}
+        rows={rows}
+        unallocated={state.funding.unallocated}
+        onClose={() => setShowReallocation(false)}
+        onApplied={refreshBudgets}
+      />
+      <DeficitResolutionDialog
+        open={Boolean(deficitTarget)}
+        month={selectedMonth}
+        row={deficitTarget}
+        rows={rows}
+        unallocated={state.funding.unallocated}
+        savings={state.savings?.balance || '0.00'}
+        onClose={() => setDeficitTarget(null)}
+        onApplied={refreshBudgets}
       />
     </div>
   );

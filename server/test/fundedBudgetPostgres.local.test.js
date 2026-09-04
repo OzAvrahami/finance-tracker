@@ -28,6 +28,10 @@ const dispositionMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '021_unused_budget_disposition.sql'),
   'utf8',
 );
+const reallocationMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '022_budget_reallocation_deficit_resolution.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -138,6 +142,11 @@ const applyDispositionFoundation = (database) => {
   psql(database, dispositionMigration);
 };
 
+const applyReallocationFoundation = (database) => {
+  applyDispositionFoundation(database);
+  psql(database, reallocationMigration);
+};
+
 before(() => {
   docker(['run', '--detach', '--rm', '--name', container, '-e', `POSTGRES_PASSWORD=${password}`, 'postgres:16-alpine']);
   let ready = false;
@@ -192,11 +201,13 @@ test('full_schema creates the funded foundation cleanly from an empty database',
       to_regclass('public.budget_category_state') IS NOT NULL,
       to_regclass('public.budget_unused_balance_policies') IS NOT NULL,
       to_regclass('public.budget_savings_entries') IS NOT NULL,
+      to_regclass('public.budget_funding_actions') IS NOT NULL,
       to_regprocedure('public.get_funded_budget_month(text)') IS NOT NULL,
       to_regprocedure('public.apply_budget_month_disposition(text,uuid,text,text)') IS NOT NULL,
+      to_regprocedure('public.apply_budget_deficit_resolution(text,bigint,jsonb,uuid,text,text)') IS NOT NULL,
       to_regprocedure('public.remove_funded_budget(bigint,uuid,text)') IS NOT NULL;
   `).stdout.trim();
-  assert.equal(objects, 't|t|t|t|t|t|t|t');
+  assert.equal(objects, 't|t|t|t|t|t|t|t|t|t');
 });
 
 test('preflight rejects invalid month and rolls the transaction back', () => {
@@ -2483,4 +2494,348 @@ test('month close shares the established lock order with override, copy, adjustm
     ||(SELECT count(*) FROM budget_category_state WHERE month='${destinationMonth}' AND category_id=6);
   `).stdout.trim(),`${closeApplied ? '1000.00' : '0.00'}|150.00|inactive|active|1|1`);
   psql('disposition_mutation_concurrency','SELECT budget_assert_reconciled(id) FROM budget_months ORDER BY id;');
+});
+
+test('migration 022 extends the deployed foundation without financial backfill', () => {
+  createDatabase('reallocation_migration');
+  psql('reallocation_migration', `${fixture()} INSERT INTO budgets(category_id,month,amount) VALUES(1,'2026-08',25);`);
+  applyDispositionFoundation('reallocation_migration');
+  const before = psql('reallocation_migration', `SELECT
+    (SELECT count(*) FROM budgets)||'|'||(SELECT count(*) FROM budget_operations)||'|'
+    ||(SELECT count(*) FROM budget_savings_entries);`).stdout.trim();
+  psql('reallocation_migration', reallocationMigration);
+  assert.equal(psql('reallocation_migration', `SELECT
+    to_regclass('public.budget_funding_actions') IS NOT NULL,
+    to_regclass('public.budget_funding_action_legs') IS NOT NULL,
+    to_regprocedure('public.apply_budget_reallocation(text,text,bigint,text,bigint,numeric,uuid,text,text)') IS NOT NULL,
+    to_regprocedure('public.apply_budget_deficit_resolution(text,bigint,jsonb,uuid,text,text)') IS NOT NULL,
+    (SELECT count(*) FROM budget_funding_actions),
+    (SELECT count(*) FROM budget_funding_action_legs),
+    (SELECT count(*) FROM budget_savings_entries WHERE entry_kind IN ('withdrawal','withdrawal_reversal'));
+  `).stdout.trim(),'t|t|t|t|0|0|0');
+  assert.equal(psql('reallocation_migration', `SELECT
+    (SELECT count(*) FROM budgets)||'|'||(SELECT count(*) FROM budget_operations)||'|'
+    ||(SELECT count(*) FROM budget_savings_entries);`).stdout.trim(),before);
+});
+
+test('planned reallocation supports all three funded movement forms and preserves composition', () => {
+  createDatabase('reallocation_forms');
+  psql('reallocation_forms', fixture());
+  applyReallocationFoundation('reallocation_forms');
+  const month = psql('reallocation_forms', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('reallocation_forms', `
+    SELECT add_manual_budget_funding('${month}',3000,'test','91000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,1000,'manual','91000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,500,'manual','91000000-0000-0000-0000-000000000003');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',200,1);
+  `);
+  const applyMove = (sourceKind, sourceId, destinationKind, destinationId, amount, key) => {
+    const preview = JSON.parse(psql('reallocation_forms', `SELECT get_budget_reallocation_preview(
+      '${month}','${sourceKind}',${sourceId ?? 'NULL'},'${destinationKind}',${destinationId ?? 'NULL'},${amount});`).stdout.trim());
+    assert.equal(preview.can_apply,true);
+    psql('reallocation_forms', `SELECT apply_budget_reallocation('${month}','${sourceKind}',${sourceId ?? 'NULL'},
+      '${destinationKind}',${destinationId ?? 'NULL'},${amount},'${key}','${preview.fingerprint}');`);
+  };
+  applyMove('category',1,'category',2,300,'91000000-0000-0000-0000-000000000004');
+  applyMove('unallocated',null,'category',2,100,'91000000-0000-0000-0000-000000000005');
+  applyMove('category',2,'unallocated',null,50,'91000000-0000-0000-0000-000000000006');
+  assert.equal(psql('reallocation_forms', `SELECT
+    (SELECT final_funded FROM budget_category_state WHERE month='${month}' AND category_id=1)||'|'
+    ||(SELECT final_funded FROM budget_category_state WHERE month='${month}' AND category_id=2)||'|'
+    ||available||'|'||total_allocated||'|'||unallocated
+    FROM budget_month_funding_state WHERE month='${month}';`).stdout.trim(),'700.00|850.00|3000.00|1550.00|1450.00');
+  const composed = JSON.parse(psql('reallocation_forms', `SELECT get_funded_budget_month('${month}');`).stdout.trim());
+  const food = composed.categories.find((row) => row.category_id === 1);
+  assert.equal(`${food.starting_amount}|${food.incoming_reallocation_resolution}|${food.outgoing_reallocation}|${food.other_adjustments}`,
+    '1000.00|0.00|300.00|0.00');
+  assert.equal(psql('reallocation_forms','SELECT count(*) FROM budget_funding_actions;').stdout.trim(),'3');
+  psql('reallocation_forms','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('source eligibility clamps negative actuals and rejects spent funding atomically', () => {
+  createDatabase('reallocation_eligibility');
+  psql('reallocation_eligibility', fixture());
+  applyReallocationFoundation('reallocation_eligibility');
+  const month = psql('reallocation_eligibility', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('reallocation_eligibility', `
+    SELECT add_manual_budget_funding('${month}',2000,'test','92000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,1000,'manual','92000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,500,'manual','92000000-0000-0000-0000-000000000003');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',-200,1),
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',500,2);
+  `);
+  const negative = JSON.parse(psql('reallocation_eligibility', `SELECT get_budget_reallocation_preview('${month}','category',1,'unallocated',NULL,1000);`).stdout.trim());
+  assert.equal(`${negative.source_raw_actual}|${negative.source_effective_actual}|${negative.source_capacity}|${negative.can_apply}`,'-200.00|0.00|1000.00|true');
+  const spent = JSON.parse(psql('reallocation_eligibility', `SELECT get_budget_reallocation_preview('${month}','category',2,'unallocated',NULL,1);`).stdout.trim());
+  assert.equal(`${spent.source_capacity}|${spent.can_apply}|${spent.reason}`,'0.00|false|REALLOCATION_SOURCE_INSUFFICIENT');
+  assert.equal(psql('reallocation_eligibility','SELECT count(*) FROM budget_funding_actions;').stdout.trim(),'0');
+});
+
+test('multi-source deficit resolution is atomic, partial, exact, and Savings is not an expense', () => {
+  createDatabase('deficit_mixed');
+  psql('deficit_mixed', fixture());
+  applyReallocationFoundation('deficit_mixed');
+  const current = psql('deficit_mixed', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const previous = psql('deficit_mixed', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('deficit_mixed', `
+    SELECT add_manual_budget_funding('${previous}',1000,'test','93000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',3,1000,'manual','93000000-0000-0000-0000-000000000002');
+    SELECT set_budget_unused_balance_policy(3,'savings');
+  `);
+  const close = JSON.parse(psql('deficit_mixed', `SELECT get_budget_month_disposition_preview('${previous}');`).stdout.trim());
+  psql('deficit_mixed', `SELECT apply_budget_month_disposition('${previous}','93000000-0000-0000-0000-000000000003','${close.fingerprint}');
+    SELECT add_manual_budget_funding('${current}',1500,'test','93000000-0000-0000-0000-000000000004');
+    SELECT establish_funded_budget('${current}',1,500,'manual','93000000-0000-0000-0000-000000000005');
+    SELECT establish_funded_budget('${current}',2,500,'manual','93000000-0000-0000-0000-000000000006');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',100,1),
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',1000,2);
+  `);
+  const legs = `jsonb_build_array(
+    jsonb_build_object('source_kind','unallocated','amount','100.00'),
+    jsonb_build_object('source_kind','category','category_id',1,'amount','150.00'),
+    jsonb_build_object('source_kind','savings','amount','100.00'))`;
+  const preview = JSON.parse(psql('deficit_mixed', `SELECT get_budget_deficit_resolution_preview('${current}',2,${legs});`).stdout.trim());
+  assert.equal(`${preview.deficit}|${preview.requested_resolution}|${preview.remaining_deficit}|${preview.can_apply}`,'500.00|350.00|150.00|true');
+  psql('deficit_mixed', `SELECT apply_budget_deficit_resolution('${current}',2,${legs},
+    '93000000-0000-0000-0000-000000000007','${preview.fingerprint}');`);
+  assert.equal(psql('deficit_mixed', `SELECT
+    (SELECT final_funded FROM budget_category_state WHERE month='${current}' AND category_id=1)||'|'
+    ||(SELECT final_funded FROM budget_category_state WHERE month='${current}' AND category_id=2)||'|'
+    ||(SELECT balance_text FROM budget_savings_state)||'|'||available||'|'||unallocated||'|'
+    ||(SELECT sum(total_amount) FROM transactions WHERE movement_type='expense')
+    FROM budget_month_funding_state WHERE month='${current}';`).stdout.trim(),'350.00|850.00|900.00|1600.00|400.00|1100');
+  assert.equal(psql('deficit_mixed', `SELECT requested_amount||'|'||deficit_before||'|'||deficit_after||'|'
+    ||(SELECT count(*) FROM budget_funding_action_legs WHERE action_id=budget_funding_actions.id)
+    FROM budget_funding_actions WHERE action_kind='deficit_resolution';`).stdout.trim(),'350.00|500.00|150.00|3');
+  psql('deficit_mixed','SELECT budget_assert_reconciled(id) FROM budget_months ORDER BY id;');
+});
+
+test('immediately completed unclosed deficits are resolvable but planning, closed, and older months are rejected', () => {
+  createDatabase('deficit_lifecycle');
+  psql('deficit_lifecycle', fixture());
+  applyReallocationFoundation('deficit_lifecycle');
+  const current = psql('deficit_lifecycle', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const previous = psql('deficit_lifecycle', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('deficit_lifecycle', `
+    SELECT add_manual_budget_funding('${previous}',1000,'test','94000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',1,600,'manual','94000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${previous}',2,200,'manual','94000000-0000-0000-0000-000000000003');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',350,2);
+  `);
+  const plan = JSON.parse(psql('deficit_lifecycle', `SELECT get_budget_reallocation_preview('${previous}','category',1,'category',2,50);`).stdout.trim());
+  assert.equal(`${plan.can_apply}|${plan.reason}`,'false|COMPLETED_MONTH_REALLOCATION_FORBIDDEN');
+  const legs = `jsonb_build_array(jsonb_build_object('source_kind','category','category_id',1,'amount','100.00'))`;
+  const resolution = JSON.parse(psql('deficit_lifecycle', `SELECT get_budget_deficit_resolution_preview('${previous}',2,${legs});`).stdout.trim());
+  assert.equal(`${resolution.lifecycle}|${resolution.can_apply}|${resolution.remaining_deficit}`,'immediately_completed_unclosed|true|50.00');
+  psql('deficit_lifecycle', `SELECT apply_budget_deficit_resolution('${previous}',2,${legs},
+    '94000000-0000-0000-0000-000000000004','${resolution.fingerprint}');`);
+  let closePreview = JSON.parse(psql('deficit_lifecycle', `SELECT get_budget_month_disposition_preview('${previous}');`).stdout.trim());
+  assert.equal(closePreview.deficit_blockers[0].deficit,'50.00');
+  const remainingLeg = `jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','50.00'))`;
+  const finalPreview = JSON.parse(psql('deficit_lifecycle', `SELECT get_budget_deficit_resolution_preview('${previous}',2,${remainingLeg});`).stdout.trim());
+  psql('deficit_lifecycle', `SELECT apply_budget_deficit_resolution('${previous}',2,${remainingLeg},
+    '94000000-0000-0000-0000-000000000005','${finalPreview.fingerprint}');`);
+  closePreview = JSON.parse(psql('deficit_lifecycle', `SELECT get_budget_month_disposition_preview('${previous}');`).stdout.trim());
+  assert.equal(closePreview.deficit_blockers.length,0);
+  psql('deficit_lifecycle', `INSERT INTO budget_months(month_start) VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date) ON CONFLICT DO NOTHING;
+    INSERT INTO budget_month_disposition_batches(request_key,request_fingerprint,source_budget_month_id,destination_budget_month_id)
+    SELECT '94000000-0000-0000-0000-000000000006','close-marker',s.id,d.id FROM budget_months s,budget_months d
+    WHERE s.month_start=(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date
+      AND d.month_start=date_trunc('month',timezone('Asia/Jerusalem',now()))::date;`);
+  const closed = JSON.parse(psql('deficit_lifecycle', `SELECT get_budget_deficit_resolution_preview('${previous}',2,${remainingLeg});`).stdout.trim());
+  assert.equal(`${closed.lifecycle}|${closed.reason}`,'closed|BUDGET_MONTH_ALREADY_CLOSED');
+  psql('deficit_lifecycle', `INSERT INTO budget_month_disposition_batches(
+      request_key,request_fingerprint,source_budget_month_id,destination_budget_month_id,reverses_batch_id)
+    SELECT '94000000-0000-0000-0000-000000000007','close-reversal',source_budget_month_id,
+      destination_budget_month_id,id FROM budget_month_disposition_batches
+    WHERE request_key='94000000-0000-0000-0000-000000000006';`);
+  assert.equal(psql('deficit_lifecycle', `SELECT budget_action_month_lifecycle('${previous}');`).stdout.trim(),'closed');
+  const older = psql('deficit_lifecycle', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '2 months','YYYY-MM');`).stdout.trim();
+  assert.equal(psql('deficit_lifecycle', `SELECT budget_action_month_lifecycle('${older}');`).stdout.trim(),'historical_forbidden');
+});
+
+test('no-budget, inactive, and globally inactive deficit destinations are rejected without writes', () => {
+  createDatabase('deficit_destinations');
+  psql('deficit_destinations', fixture());
+  applyReallocationFoundation('deficit_destinations');
+  const month = psql('deficit_destinations', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('deficit_destinations', `
+    SELECT add_manual_budget_funding('${month}',1000,'test','95000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,500,'manual','95000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,0,'manual','95000000-0000-0000-0000-000000000003');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',50,2),
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',50,3);
+  `);
+  const leg = `jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','10.00'))`;
+  assert.equal(JSON.parse(psql('deficit_destinations', `SELECT get_budget_deficit_resolution_preview('${month}',3,${leg});`).stdout.trim()).reason,'NO_BUDGET_DESTINATION');
+  const explicitZero = JSON.parse(psql('deficit_destinations', `SELECT get_budget_deficit_resolution_preview('${month}',2,${leg});`).stdout.trim());
+  assert.equal(`${explicitZero.current_funded}|${explicitZero.deficit}|${explicitZero.can_apply}`,'0.00|50.00|true');
+  psql('deficit_destinations', `SELECT remove_funded_budget((SELECT budget_id FROM budget_category_state WHERE month='${month}' AND category_id=2),'95000000-0000-0000-0000-000000000004');`);
+  assert.equal(JSON.parse(psql('deficit_destinations', `SELECT get_budget_deficit_resolution_preview('${month}',2,${leg});`).stdout.trim()).reason,'DESTINATION_BUDGET_NOT_ACTIVE');
+  psql('deficit_destinations', `SELECT reactivate_funded_budget((SELECT budget_id FROM budget_category_state WHERE month='${month}' AND category_id=2),0,'95000000-0000-0000-0000-000000000005'); UPDATE categories SET is_active=false WHERE id=2;`);
+  assert.equal(JSON.parse(psql('deficit_destinations', `SELECT get_budget_deficit_resolution_preview('${month}',2,${leg});`).stdout.trim()).reason,'DESTINATION_BUDGET_NOT_ACTIVE');
+  assert.equal(psql('deficit_destinations','SELECT count(*) FROM budget_funding_actions;').stdout.trim(),'0');
+});
+
+test('transaction changes stale an approved resolution and leave zero partial provenance', () => {
+  createDatabase('deficit_stale');
+  psql('deficit_stale', fixture());
+  applyReallocationFoundation('deficit_stale');
+  const month = psql('deficit_stale', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('deficit_stale', `
+    SELECT add_manual_budget_funding('${month}',1000,'test','96000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,500,'manual','96000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,300,'manual','96000000-0000-0000-0000-000000000003');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',500,2);
+  `);
+  const legs = `jsonb_build_array(jsonb_build_object('source_kind','category','category_id',1,'amount','100.00'))`;
+  const preview = JSON.parse(psql('deficit_stale', `SELECT get_budget_deficit_resolution_preview('${month}',2,${legs});`).stdout.trim());
+  psql('deficit_stale', `INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',25,1);`);
+  const failed = psql('deficit_stale', `SELECT apply_budget_deficit_resolution('${month}',2,${legs},
+    '96000000-0000-0000-0000-000000000004','${preview.fingerprint}');`,true);
+  assert.match(failed.stderr,/DEFICIT_RESOLUTION_PREVIEW_STALE/);
+  assert.equal(psql('deficit_stale', `SELECT
+    (SELECT count(*) FROM budget_funding_actions)||'|'||(SELECT count(*) FROM budget_funding_action_legs)||'|'
+    ||(SELECT count(*) FROM budget_operations WHERE operation_type='deficit_resolution')||'|'
+    ||(SELECT count(*) FROM budget_movements WHERE operation_id IN (SELECT id FROM budget_operations WHERE operation_type='deficit_resolution'));
+  `).stdout.trim(),'0|0|0|0');
+});
+
+test('funding actions are append-only, service-role bounded, reversible, and exact above 2^53', () => {
+  createDatabase('reallocation_acl_exact');
+  psql('reallocation_acl_exact', fixture());
+  applyReallocationFoundation('reallocation_acl_exact');
+  const month = psql('reallocation_acl_exact', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('reallocation_acl_exact', `
+    SELECT add_manual_budget_funding('${month}',9007199254740993.99,'test','97000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,9007199254740993.00,'manual','97000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,0,'manual','97000000-0000-0000-0000-000000000003');
+  `);
+  const preview = JSON.parse(psql('reallocation_acl_exact', `SELECT get_budget_reallocation_preview('${month}','category',1,'category',2,0.99);`).stdout.trim());
+  psql('reallocation_acl_exact', `SELECT apply_budget_reallocation('${month}','category',1,'category',2,0.99,
+    '97000000-0000-0000-0000-000000000004','${preview.fingerprint}');`);
+  assert.equal(psql('reallocation_acl_exact', `SELECT final_funded FROM budget_category_state WHERE month='${month}' ORDER BY category_id;`).stdout.trim(),'9007199254740992.01\n0.99');
+  psql('reallocation_acl_exact', `SELECT reverse_budget_funding_action((SELECT id FROM budget_funding_actions WHERE action_kind='planned_reallocation'),
+    '97000000-0000-0000-0000-000000000005');`);
+  assert.equal(psql('reallocation_acl_exact', `SELECT final_funded FROM budget_category_state WHERE month='${month}' ORDER BY category_id;`).stdout.trim(),'9007199254740993.00\n0.00');
+  const spentPreview = JSON.parse(psql('reallocation_acl_exact', `SELECT get_budget_reallocation_preview('${month}','category',1,'category',2,0.50);`).stdout.trim());
+  psql('reallocation_acl_exact', `SELECT apply_budget_reallocation('${month}','category',1,'category',2,0.50,
+    '97000000-0000-0000-0000-000000000006','${spentPreview.fingerprint}');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',0.25,2);`);
+  const blockedReversal = psql('reallocation_acl_exact', `SELECT reverse_budget_funding_action(
+    (SELECT max(id) FROM budget_funding_actions WHERE action_kind='planned_reallocation'),
+    '97000000-0000-0000-0000-000000000007');`,true);
+  assert.match(blockedReversal.stderr,/FUNDING_ACTION_REVERSAL_BLOCKED/);
+  assert.equal(psql('reallocation_acl_exact', `SELECT count(*) FROM budget_funding_actions WHERE action_kind='reversal';`).stdout.trim(),'1');
+  assert.match(psql('reallocation_acl_exact','UPDATE budget_funding_actions SET applied_amount=1;',true).stderr,/append-only/);
+  assert.match(psql('reallocation_acl_exact','DELETE FROM budget_funding_action_legs;',true).stderr,/append-only/);
+  for (const role of ['anon','authenticated']) {
+    assert.equal(psql('reallocation_acl_exact', `SELECT has_table_privilege('${role}','budget_funding_actions','INSERT');`).stdout.trim(),'f');
+    assert.equal(psql('reallocation_acl_exact', `SELECT has_function_privilege('${role}',
+      'apply_budget_deficit_resolution(text,bigint,jsonb,uuid,text,text)','EXECUTE');`).stdout.trim(),'f');
+  }
+  assert.equal(psql('reallocation_acl_exact', `SELECT has_function_privilege('service_role',
+    'apply_budget_deficit_resolution(text,bigint,jsonb,uuid,text,text)','EXECUTE');`).stdout.trim(),'t');
+  assert.equal(psql('reallocation_acl_exact', `SELECT has_function_privilege('service_role',
+    'validate_budget_funding_action()','EXECUTE');`).stdout.trim(),'f');
+});
+
+test('funding action previews are read-only and apply retries are idempotent with conflicting keys rejected', () => {
+  createDatabase('reallocation_idempotency');
+  psql('reallocation_idempotency', fixture());
+  applyReallocationFoundation('reallocation_idempotency');
+  const month = psql('reallocation_idempotency', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('reallocation_idempotency', `
+    SELECT add_manual_budget_funding('${month}',1000,'test','98000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,500,'manual','98000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,300,'manual','98000000-0000-0000-0000-000000000003');
+  `);
+  const before = psql('reallocation_idempotency', `SELECT
+    (SELECT count(*) FROM budget_operations)||'|'||(SELECT count(*) FROM budget_movements)||'|'
+    ||(SELECT count(*) FROM budget_funding_actions)||'|'||(SELECT count(*) FROM budget_funding_action_legs);`).stdout.trim();
+  const preview = JSON.parse(psql('reallocation_idempotency', `SELECT get_budget_reallocation_preview(
+    '${month}','category',1,'category',2,100);`).stdout.trim());
+  assert.equal(psql('reallocation_idempotency', `SELECT
+    (SELECT count(*) FROM budget_operations)||'|'||(SELECT count(*) FROM budget_movements)||'|'
+    ||(SELECT count(*) FROM budget_funding_actions)||'|'||(SELECT count(*) FROM budget_funding_action_legs);`).stdout.trim(),before);
+  const applySql = `SELECT apply_budget_reallocation('${month}','category',1,'category',2,100,
+    '98000000-0000-0000-0000-000000000004','${preview.fingerprint}');`;
+  psql('reallocation_idempotency', applySql);
+  psql('reallocation_idempotency', applySql);
+  assert.equal(psql('reallocation_idempotency', `SELECT
+    (SELECT count(*) FROM budget_operations WHERE operation_type='budget_reallocation')||'|'
+    ||(SELECT count(*) FROM budget_funding_actions)||'|'||(SELECT count(*) FROM budget_funding_action_legs);`).stdout.trim(),'1|1|1');
+  const conflict = psql('reallocation_idempotency', `SELECT apply_budget_reallocation('${month}','category',1,'category',2,50,
+    '98000000-0000-0000-0000-000000000004','00000000000000000000000000000000');`,true);
+  assert.match(conflict.stderr,/request_key was already used/);
+  assert.equal(psql('reallocation_idempotency','SELECT count(*) FROM budget_funding_actions;').stdout.trim(),'1');
+});
+
+test('over-resolution and insufficient legs fail atomically without consuming Savings or funding', () => {
+  createDatabase('deficit_atomic_reject');
+  psql('deficit_atomic_reject', fixture());
+  applyReallocationFoundation('deficit_atomic_reject');
+  const month = psql('deficit_atomic_reject', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('deficit_atomic_reject', `
+    SELECT add_manual_budget_funding('${month}',500,'test','99000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,100,'manual','99000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,300,'manual','99000000-0000-0000-0000-000000000003');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',350,2);
+  `);
+  for (const [legs,reason,key] of [
+    [`jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','60.00'))`,'DEFICIT_RESOLUTION_EXCEEDS_DEFICIT','99000000-0000-0000-0000-000000000004'],
+    [`jsonb_build_array(jsonb_build_object('source_kind','savings','amount','10.00'))`,'SAVINGS_INSUFFICIENT','99000000-0000-0000-0000-000000000005'],
+    [`jsonb_build_array(jsonb_build_object('source_kind','category','category_id',1,'amount','101.00'))`,'DEFICIT_SOURCE_INSUFFICIENT','99000000-0000-0000-0000-000000000006'],
+  ]) {
+    const preview = JSON.parse(psql('deficit_atomic_reject', `SELECT get_budget_deficit_resolution_preview('${month}',2,${legs});`).stdout.trim());
+    assert.equal(preview.reason,reason);
+    const failed = psql('deficit_atomic_reject', `SELECT apply_budget_deficit_resolution('${month}',2,${legs},'${key}','${preview.fingerprint}');`,true);
+    assert.match(failed.stderr,new RegExp(reason));
+  }
+  assert.equal(psql('deficit_atomic_reject', `SELECT
+    (SELECT count(*) FROM budget_funding_actions)||'|'||(SELECT count(*) FROM budget_funding_action_legs)||'|'
+    ||(SELECT balance_text FROM budget_savings_state)||'|'||(SELECT final_funded FROM budget_category_state WHERE month='${month}' AND category_id=2);`).stdout.trim(),'0|0|0.00|300.00');
+});
+
+test('concurrent funding mutation either precedes an exact resolution or makes its preview stale without deadlock', async () => {
+  createDatabase('deficit_funding_concurrency');
+  psql('deficit_funding_concurrency', fixture());
+  applyReallocationFoundation('deficit_funding_concurrency');
+  const month = psql('deficit_funding_concurrency', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('deficit_funding_concurrency', `
+    SELECT add_manual_budget_funding('${month}',500,'test','99100000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,100,'manual','99100000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,300,'manual','99100000-0000-0000-0000-000000000003');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',400,2);
+  `);
+  const legs = `jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','100.00'))`;
+  const preview = JSON.parse(psql('deficit_funding_concurrency', `SELECT get_budget_deficit_resolution_preview('${month}',2,${legs});`).stdout.trim());
+  const [funding, resolution] = await Promise.all([
+    psqlAsync('deficit_funding_concurrency', `SET statement_timeout='5s'; SELECT add_manual_budget_funding(
+      '${month}',50,'concurrent','99100000-0000-0000-0000-000000000004');`),
+    psqlAsync('deficit_funding_concurrency', `SET statement_timeout='5s'; SELECT apply_budget_deficit_resolution(
+      '${month}',2,${legs},'99100000-0000-0000-0000-000000000005','${preview.fingerprint}');`),
+  ]);
+  assert.equal(funding.status,0,funding.stderr);
+  assert.ok(resolution.status===0 || /DEFICIT_RESOLUTION_PREVIEW_STALE/.test(resolution.stderr),resolution.stderr);
+  const actionCount = Number(psql('deficit_funding_concurrency', `SELECT count(*) FROM budget_funding_actions WHERE action_kind='deficit_resolution';`).stdout.trim());
+  assert.equal(actionCount,resolution.status===0 ? 1 : 0);
+  assert.equal(psql('deficit_funding_concurrency', `SELECT available||'|'||total_allocated||'|'||unallocated
+    FROM budget_month_funding_state WHERE month='${month}';`).stdout.trim(),resolution.status===0 ? '550.00|500.00|50.00' : '550.00|400.00|150.00');
+  psql('deficit_funding_concurrency','SELECT budget_assert_reconciled(id) FROM budget_months;');
+  if (resolution.status!==0) {
+    const fresh = JSON.parse(psql('deficit_funding_concurrency', `SELECT get_budget_deficit_resolution_preview('${month}',2,${legs});`).stdout.trim());
+    assert.notEqual(fresh.fingerprint,preview.fingerprint);
+    assert.equal(fresh.unallocated_capacity,'150.00');
+  }
 });

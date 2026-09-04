@@ -8,6 +8,8 @@ const money = require('../utils/money');
 const FUNDED_MONEY_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const ZERO_MONEY_PATTERN = /^0(?:\.0{1,2})?$/;
 const CARRYOVER_FINGERPRINT_PATTERN = /^[0-9a-f]{32}$/;
+const FUNDING_ENDPOINT_KINDS = new Set(['category', 'unallocated']);
+const DEFICIT_SOURCE_KINDS = new Set(['category', 'unallocated', 'savings']);
 
 const validateFundedMoney = (res, field, value, { positive = false } = {}) => {
   if (typeof value !== 'string' || !FUNDED_MONEY_PATTERN.test(value)) {
@@ -41,6 +43,30 @@ const sendBudgetError = (res, label, error) => {
     error: error.message,
     code,
   });
+};
+
+const validateDeficitLegs = (res, legs) => {
+  if (!Array.isArray(legs) || legs.length === 0) {
+    res.status(400).json({ error: 'legs must be a non-empty array', code: 'INVALID_DEFICIT_RESOLUTION_REQUEST' });
+    return false;
+  }
+  const seen = new Set();
+  for (const leg of legs) {
+    if (!leg || !DEFICIT_SOURCE_KINDS.has(leg.source_kind)
+        || !validateFundedMoney(res, 'legs[].amount', leg.amount, { positive: true })) return false;
+    const categoryId = leg.source_kind === 'category' ? leg.category_id : null;
+    if (leg.source_kind === 'category' && !categoryId) {
+      res.status(400).json({ error: 'category source legs require category_id', code: 'INVALID_DEFICIT_RESOLUTION_REQUEST' });
+      return false;
+    }
+    const key = `${leg.source_kind}:${categoryId || ''}`;
+    if (seen.has(key)) {
+      res.status(400).json({ error: 'duplicate deficit funding source', code: 'INVALID_DEFICIT_RESOLUTION_REQUEST' });
+      return false;
+    }
+    seen.add(key);
+  }
+  return true;
 };
 
 // GET /api/budgets?month=2026-02
@@ -77,6 +103,7 @@ exports.getBudgetHistory = async (req, res) => {
       history: state.history || [],
       carryover_history: state.carryover_history || [],
       unused_disposition_history: state.unused_disposition_history || [],
+      funding_action_history: state.funding_action_history || [],
       savings: state.savings || { balance: '0.00' },
     });
   } catch (error) {
@@ -331,6 +358,97 @@ exports.reverseMonthDisposition = async (req, res) => {
     return res.status(200).json(result);
   } catch (error) {
     return sendBudgetError(res, 'reverseMonthDisposition', error);
+  }
+};
+
+exports.getBudgetReallocationPreview = async (req, res) => {
+  try {
+    const {
+      source_kind: sourceKind, source_category_id: sourceCategoryId,
+      destination_kind: destinationKind, destination_category_id: destinationCategoryId,
+      amount,
+    } = req.body || {};
+    if (!FUNDING_ENDPOINT_KINDS.has(sourceKind) || !FUNDING_ENDPOINT_KINDS.has(destinationKind)) {
+      return res.status(400).json({ error: 'invalid reallocation endpoints', code: 'INVALID_REALLOCATION_REQUEST' });
+    }
+    if (!validateFundedMoney(res, 'amount', amount, { positive: true })) return undefined;
+    const preview = await budgetService.getBudgetReallocationPreview(supabase, {
+      month: req.params.month, sourceKind, sourceCategoryId,
+      destinationKind, destinationCategoryId, amount,
+    });
+    return res.status(200).json(preview);
+  } catch (error) {
+    return sendBudgetError(res, 'getBudgetReallocationPreview', error);
+  }
+};
+
+exports.applyBudgetReallocation = async (req, res) => {
+  try {
+    const {
+      source_kind: sourceKind, source_category_id: sourceCategoryId,
+      destination_kind: destinationKind, destination_category_id: destinationCategoryId,
+      amount, request_key: requestKey, preview_fingerprint: previewFingerprint, reason,
+    } = req.body || {};
+    if (!FUNDING_ENDPOINT_KINDS.has(sourceKind) || !FUNDING_ENDPOINT_KINDS.has(destinationKind)
+        || !requestKey || !CARRYOVER_FINGERPRINT_PATTERN.test(previewFingerprint || '')) {
+      return res.status(400).json({ error: 'invalid reallocation request', code: 'INVALID_REALLOCATION_REQUEST' });
+    }
+    if (!validateFundedMoney(res, 'amount', amount, { positive: true })) return undefined;
+    const result = await budgetService.applyBudgetReallocation(supabase, {
+      month: req.params.month, sourceKind, sourceCategoryId, destinationKind,
+      destinationCategoryId, amount, requestKey, previewFingerprint, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'applyBudgetReallocation', error);
+  }
+};
+
+exports.getDeficitResolutionPreview = async (req, res) => {
+  try {
+    const { legs } = req.body || {};
+    if (!validateDeficitLegs(res, legs)) return undefined;
+    const preview = await budgetService.getDeficitResolutionPreview(supabase, {
+      month: req.params.month, categoryId: req.params.categoryId, legs,
+    });
+    return res.status(200).json(preview);
+  } catch (error) {
+    return sendBudgetError(res, 'getDeficitResolutionPreview', error);
+  }
+};
+
+exports.applyDeficitResolution = async (req, res) => {
+  try {
+    const {
+      legs, request_key: requestKey, preview_fingerprint: previewFingerprint, reason,
+    } = req.body || {};
+    if (!validateDeficitLegs(res, legs)) return undefined;
+    if (!requestKey || !CARRYOVER_FINGERPRINT_PATTERN.test(previewFingerprint || '')) {
+      return res.status(400).json({
+        error: 'request_key and a valid preview_fingerprint are required',
+        code: 'INVALID_DEFICIT_RESOLUTION_REQUEST',
+      });
+    }
+    const result = await budgetService.applyDeficitResolution(supabase, {
+      month: req.params.month, categoryId: req.params.categoryId, legs,
+      requestKey, previewFingerprint, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'applyDeficitResolution', error);
+  }
+};
+
+exports.reverseBudgetFundingAction = async (req, res) => {
+  try {
+    const { request_key: requestKey, reason } = req.body || {};
+    if (!requestKey) return res.status(400).json({ error: 'request_key is required', code: 'INVALID_FUNDING_ACTION_REQUEST' });
+    const result = await budgetService.reverseBudgetFundingAction(supabase, {
+      actionId: req.params.id, requestKey, reason,
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendBudgetError(res, 'reverseBudgetFundingAction', error);
   }
 };
 
