@@ -36,6 +36,10 @@ const unbudgetedResolutionMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '023_unbudgeted_expense_resolution.sql'),
   'utf8',
 );
+const consolidationMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '024_budget_schema_consolidation.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -154,6 +158,11 @@ const applyReallocationFoundation = (database) => {
 const applyUnbudgetedResolutionFoundation = (database) => {
   applyReallocationFoundation(database);
   psql(database, unbudgetedResolutionMigration);
+};
+
+const applyConsolidatedFoundation = (database) => {
+  applyUnbudgetedResolutionFoundation(database);
+  psql(database, consolidationMigration);
 };
 
 before(() => {
@@ -3005,4 +3014,386 @@ test('mixed Savings resolution is exact, idempotent, reversible, and preserves e
     FROM budget_category_state WHERE month='${current}' AND category_id=3;`).stdout.trim(),'inactive|300.00');
   assert.equal(psql('unbudgeted_savings_exact',`SELECT sum(total_amount) FROM transactions WHERE category_id=3;`).stdout.trim(),'9007199254740993.99');
   psql('unbudgeted_savings_exact','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('migration 024 consolidates the empty feature write model into exactly eleven physical tables', () => {
+  createDatabase('budget_consolidation_shape');
+  psql('budget_consolidation_shape', fixture());
+  applyUnbudgetedResolutionFoundation('budget_consolidation_shape');
+  psql('budget_consolidation_shape', `
+    SELECT add_manual_budget_funding('2026-09',1000,'fixture','b1000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('2026-09',1,600,'manual','b1000000-0000-0000-0000-000000000002');
+    SELECT set_budget_recurring_default(1,700);
+    SELECT set_budget_unused_balance_policy(1,'savings');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES('2026-09-01','expense',12.34,3);
+  `);
+  const before = JSON.parse(psql('budget_consolidation_shape', "SELECT get_funded_budget_month('2026-09');").stdout.trim());
+  const retained = psql('budget_consolidation_shape', `SELECT
+    (SELECT count(*) FROM budget_months)||'|'||(SELECT count(*) FROM budgets)||'|'
+    ||(SELECT count(*) FROM budget_operations)||'|'||(SELECT count(*) FROM budget_funding_entries)||'|'
+    ||(SELECT count(*) FROM budget_movements)||'|'||(SELECT count(*) FROM budget_lifecycle_events);`).stdout.trim();
+  psql('budget_consolidation_shape', consolidationMigration);
+  const after = JSON.parse(psql('budget_consolidation_shape', "SELECT get_funded_budget_month('2026-09');").stdout.trim());
+  assert.deepEqual(after.funding, before.funding);
+  assert.deepEqual(after.actuals, before.actuals);
+  assert.deepEqual(
+    after.categories.map(({ unused_disposition_adjustment, ...existingFields }) => existingFields),
+    before.categories,
+  );
+  assert.ok(after.categories.every((category) => category.unused_disposition_adjustment === '0.00'));
+  assert.equal(psql('budget_consolidation_shape', `SELECT
+    (SELECT count(*) FROM budget_months)||'|'||(SELECT count(*) FROM budgets)||'|'
+    ||(SELECT count(*) FROM budget_operations)||'|'||(SELECT count(*) FROM budget_funding_entries)||'|'
+    ||(SELECT count(*) FROM budget_movements)||'|'||(SELECT count(*) FROM budget_lifecycle_events);`).stdout.trim(),retained);
+  assert.equal(psql('budget_consolidation_shape', `SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relname LIKE 'budget%';`).stdout.trim(),'11');
+  assert.equal(psql('budget_consolidation_shape', `SELECT count(*)||'|'||(SELECT count(*) FROM budget_operations WHERE parent_operation_id IS NOT NULL)
+    FROM budget_operation_items;`).stdout.trim(),'0|0');
+  assert.equal(psql('budget_consolidation_shape', `SELECT string_agg(c.relname||':'||c.relkind::text,',' ORDER BY c.relname)
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relname IN ('budget_carryover_batches','budget_carryover_transfers','budget_month_override_events',
+      'budget_month_disposition_batches','budget_unused_disposition_events','budget_funding_actions',
+      'budget_funding_action_legs','budget_unbudgeted_resolution_events');`).stdout.trim(),
+    'budget_carryover_batches:v,budget_carryover_transfers:v,budget_funding_action_legs:v,budget_funding_actions:v,budget_month_disposition_batches:v,budget_month_override_events:v,budget_unbudgeted_resolution_events:v,budget_unused_disposition_events:v');
+  assert.equal(psql('budget_consolidation_shape', `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND p.proname IN ('get_funded_budget_month_foundation','get_funded_budget_month_recurring',
+      'get_funded_budget_month_carryover','get_funded_budget_month_overrides','get_funded_budget_month_disposition');`).stdout.trim(),'0');
+  psql('budget_consolidation_shape','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('migration 024 refuses nonempty retirement history before changing schema', () => {
+  createDatabase('budget_consolidation_preflight');
+  psql('budget_consolidation_preflight', fixture());
+  applyUnbudgetedResolutionFoundation('budget_consolidation_preflight');
+  psql('budget_consolidation_preflight', `
+    INSERT INTO budget_months(month_start) VALUES('2026-08-01'),('2026-09-01');
+    INSERT INTO budget_carryover_batches(request_key,request_fingerprint,source_budget_month_id,destination_budget_month_id)
+    SELECT 'b2000000-0000-0000-0000-000000000001','fixture',s.id,d.id
+    FROM budget_months s,budget_months d WHERE s.month_start='2026-08-01' AND d.month_start='2026-09-01';
+  `);
+  const failed = psql('budget_consolidation_preflight', consolidationMigration, true);
+  assert.notEqual(failed.status,0);
+  assert.match(failed.stderr,/retirement table public\.budget_carryover_batches contains 1 rows/);
+  assert.equal(psql('budget_consolidation_preflight', `SELECT
+    (SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='budget_operations' AND column_name='parent_operation_id')||'|'
+    ||(to_regclass('public.budget_operation_items') IS NULL)::text||'|'
+    ||(SELECT relkind::text FROM pg_class WHERE oid='public.budget_carryover_batches'::regclass);`).stdout.trim(),'0|true|r');
+});
+
+test('consolidated override and reallocation write typed items while postings remain authoritative', () => {
+  createDatabase('budget_consolidation_actions');
+  psql('budget_consolidation_actions', fixture());
+  applyConsolidatedFoundation('budget_consolidation_actions');
+  const month = psql('budget_consolidation_actions', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_actions', `
+    SELECT add_manual_budget_funding('${month}',1000,'fixture','b3000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,600,'manual','b3000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${month}',2,100,'manual','b3000000-0000-0000-0000-000000000003');
+    SELECT set_budget_month_override('${month}',1,500,'b3000000-0000-0000-0000-000000000004');
+  `);
+  const preview = JSON.parse(psql('budget_consolidation_actions', `SELECT get_budget_reallocation_preview('${month}','category',1,'category',2,100);`).stdout.trim());
+  psql('budget_consolidation_actions', `SELECT apply_budget_reallocation('${month}','category',1,'category',2,100,
+    'b3000000-0000-0000-0000-000000000005','${preview.fingerprint}');`);
+  const unallocatedIn = JSON.parse(psql('budget_consolidation_actions', `SELECT get_budget_reallocation_preview('${month}','unallocated',NULL,'category',2,50);`).stdout.trim());
+  psql('budget_consolidation_actions', `SELECT apply_budget_reallocation('${month}','unallocated',NULL,'category',2,50,
+    'b3000000-0000-0000-0000-000000000006','${unallocatedIn.fingerprint}');`);
+  const unallocatedOut = JSON.parse(psql('budget_consolidation_actions', `SELECT get_budget_reallocation_preview('${month}','category',2,'unallocated',NULL,25);`).stdout.trim());
+  psql('budget_consolidation_actions', `SELECT apply_budget_reallocation('${month}','category',2,'unallocated',NULL,25,
+    'b3000000-0000-0000-0000-000000000007','${unallocatedOut.fingerprint}');
+    SELECT set_funded_budget_amount(
+      (SELECT budget_id FROM budget_category_state WHERE month='${month}' AND category_id=1),
+      450,'b3000000-0000-0000-0000-000000000008','residual classification');`);
+  assert.equal(psql('budget_consolidation_actions', `SELECT string_agg(category_id||':'||final_funded,',' ORDER BY category_id)
+    FROM budget_category_composition WHERE month='${month}';`).stdout.trim(),'1:450.00,2:225.00');
+  assert.equal(psql('budget_consolidation_actions', `SELECT effective_base||'|'||outgoing_reallocation||'|'||other_adjustments||'|'||final_funded
+    FROM budget_category_composition WHERE month='${month}' AND category_id=1;`).stdout.trim(),'500.00|100.00|50.00|450.00');
+  assert.equal(psql('budget_consolidation_actions', `SELECT string_agg(item_kind||':'||item_count,',' ORDER BY item_kind)
+    FROM (SELECT item_kind,count(*) AS item_count FROM budget_operation_items GROUP BY item_kind) counts;`).stdout.trim(),
+    'allocation_leg:3,month_override:1,reallocation:3');
+  assert.equal(psql('budget_consolidation_actions', `SELECT count(*) FROM budget_funding_actions;`).stdout.trim(),'3');
+  assert.equal(psql('budget_consolidation_actions', `SELECT count(*) FROM budget_funding_action_legs;`).stdout.trim(),'3');
+  psql('budget_consolidation_actions','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('consolidated operation tree and item shape rules reject grandchildren and malformed provenance', () => {
+  createDatabase('budget_consolidation_constraints');
+  psql('budget_consolidation_constraints', fixture());
+  applyConsolidatedFoundation('budget_consolidation_constraints');
+  psql('budget_consolidation_constraints', `INSERT INTO budget_months(month_start) VALUES('2026-09-01');
+    INSERT INTO budget_operations(budget_month_id,request_key,request_fingerprint,operation_type,effective_date)
+    SELECT id,'b4000000-0000-0000-0000-000000000001','root','adjustment','2026-09-01' FROM budget_months;
+    INSERT INTO budget_operations(budget_month_id,request_key,request_fingerprint,operation_type,effective_date,parent_operation_id)
+    SELECT id,'b4000000-0000-0000-0000-000000000002','child','adjustment','2026-09-01',
+      (SELECT min(id) FROM budget_operations) FROM budget_months;`);
+  let failed = psql('budget_consolidation_constraints', `INSERT INTO budget_operations(
+    budget_month_id,request_key,request_fingerprint,operation_type,effective_date,parent_operation_id)
+    SELECT id,'b4000000-0000-0000-0000-000000000003','grandchild','adjustment','2026-09-01',
+      (SELECT max(id) FROM budget_operations) FROM budget_months;`,true);
+  assert.match(failed.stderr,/children must reference a root/);
+  failed = psql('budget_consolidation_constraints', `INSERT INTO budget_operation_items(
+    operation_id,item_kind,budget_month_id)
+    SELECT min(operation.id),'month_override',month.id
+    FROM budget_operations operation CROSS JOIN budget_months month GROUP BY month.id;`,true);
+  assert.match(failed.stderr,/Invalid month_override operation item shape/);
+  for (const role of ['anon','authenticated','service_role']) {
+    failed = psql('budget_consolidation_constraints', `SET ROLE ${role}; INSERT INTO budget_operation_items(operation_id,item_kind)
+      SELECT min(id),'reallocation' FROM budget_operations;`,true);
+    assert.notEqual(failed.status,0,`${role} unexpectedly wrote operation items`);
+  }
+  assert.equal(psql('budget_consolidation_constraints', `SELECT relrowsecurity||'|'
+    ||has_function_privilege('service_role','public.budget_create_action_root(bigint,uuid,text,text,date,text,bigint)','EXECUTE')
+    FROM pg_class WHERE oid='public.budget_operation_items'::regclass;`).stdout.trim(),'true|false');
+  failed = psql('budget_consolidation_constraints', `INSERT INTO budget_operations(
+    budget_month_id,request_key,request_fingerprint,operation_type,effective_date)
+    SELECT id,'b4000000-0000-0000-0000-000000000004','other-root','adjustment','2026-09-01' FROM budget_months;
+    INSERT INTO budget_operation_items(operation_id,item_kind,action_kind,budget_month_id,source_operation_id)
+    SELECT min(id),'carryover','apply',(SELECT id FROM budget_months),max(id)
+    FROM budget_operations;`,true);
+  assert.match(failed.stderr,/source operation is outside its root/);
+  failed = psql('budget_consolidation_constraints', `SET ROLE service_role;
+    INSERT INTO budget_carryover_batches(request_key,request_fingerprint,source_budget_month_id,destination_budget_month_id)
+    SELECT 'b4000000-0000-0000-0000-000000000005','forbidden',id,id FROM budget_months;`,true);
+  assert.match(failed.stderr,/permission denied/i);
+});
+
+test('consolidated overrides preserve fallback provenance through uninitialized and initialized removal', () => {
+  createDatabase('budget_consolidation_overrides');
+  psql('budget_consolidation_overrides', fixture());
+  applyConsolidatedFoundation('budget_consolidation_overrides');
+  const current = psql('budget_consolidation_overrides', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const future = psql('budget_consolidation_overrides', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))+interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_overrides', `
+    SELECT set_budget_recurring_default(1,500);
+    SELECT set_budget_month_override('${future}',1,750,'b5000000-0000-0000-0000-000000000001');
+    SELECT remove_budget_month_override('${future}',1,'b5000000-0000-0000-0000-000000000002');`);
+  assert.equal(psql('budget_consolidation_overrides', `SELECT
+    (SELECT count(*) FROM budgets b JOIN budget_months bm ON bm.id=b.budget_month_id WHERE bm.month_start=('${future}'||'-01')::date)||'|'
+    ||(SELECT count(*) FROM budget_month_overrides mo JOIN budget_months bm ON bm.id=mo.budget_month_id WHERE bm.month_start=('${future}'||'-01')::date)||'|'
+    ||(SELECT string_agg(action_kind||':'||base_before||':'||base_after||':'||fallback_base_snapshot||':'||source_kind,',' ORDER BY id)
+      FROM budget_operation_items WHERE item_kind='month_override' AND budget_month_id=(SELECT id FROM budget_months WHERE month_start=('${future}'||'-01')::date));`).stdout.trim(),
+    '0|0|set:500.00:750.00:500.00:recurring_default,remove:750.00:500.00:500.00:recurring_default');
+  psql('budget_consolidation_overrides', `
+    SELECT add_manual_budget_funding('${current}',1000,'source','b5000000-0000-0000-0000-000000000003');
+    SELECT establish_funded_budget('${current}',1,600,'manual','b5000000-0000-0000-0000-000000000004');
+    SELECT set_budget_month_override('${current}',1,400,'b5000000-0000-0000-0000-000000000005');
+    SELECT remove_budget_month_override('${current}',1,'b5000000-0000-0000-0000-000000000006');`);
+  assert.equal(psql('budget_consolidation_overrides', `SELECT opening_base||'|'||starting_kind||'|'||effective_base||'|'||final_funded
+    FROM budget_category_composition WHERE month='${current}' AND category_id=1;`).stdout.trim(),'600.00|manual|600.00|600.00');
+  assert.equal(psql('budget_consolidation_overrides', `SELECT string_agg(action_kind||':'||fallback_base_snapshot||':'||source_kind,',' ORDER BY id)
+    FROM budget_operation_items WHERE item_kind='month_override' AND budget_month_id=(SELECT id FROM budget_months WHERE month_start=('${current}'||'-01')::date);`).stdout.trim(),
+    'set:600.00:manual,remove:600.00:manual');
+  psql('budget_consolidation_overrides','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('consolidated standalone carryover is one root tree, idempotent, exact, and reversible', () => {
+  createDatabase('budget_consolidation_carryover');
+  psql('budget_consolidation_carryover', fixture());
+  applyConsolidatedFoundation('budget_consolidation_carryover');
+  const current = psql('budget_consolidation_carryover', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const previous = psql('budget_consolidation_carryover', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_carryover', `
+    SELECT add_manual_budget_funding('${previous}',9007199254740993.01,'source','c1000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',1,9007199254740993.01,'manual','c1000000-0000-0000-0000-000000000002');
+    SELECT set_budget_unused_balance_policy(1,'carry_forward');
+  `);
+  const preview = JSON.parse(psql('budget_consolidation_carryover', `SELECT get_budget_carryover_preview('${current}');`).stdout.trim());
+  psql('budget_consolidation_carryover', `SELECT apply_budget_carryover('${current}',
+    'c1000000-0000-0000-0000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('budget_consolidation_carryover', `SELECT
+    root.parent_operation_id IS NULL AND source.parent_operation_id=root.id
+      AND destination.parent_operation_id=root.id
+      AND root.request_key<>source.request_key AND root.request_key<>destination.request_key
+      AND source.effective_date=source_month.month_start
+      AND destination.effective_date=destination_month.month_start
+    FROM budget_carryover_batches batch
+    JOIN budget_operations root ON root.id=batch.id
+    JOIN budget_carryover_transfers transfer ON transfer.batch_id=batch.id
+    JOIN budget_operations source ON source.id=transfer.source_operation_id
+    JOIN budget_operations destination ON destination.id=transfer.destination_operation_id
+    JOIN budget_months source_month ON source_month.id=source.budget_month_id
+    JOIN budget_months destination_month ON destination_month.id=destination.budget_month_id;`).stdout.trim(),'t');
+  assert.equal(psql('budget_consolidation_carryover', `SELECT string_agg(month||':'||final_funded||':'||incoming_carryover||':'||outgoing_carryover,',' ORDER BY month)
+    FROM budget_category_composition WHERE category_id=1;`).stdout.trim(),
+    `${previous}:0.00:0.00:9007199254740993.01,${current}:9007199254740993.01:9007199254740993.01:0.00`);
+  psql('budget_consolidation_carryover', `SELECT apply_budget_carryover('${current}',
+    'c1000000-0000-0000-0000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('budget_consolidation_carryover', `SELECT count(*) FROM budget_operation_items WHERE item_kind='carryover' AND category_id IS NOT NULL;`).stdout.trim(),'1');
+  assert.match(psql('budget_consolidation_carryover', `SELECT apply_budget_carryover('${current}',
+    'c1000000-0000-0000-0000-000000000003','00000000000000000000000000000000');`,true).stderr,/different carryover request/i);
+  psql('budget_consolidation_carryover', `SELECT reverse_budget_carryover(
+    (SELECT id FROM budget_carryover_transfers WHERE reverses_transfer_id IS NULL),
+    'c1000000-0000-0000-0000-000000000004','correction');`);
+  assert.equal(psql('budget_consolidation_carryover', `SELECT string_agg(month||':'||final_funded||':'||incoming_carryover||':'||outgoing_carryover,',' ORDER BY month)
+    FROM budget_category_composition WHERE category_id=1;`).stdout.trim(),
+    `${previous}:9007199254740993.01:0.00:0.00,${current}:0.00:0.00:0.00`);
+  assert.equal(psql('budget_consolidation_carryover', `SELECT count(*)||'|'||count(*) FILTER(WHERE reversed_item_id IS NOT NULL)
+    FROM budget_operation_items WHERE item_kind='carryover' AND category_id IS NOT NULL;`).stdout.trim(),'2|1');
+  psql('budget_consolidation_carryover','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('consolidated mixed month close uses one root and reversal never reopens the month', () => {
+  createDatabase('budget_consolidation_close');
+  psql('budget_consolidation_close', fixture());
+  applyConsolidatedFoundation('budget_consolidation_close');
+  const previous = psql('budget_consolidation_close', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_close', `
+    SELECT add_manual_budget_funding('${previous}',3000,'source','c2000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',1,1000,'manual','c2000000-0000-0000-0000-000000000002');
+    SELECT establish_funded_budget('${previous}',2,1000,'manual','c2000000-0000-0000-0000-000000000003');
+    SELECT establish_funded_budget('${previous}',3,1000,'manual','c2000000-0000-0000-0000-000000000004');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',400,1),
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',500,2),
+      ((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',600,3);
+    SELECT set_budget_unused_balance_policy(1,'carry_forward');
+    SELECT set_budget_unused_balance_policy(2,'return_to_unallocated');
+    SELECT set_budget_unused_balance_policy(3,'savings');
+  `);
+  const preview = JSON.parse(psql('budget_consolidation_close', `SELECT get_budget_month_disposition_preview('${previous}');`).stdout.trim());
+  psql('budget_consolidation_close', `SELECT apply_budget_month_disposition('${previous}',
+    'c2000000-0000-0000-0000-000000000005','${preview.fingerprint}');`);
+  assert.equal(psql('budget_consolidation_close', `SELECT
+    count(*) FILTER(WHERE parent_operation_id IS NULL AND operation_type='month_close')||'|'
+    ||count(*) FILTER(WHERE parent_operation_id IS NULL AND operation_type='carryover_out')
+    FROM budget_operations;`).stdout.trim(),'1|0');
+  assert.equal(psql('budget_consolidation_close', `SELECT string_agg(category_id||':'||outgoing_carryover||':'||unused_disposition_adjustment,',' ORDER BY category_id)
+    FROM budget_category_composition WHERE month='${previous}';`).stdout.trim(),
+    '1:600.00:0.00,2:0.00:-500.00,3:0.00:-400.00');
+  assert.equal(psql('budget_consolidation_close','SELECT balance_text FROM budget_savings_state;').stdout.trim(),'400.00');
+  psql('budget_consolidation_close', `SELECT reverse_budget_month_disposition(
+    (SELECT id FROM budget_month_disposition_batches WHERE reverses_batch_id IS NULL),
+    'c2000000-0000-0000-0000-000000000006','correction');`);
+  assert.equal(psql('budget_consolidation_close', `SELECT budget_action_month_lifecycle('${previous}')||'|'
+    ||(SELECT balance_text FROM budget_savings_state);`).stdout.trim(),'closed|0.00');
+  assert.equal(psql('budget_consolidation_close', `SELECT string_agg(category_id||':'||final_funded||':'||outgoing_carryover||':'||unused_disposition_adjustment,',' ORDER BY category_id)
+    FROM budget_category_composition WHERE month='${previous}';`).stdout.trim(),
+    '1:1000.00:0.00:0.00,2:1000.00:0.00:0.00,3:1000.00:0.00:0.00');
+  psql('budget_consolidation_close','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('consolidated partial deficit resolution preserves multi-source and Savings provenance through reversal', () => {
+  createDatabase('budget_consolidation_deficit');
+  psql('budget_consolidation_deficit', fixture());
+  applyConsolidatedFoundation('budget_consolidation_deficit');
+  const current = psql('budget_consolidation_deficit', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const previous = psql('budget_consolidation_deficit', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_deficit', `
+    SELECT add_manual_budget_funding('${previous}',1000,'source','c3000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',3,1000,'manual','c3000000-0000-0000-0000-000000000002');
+    SELECT set_budget_unused_balance_policy(3,'savings');
+  `);
+  const close = JSON.parse(psql('budget_consolidation_deficit', `SELECT get_budget_month_disposition_preview('${previous}');`).stdout.trim());
+  psql('budget_consolidation_deficit', `SELECT apply_budget_month_disposition('${previous}',
+    'c3000000-0000-0000-0000-000000000003','${close.fingerprint}');
+    SELECT add_manual_budget_funding('${current}',1500,'current','c3000000-0000-0000-0000-000000000004');
+    SELECT establish_funded_budget('${current}',1,500,'manual','c3000000-0000-0000-0000-000000000005');
+    SELECT establish_funded_budget('${current}',2,500,'manual','c3000000-0000-0000-0000-000000000006');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',100,1),
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',1000,2);`);
+  const legs = `jsonb_build_array(
+    jsonb_build_object('source_kind','unallocated','amount','100.00'),
+    jsonb_build_object('source_kind','category','category_id',1,'amount','150.00'),
+    jsonb_build_object('source_kind','savings','amount','100.00'))`;
+  const preview = JSON.parse(psql('budget_consolidation_deficit', `SELECT get_budget_deficit_resolution_preview('${current}',2,${legs});`).stdout.trim());
+  psql('budget_consolidation_deficit', `SELECT apply_budget_deficit_resolution('${current}',2,${legs},
+    'c3000000-0000-0000-0000-000000000007','${preview.fingerprint}');`);
+  assert.equal(psql('budget_consolidation_deficit', `SELECT final_funded||'|'||incoming_reallocation_resolution||'|'||deficit
+    FROM budget_category_composition WHERE month='${current}' AND category_id=2;`).stdout.trim(),'850.00|350.00|150.00');
+  assert.equal(psql('budget_consolidation_deficit', `SELECT count(*)||'|'||(SELECT count(*) FROM budget_operation_items WHERE item_kind='allocation_leg')
+    FROM budget_operation_items WHERE item_kind='deficit_resolution' AND reversed_item_id IS NULL;`).stdout.trim(),'1|3');
+  assert.equal(psql('budget_consolidation_deficit','SELECT balance_text FROM budget_savings_state;').stdout.trim(),'900.00');
+  psql('budget_consolidation_deficit', `SELECT reverse_budget_funding_action(
+    (SELECT id FROM budget_funding_actions WHERE action_kind='deficit_resolution'),
+    'c3000000-0000-0000-0000-000000000008','correction');`);
+  assert.equal(psql('budget_consolidation_deficit', `SELECT final_funded||'|'||incoming_reallocation_resolution||'|'||outgoing_reallocation||'|'
+    ||(SELECT balance_text FROM budget_savings_state)
+    FROM budget_category_composition WHERE month='${current}' AND category_id=2;`).stdout.trim(),'500.00|350.00|350.00|1000.00');
+  psql('budget_consolidation_deficit','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('consolidated unbudgeted resolution preserves zero opening and explicit zero-funding reactivation', () => {
+  createDatabase('budget_consolidation_unbudgeted');
+  psql('budget_consolidation_unbudgeted', fixture());
+  applyConsolidatedFoundation('budget_consolidation_unbudgeted');
+  const previous = psql('budget_consolidation_unbudgeted', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_unbudgeted', `
+    SELECT add_manual_budget_funding('${previous}',1000,'source','c4000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',1,400,'manual','c4000000-0000-0000-0000-000000000002');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',500,3);`);
+  const legs = `jsonb_build_array(
+    jsonb_build_object('source_kind','unallocated','amount','100.00'),
+    jsonb_build_object('source_kind','category','category_id',1,'amount','100.00'))`;
+  const preview = JSON.parse(psql('budget_consolidation_unbudgeted', `SELECT get_budget_unbudgeted_resolution_preview('${previous}',3,200,${legs});`).stdout.trim());
+  psql('budget_consolidation_unbudgeted', `SELECT apply_budget_unbudgeted_resolution('${previous}',3,200,${legs},
+    'c4000000-0000-0000-0000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('budget_consolidation_unbudgeted', `SELECT opening_base||'|'||starting_kind||'|'||unbudgeted_resolution_adjustment||'|'||final_funded||'|'||deficit
+    FROM budget_category_composition WHERE month='${previous}' AND category_id=3;`).stdout.trim(),
+    '0.00|unbudgeted_resolution|200.00|200.00|300.00');
+  assert.equal(psql('budget_consolidation_unbudgeted', `SELECT resolution_mode||'|'||amount||'|'||funded_before||'|'||funded_after||'|'||deficit_after
+    FROM budget_operation_items WHERE item_kind='unbudgeted_resolution';`).stdout.trim(),
+    'created|200.00|0.00|200.00|300.00');
+  psql('budget_consolidation_unbudgeted', `SELECT reverse_budget_unbudgeted_resolution(
+    (SELECT id FROM budget_unbudgeted_resolution_events WHERE event_kind='apply'),
+    'c4000000-0000-0000-0000-000000000004','correction');`);
+  assert.equal(psql('budget_consolidation_unbudgeted', `SELECT lifecycle_state||'|'||final_funded||'|'||unbudgeted_resolution_adjustment
+    FROM budget_category_composition WHERE month='${previous}' AND category_id=3;`).stdout.trim(),
+    'inactive|0.00|0.00');
+  assert.equal(psql('budget_consolidation_unbudgeted', `SELECT count(*)||'|'||count(*) FILTER(WHERE reversed_item_id IS NOT NULL)
+    FROM budget_operation_items WHERE item_kind='unbudgeted_resolution';`).stdout.trim(),'2|1');
+  psql('budget_consolidation_unbudgeted','SELECT budget_assert_reconciled(id) FROM budget_months;');
+
+  createDatabase('budget_consolidation_reactivate');
+  psql('budget_consolidation_reactivate', fixture());
+  applyConsolidatedFoundation('budget_consolidation_reactivate');
+  const current = psql('budget_consolidation_reactivate', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_reactivate', `
+    SELECT add_manual_budget_funding('${current}',500,'source','c4100000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${current}',3,300,'manual','c4100000-0000-0000-0000-000000000002');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',200,3);
+    SELECT remove_funded_budget((SELECT budget_id FROM budget_category_state WHERE month='${current}' AND category_id=3),
+      'c4100000-0000-0000-0000-000000000003');`);
+  const reactivate = JSON.parse(psql('budget_consolidation_reactivate', `SELECT get_budget_unbudgeted_resolution_preview('${current}',3,0,'[]');`).stdout.trim());
+  psql('budget_consolidation_reactivate', `SELECT apply_budget_unbudgeted_resolution('${current}',3,0,'[]',
+    'c4100000-0000-0000-0000-000000000004','${reactivate.fingerprint}');`);
+  assert.equal(psql('budget_consolidation_reactivate', `SELECT lifecycle_state||'|'||final_funded||'|'
+    ||(SELECT resolution_mode||':'||amount FROM budget_operation_items WHERE item_kind='unbudgeted_resolution')
+    FROM budget_category_composition WHERE month='${current}' AND category_id=3;`).stdout.trim(),
+    'active|200.00|reactivated:0.00');
+  psql('budget_consolidation_reactivate','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('consolidated carryover still rejects stale transaction material without partial writes', async () => {
+  createDatabase('budget_consolidation_stale');
+  psql('budget_consolidation_stale', fixture());
+  applyConsolidatedFoundation('budget_consolidation_stale');
+  const current = psql('budget_consolidation_stale', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const previous = psql('budget_consolidation_stale', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month','YYYY-MM');`).stdout.trim();
+  psql('budget_consolidation_stale', `
+    SELECT add_manual_budget_funding('${previous}',1000,'source','c5000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${previous}',1,1000,'manual','c5000000-0000-0000-0000-000000000002');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',100,1);
+    SELECT set_budget_unused_balance_policy(1,'carry_forward');`);
+  const preview = JSON.parse(psql('budget_consolidation_stale', `SELECT get_budget_carryover_preview('${current}');`).stdout.trim());
+  const writer = psqlAsync('budget_consolidation_stale', `BEGIN;
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES((date_trunc('month',timezone('Asia/Jerusalem',now()))-interval '1 month')::date,'expense',50,1);
+    SELECT pg_sleep(2); COMMIT;`);
+  await waitForGrantedTableLock('budget_consolidation_stale','public.transactions','RowExclusiveLock');
+  const apply = psqlAsync('budget_consolidation_stale', `SELECT apply_budget_carryover('${current}',
+    'c5000000-0000-0000-0000-000000000003','${preview.fingerprint}');`);
+  const [writerResult,applyResult] = await Promise.all([writer,apply]);
+  assert.equal(writerResult.status,0);
+  assert.notEqual(applyResult.status,0);
+  assert.match(applyResult.stderr,/CARRYOVER_PREVIEW_STALE/);
+  assert.equal(psql('budget_consolidation_stale', `SELECT
+    (SELECT count(*) FROM budget_operation_items WHERE item_kind='carryover')||'|'
+    ||(SELECT count(*) FROM budget_funding_entries WHERE source_kind='carryover_transfer')||'|'
+    ||(SELECT count(*) FROM budget_movements m JOIN budget_operations o ON o.id=m.operation_id
+      WHERE o.operation_type IN ('carryover_out','carryover_in'));`).stdout.trim(),'0|0|0');
+  psql('budget_consolidation_stale','SELECT budget_assert_reconciled(id) FROM budget_months;');
 });

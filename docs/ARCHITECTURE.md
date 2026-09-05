@@ -277,6 +277,25 @@ Migration 022 adds one immutable funding-action header with per-source legs over
 
 Category source capacity is `max(final_funded - max(raw_actual, 0), 0)`. A resolution may combine unallocated funding, eligible categories, and one explicit Savings withdrawal atomically, and may resolve only part of a deficit. Savings withdrawal adds equal monthly funding and category allocation while subtracting the retained reserve, so it is neither income nor expense. Previews are read-only. Apply locks transaction actuals, the Savings mutex when applicable, the month, affected budgets, and category-active rows in stable order, then validates and writes one captured fingerprinted candidate set or returns a stale-preview conflict.
 
+## Consolidated Budget data model
+
+Migration 024 reduces the funded Budget write model to eleven physical tables. The ten long-lived domain tables are `budget_months`, `budgets`, `budget_operations`, `budget_funding_entries`, `budget_movements`, `budget_lifecycle_events`, `budget_savings_entries`, `budget_recurring_defaults`, `budget_month_overrides`, and `budget_unused_balance_policies`. One typed append-only table, `budget_operation_items`, carries approval-time semantic facts that cannot be reconstructed from postings.
+
+The boundaries are deliberate:
+
+- `budget_operations` is the only auditable command/action header. A cross-month command has one root and deterministic child posting operations; roots own user request keys and fingerprints.
+- `budget_funding_entries` alone changes a month's funded envelope.
+- `budget_movements` alone changes category versus unallocated allocation.
+- `budget_savings_entries` alone changes the retained Savings reserve.
+- `budget_lifecycle_events` alone changes a snapshot's active state.
+- `transactions` remains authoritative for actual spending.
+- Recurring defaults, month overrides, and unused-balance policies remain mutable configuration. Configuration is not funded history.
+- `budget_operation_items` explains why a posting was approved and links it relationally; item amounts never calculate funded totals.
+
+`budget_category_composition` classifies authoritative movements through their operation items into base override, carryover, reallocation/resolution, unbudgeted resolution, unused disposition, or direct residual adjustment. The residual is the set of movements with no recognized semantic classification, rather than a total repeatedly reduced by every newer feature. `budget_assert_reconciled` verifies both the monthly envelope identity and the composition-to-final-funded identity. The canonical `get_funded_budget_month(text)` reads this layer directly; the five historical wrapper generations are removed.
+
+The eight feature-specific provenance tables introduced by Migrations 019–023 are retired only when all are empty. Migration 024 fails before structural work if any contains history. Read/write adapter views preserve deployed RPC signatures while their implementations persist only universal operations/items and authoritative postings; they are not independent ledgers.
+
 ## Known architectural boundaries
 
 - Legacy and principal-aware loan calculations coexist.

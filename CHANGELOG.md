@@ -10,6 +10,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Budget Schema Consolidation — Migration 024 adds universal root/child operation grouping, typed append-only `budget_operation_items`, a direct `budget_category_composition` read model, and operation history without changing funded balances.
+
 - #22 — Migration 023 explicit resolution of transaction-authoritative unbudgeted expenses through zero-opening late snapshots or explicit inactive-snapshot reactivation.
 - Atomic partial/full multi-source allocation from unallocated funds, eligible categories, and Savings, plus Budget-to-Transactions correction deep links.
 - #23 — Migration 022 provenance-aware current-month reallocation and atomic multi-source deficit resolution, including bounded Savings withdrawals and close-preparation support for the immediately completed unclosed month.
@@ -29,6 +31,9 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- Consolidated override, carryover, month-close, reallocation, deficit-resolution, and unbudgeted-resolution provenance onto `budget_operations` and typed operation items while keeping funding, allocation, Savings, lifecycle, configuration, and transactions as separate authorities.
+- Flattened `get_funded_budget_month(text)` onto the consolidated composition layer and made residual adjustments a direct classification of otherwise-unclassified movements.
+
 - Canonical funded reads distinguish incoming/outgoing unbudgeted-resolution funding from base, carryover, reallocation/deficit resolution, and residual adjustments.
 - Canonical funded reads now expose incoming/outgoing reallocation and resolution separately from base, carryover, and residual adjustments.
 - Replaced the overlapping carryover toggle with one Settings → Budget policy: carry forward, move to Savings, return to next-month unallocated funds, or unconfigured. Existing enabled carryover settings migrate deterministically to carry forward.
@@ -46,6 +51,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - #17 / #26 — Reject non-finite funded values and transaction actuals, reserve idempotency keys for no-op adjustments, use rollback-safe sequence restart, standardize month-first locks, and narrow legacy budget privileges.
 
 ### Removed
+
+- Retired the eight empty feature-specific Budget write tables and the five historical canonical-reader wrapper generations. Runtime compatibility adapters preserve deployed RPC contracts without restoring independent physical ledgers.
 
 ## [1.0.0] - 2026-08-15
 

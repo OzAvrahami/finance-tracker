@@ -6,8 +6,8 @@
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
 - No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
-- Repository migration history currently reaches Migration 023. Migration 023 is implemented locally and has not been applied to production.
-- Production object/data preflights have independently verified the funded-budget foundation through Migration 021. No Finance Tracker applied-migration ledger exists, so these findings are object-state evidence rather than an authoritative execution history.
+- Repository migration history currently reaches Migration 024. Migration 024 consolidates the Budget write/provenance model locally and has not been applied to production.
+- Production object/data preflights have independently verified the funded-budget foundation through Migration 023. No Finance Tracker applied-migration ledger exists, so these findings are object-state evidence rather than an authoritative execution history.
 
 The application is mature, operational across its principal product areas, and stable for regular personal use. The known limitations below remain explicit post-1.0 stabilization work rather than hidden release blockers.
 
@@ -19,7 +19,7 @@ The application is mature, operational across its principal product areas, and s
 | Transactions | Operational with known limitations | Direct, itemized, installment, loan-linked, filtered, and paginated workflows. Core loan accounting is atomic; several surrounding item/LEGO/keyword operations are separate calls. |
 | Categories | Operational | Active state, keywords, quick creation, and Settings CRUD for category metadata. |
 | Payment sources | Operational | Managed in Settings and used by transactions, loans, budgets, and checkout. |
-| Monthly budgets | Unbudgeted-expense resolution implemented locally, production migration pending | Funded month/read model, recurring initialization, carryover, month overrides, month close/Savings, reallocation/deficit resolution, and explicit late allocation or transaction-review paths for `no_budget` spending. The full redesign remains future work. |
+| Monthly budgets | Schema consolidation implemented locally, production migration pending | The funded features remain intact while Migration 024 reduces their write model to eleven physical tables and one universal operation/item provenance system. The combined recurring/month edit and full redesign remain future work. |
 | Annual summary | Operational | Dedicated annual view using API-backed financial aggregates. |
 | Loans | Operational with known limitations | Finance v3 active/closed views, details, modern creation, legacy compatibility, manual/automatic payments, CPI metadata, and early payoff. CPI automatic calculation is intentionally unsupported. |
 | Loan payments | Operational | Authoritative principal accounting with installment, catch-up, irregular, balance-adjustment, and early-payoff events. |
@@ -43,7 +43,7 @@ The application is mature, operational across its principal product areas, and s
 ## Known limitations
 
 - There is no canonical migration runner or authoritative applied-migration ledger in the repository.
-- Migrations 022 and 023 have not been applied to production. Migration 023 requires the deployed and verified Migration 017–022 object boundary before deployment.
+- Migration 024 has not been applied to production. It requires the exact deployed and verified Migration 017–023 object boundary and refuses to run if any retired feature-provenance table contains rows.
 - Income transactions do not yet supply consumable budget funding. Monthly budget funding is manual; `legacy_import` is migration-only.
 - General Savings withdrawals/accounts, historical corrections, and the full funded-budget presentation (#25) remain deferred.
 - There is no general CI workflow for client tests, lint, build, and server tests.

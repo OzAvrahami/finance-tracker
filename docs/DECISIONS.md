@@ -431,3 +431,23 @@ Migration 023 creates a missing snapshot with immutable zero opening and `starti
 ### Consequences
 
 Partial funding becomes an ordinary funded deficit for #23 and continues blocking #21 close. Full funding removes the `no_budget` blocker through canonical state. Transaction correction remains the existing Transactions workflow reached through month/category filters. Recurring defaults are never inferred, pending overrides must initialize first, and closed/older/future months remain immutable. The full Budget redesign (#25) remains separate.
+
+## D-025 — Budget operations are the universal action header
+
+**Status:** Accepted
+
+**Date:** 2026-09-05
+
+### Context
+
+Migrations 019–023 added feature-specific batch, transfer, action, leg, and event tables around the proven funded ledger. Production has no rows in those newer provenance tables, making this the safest point to remove overlapping write-side identities without transforming history.
+
+### Decision
+
+Migration 024 keeps the accounting and configuration tables, makes `budget_operations` the sole business-action header, and adds one typed append-only `budget_operation_items` table for approval-time facts. Cross-month actions use one root and child posting operations. Funding entries, movements, Savings entries, lifecycle events, and transactions remain separate authorities; operation-item amounts are never used to calculate money.
+
+The migration refuses to proceed if any retired feature table contains rows. Public commands remain domain-specific and retain their signatures. Relational adapter views support those deployed command implementations while storing no independent state. Canonical reads derive direct movement classifications and assert that composition equals authoritative final funding.
+
+### Consequences
+
+The physical Budget model is eleven tables, action reversal is rooted in `budget_operations.reverses_operation_id`, and feature-specific provenance no longer creates additional action headers. Pure recurring-default and unused-policy changes remain configuration-only. The canceled combined recurring/month edit is rebuilt after consolidation as one bounded command and uses operation items rather than another event table.

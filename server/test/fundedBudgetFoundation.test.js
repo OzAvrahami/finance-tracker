@@ -33,18 +33,24 @@ const unbudgetedResolutionMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '023_unbudgeted_expense_resolution.sql'),
   'utf8',
 );
+const consolidationMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '024_budget_schema_consolidation.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
+const normalizedSql = (value) => value.replace(/\r\n/g, '\n').trim();
+const schemaContains = (value) => normalizedSql(fullSchema).includes(normalizedSql(value));
 
 test('migration 017 and full_schema carry the same funded-budget foundation', () => {
   const marker = '-- Migration 017: funded monthly budget foundation';
   assert.match(migration, new RegExp(marker));
-  assert.ok(fullSchema.includes(migration.trim()));
+  assert.ok(schemaContains(migration));
 });
 
 test('migration 018 and full_schema carry the same recurring-budget extension', () => {
   const marker = '-- Migration 018: recurring monthly budget defaults';
   assert.match(recurringMigration, new RegExp(marker));
-  assert.ok(fullSchema.includes(recurringMigration.trim()));
+  assert.ok(schemaContains(recurringMigration));
   assert.match(recurringMigration, /budget_recurring_defaults/i);
   assert.match(recurringMigration, /starting_kind IN \([^)]+recurring_default/is);
   assert.match(recurringMigration, /month_initialization/i);
@@ -54,7 +60,7 @@ test('migration 018 and full_schema carry the same recurring-budget extension', 
 
 test('migration 019 and full_schema carry the balanced carryover extension', () => {
   assert.match(carryoverMigration, /Migration 019: balanced category budget carryover/i);
-  assert.ok(fullSchema.includes(carryoverMigration.trim()));
+  assert.ok(schemaContains(carryoverMigration));
   for (const object of [
     'budget_carryover_settings', 'budget_carryover_batches', 'budget_carryover_transfers',
     'get_budget_carryover_preview', 'apply_budget_carryover', 'reverse_budget_carryover',
@@ -73,7 +79,7 @@ test('migration 019 and full_schema carry the balanced carryover extension', () 
 
 test('migration 020 and full_schema carry the month-base override extension', () => {
   assert.match(overrideMigration, /Migration 020: month-specific funded-budget base overrides/i);
-  assert.ok(fullSchema.includes(overrideMigration.trim()));
+  assert.ok(schemaContains(overrideMigration));
   for (const object of [
     'budget_month_overrides', 'budget_month_override_events', 'budget_category_base_state',
     'set_budget_month_override', 'remove_budget_month_override',
@@ -87,9 +93,10 @@ test('migration 020 and full_schema carry the month-base override extension', ()
 });
 
 test('migrations 021 and 022 remain ordered and exact in full_schema', () => {
-  assert.ok(fullSchema.includes(dispositionMigration.trim()));
-  assert.ok(fullSchema.includes(reallocationMigration.trim()));
-  assert.ok(fullSchema.indexOf(dispositionMigration.trim()) < fullSchema.indexOf(reallocationMigration.trim()));
+  assert.ok(schemaContains(dispositionMigration));
+  assert.ok(schemaContains(reallocationMigration));
+  assert.ok(normalizedSql(fullSchema).indexOf(normalizedSql(dispositionMigration))
+    < normalizedSql(fullSchema).indexOf(normalizedSql(reallocationMigration)));
   for (const object of [
     'budget_funding_actions', 'budget_funding_action_legs', 'budget_action_month_lifecycle',
     'get_budget_reallocation_preview', 'apply_budget_reallocation',
@@ -103,9 +110,9 @@ test('migrations 021 and 022 remain ordered and exact in full_schema', () => {
 });
 
 test('migration 023 remains ordered and exact in full_schema', () => {
-  assert.ok(fullSchema.includes(unbudgetedResolutionMigration.trim()));
-  assert.ok(fullSchema.indexOf(reallocationMigration.trim())
-    < fullSchema.indexOf(unbudgetedResolutionMigration.trim()));
+  assert.ok(schemaContains(unbudgetedResolutionMigration));
+  assert.ok(normalizedSql(fullSchema).indexOf(normalizedSql(reallocationMigration))
+    < normalizedSql(fullSchema).indexOf(normalizedSql(unbudgetedResolutionMigration)));
   for (const object of [
     'budget_unbudgeted_resolution_events', 'budget_funding_source_rows',
     'get_budget_unbudgeted_resolution_preview', 'apply_budget_unbudgeted_resolution',
@@ -113,6 +120,19 @@ test('migration 023 remains ordered and exact in full_schema', () => {
   ]) assert.match(unbudgetedResolutionMigration, new RegExp(object, 'i'));
   assert.match(unbudgetedResolutionMigration, /LOCK TABLE public\.transactions IN SHARE MODE/i);
   assert.match(unbudgetedResolutionMigration, /UNBUDGETED_RESOLUTION_PREVIEW_STALE/i);
+});
+
+test('migration 024 is the ordered Budget schema consolidation', () => {
+  assert.ok(schemaContains(consolidationMigration));
+  assert.ok(normalizedSql(fullSchema).indexOf(normalizedSql(unbudgetedResolutionMigration))
+    < normalizedSql(fullSchema).indexOf(normalizedSql(consolidationMigration)));
+  assert.match(consolidationMigration, /CREATE TABLE public\.budget_operation_items/i);
+  assert.match(consolidationMigration, /ADD COLUMN parent_operation_id BIGINT/i);
+  assert.match(consolidationMigration, /CREATE VIEW public\.budget_category_composition/i);
+  assert.match(consolidationMigration, /retirement table public\.% contains % rows/i);
+  assert.match(consolidationMigration, /expected 11 physical Budget tables/i);
+  assert.match(consolidationMigration, /DROP TABLE public\.budget_retired_funding_actions/i);
+  assert.doesNotMatch(consolidationMigration, /set_budget_month_and_recurring|combined recurring/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {
