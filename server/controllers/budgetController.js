@@ -275,6 +275,52 @@ exports.setMonthOverride = async (req, res) => {
   }
 };
 
+exports.getMonthAndRecurringDefaultPreview = async (req, res) => {
+  try {
+    const { amount } = req.body || {};
+    const { month, categoryId } = req.params;
+    if (!month || !categoryId || amount === undefined) {
+      return res.status(400).json({
+        error: 'month, categoryId, and amount are required',
+        code: 'INVALID_COMBINED_BUDGET_UPDATE_REQUEST',
+      });
+    }
+    if (!validateFundedMoney(res, 'amount', amount)) return undefined;
+    const preview = await budgetService.getMonthAndRecurringDefaultPreview(supabase, {
+      month, categoryId, amount,
+    });
+    return res.status(200).json(preview);
+  } catch (error) {
+    return sendBudgetError(res, 'getMonthAndRecurringDefaultPreview', error);
+  }
+};
+
+exports.setMonthAndRecurringDefault = async (req, res) => {
+  try {
+    const {
+      amount,
+      request_key: requestKey,
+      preview_fingerprint: previewFingerprint,
+      reason,
+    } = req.body || {};
+    const { month, categoryId } = req.params;
+    if (!month || !categoryId || amount === undefined || !requestKey
+        || !CARRYOVER_FINGERPRINT_PATTERN.test(previewFingerprint || '')) {
+      return res.status(400).json({
+        error: 'month, categoryId, amount, request_key, and a valid preview_fingerprint are required',
+        code: 'INVALID_COMBINED_BUDGET_UPDATE_REQUEST',
+      });
+    }
+    if (!validateFundedMoney(res, 'amount', amount)) return undefined;
+    const state = await budgetService.setMonthAndRecurringDefault(supabase, {
+      month, categoryId, amount, requestKey, previewFingerprint, reason,
+    });
+    return res.status(200).json(state);
+  } catch (error) {
+    return sendBudgetError(res, 'setMonthAndRecurringDefault', error);
+  }
+};
+
 exports.removeMonthOverride = async (req, res) => {
   try {
     const { request_key: requestKey, reason } = req.body || {};

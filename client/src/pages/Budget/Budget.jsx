@@ -12,6 +12,7 @@ import {
   addManualBudgetFunding,
   applyBudgetMonthClose,
   copyBudget,
+  getBudgetMonthAndRecurringDefaultPreview,
   getCategories,
   getFundedBudgetMonth,
   getBudgetMonthClosePreview,
@@ -19,7 +20,7 @@ import {
   removeBudgetMonthOverride,
   removeFundedBudget,
   setBudgetMonthOverride,
-  setSettingsCategoryRecurringBudget,
+  setBudgetMonthAndRecurringDefault,
 } from '../../services/api';
 import BudgetSummary from './BudgetSummary';
 import BudgetList from './BudgetList';
@@ -177,6 +178,7 @@ const Budget = () => {
   const [categoriesError, setCategoriesError] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editAmount, setEditAmount] = useState('');
+  const [editScope, setEditScope] = useState('month');
   const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState('');
   const [showCopyDialog, setShowCopyDialog] = useState(false);
@@ -348,6 +350,7 @@ const Budget = () => {
     closeFundingPanel();
     setEditingId(null);
     setEditAmount('');
+    setEditScope('month');
     setEditError('');
     setRecurringError('');
     setCloseError('');
@@ -399,6 +402,7 @@ const Budget = () => {
   const startEdit = (row) => {
     setEditingId(row.id);
     setEditAmount(row.effectiveBase);
+    setEditScope('month');
     setEditError('');
   };
 
@@ -406,6 +410,7 @@ const Budget = () => {
     if (editPending) return;
     setEditingId(null);
     setEditAmount('');
+    setEditScope('month');
     setEditError('');
   };
 
@@ -414,31 +419,27 @@ const Budget = () => {
     setEditPending(true);
     setEditError('');
     try {
-      await setBudgetMonthOverride(selectedMonth, row.category_id, {
-        amount: editAmount,
-        request_key: requestKey(),
-      });
+      if (editScope === 'month_and_future') {
+        const preview = await getBudgetMonthAndRecurringDefaultPreview(
+          selectedMonth, row.category_id, { amount: editAmount }
+        );
+        await setBudgetMonthAndRecurringDefault(selectedMonth, row.category_id, {
+          amount: editAmount,
+          request_key: requestKey(),
+          preview_fingerprint: preview.data.fingerprint,
+        });
+      } else {
+        await setBudgetMonthOverride(selectedMonth, row.category_id, {
+          amount: editAmount,
+          request_key: requestKey(),
+        });
+      }
       setEditingId(null);
       setEditAmount('');
+      setEditScope('month');
       refreshBudgets();
     } catch (error) {
       setEditError(domainMessage(error, 'שמירת התקציב נכשלה. הסכום שהוזן נשמר ואפשר לנסות שוב.'));
-    } finally {
-      setEditPending(false);
-    }
-  };
-
-  const handleRecurringEdit = async (row) => {
-    if (editPending || editAmount === '') return;
-    setEditPending(true);
-    setEditError('');
-    try {
-      await setSettingsCategoryRecurringBudget(row.category_id, { amount: editAmount });
-      setEditingId(null);
-      setEditAmount('');
-      refreshBudgets();
-    } catch (error) {
-      setEditError(domainMessage(error, 'עדכון התקציב החודשי הקבוע נכשל. השינוי לחודש זה לא בוצע.'));
     } finally {
       setEditPending(false);
     }
@@ -626,12 +627,15 @@ const Budget = () => {
             rows={rows}
             editingId={editingId}
             editAmount={editAmount}
+            editScope={editScope}
             editPending={editPending}
             editError={editError}
             onStartEdit={startEdit}
             onEditAmountChange={setEditAmount}
+            onEditScopeChange={setEditScope}
             onSaveEdit={handleEdit}
-            onSaveRecurring={handleRecurringEdit}
+            allowCombinedEdit={selectedMonth === currentCalendarMonth()}
+            selectedMonth={selectedMonth}
             onRemoveOverride={handleRemoveOverride}
             onCancelEdit={cancelEdit}
             onRequestDelete={setDeleteTarget}

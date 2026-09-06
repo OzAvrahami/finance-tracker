@@ -469,3 +469,21 @@ Migration 025 preserves the domain-specific public RPCs but rewrites their inter
 ### Consequences
 
 Internal SQL relation names are not compatibility contracts. Future Budget features must extend the universal operation/item model or receive explicit architectural approval; they must not introduce feature-specific tables or views as shortcuts. Migration 025 changes no funded, Savings, lifecycle, configuration, provenance, or transaction row.
+
+## D-027 — Inline current-and-future Budget edits are one command
+
+**Status:** Accepted
+
+**Date:** 2026-09-06
+
+### Context
+
+The previous inline recurring action updated only future configuration while the selected current month remained unchanged, which made a successful command look broken.
+
+### Decision
+
+Migration 026 provides one current-Asia/Jerusalem-month command that applies the existing safe month override and the same recurring default atomically. A read-only approved fingerprint includes funded composition, transaction actual, and recurring configuration. The existing standalone month-override and Settings recurring commands remain unchanged.
+
+### Consequences
+
+The current opening snapshot remains immutable, increases still require unallocated funding, and decreases retain #19 release safety. One operation/item explains the combined command without adding another table or view. Future-month inline editing remains month-only; future-only recurring changes stay in Settings.

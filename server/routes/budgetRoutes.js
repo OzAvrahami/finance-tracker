@@ -14,6 +14,8 @@ const {
   reverseOperation,
   initializeRecurringBudgets,
   setMonthOverride,
+  getMonthAndRecurringDefaultPreview,
+  setMonthAndRecurringDefault,
   removeMonthOverride,
   reverseCarryover,
   getMonthDispositionPreview,
@@ -38,6 +40,8 @@ router.get('/funded/history', getBudgetHistory);
 router.get('/funded', getFundedBudgetMonth);
 router.post('/funded/funding', addManualFunding);
 router.post('/funded/recurring/initialize', initializeRecurringBudgets);
+router.post('/funded/months/:month/categories/:categoryId/override/with-recurring/preview', getMonthAndRecurringDefaultPreview);
+router.put('/funded/months/:month/categories/:categoryId/override/with-recurring', setMonthAndRecurringDefault);
 router.put('/funded/months/:month/categories/:categoryId/override', setMonthOverride);
 router.post('/funded/months/:month/categories/:categoryId/override/remove', removeMonthOverride);
 router.get('/funded/month-close/preview', getMonthDispositionPreview);

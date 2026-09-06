@@ -142,6 +142,12 @@ export const initializeRecurringBudgets = (data) => api.post('/budgets/funded/re
 export const setBudgetMonthOverride = (month, categoryId, data) => (
   api.put(`/budgets/funded/months/${month}/categories/${categoryId}/override`, data)
 );
+export const getBudgetMonthAndRecurringDefaultPreview = (month, categoryId, data) => (
+  api.post(`/budgets/funded/months/${month}/categories/${categoryId}/override/with-recurring/preview`, data)
+);
+export const setBudgetMonthAndRecurringDefault = (month, categoryId, data) => (
+  api.put(`/budgets/funded/months/${month}/categories/${categoryId}/override/with-recurring`, data)
+);
 export const removeBudgetMonthOverride = (month, categoryId, data) => (
   api.post(`/budgets/funded/months/${month}/categories/${categoryId}/override/remove`, data)
 );

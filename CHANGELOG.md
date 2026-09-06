@@ -10,6 +10,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #30 — Migration 026 adds one bounded, fingerprinted command for atomically applying the current-month base override and the same recurring default through the consolidated operation/item model.
+
 - Budget Schema Consolidation — Migration 024 adds universal root/child operation grouping, typed append-only `budget_operation_items`, a direct `budget_category_composition` read model, and operation history without changing funded balances.
 
 - #22 — Migration 023 explicit resolution of transaction-authoritative unbudgeted expenses through zero-opening late snapshots or explicit inactive-snapshot reactivation.
@@ -47,6 +49,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Funded-budget money crosses PostgreSQL, JSON, Node, and React as canonical decimal strings; authoritative mutation requests reject JSON numbers and annual compatibility aggregation uses exact minor-unit arithmetic.
 
 ### Fixed
+
+- Budget inline editing now distinguishes “this month only” from “this month and future”; the latter changes both states atomically and no longer reports a recurring-only update as a changed current month.
 
 - #20 — Serialize carryover application against transaction writes, reject stale approved previews atomically, and preserve distinct raw and effective actual-spending provenance.
 - #17 / #26 — Reject non-finite funded values and transaction actuals, reserve idempotency keys for no-op adjustments, use rollback-safe sequence restart, standardize month-first locks, and narrow legacy budget privileges.

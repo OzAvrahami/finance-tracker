@@ -258,6 +258,69 @@ test('month override rejects numeric JSON and surfaces stable funded-domain conf
   }
 });
 
+test('combined month and recurring update maps preview and apply to bounded RPCs with exact strings', async () => {
+  const exact = '9007199254740993.01';
+  const preview = await call('getMonthAndRecurringDefaultPreview', {
+    params: { month: '2026-09', categoryId: '21' },
+    body: { amount: exact },
+  }, { fingerprint: 'abcdefabcdefabcdefabcdefabcdefab' });
+  assert.equal(preview.res.statusCode, 200);
+  assert.deepEqual(preview.calls, [{
+    name: 'get_budget_month_and_recurring_default_preview',
+    params: { p_month: '2026-09', p_category_id: '21', p_amount: exact },
+  }]);
+
+  const apply = await call('setMonthAndRecurringDefault', {
+    params: { month: '2026-09', categoryId: '21' },
+    body: {
+      amount: exact,
+      request_key: 'combined-key',
+      preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+    },
+  });
+  assert.equal(apply.res.statusCode, 200);
+  assert.deepEqual(apply.calls, [{
+    name: 'set_budget_month_and_recurring_default',
+    params: {
+      p_month: '2026-09', p_category_id: '21', p_amount: exact,
+      p_request_key: 'combined-key',
+      p_preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab', p_reason: null,
+    },
+  }]);
+});
+
+test('combined update rejects numeric JSON and malformed approved fingerprints before PostgreSQL', async () => {
+  const numeric = await call('setMonthAndRecurringDefault', {
+    params: { month: '2026-09', categoryId: '21' },
+    body: {
+      amount: 500,
+      request_key: 'combined-number',
+      preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+    },
+  });
+  assert.equal(numeric.res.statusCode, 400);
+  assert.equal(numeric.res.body.code, 'INVALID_MONEY_FORMAT');
+  assert.equal(numeric.calls.length, 0);
+
+  const fingerprint = await call('setMonthAndRecurringDefault', {
+    params: { month: '2026-09', categoryId: '21' },
+    body: { amount: '500.00', request_key: 'combined-fingerprint', preview_fingerprint: 'bad' },
+  });
+  assert.equal(fingerprint.res.statusCode, 400);
+  assert.equal(fingerprint.res.body.code, 'INVALID_COMBINED_BUDGET_UPDATE_REQUEST');
+  assert.equal(fingerprint.calls.length, 0);
+
+  const stale = await call('setMonthAndRecurringDefault', {
+    params: { month: '2026-09', categoryId: '21' },
+    body: {
+      amount: '500.00', request_key: 'combined-stale',
+      preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+    },
+  }, null, { code: '40001', message: 'BUDGET_MONTH_RECURRING_PREVIEW_STALE: refresh' });
+  assert.equal(stale.res.statusCode, 409);
+  assert.equal(stale.res.body.code, 'BUDGET_MONTH_RECURRING_PREVIEW_STALE');
+});
+
 test('carryover preview is read-only and application maps fingerprint to one bounded RPC', async () => {
   const carryoverState = {
     ...state,

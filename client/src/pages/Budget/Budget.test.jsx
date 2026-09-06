@@ -7,10 +7,11 @@ import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   addManualBudgetFunding, applyBudgetMonthClose, applyBudgetReallocation, applyDeficitResolution, copyBudget,
   applyUnbudgetedResolution,
+  getBudgetMonthAndRecurringDefaultPreview,
   getBudgetReallocationPreview, getDeficitResolutionPreview,
   getUnbudgetedResolutionPreview,
   getBudgetMonthClosePreview, getCategories, getFundedBudgetMonth, initializeRecurringBudgets, removeBudgetMonthOverride,
-  removeFundedBudget, setBudgetMonthOverride, setSettingsCategoryRecurringBudget,
+  removeFundedBudget, setBudgetMonthAndRecurringDefault, setBudgetMonthOverride,
 } from '../../services/api';
 import Budget from './Budget';
 
@@ -20,6 +21,7 @@ vi.mock('../../services/api', () => ({
   addManualBudgetFunding: vi.fn(), applyBudgetMonthClose: vi.fn(),
   applyBudgetReallocation: vi.fn(), applyDeficitResolution: vi.fn(), copyBudget: vi.fn(),
   applyUnbudgetedResolution: vi.fn(),
+  getBudgetMonthAndRecurringDefaultPreview: vi.fn(),
   getBudgetReallocationPreview: vi.fn(), getDeficitResolutionPreview: vi.fn(),
   getUnbudgetedResolutionPreview: vi.fn(),
   getBudgetMonthClosePreview: vi.fn(), getCategories: vi.fn(), getFundedBudgetMonth: vi.fn(),
@@ -27,7 +29,7 @@ vi.mock('../../services/api', () => ({
   removeBudgetMonthOverride: vi.fn(),
   removeFundedBudget: vi.fn(),
   setBudgetMonthOverride: vi.fn(),
-  setSettingsCategoryRecurringBudget: vi.fn(),
+  setBudgetMonthAndRecurringDefault: vi.fn(),
 }));
 
 const categories = [
@@ -97,8 +99,11 @@ beforeEach(() => {
   getFundedBudgetMonth.mockResolvedValue({ data: fundedState() });
   addManualBudgetFunding.mockResolvedValue({ data: {} });
   setBudgetMonthOverride.mockResolvedValue({ data: {} });
+  setBudgetMonthAndRecurringDefault.mockResolvedValue({ data: {} });
   removeBudgetMonthOverride.mockResolvedValue({ data: {} });
-  setSettingsCategoryRecurringBudget.mockResolvedValue({ data: {} });
+  getBudgetMonthAndRecurringDefaultPreview.mockResolvedValue({
+    data: { fingerprint: 'abcdefabcdefabcdefabcdefabcdefab' },
+  });
   copyBudget.mockResolvedValue({ data: {} });
   removeFundedBudget.mockResolvedValue({ data: {} });
   initializeRecurringBudgets.mockResolvedValue({ data: {} });
@@ -371,7 +376,7 @@ describe('canonical funded monthly read', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'עריכת תקציב עבור מזון' })[0]);
     const input = document.getElementById('budget-amount-desktop-11');
     expect(input.value).toBe('9007199254740993.01');
-    await userEvent.click(screen.getAllByRole('button', { name: /שינוי לחודש זה בלבד/ })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'שמירה' })[0]);
     expect(setBudgetMonthOverride).toHaveBeenCalledWith(new Date().toISOString().slice(0, 7), 1, {
       amount: '9007199254740993.01', request_key: 'request-key',
     });
@@ -538,16 +543,27 @@ describe('funded budget commands', () => {
     await settle();
     await userEvent.click(screen.getAllByRole('button', { name: 'עריכת תקציב עבור מזון' })[0]);
     const input = document.getElementById('budget-amount-desktop-11');
+    expect(screen.getAllByText(/תקציב חודשי קבוע/).length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('רק החודש הזה')[0]).toBeChecked();
     await userEvent.clear(input);
     await userEvent.type(input, '1300');
-    await userEvent.click(screen.getAllByRole('button', { name: /שינוי לחודש זה בלבד/ })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'שמירה' })[0]);
     expect(setBudgetMonthOverride).toHaveBeenCalledWith(new Date().toISOString().slice(0, 7), 1, {
       amount: '1300', request_key: 'request-key',
     });
     await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
   });
 
-  it('keeps recurring-default updates explicit and removes an existing month override separately', async () => {
+  it('keeps future-month inline editing month-only and leaves future recurring changes in Settings', async () => {
+    await settle();
+    await userEvent.click(screen.getByRole('button', { name: 'חודש הבא' }));
+    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
+    await userEvent.click(screen.getAllByRole('button', { name: 'עריכת תקציב עבור מזון' })[0]);
+    expect(screen.getAllByLabelText('רק החודש הזה')[0]).toBeChecked();
+    expect(screen.queryByLabelText('החודש הזה וגם להבא')).not.toBeInTheDocument();
+  });
+
+  it('atomically updates this month and the recurring default, then removes an override separately', async () => {
     getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
       categories: [categoryState({
         month_override: '1500.00', effective_base: '1500.00',
@@ -562,10 +578,22 @@ describe('funded budget commands', () => {
 
     await userEvent.click(screen.getAllByRole('button', { name: 'עריכת תקציב עבור מזון' })[0]);
     const input = document.getElementById('budget-amount-desktop-11');
+    expect(screen.getAllByText(/תקציב חודשי קבוע/)[0].parentElement).toHaveTextContent('₪900');
+    expect(screen.getAllByText(new RegExp(`תקציב ${new Date().toISOString().slice(0, 7)}`))[0].parentElement)
+      .toHaveTextContent('₪1,500');
     await userEvent.clear(input);
     await userEvent.type(input, '1600');
-    await userEvent.click(screen.getAllByRole('button', { name: 'עדכון התקציב החודשי הקבוע' })[0]);
-    expect(setSettingsCategoryRecurringBudget).toHaveBeenCalledWith(1, { amount: '1600' });
+    await userEvent.click(screen.getAllByLabelText('החודש הזה וגם להבא')[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'שמירה' })[0]);
+    expect(getBudgetMonthAndRecurringDefaultPreview).toHaveBeenCalledWith(
+      new Date().toISOString().slice(0, 7), 1, { amount: '1600' },
+    );
+    expect(setBudgetMonthAndRecurringDefault).toHaveBeenCalledWith(
+      new Date().toISOString().slice(0, 7), 1, {
+        amount: '1600', request_key: 'request-key',
+        preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+      },
+    );
     expect(setBudgetMonthOverride).not.toHaveBeenCalled();
 
     await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
@@ -602,9 +630,26 @@ describe('funded budget commands', () => {
     const input = document.getElementById('budget-amount-desktop-11');
     await userEvent.clear(input);
     await userEvent.type(input, '825.37');
-    await userEvent.click(screen.getAllByRole('button', { name: /שינוי לחודש זה בלבד/ })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'שמירה' })[0]);
     expect((await screen.findAllByText(/שמירת התקציב נכשלה/)).length).toBeGreaterThan(0);
     expect(input.value).toBe('825.37');
+    expect(getFundedBudgetMonth).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains the entered amount and combined scope after an atomic update failure', async () => {
+    setBudgetMonthAndRecurringDefault.mockRejectedValueOnce({
+      response: { data: { error: 'MONTH_OVERRIDE_RELEASE_BLOCKED: exact details' } },
+    });
+    await settle();
+    await userEvent.click(screen.getAllByRole('button', { name: 'עריכת תקציב עבור מזון' })[0]);
+    const input = document.getElementById('budget-amount-desktop-11');
+    await userEvent.clear(input);
+    await userEvent.type(input, '500.00');
+    await userEvent.click(screen.getAllByLabelText('החודש הזה וגם להבא')[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'שמירה' })[0]);
+    expect((await screen.findAllByText(/MONTH_OVERRIDE_RELEASE_BLOCKED/)).length).toBeGreaterThan(0);
+    expect(input.value).toBe('500');
+    expect(screen.getAllByLabelText('החודש הזה וגם להבא')[0]).toBeChecked();
     expect(getFundedBudgetMonth).toHaveBeenCalledTimes(1);
   });
 

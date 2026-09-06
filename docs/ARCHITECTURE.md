@@ -296,6 +296,8 @@ The boundaries are deliberate:
 
 The eight feature-specific provenance tables introduced by Migrations 019–023 were retired only after Migration 024 proved every one empty. Migration 025 then moved the remaining command implementations directly to operations/items and removed their temporary adapter views. The steady-state read layer is nine views with current responsibilities: category state, month funding, month/category actuals, category composition, Savings state, three configuration reads, and operation history. Public RPCs remain domain-specific; no internal relation alias is part of the application contract.
 
+Migration 026 keeps that boundary unchanged. The combined current-month/recurring edit captures a read-only fingerprint, delegates the funded half to the existing month-override command in the same PostgreSQL transaction, and then updates recurring configuration. The root `budget_operations` row and its typed `month_override` item record the recurring value observed before the command; `budget_movements` remains the only authority for the funded delta. No table or view is added.
+
 ## Known architectural boundaries
 
 - Legacy and principal-aware loan calculations coexist.

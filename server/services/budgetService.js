@@ -122,6 +122,32 @@ const setMonthOverride = (supabase, {
   p_reason: reason,
 });
 
+const getMonthAndRecurringDefaultPreview = (supabase, {
+  month,
+  categoryId,
+  amount,
+}) => callBudgetRpc(supabase, 'get_budget_month_and_recurring_default_preview', {
+  p_month: month,
+  p_category_id: categoryId,
+  p_amount: amount,
+});
+
+const setMonthAndRecurringDefault = (supabase, {
+  month,
+  categoryId,
+  amount,
+  requestKey: suppliedRequestKey,
+  previewFingerprint,
+  reason = null,
+}) => callBudgetRpc(supabase, 'set_budget_month_and_recurring_default', {
+  p_month: month,
+  p_category_id: categoryId,
+  p_amount: amount,
+  p_request_key: requestKey(suppliedRequestKey),
+  p_preview_fingerprint: previewFingerprint,
+  p_reason: reason,
+});
+
 const removeMonthOverride = (supabase, {
   month,
   categoryId,
@@ -317,6 +343,7 @@ module.exports = {
   getBudgetReallocationPreview,
   getDeficitResolutionPreview,
   getMonthDispositionPreview,
+  getMonthAndRecurringDefaultPreview,
   getUnbudgetedResolutionPreview,
   getFundedBudgetMonth,
   initializeRecurringBudgets,
@@ -329,6 +356,7 @@ module.exports = {
   reverseOperation,
   reverseUnbudgetedResolution,
   setBudgetAmount,
+  setMonthAndRecurringDefault,
   setMonthOverride,
   toCompatibilityRows,
 };

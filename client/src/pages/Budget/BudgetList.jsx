@@ -25,9 +25,22 @@ const BudgetProgress = ({ row }) => (
 );
 
 const BudgetEditor = ({
-  row, view, value, pending, error, onChange, onSave, onSaveRecurring, onRemoveOverride, onCancel,
+  row, view, month, value, scope, allowCombined, pending, error,
+  onChange, onScopeChange, onSave, onRemoveOverride, onCancel,
 }) => (
   <div className="budget-inline-editor">
+    <dl className="budget-inline-editor__context">
+      <div>
+        <dt>{`תקציב ${month}`}</dt>
+        <dd><BudgetMoneyAmount value={row.effectiveBase} /></dd>
+      </div>
+      <div>
+        <dt>תקציב חודשי קבוע</dt>
+        <dd>{row.recurringDefault === null || row.recurringDefault === undefined
+          ? 'לא הוגדר'
+          : <BudgetMoneyAmount value={row.recurringDefault} />}</dd>
+      </div>
+    </dl>
     <NumberField
       id={`budget-amount-${view}-${row.id}`}
       label={`בסיס התקציב עבור ${row.categoryName}`}
@@ -37,6 +50,33 @@ const BudgetEditor = ({
       disabled={pending}
       error={error}
     />
+    <fieldset className="budget-inline-editor__scope">
+      <legend>החלה על</legend>
+      <label>
+        <input
+          type="radio"
+          name={`budget-scope-${view}-${row.id}`}
+          value="month"
+          checked={scope === 'month'}
+          disabled={pending}
+          onChange={(event) => onScopeChange(event.target.value)}
+        />
+        רק החודש הזה
+      </label>
+      {allowCombined && (
+        <label>
+          <input
+            type="radio"
+            name={`budget-scope-${view}-${row.id}`}
+            value="month_and_future"
+            checked={scope === 'month_and_future'}
+            disabled={pending}
+            onChange={(event) => onScopeChange(event.target.value)}
+          />
+          החודש הזה וגם להבא
+        </label>
+      )}
+    </fieldset>
     <div className="budget-inline-editor__actions">
       <button
         type="button"
@@ -44,10 +84,7 @@ const BudgetEditor = ({
         disabled={pending}
         onClick={() => onSave(row)}
       >
-        <Check size={15} aria-hidden="true" /> שינוי לחודש זה בלבד
-      </button>
-      <button type="button" disabled={pending} onClick={() => onSaveRecurring(row)}>
-        עדכון התקציב החודשי הקבוע
+        <Check size={15} aria-hidden="true" /> שמירה
       </button>
       {row.monthOverride !== null && row.monthOverride !== undefined && (
         <button type="button" disabled={pending} onClick={() => onRemoveOverride(row)}>
@@ -146,12 +183,15 @@ const BudgetList = ({
   rows,
   editingId,
   editAmount,
+  editScope,
   editPending,
   editError,
   onStartEdit,
   onEditAmountChange,
+  onEditScopeChange,
   onSaveEdit,
-  onSaveRecurring,
+  allowCombinedEdit,
+  selectedMonth,
   onRemoveOverride,
   onCancelEdit,
   onRequestDelete,
@@ -193,12 +233,15 @@ const BudgetList = ({
                     <BudgetEditor
                       row={row}
                       view="desktop"
+                      month={selectedMonth}
                       value={editAmount}
+                      scope={editScope}
+                      allowCombined={allowCombinedEdit}
                       pending={editPending}
                       error={editError}
                       onChange={onEditAmountChange}
+                      onScopeChange={onEditScopeChange}
                       onSave={onSaveEdit}
-                      onSaveRecurring={onSaveRecurring}
                       onRemoveOverride={onRemoveOverride}
                       onCancel={onCancelEdit}
                     />
@@ -250,12 +293,15 @@ const BudgetList = ({
               <BudgetEditor
                 row={row}
                 view="mobile"
+                month={selectedMonth}
                 value={editAmount}
+                scope={editScope}
+                allowCombined={allowCombinedEdit}
                 pending={editPending}
                 error={editError}
                 onChange={onEditAmountChange}
+                onScopeChange={onEditScopeChange}
                 onSave={onSaveEdit}
-                onSaveRecurring={onSaveRecurring}
                 onRemoveOverride={onRemoveOverride}
                 onCancel={onCancelEdit}
               />
