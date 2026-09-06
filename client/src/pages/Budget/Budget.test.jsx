@@ -102,7 +102,14 @@ beforeEach(() => {
   setBudgetMonthAndRecurringDefault.mockResolvedValue({ data: {} });
   removeBudgetMonthOverride.mockResolvedValue({ data: {} });
   getBudgetMonthAndRecurringDefaultPreview.mockResolvedValue({
-    data: { fingerprint: 'abcdefabcdefabcdefabcdefabcdefab' },
+    data: {
+      month: new Date().toISOString().slice(0, 7),
+      fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
+      can_apply: true,
+      future_months_to_change: [],
+      future_months_skipped: [],
+      blocking_months: [],
+    },
   });
   copyBudget.mockResolvedValue({ data: {} });
   removeFundedBudget.mockResolvedValue({ data: {} });
@@ -564,6 +571,13 @@ describe('funded budget commands', () => {
   });
 
   it('atomically updates this month and the recurring default, then removes an override separately', async () => {
+    getBudgetMonthAndRecurringDefaultPreview.mockResolvedValueOnce({ data: {
+      month: new Date().toISOString().slice(0, 7),
+      fingerprint: 'abcdefabcdefabcdefabcdefabcdefab', can_apply: true,
+      future_months_to_change: [{ month: '2026-10' }, { month: '2026-12' }],
+      future_months_skipped: [{ month: '2026-11', reason: 'explicit_month_override' }],
+      blocking_months: [],
+    } });
     getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
       categories: [categoryState({
         month_override: '1500.00', effective_base: '1500.00',
@@ -584,10 +598,14 @@ describe('funded budget commands', () => {
     await userEvent.clear(input);
     await userEvent.type(input, '1600');
     await userEvent.click(screen.getAllByLabelText('החודש הזה וגם להבא')[0]);
-    await userEvent.click(screen.getAllByRole('button', { name: 'שמירה' })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'סקירת השינוי' })[0]);
     expect(getBudgetMonthAndRecurringDefaultPreview).toHaveBeenCalledWith(
       new Date().toISOString().slice(0, 7), 1, { amount: '1600' },
     );
+    expect((await screen.findAllByText(/יעודכנו:/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/יישארו ללא שינוי בגלל התאמה ידנית/)[0]).toBeInTheDocument();
+    expect(setBudgetMonthAndRecurringDefault).not.toHaveBeenCalled();
+    await userEvent.click(screen.getAllByRole('button', { name: 'אישור ושמירה' })[0]);
     expect(setBudgetMonthAndRecurringDefault).toHaveBeenCalledWith(
       new Date().toISOString().slice(0, 7), 1, {
         amount: '1600', request_key: 'request-key',
@@ -646,11 +664,28 @@ describe('funded budget commands', () => {
     await userEvent.clear(input);
     await userEvent.type(input, '500.00');
     await userEvent.click(screen.getAllByLabelText('החודש הזה וגם להבא')[0]);
-    await userEvent.click(screen.getAllByRole('button', { name: 'שמירה' })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'סקירת השינוי' })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'אישור ושמירה' })[0]);
     expect((await screen.findAllByText(/MONTH_OVERRIDE_RELEASE_BLOCKED/)).length).toBeGreaterThan(0);
     expect(input.value).toBe('500');
     expect(screen.getAllByLabelText('החודש הזה וגם להבא')[0]).toBeChecked();
     expect(getFundedBudgetMonth).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a blocking propagated month during review and never attempts apply', async () => {
+    getBudgetMonthAndRecurringDefaultPreview.mockResolvedValueOnce({ data: {
+      month: new Date().toISOString().slice(0, 7),
+      fingerprint: 'abcdefabcdefabcdefabcdefabcdefab', can_apply: false,
+      future_months_to_change: [], future_months_skipped: [],
+      blocking_months: [{ month: '2026-11', reason: 'release_blocked' }],
+    } });
+    await settle();
+    await userEvent.click(screen.getAllByRole('button', { name: 'עריכת תקציב עבור מזון' })[0]);
+    await userEvent.click(screen.getAllByLabelText('החודש הזה וגם להבא')[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'סקירת השינוי' })[0]);
+    expect((await screen.findAllByText(/לא ניתן להחיל את השינוי על 2026-11/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'אישור ושמירה' })[0]).toBeDisabled();
+    expect(setBudgetMonthAndRecurringDefault).not.toHaveBeenCalled();
   });
 
   it('maps removal to the provenance-preserving command', async () => {

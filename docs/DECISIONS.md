@@ -482,8 +482,8 @@ The previous inline recurring action updated only future configuration while the
 
 ### Decision
 
-Migration 026 provides one current-Asia/Jerusalem-month command that applies the existing safe month override and the same recurring default atomically. A read-only approved fingerprint includes funded composition, transaction actual, and recurring configuration. The existing standalone month-override and Settings recurring commands remain unchanged.
+Migration 026 provides one current-Asia/Jerusalem-month command that applies the existing safe month override and the same recurring default atomically. Migration 027 includes existing future snapshots that still follow inherited/default planning in the same approved material and transaction. A read-only fingerprint includes every inspected future snapshot, its funding and actual state, and explicit-customization classification. The existing standalone month-override and Settings recurring commands remain unchanged.
 
 ### Consequences
 
-The current opening snapshot remains immutable, increases still require unallocated funding, and decreases retain #19 release safety. One operation/item explains the combined command without adding another table or view. Future-month inline editing remains month-only; future-only recurring changes stay in Settings.
+All openings remain immutable, increases still require each affected month's unallocated funding, and decreases retain #19 release safety per month. The current month receives its explicit override configuration; inherited future months receive movements and typed propagation provenance without override rows, so later recurring changes can propagate again. Explicit future overrides and other proven month-specific openings are preserved. One root with deterministic child postings explains the atomic command without adding another table or view. Future-month inline editing remains month-only; future-only recurring changes stay in Settings.

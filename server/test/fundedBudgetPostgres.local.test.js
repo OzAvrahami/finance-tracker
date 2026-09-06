@@ -48,6 +48,10 @@ const combinedUpdateMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '026_budget_month_recurring_update.sql'),
   'utf8',
 );
+const futurePropagationMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '027_budget_recurring_future_propagation.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -181,6 +185,7 @@ const applyCleanBudgetFoundation = (database) => {
 const applyCombinedUpdateFoundation = (database) => {
   applyCleanBudgetFoundation(database);
   psql(database, combinedUpdateMigration);
+  psql(database, futurePropagationMigration);
 };
 
 before(() => {
@@ -247,9 +252,10 @@ test('full_schema creates the funded foundation cleanly from an empty database',
       to_regprocedure('public.apply_budget_unbudgeted_resolution(text,bigint,numeric,jsonb,uuid,text,text)') IS NOT NULL,
       to_regprocedure('public.get_budget_month_and_recurring_default_preview(text,bigint,numeric)') IS NOT NULL,
       to_regprocedure('public.set_budget_month_and_recurring_default(text,bigint,numeric,uuid,text,text)') IS NOT NULL,
+      to_regprocedure('public.validate_budget_recurring_propagation_item()') IS NOT NULL,
       to_regprocedure('public.remove_funded_budget(bigint,uuid,text)') IS NOT NULL;
   `).stdout.trim();
-  assert.equal(objects, 't|t|t|t|t|t|t|t|t|t|t|t|t|t|t|t');
+  assert.equal(objects, 't|t|t|t|t|t|t|t|t|t|t|t|t|t|t|t|t');
 });
 
 test('preflight rejects invalid month and rolls the transaction back', () => {
@@ -3755,20 +3761,29 @@ test('combined update preserves exact values beyond JavaScript safe integer and 
   psql('budget_combined_exact', fixture());
   applyCombinedUpdateFoundation('budget_combined_exact');
   const current = psql('budget_combined_exact', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  const future = psql('budget_combined_exact', `SELECT to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))+interval '1 month','YYYY-MM');`).stdout.trim();
   const exact = '9007199254740993.01';
   psql('budget_combined_exact', `
     SELECT add_manual_budget_funding('${current}',${exact},'exact','e4000000-0000-0000-0000-000000000001');
     SELECT establish_funded_budget('${current}',1,${exact},'manual','e4000000-0000-0000-0000-000000000002');
-    SELECT set_budget_recurring_default(1,1.00);`);
+    SELECT set_budget_recurring_default(1,1.00);
+    SELECT add_manual_budget_funding('${future}',${exact},'future exact','e4000000-0000-0000-0000-000000000005');
+    SELECT initialize_budget_recurring_defaults('${future}','e4000000-0000-0000-0000-000000000006');`);
   const preview = JSON.parse(psql('budget_combined_exact', `SELECT get_budget_month_and_recurring_default_preview('${current}',1,${exact});`).stdout.trim());
   assert.equal(preview.requested_target,exact);
+  assert.equal(preview.future_months_to_change[0].effective_base_before,'1.00');
+  assert.equal(preview.future_months_to_change[0].effective_base_after,exact);
   psql('budget_combined_exact', `SELECT set_budget_month_and_recurring_default('${current}',1,${exact},
     'e4000000-0000-0000-0000-000000000003','${preview.fingerprint}');`);
   assert.equal(psql('budget_combined_exact', `SELECT effective_base||'|'||recurring_default||'|'||
     (SELECT recurring_before FROM budget_operation_items i JOIN budget_operations o ON o.id=i.operation_id
-      WHERE o.request_key='e4000000-0000-0000-0000-000000000003')
+      WHERE o.request_key='e4000000-0000-0000-0000-000000000003'
+        AND i.resolution_mode='with_recurring')
     FROM budget_category_composition WHERE month='${current}' AND category_id=1;`).stdout.trim(),
   `${exact}|${exact}|1.00`);
+  assert.equal(psql('budget_combined_exact', `SELECT opening_base||'|'||effective_base||'|'||
+    coalesce(current_override::text,'none') FROM budget_category_composition
+    WHERE month='${future}' AND category_id=1;`).stdout.trim(),`1.00|${exact}|none`);
 
   psql('budget_combined_exact', `SELECT set_budget_recurring_default(1,2.00);`);
   assert.equal(psql('budget_combined_exact', 'SELECT amount FROM budget_recurring_defaults WHERE category_id=1;').stdout.trim(),'2.00');
@@ -3776,4 +3791,174 @@ test('combined update preserves exact values beyond JavaScript safe integer and 
     'e4000000-0000-0000-0000-000000000004');`);
   assert.equal(psql('budget_combined_exact', `SELECT recurring_before IS NULL FROM budget_operation_items i
     JOIN budget_operations o ON o.id=i.operation_id WHERE o.request_key='e4000000-0000-0000-0000-000000000004';`).stdout.trim(),'t');
+});
+
+test('combined recurring update propagates inherited future snapshots and preserves explicit overrides', () => {
+  createDatabase('budget_recurring_propagation');
+  const [current, october, november, december] = psql('postgres', `SELECT string_agg(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))+(n||' month')::interval,'YYYY-MM'),
+    '|' ORDER BY n) FROM generate_series(0,3) n;`).stdout.trim().split('|');
+  psql('budget_recurring_propagation', `${fixture()}
+    INSERT INTO categories(id,name,type) VALUES(21,'ביגוד והנעלה','expense');
+    INSERT INTO budgets(id,category_id,month,amount) VALUES
+      (210,21,'${current}',1000.00),(211,21,'${october}',1000.00),
+      (212,21,'${november}',1000.00),(213,21,'${december}',1000.00);
+  `);
+  applyCombinedUpdateFoundation('budget_recurring_propagation');
+  psql('budget_recurring_propagation', `
+    SELECT set_budget_recurring_default(21,500.00);
+    SELECT set_budget_month_override('${current}',21,500.00,
+      'f1000000-0000-0000-0000-000000000000','existing deployed combined result');
+    SELECT set_budget_month_override('${november}',21,800.00,
+      'f1000000-0000-0000-0000-000000000001','explicit November');`);
+
+  const preview = JSON.parse(psql('budget_recurring_propagation', `
+    SELECT get_budget_month_and_recurring_default_preview('${current}',21,500.00);
+  `).stdout.trim());
+  assert.equal(preview.can_apply, true);
+  assert.deepEqual(preview.future_months_inspected.map((item) => item.month), [october, november, december]);
+  assert.deepEqual(preview.future_months_to_change.map((item) => item.month), [october, december]);
+  assert.deepEqual(preview.future_months_skipped.map((item) => [item.month, item.reason]),
+    [[november, 'explicit_month_override']]);
+  assert.equal(preview.blocking_months.length, 0);
+
+  psql('budget_recurring_propagation', `SELECT set_budget_month_and_recurring_default(
+    '${current}',21,500.00,'f1000000-0000-0000-0000-000000000002','${preview.fingerprint}','propagate');`);
+  assert.equal(psql('budget_recurring_propagation', `SELECT string_agg(
+    c.month||':'||c.opening_base||':'||c.effective_base||':'||coalesce(c.current_override::text,'none'),
+    '|' ORDER BY c.month_start)
+    FROM budget_category_composition c WHERE c.category_id=21;`).stdout.trim(),
+  `${current}:1000.00:500.00:500.00|${october}:1000.00:500.00:none|${november}:1000.00:800.00:800.00|${december}:1000.00:500.00:none`);
+  assert.equal(psql('budget_recurring_propagation', `SELECT
+    (SELECT count(*) FROM budget_month_overrides override_config
+      JOIN budget_months bm ON bm.id=override_config.budget_month_id
+      WHERE override_config.category_id=21 AND bm.month_start>public.budget_month_start_from_key('${current}'))||'|'||
+    (SELECT count(*) FROM budget_operations child JOIN budget_operations root ON root.id=child.parent_operation_id
+      WHERE root.request_key='f1000000-0000-0000-0000-000000000002')||'|'||
+    (SELECT count(*) FROM budget_operation_items item JOIN budget_operations root ON root.id=item.operation_id
+      WHERE root.request_key='f1000000-0000-0000-0000-000000000002'
+        AND item.resolution_mode='recurring_propagation')||'|'||
+    (SELECT count(*) FROM budget_movements movement JOIN budget_operations operation ON operation.id=movement.operation_id
+      WHERE coalesce(operation.parent_operation_id,operation.id)=(SELECT id FROM budget_operations
+        WHERE request_key='f1000000-0000-0000-0000-000000000002'));
+  `).stdout.trim(),'1|2|2|2');
+  assert.equal(psql('budget_recurring_propagation', `SELECT bool_and(
+    child.request_key=public.budget_derived_request_key(
+      root.request_key,'recurring-propagation|'||child.budget_month_id||'|21')
+    AND child.effective_date=bm.month_start)
+    FROM budget_operations child JOIN budget_operations root ON root.id=child.parent_operation_id
+    JOIN budget_months bm ON bm.id=child.budget_month_id
+    WHERE root.request_key='f1000000-0000-0000-0000-000000000002';`).stdout.trim(),'t');
+
+  psql('budget_recurring_propagation', `SELECT set_budget_month_and_recurring_default(
+    '${current}',21,500.00,'f1000000-0000-0000-0000-000000000002','${preview.fingerprint}','retry');`);
+  assert.equal(psql('budget_recurring_propagation', `SELECT count(*) FROM budget_movements movement
+    JOIN budget_operations operation ON operation.id=movement.operation_id
+    WHERE coalesce(operation.parent_operation_id,operation.id)=(SELECT id FROM budget_operations
+      WHERE request_key='f1000000-0000-0000-0000-000000000002');`).stdout.trim(),'2');
+
+  const secondPreview = JSON.parse(psql('budget_recurring_propagation', `
+    SELECT get_budget_month_and_recurring_default_preview('${current}',21,600.00);
+  `).stdout.trim());
+  assert.deepEqual(secondPreview.future_months_to_change.map((item) => item.month), [october, december]);
+  assert.deepEqual(secondPreview.future_months_skipped.map((item) => item.month), [november]);
+  psql('budget_recurring_propagation', `SELECT set_budget_month_and_recurring_default(
+    '${current}',21,600.00,'f1000000-0000-0000-0000-000000000003','${secondPreview.fingerprint}','propagate again');`);
+  assert.equal(psql('budget_recurring_propagation', `SELECT string_agg(month||':'||effective_base,'|' ORDER BY month_start)
+    FROM budget_category_composition WHERE category_id=21;`).stdout.trim(),
+  `${current}:600.00|${october}:600.00|${november}:800.00|${december}:600.00`);
+  psql('budget_recurring_propagation','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('a blocked future month or stale future customization rolls the combined command back completely', () => {
+  createDatabase('budget_recurring_propagation_atomic');
+  const [current, nextMonth, blockedMonth] = psql('postgres', `SELECT string_agg(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))+(n||' month')::interval,'YYYY-MM'),
+    '|' ORDER BY n) FROM generate_series(0,2) n;`).stdout.trim().split('|');
+  psql('budget_recurring_propagation_atomic', `${fixture()}
+    INSERT INTO budgets(id,category_id,month,amount) VALUES
+      (310,1,'${current}',1000.00),(311,1,'${nextMonth}',1000.00),(312,1,'${blockedMonth}',1000.00);
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(('${blockedMonth}-01')::date,'expense',900.00,1);
+  `);
+  applyCombinedUpdateFoundation('budget_recurring_propagation_atomic');
+  psql('budget_recurring_propagation_atomic','SELECT set_budget_recurring_default(1,1000.00);');
+
+  const blocked = JSON.parse(psql('budget_recurring_propagation_atomic', `
+    SELECT get_budget_month_and_recurring_default_preview('${current}',1,500.00);`).stdout.trim());
+  assert.equal(blocked.can_apply, false);
+  assert.deepEqual(blocked.blocking_months.map((item) => [item.month, item.reason, item.shortfall]),
+    [[blockedMonth, 'release_blocked', '400.00']]);
+  const rejected = psql('budget_recurring_propagation_atomic', `SELECT set_budget_month_and_recurring_default(
+    '${current}',1,500.00,'f2000000-0000-0000-0000-000000000001','${blocked.fingerprint}');`,true);
+  assert.notEqual(rejected.status,0);
+  assert.match(rejected.stderr,/MONTH_OVERRIDE_RELEASE_BLOCKED/);
+  assert.equal(psql('budget_recurring_propagation_atomic', `SELECT
+    (SELECT string_agg(month||':'||effective_base,'|' ORDER BY month_start)
+      FROM budget_category_composition WHERE category_id=1)||'|'||
+    (SELECT amount FROM budget_recurring_defaults WHERE category_id=1)||'|'||
+    (SELECT count(*) FROM budget_operations WHERE request_key='f2000000-0000-0000-0000-000000000001');
+  `).stdout.trim(),`${current}:1000.00|${nextMonth}:1000.00|${blockedMonth}:1000.00|1000.00|0`);
+
+  const stale = JSON.parse(psql('budget_recurring_propagation_atomic', `
+    SELECT get_budget_month_and_recurring_default_preview('${current}',1,900.00);`).stdout.trim());
+  psql('budget_recurring_propagation_atomic', `SELECT set_budget_month_override('${nextMonth}',1,950.00,
+    'f2000000-0000-0000-0000-000000000002','concurrent explicit choice');`);
+  const staleResult = psql('budget_recurring_propagation_atomic', `SELECT set_budget_month_and_recurring_default(
+    '${current}',1,900.00,'f2000000-0000-0000-0000-000000000003','${stale.fingerprint}');`,true);
+  assert.notEqual(staleResult.status,0);
+  assert.match(staleResult.stderr,/BUDGET_MONTH_RECURRING_PREVIEW_STALE/);
+  assert.equal(psql('budget_recurring_propagation_atomic', `SELECT
+    (SELECT effective_base FROM budget_category_composition WHERE month='${current}' AND category_id=1)||'|'||
+    (SELECT effective_base FROM budget_category_composition WHERE month='${nextMonth}' AND category_id=1)||'|'||
+    (SELECT amount FROM budget_recurring_defaults WHERE category_id=1)||'|'||
+    (SELECT count(*) FROM budget_operations WHERE request_key='f2000000-0000-0000-0000-000000000003');
+  `).stdout.trim(),'1000.00|950.00|1000.00|0');
+});
+
+test('future propagation supports safe increases and leaves missing months to recurring initialization', () => {
+  createDatabase('budget_recurring_propagation_increase');
+  const [current, nextMonth, missingMonth] = psql('postgres', `SELECT string_agg(
+    to_char(date_trunc('month',timezone('Asia/Jerusalem',now()))+(n||' month')::interval,'YYYY-MM'),
+    '|' ORDER BY n) FROM generate_series(0,2) n;`).stdout.trim().split('|');
+  psql('budget_recurring_propagation_increase', `${fixture()}
+    INSERT INTO budgets(id,category_id,month,amount) VALUES
+      (410,1,'${current}',500.00),(411,1,'${nextMonth}',500.00);
+  `);
+  applyCombinedUpdateFoundation('budget_recurring_propagation_increase');
+  psql('budget_recurring_propagation_increase', `
+    SELECT set_budget_recurring_default(1,500.00);
+    SELECT add_manual_budget_funding('${current}',300.00,'increase','f3000000-0000-0000-0000-000000000001');
+    SELECT add_manual_budget_funding('${nextMonth}',300.00,'increase','f3000000-0000-0000-0000-000000000002');`);
+  const preview = JSON.parse(psql('budget_recurring_propagation_increase', `
+    SELECT get_budget_month_and_recurring_default_preview('${current}',1,800.00);`).stdout.trim());
+  assert.deepEqual(preview.future_months_to_change.map((item) => item.month), [nextMonth]);
+  assert.equal(preview.future_months_inspected.some((item) => item.month===missingMonth), false);
+  psql('budget_recurring_propagation_increase', `SELECT set_budget_month_and_recurring_default(
+    '${current}',1,800.00,'f3000000-0000-0000-0000-000000000003','${preview.fingerprint}');`);
+  assert.equal(psql('budget_recurring_propagation_increase', `SELECT string_agg(
+    month||':'||opening_base||':'||effective_base||':'||coalesce(current_override::text,'none'),
+    '|' ORDER BY month_start) FROM budget_category_composition WHERE category_id=1;`).stdout.trim(),
+  `${current}:500.00:800.00:800.00|${nextMonth}:500.00:800.00:none`);
+
+  psql('budget_recurring_propagation_increase', `
+    SELECT add_manual_budget_funding('${missingMonth}',800.00,'initialize','f3000000-0000-0000-0000-000000000004');
+    SELECT initialize_budget_recurring_defaults('${missingMonth}','f3000000-0000-0000-0000-000000000005');`);
+  assert.equal(psql('budget_recurring_propagation_increase', `SELECT opening_base||'|'||starting_kind||'|'||effective_base
+    FROM budget_category_composition WHERE month='${missingMonth}' AND category_id=1;`).stdout.trim(),
+  '800.00|recurring_default|800.00');
+  assert.equal(psql('budget_recurring_propagation_increase', `SELECT
+    (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind IN('r','p') AND c.relname LIKE 'budget%')||'|'||
+    (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind='v' AND c.relname LIKE 'budget%');
+  `).stdout.trim(),'11|9');
+  assert.equal(psql('budget_recurring_propagation_increase', `SELECT NOT EXISTS(
+    SELECT 1 FROM unnest(ARRAY[
+      'budget_carryover_batches','budget_carryover_transfers','budget_month_override_events',
+      'budget_month_disposition_batches','budget_unused_disposition_events','budget_funding_actions',
+      'budget_funding_action_legs','budget_unbudgeted_resolution_events'
+    ]) retired(name) WHERE to_regclass('public.'||retired.name) IS NOT NULL);
+  `).stdout.trim(),'t');
+  psql('budget_recurring_propagation_increase','SELECT budget_assert_reconciled(id) FROM budget_months;');
 });

@@ -883,6 +883,22 @@
   accent-color: var(--ft-primary);
 }
 
+.budget-inline-editor__propagation {
+  display: grid;
+  gap: 3px;
+  padding: 7px 9px;
+  color: var(--ft-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  background: var(--ft-glass);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-control);
+}
+
+.budget-inline-editor__propagation strong {
+  color: var(--ft-text);
+}
+
 .budget-inline-editor__field {
   width: 140px;
 }

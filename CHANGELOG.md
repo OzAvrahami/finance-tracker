@@ -50,6 +50,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- #30 — Migration 027 makes “this month and future” propagate through existing inherited/default future snapshots while preserving explicit month overrides and immutable openings.
 - Budget inline editing now distinguishes “this month only” from “this month and future”; the latter changes both states atomically and no longer reports a recurring-only update as a changed current month.
 
 - #20 — Serialize carryover application against transaction writes, reject stale approved previews atomically, and preserve distinct raw and effective actual-spending provenance.

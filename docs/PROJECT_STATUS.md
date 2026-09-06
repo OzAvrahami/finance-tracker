@@ -6,8 +6,8 @@
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
 - No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
-- Repository migration history currently reaches Migration 026. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model; Migration 026 remains undeployed pending verification and production preflight.
-- Production object/data preflights independently verified the funded-budget foundation through Migration 025. No Finance Tracker applied-migration ledger exists, so these findings are object-state evidence rather than an authoritative execution history.
+- Repository migration history currently reaches Migration 027. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model; Migration 027 is the undeployed #30 future-snapshot propagation correction.
+- Production is reported deployed through Migration 026. No Finance Tracker applied-migration ledger exists, so deployment claims still require object-state verification before later migrations.
 
 The application is mature, operational across its principal product areas, and stable for regular personal use. The known limitations below remain explicit post-1.0 stabilization work rather than hidden release blockers.
 
@@ -19,7 +19,7 @@ The application is mature, operational across its principal product areas, and s
 | Transactions | Operational with known limitations | Direct, itemized, installment, loan-linked, filtered, and paginated workflows. Core loan accounting is atomic; several surrounding item/LEGO/keyword operations are separate calls. |
 | Categories | Operational | Active state, keywords, quick creation, and Settings CRUD for category metadata. |
 | Payment sources | Operational | Managed in Settings and used by transactions, loans, budgets, and checkout. |
-| Monthly budgets | Consolidated model deployed; cleanup and combined edit implemented locally | Migration 024 provides eleven physical tables and one universal operation/item provenance system. Migration 025 removes temporary internal compatibility reads. Migration 026 atomically applies the current-month override and recurring default without changing the 11-table/9-view boundary. The full redesign remains future work. |
+| Monthly budgets | Consolidated model deployed; #30 propagation correction implemented locally | Migration 024 provides eleven physical tables and one universal operation/item provenance system. Migration 025 removes temporary internal compatibility reads. Migration 026 provides the atomic combined edit; Migration 027 extends it to eligible existing future snapshots without changing the 11-table/9-view boundary. The full redesign remains future work. |
 | Annual summary | Operational | Dedicated annual view using API-backed financial aggregates. |
 | Loans | Operational with known limitations | Finance v3 active/closed views, details, modern creation, legacy compatibility, manual/automatic payments, CPI metadata, and early payoff. CPI automatic calculation is intentionally unsupported. |
 | Loan payments | Operational | Authoritative principal accounting with installment, catch-up, irregular, balance-adjustment, and early-payoff events. |
@@ -43,7 +43,7 @@ The application is mature, operational across its principal product areas, and s
 ## Known limitations
 
 - There is no canonical migration runner or authoritative applied-migration ledger in the repository.
-- Migrations 024–025 establish the consolidated Budget boundary and remove obsolete internal views/helpers. Migration 026 adds the bounded combined current-month/recurring command without adding Budget relations.
+- Migrations 024–025 establish the consolidated Budget boundary and remove obsolete internal views/helpers. Migrations 026–027 provide the bounded combined current/future-recurring command without adding Budget relations.
 - Income transactions do not yet supply consumable budget funding. Monthly budget funding is manual; `legacy_import` is migration-only.
 - General Savings withdrawals/accounts, historical corrections, and the full funded-budget presentation (#25) remain deferred.
 - There is no general CI workflow for client tests, lint, build, and server tests.

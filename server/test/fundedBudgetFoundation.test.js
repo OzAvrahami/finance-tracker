@@ -45,6 +45,10 @@ const combinedUpdateMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '026_budget_month_recurring_update.sql'),
   'utf8',
 );
+const futurePropagationMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '027_budget_recurring_future_propagation.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 const normalizedSql = (value) => value.replace(/\r\n/g, '\n').trim();
 const schemaContains = (value) => normalizedSql(fullSchema).includes(normalizedSql(value));
@@ -143,19 +147,26 @@ test('migration 024 is the ordered Budget schema consolidation', () => {
   assert.doesNotMatch(consolidationMigration, /set_budget_month_and_recurring|combined recurring/i);
 });
 
-test('migrations 025 and 026 are ordered and preserve the consolidated object boundary', () => {
+test('migrations 025 through 027 are ordered and preserve the consolidated object boundary', () => {
   assert.ok(schemaContains(cleanupMigration));
   assert.ok(schemaContains(combinedUpdateMigration));
+  assert.ok(schemaContains(futurePropagationMigration));
   assert.ok(normalizedSql(fullSchema).indexOf(normalizedSql(consolidationMigration))
     < normalizedSql(fullSchema).indexOf(normalizedSql(cleanupMigration)));
   assert.ok(normalizedSql(fullSchema).indexOf(normalizedSql(cleanupMigration))
     < normalizedSql(fullSchema).indexOf(normalizedSql(combinedUpdateMigration)));
+  assert.ok(normalizedSql(fullSchema).indexOf(normalizedSql(combinedUpdateMigration))
+    < normalizedSql(fullSchema).indexOf(normalizedSql(futurePropagationMigration)));
   assert.match(combinedUpdateMigration, /set_budget_month_and_recurring_default/i);
   assert.match(combinedUpdateMigration, /get_budget_month_and_recurring_default_preview/i);
   assert.match(combinedUpdateMigration, /11 Budget tables and 9 Budget views/i);
   assert.match(combinedUpdateMigration, /PERFORM public\.set_budget_month_override/i);
   assert.match(combinedUpdateMigration, /PERFORM public\.set_budget_recurring_default/i);
   assert.doesNotMatch(combinedUpdateMigration, /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+public\.budget_/i);
+  assert.match(futurePropagationMigration, /recurring_propagation/i);
+  assert.match(futurePropagationMigration, /future_months_to_change/i);
+  assert.match(futurePropagationMigration, /parent_operation_id/i);
+  assert.doesNotMatch(futurePropagationMigration, /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+public\.budget_/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {

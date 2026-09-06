@@ -181,6 +181,7 @@ const Budget = () => {
   const [editScope, setEditScope] = useState('month');
   const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState('');
+  const [editPropagationPreview, setEditPropagationPreview] = useState(null);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showFundingPanel, setShowFundingPanel] = useState(false);
@@ -352,6 +353,7 @@ const Budget = () => {
     setEditAmount('');
     setEditScope('month');
     setEditError('');
+    setEditPropagationPreview(null);
     setRecurringError('');
     setCloseError('');
     setSelectedMonth(month);
@@ -404,6 +406,7 @@ const Budget = () => {
     setEditAmount(row.effectiveBase);
     setEditScope('month');
     setEditError('');
+    setEditPropagationPreview(null);
   };
 
   const cancelEdit = () => {
@@ -411,6 +414,18 @@ const Budget = () => {
     setEditingId(null);
     setEditAmount('');
     setEditScope('month');
+    setEditError('');
+    setEditPropagationPreview(null);
+  };
+
+  const changeEditAmount = (amount) => {
+    setEditAmount(amount);
+    setEditPropagationPreview(null);
+  };
+
+  const changeEditScope = (scope) => {
+    setEditScope(scope);
+    setEditPropagationPreview(null);
     setEditError('');
   };
 
@@ -420,13 +435,24 @@ const Budget = () => {
     setEditError('');
     try {
       if (editScope === 'month_and_future') {
-        const preview = await getBudgetMonthAndRecurringDefaultPreview(
-          selectedMonth, row.category_id, { amount: editAmount }
-        );
+        if (!editPropagationPreview) {
+          const preview = await getBudgetMonthAndRecurringDefaultPreview(
+            selectedMonth, row.category_id, { amount: editAmount }
+          );
+          setEditPropagationPreview(preview.data);
+          if (preview.data.can_apply === false) {
+            const blocker = preview.data.blocking_months?.[0];
+            setEditError(blocker
+              ? `לא ניתן להחיל את השינוי על ${blocker.month}: ${blocker.reason}.`
+              : 'לא ניתן להחיל את השינוי על כל החודשים.');
+          }
+          return;
+        }
+        if (editPropagationPreview.can_apply === false) return;
         await setBudgetMonthAndRecurringDefault(selectedMonth, row.category_id, {
           amount: editAmount,
           request_key: requestKey(),
-          preview_fingerprint: preview.data.fingerprint,
+          preview_fingerprint: editPropagationPreview.fingerprint,
         });
       } else {
         await setBudgetMonthOverride(selectedMonth, row.category_id, {
@@ -437,9 +463,11 @@ const Budget = () => {
       setEditingId(null);
       setEditAmount('');
       setEditScope('month');
+      setEditPropagationPreview(null);
       refreshBudgets();
     } catch (error) {
       setEditError(domainMessage(error, 'שמירת התקציב נכשלה. הסכום שהוזן נשמר ואפשר לנסות שוב.'));
+      setEditPropagationPreview(null);
     } finally {
       setEditPending(false);
     }
@@ -630,9 +658,10 @@ const Budget = () => {
             editScope={editScope}
             editPending={editPending}
             editError={editError}
+            editPropagationPreview={editPropagationPreview}
             onStartEdit={startEdit}
-            onEditAmountChange={setEditAmount}
-            onEditScopeChange={setEditScope}
+            onEditAmountChange={changeEditAmount}
+            onEditScopeChange={changeEditScope}
             onSaveEdit={handleEdit}
             allowCombinedEdit={selectedMonth === currentCalendarMonth()}
             selectedMonth={selectedMonth}

@@ -24,8 +24,34 @@ const BudgetProgress = ({ row }) => (
   </div>
 );
 
+const formatMonthLabel = (month) => {
+  const match = /^(\d{4})-(\d{2})$/.exec(month || '');
+  if (!match) return month;
+  return new Intl.DateTimeFormat('he-IL', {
+    month: 'long', year: 'numeric', timeZone: 'Asia/Jerusalem',
+  }).format(new Date(`${month}-01T12:00:00Z`));
+};
+
+const PropagationPreview = ({ preview }) => {
+  if (!preview) return null;
+  const changed = [
+    preview.month,
+    ...(preview.future_months_to_change || []).map((item) => item.month),
+  ].filter(Boolean).map(formatMonthLabel);
+  const skipped = (preview.future_months_skipped || []).map((item) => formatMonthLabel(item.month));
+  return (
+    <div className="budget-inline-editor__propagation" role="status">
+      <strong>אישור החלה</strong>
+      <span>{`יעודכנו: ${changed.join(', ')}.`}</span>
+      {skipped.length > 0 && (
+        <span>{`${skipped.join(', ')} יישארו ללא שינוי בגלל התאמה ידנית.`}</span>
+      )}
+    </div>
+  );
+};
+
 const BudgetEditor = ({
-  row, view, month, value, scope, allowCombined, pending, error,
+  row, view, month, value, scope, allowCombined, pending, error, propagationPreview,
   onChange, onScopeChange, onSave, onRemoveOverride, onCancel,
 }) => (
   <div className="budget-inline-editor">
@@ -77,14 +103,17 @@ const BudgetEditor = ({
         </label>
       )}
     </fieldset>
+    <PropagationPreview preview={propagationPreview} />
     <div className="budget-inline-editor__actions">
       <button
         type="button"
         className="budget-inline-editor__primary"
-        disabled={pending}
+        disabled={pending || propagationPreview?.can_apply === false}
         onClick={() => onSave(row)}
       >
-        <Check size={15} aria-hidden="true" /> שמירה
+        <Check size={15} aria-hidden="true" /> {scope === 'month_and_future'
+          ? (propagationPreview ? 'אישור ושמירה' : 'סקירת השינוי')
+          : 'שמירה'}
       </button>
       {row.monthOverride !== null && row.monthOverride !== undefined && (
         <button type="button" disabled={pending} onClick={() => onRemoveOverride(row)}>
@@ -186,6 +215,7 @@ const BudgetList = ({
   editScope,
   editPending,
   editError,
+  editPropagationPreview,
   onStartEdit,
   onEditAmountChange,
   onEditScopeChange,
@@ -239,6 +269,7 @@ const BudgetList = ({
                       allowCombined={allowCombinedEdit}
                       pending={editPending}
                       error={editError}
+                      propagationPreview={editPropagationPreview}
                       onChange={onEditAmountChange}
                       onScopeChange={onEditScopeChange}
                       onSave={onSaveEdit}
@@ -299,6 +330,7 @@ const BudgetList = ({
                 allowCombined={allowCombinedEdit}
                 pending={editPending}
                 error={editError}
+                propagationPreview={editPropagationPreview}
                 onChange={onEditAmountChange}
                 onScopeChange={onEditScopeChange}
                 onSave={onSaveEdit}
