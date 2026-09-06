@@ -14,6 +14,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- #22 — Reworked unbudgeted-expense allocation around one requested amount, an automatic unallocated-funds preview, and progressive explicit source selection without the previous all-category funding grid.
+
 ### Removed
 
 ## [1.1.0] - 2026-09-06
