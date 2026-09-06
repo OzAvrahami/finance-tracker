@@ -17,7 +17,7 @@ The application is designed for a personal finance workflow. It is not presented
 
 Development began in early 2026 and the application has a broad operational feature set. Formal semantic release tracking began with v0.9.0.
 
-**v1.0.0** is the current stable release and is suitable for regular personal use. **v0.9.0** remains the first formally tracked baseline. Stable does not mean feature-complete: architectural stabilization and new product capabilities remain active work.
+**v1.1.0** is the prepared current application version, centered on the funded-budget initiative. **v1.0.0** remains the first stable release and **v0.9.0** the first formally tracked baseline. User-provided production verification from 2026-09-06 records Migration 027 as applied with the expected consolidated Budget object boundary; release acceptance remains distinct from application deployment and database installation evidence.
 
 See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known limitations.
 
@@ -89,7 +89,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata use the stable `1.0.0` product version.
+Root, client, and server package metadata use the prepared `1.1.0` product version.
 
 ## Getting started
 
@@ -146,7 +146,7 @@ Copy [client/.env.example](client/.env.example) and [server/.env.example](server
 
 ## Database and migrations
 
-Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 021. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migrations 017–020 provide funded budgets, recurring defaults, balanced carryover, and month overrides. Migration 021 adds unified unused-balance policies, explicit month close, next-month unallocated return, and retained Savings. Migration 021 has not been applied to production.
+Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 027. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migrations 017–023 deliver the funded-budget feature set; Migrations 024–025 consolidate it into eleven physical Budget tables and nine canonical views; Migrations 026–027 provide the atomic current-and-recurring update and eligible future-snapshot propagation. On 2026-09-06 the user supplied production Supabase verification reporting 11 Budget tables, 9 Budget views, both Migration 027 preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This recovered evidence is not a new live verification by this release-preparation work and does not by itself prove that the combined propagation mutation was functionally exercised.
 
 Funded-budget monetary API values are exact canonical decimal strings. Authoritative mutation endpoints reject JSON numbers rather than stringifying values that may already have lost precision; PostgreSQL `NUMERIC` remains the authority. JavaScript numeric conversion is limited to non-authoritative visual geometry and percentages.
 
@@ -251,9 +251,9 @@ The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. I
 
 ## Versioning
 
-Formal semantic-version-style tracking began with **v0.9.0**, the first finalized baseline. **v1.0.0** is the first stable release.
+Formal semantic-version-style tracking began with **v0.9.0**, the first finalized baseline. **v1.0.0** is the first stable release, and **v1.1.0** is the prepared funded-budget minor release.
 
-The private root, client, and server application packages are aligned to version `1.0.0`.
+The private root, client, and server application packages are aligned to version `1.1.0`.
 
 Earlier development is recorded as historical milestones rather than assigned fictional versions. Future releases should document changes under `Unreleased`, move them into a dated release section when release content is finalized, and keep repository tags, package metadata, and documentation aligned.
 

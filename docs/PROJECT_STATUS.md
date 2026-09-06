@@ -2,12 +2,13 @@
 
 ## Current release status
 
-- Current release as of 2026-08-15: **v1.0.0 — Stable**.
+- Prepared release as of 2026-09-06: **v1.1.0 — Funded Budgeting**.
+- **v1.0.0** remains the first tagged stable release until the v1.1.0 release commit and release publication are completed.
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
 - No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
-- Repository migration history currently reaches Migration 027. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model; Migration 027 is the undeployed #30 future-snapshot propagation correction.
-- Production is reported deployed through Migration 026. No Finance Tracker applied-migration ledger exists, so deployment claims still require object-state verification before later migrations.
+- Repository migration history currently reaches Migration 027. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model, and Migration 027 provides #30 future-snapshot propagation.
+- User-provided production Supabase verification from 2026-09-06, recovered from the preceding project conversation, reports `budget_tables = 11`, `budget_views = 9`, both Migration 027 preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This is recorded historical evidence, not a new live verification performed during release preparation.
 
 The application is mature, operational across its principal product areas, and stable for regular personal use. The known limitations below remain explicit post-1.0 stabilization work rather than hidden release blockers.
 
@@ -19,7 +20,7 @@ The application is mature, operational across its principal product areas, and s
 | Transactions | Operational with known limitations | Direct, itemized, installment, loan-linked, filtered, and paginated workflows. Core loan accounting is atomic; several surrounding item/LEGO/keyword operations are separate calls. |
 | Categories | Operational | Active state, keywords, quick creation, and Settings CRUD for category metadata. |
 | Payment sources | Operational | Managed in Settings and used by transactions, loans, budgets, and checkout. |
-| Monthly budgets | Consolidated model deployed; #30 propagation correction implemented locally | Migration 024 provides eleven physical tables and one universal operation/item provenance system. Migration 025 removes temporary internal compatibility reads. Migration 026 provides the atomic combined edit; Migration 027 extends it to eligible existing future snapshots without changing the 11-table/9-view boundary. The full redesign remains future work. |
+| Monthly budgets | v1.1.0 implementation and Migration 027 installation verified | The funded envelope, recurring defaults, overrides, carryover, explicit month close and Savings, reallocation, deficit and unbudgeted-expense resolution, consolidated operation/item model, atomic current/future recurring edit, and #25 presentation are implemented. The recovered production evidence verifies Migration 027's catalog/RPC/configuration postconditions; it does not alone prove execution of a live combined propagation mutation. |
 | Annual summary | Operational | Dedicated annual view using API-backed financial aggregates. |
 | Loans | Operational with known limitations | Finance v3 active/closed views, details, modern creation, legacy compatibility, manual/automatic payments, CPI metadata, and early payoff. CPI automatic calculation is intentionally unsupported. |
 | Loan payments | Operational | Authoritative principal accounting with installment, catch-up, irregular, balance-adjustment, and early-payoff events. |
@@ -45,7 +46,7 @@ The application is mature, operational across its principal product areas, and s
 - There is no canonical migration runner or authoritative applied-migration ledger in the repository.
 - Migrations 024–025 establish the consolidated Budget boundary and remove obsolete internal views/helpers. Migrations 026–027 provide the bounded combined current/future-recurring command without adding Budget relations.
 - Income transactions do not yet supply consumable budget funding. Monthly budget funding is manual; `legacy_import` is migration-only.
-- General Savings withdrawals/accounts, historical corrections, and the full funded-budget presentation (#25) remain deferred.
+- General Savings withdrawals/accounts and historical corrections remain deferred; #25's funded-budget presentation is complete.
 - There is no general CI workflow for client tests, lint, build, and server tests.
 - Legacy loan calculation and the newer `loan_payments` model coexist intentionally.
 - Automatic payment generation does not support CPI-indexed loans.
@@ -87,6 +88,21 @@ Those remaining facts require external deployment or database records; they are 
 - [x] Verify the latest scheduled due-loan GitHub Actions run completed successfully.
 
 ## Latest local quality gate
+
+Release-preparation checks on 2026-09-06:
+
+| Gate | Result |
+|---|---|
+| Client tests | 27 files, 455 tests passed |
+| Focused Budget tests after final presentation order | 46 tests passed |
+| Client lint | Passed |
+| Client production build | Passed; Vite reported the existing large-chunk advisory |
+| Canonical server tests | 306 tests passed |
+| Disposable PostgreSQL refresh | Infrastructure unavailable; Docker's Linux engine did not start, so this attempt executed zero SQL tests and is not counted as a pass |
+
+Migration 027 must not be applied again: the recovered user-provided production verification from 2026-09-06 reports its expected 11-table/9-view boundary, preview/apply RPCs, Clothing recurring value `500.00`, and PASS status. That SQL output does not establish whether a live “this month and future” mutation was exercised end to end; if the post-deployment functional review did not include that action, it remains a separate manual acceptance check rather than a migration-installation task. Vercel and Railway reported successful application deployments for `df8e230`, which remains application-deployment evidence rather than the source of the database conclusion.
+
+The prior v1.0.0 quality gate remains recorded below for historical context.
 
 Run on 2026-08-15 with Node.js 24.11.1, which satisfies the declared runtime range:
 

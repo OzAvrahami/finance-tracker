@@ -8,13 +8,15 @@ This roadmap is organized by outcomes rather than speculative dates. It distingu
 
 The stable designation reflects verified core workflows, complete release documentation, runtime and package alignment, portable quality gates, environment examples, independently verified production schema through Migration 016, external transaction contract coverage, private-artifact checks, and manual verification of the Railway runtime, Vercel origin/CORS match, and latest scheduled due-loan run.
 
-## Planned minor release: v1.1.0 — Savings / חיסכון
+## Prepared minor release: v1.1.0 — Funded budgeting
 
-The next planned product capability is a substantial Savings module. Its product and accounting design will be handled as separate work; this roadmap does not define or implement it.
+The v1.1.0 release candidate completes the funded-budget initiative: funded monthly envelopes, recurring defaults and overrides, carryover, explicit unused-balance disposition and retained Savings, reallocation and deficit resolution, unbudgeted-expense resolution, the consolidated operation/item model, atomic current/future recurring updates, and the #25 presentation redesign.
+
+Migration 027 is recorded as applied in production. User-provided Supabase verification from 2026-09-06 reported 11 Budget tables, 9 Budget views, both preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This evidence was recovered from the preceding project conversation rather than obtained through a new live check. It verifies the installation postconditions but does not independently demonstrate a live combined propagation mutation.
 
 ## Post-1.0 stabilization
 
-### Active: funded-budget initiative
+### Completed implementation scope: funded-budget initiative
 
 - Foundation (#17 + #26): immutable monthly opening snapshots, confirmed manual funds, append-only provenance, reconciled reads, and bounded atomic commands are deployed through Migration 017.
 - Recurring defaults (#18): dedicated Settings → Budget configuration for expense categories, read-only pending previews, and explicit funded initialization are deployed through Migration 018.
@@ -24,8 +26,9 @@ The next planned product capability is a substantial Savings module. Its product
 - Reallocation and deficit resolution (#23): current-month funded moves, immediately-completed-month close preparation, atomic multi-source resolution, and deficit-only Savings withdrawal are deployed through Migration 022.
 - Unbudgeted-expense resolution (#22): explicit zero-opening late snapshots, inactive-snapshot reactivation, multi-source funding, and filtered transaction review are deployed through Migration 023.
 - Budget Schema Consolidation (#29): Migration 024 is deployed, making operations/items the single provenance model while preserving the separate accounting ledgers. Migration 025 completes the repository-side cleanup by removing temporary feature-relation adapters and obsolete read intermediates.
-- Combined current/recurring edit (#30): Migration 026 is deployed; Migration 027 corrects the command so eligible inherited future snapshots join the same atomic update while explicit future customization is preserved.
-- Next dependent work remains separate: general Savings withdrawals/accounts, historical correction, and the funded summary UX (#25).
+- Combined current/recurring edit (#30): Migrations 026–027 are deployed; the corrected command includes eligible inherited future snapshots in the same atomic update while preserving explicit future customization. The recovered SQL evidence verifies Migration 027 installation, while end-to-end mutation acceptance remains a distinct functional check.
+- Funded Budget presentation (#25): the monthly summary, actionable unbudgeted-expense panel, readable category rows, and accessible composition disclosure are complete and screenshot-reviewed on desktop and mobile.
+- Next dependent work remains separate: general Savings withdrawals/accounts and historical correction.
 - Income-transaction funding requires a future source-consumption model so one realized income cannot fund multiple months or allocations.
 
 - Add a general CI workflow for client test/lint/build and server tests.

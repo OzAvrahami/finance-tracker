@@ -10,6 +10,18 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [1.1.0] - 2026-09-06
+
+Finance Tracker 1.1.0 delivers the funded-budget initiative as one coherent, exact-money monthly planning and close workflow. It adds funded envelopes, recurring and month-specific planning, carryover, Savings disposition, reallocation, deficit and unbudgeted-expense resolution, and a consolidated auditable Budget model and presentation.
+
+### Added
+
 - #30 — Migration 026 adds one bounded, fingerprinted command for atomically applying the current-month base override and the same recurring default through the consolidated operation/item model.
 
 - Budget Schema Consolidation — Migration 024 adds universal root/child operation grouping, typed append-only `budget_operation_items`, a direct `budget_category_composition` read model, and operation history without changing funded balances.
@@ -33,10 +45,11 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
-- #25 — Redesigned the monthly Budget presentation around four funded summary metrics, separate non-netted balances/deficits/Savings, readable category rows, and an accessible on-demand composition breakdown without changing financial contracts.
+- #25 — Redesigned the monthly Budget presentation around four funded summary metrics, separate non-netted balances/deficits/Savings, readable category rows, and an accessible on-demand composition breakdown without changing financial contracts. The financial summary precedes the actionable unbudgeted-expense panel on desktop and mobile.
 - Budget schema cleanup — Migration 025 rewrites all funded-Budget commands against consolidated operations/items and removes the eight feature-table compatibility views plus five obsolete intermediate read views. The final read layer is nine canonical views; public RPC behavior and financial values are unchanged.
 - Consolidated override, carryover, month-close, reallocation, deficit-resolution, and unbudgeted-resolution provenance onto `budget_operations` and typed operation items while keeping funding, allocation, Savings, lifecycle, configuration, and transactions as separate authorities.
 - Flattened `get_funded_budget_month(text)` onto the consolidated composition layer and made residual adjustments a direct classification of otherwise-unclassified movements.
+- Adopted the repository's structured GitHub issue templates, release-note categories, and development workflow guidance.
 
 - Canonical funded reads distinguish incoming/outgoing unbudgeted-resolution funding from base, carryover, reallocation/deficit resolution, and residual adjustments.
 - Canonical funded reads now expose incoming/outgoing reallocation and resolution separately from base, carryover, and residual adjustments.
@@ -53,6 +66,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - #30 — Migration 027 makes “this month and future” propagate through existing inherited/default future snapshots while preserving explicit month overrides and immutable openings.
 - Budget inline editing now distinguishes “this month only” from “this month and future”; the latter changes both states atomically and no longer reports a recurring-only update as a changed current month.
+- Restored the mobile “More” sheet above the application shell so its navigation remains visible and usable.
 
 - #20 — Serialize carryover application against transaction writes, reject stale approved previews atomically, and preserve distinct raw and effective actual-spending provenance.
 - #17 / #26 — Reject non-finite funded values and transaction actuals, reserve idempotency keys for no-op adjustments, use rollback-safe sequence restart, standardize month-first locks, and narrow legacy budget privileges.
