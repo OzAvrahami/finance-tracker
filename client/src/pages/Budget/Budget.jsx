@@ -4,6 +4,7 @@ import { Alert, ErrorState } from '../../components/ui';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   absoluteMoney,
+  addMoney,
   approximateMoneyRatio,
   compareMoney,
   subtractMoney,
@@ -93,6 +94,8 @@ const emptyState = (month) => ({
 
 const requestKey = () => globalThis.crypto.randomUUID();
 
+const sumMoney = (values) => values.reduce((total, value) => addMoney(total, value), '0.00');
+
 const domainMessage = (error, fallback) => {
   const message = error?.response?.data?.error;
   if (!message) return fallback;
@@ -157,6 +160,7 @@ const enrichBudget = (budget) => {
     fundingActionAdjustment: budget.funding_action_adjustment_total ?? '0.00',
     incomingUnbudgetedResolution: budget.incoming_unbudgeted_resolution ?? '0.00',
     outgoingUnbudgetedResolution: budget.outgoing_unbudgeted_resolution ?? '0.00',
+    unusedDispositionAdjustment: budget.unused_disposition_adjustment ?? '0.00',
     actual,
     remaining,
     remainingAbsolute: absoluteMoney(remaining),
@@ -182,6 +186,7 @@ const Budget = () => {
   const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState('');
   const [editPropagationPreview, setEditPropagationPreview] = useState(null);
+  const [expandedBudgetId, setExpandedBudgetId] = useState(null);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [showFundingPanel, setShowFundingPanel] = useState(false);
@@ -295,8 +300,15 @@ const Budget = () => {
     allocated: state.funding.total_allocated,
     unallocated: state.funding.unallocated,
     totalSpent: state.actuals.total,
-    fundedRemaining: subtractMoney(state.funding.active_allocated, state.actuals.budgeted),
-  }), [state]);
+    remainingBalances: sumMoney(rows
+      .filter((row) => compareMoney(row.remaining) > 0)
+      .map((row) => row.remaining)),
+    unresolvedDeficits: sumMoney(rows
+      .filter((row) => row.isDeficit)
+      .map((row) => row.deficit ?? row.remainingAbsolute)),
+    savings: state.savings?.balance ?? '0.00',
+    inactiveRetainedFunding: state.funding.inactive_retained_funding ?? '0.00',
+  }), [rows, state]);
 
   const insights = useMemo(() => {
     const withDiff = activeBudgets.map((budget) => ({
@@ -354,6 +366,7 @@ const Budget = () => {
     setEditScope('month');
     setEditError('');
     setEditPropagationPreview(null);
+    setExpandedBudgetId(null);
     setRecurringError('');
     setCloseError('');
     setSelectedMonth(month);
@@ -402,6 +415,7 @@ const Budget = () => {
   };
 
   const startEdit = (row) => {
+    setExpandedBudgetId(null);
     setEditingId(row.id);
     setEditAmount(row.effectiveBase);
     setEditScope('month');
@@ -553,6 +567,20 @@ const Budget = () => {
         onOpenAdd={() => setShowAddPanel(true)}
         onOpenReallocation={() => setShowReallocation(true)}
         canReallocate={actionLifecycle === 'current'}
+        attention={!loading && !pageError && unbudgetedExpenses.length > 0 ? (
+          <UnbudgetedExpensesPanel
+            categories={unbudgetedExpenses}
+            total={state.actuals.unbudgeted}
+            canAllocate={['current', 'immediately_completed_unclosed'].includes(actionLifecycle)}
+            onAllocate={setUnbudgetedTarget}
+            onReviewTransactions={(category) => {
+              const transactionQuery = new URLSearchParams({ month: selectedMonth });
+              if (category.category_id) transactionQuery.set('categoryId', String(category.category_id));
+              else transactionQuery.set('uncategorized', '1');
+              navigate(`/transactions?${transactionQuery.toString()}`);
+            }}
+          />
+        ) : null}
       />
 
       <ManualFundingPanel
@@ -612,21 +640,6 @@ const Budget = () => {
         />
       )}
 
-      {!loading && !pageError && unbudgetedExpenses.length > 0 && (
-        <UnbudgetedExpensesPanel
-          categories={unbudgetedExpenses}
-          total={state.actuals.unbudgeted}
-          canAllocate={['current', 'immediately_completed_unclosed'].includes(actionLifecycle)}
-          onAllocate={setUnbudgetedTarget}
-          onReviewTransactions={(category) => {
-            const query = new URLSearchParams({ month: selectedMonth });
-            if (category.category_id) query.set('categoryId', String(category.category_id));
-            else query.set('uncategorized', '1');
-            navigate(`/transactions?${query.toString()}`);
-          }}
-        />
-      )}
-
       {pageError && activeBudgets.length > 0 && (
         <Alert variant="error" className="budget-refresh-error">
           {pageError} הנתונים האחרונים נשארו מוצגים.
@@ -659,6 +672,10 @@ const Budget = () => {
             editPending={editPending}
             editError={editError}
             editPropagationPreview={editPropagationPreview}
+            expandedBudgetId={expandedBudgetId}
+            onToggleDetails={(row) => setExpandedBudgetId((current) => (
+              current === row.id ? null : row.id
+            ))}
             onStartEdit={startEdit}
             onEditAmountChange={changeEditAmount}
             onEditScopeChange={changeEditScope}

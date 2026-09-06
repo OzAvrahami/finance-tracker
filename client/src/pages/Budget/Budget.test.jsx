@@ -146,12 +146,24 @@ describe('canonical funded monthly read', () => {
     expect(within(summary).getByText('₪1,200')).toBeInTheDocument();
     expect(within(summary).getByText('₪300')).toBeInTheDocument();
     expect(within(summary).getByText('₪825')).toBeInTheDocument();
-    expect(within(summary).getByText('נותר בתקציבים')).toBeInTheDocument();
-    expect(within(summary).getByText('₪450')).toBeInTheDocument();
+    expect(within(summary).getByText('הוקצה לקטגוריות')).toBeInTheDocument();
     expect(within(summary).getByText('טרם הוקצה')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'הוצאות מחוץ לתקציב' })).toBeInTheDocument();
+    const secondary = screen.getByLabelText('מידע משלים לתקציב');
+    expect(within(secondary).getByText('יתרות בתקציבים פעילים')).toBeInTheDocument();
+    expect(within(secondary).getByText('₪450')).toBeInTheDocument();
+    expect(within(secondary).getByText('חריגות לא פתורות')).toBeInTheDocument();
+    expect(within(secondary).getByText('חיסכון נוכחי')).toBeInTheDocument();
+    const unbudgetedHeading = screen.getByRole('heading', { name: 'הוצאות מחוץ לתקציב' });
+    expect(unbudgetedHeading).toBeInTheDocument();
     expect(screen.getByText(/תחבורה/)).toBeInTheDocument();
     expect(within(screen.getByLabelText('סך הוצאות מחוץ לתקציב')).getByText('₪75')).toBeInTheDocument();
+    const toolbarCard = screen.getByLabelText('כלי תקציב חודשי').closest('.budget-toolbar-card');
+    const unbudgetedPanel = unbudgetedHeading.closest('.budget-unbudgeted-panel');
+    const summaryCard = summary.closest('.budget-overview');
+    const categoryList = screen.getByRole('table', { name: 'תקציבים לפי קטגוריית הוצאה' });
+    expect(toolbarCard.compareDocumentPosition(unbudgetedPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(summaryCard.compareDocumentPosition(unbudgetedPanel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(unbudgetedPanel.compareDocumentPosition(categoryList) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('renders every active funded row in both desktop and mobile views', async () => {
@@ -281,17 +293,112 @@ describe('canonical funded monthly read', () => {
 
   it('renders final funded, actual, remaining, and the responsive duplicate', async () => {
     const table = await settle();
-    expect(within(table).getByText('ממומן סופי')).toBeInTheDocument();
+    expect(within(table).getByText('תקציב החודש')).toBeInTheDocument();
     expect(within(table).getByText('₪1,200')).toBeInTheDocument();
     expect(within(table).getByText('₪750')).toBeInTheDocument();
     expect(within(table).getByText('₪450')).toBeInTheDocument();
+    expect(within(table).queryByText(/בסיס התקציב/)).not.toBeInTheDocument();
+    expect(within(table).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' })).toHaveAttribute('aria-expanded', 'false');
     const mobile = screen.getByRole('list', { name: 'תקציבים לפי קטגוריית הוצאה' });
     expect(within(mobile).getByText('מזון')).toBeInTheDocument();
-    expect(within(mobile).getByText('זמין')).toBeInTheDocument();
+    expect(within(mobile).getByText('תקציב החודש')).toBeInTheDocument();
     expect(within(table).getByRole('button', { name: 'עריכת תקציב עבור מזון' })).toBeInTheDocument();
     expect(within(table).getByRole('button', { name: 'הסרת תקציב פעיל עבור מזון' })).toBeInTheDocument();
     expect(within(mobile).getByRole('button', { name: 'עריכת תקציב עבור מזון' })).toBeInTheDocument();
     expect(within(mobile).getByRole('button', { name: 'הסרת תקציב פעיל עבור מזון' })).toBeInTheDocument();
+  });
+
+  it('keeps long category identity readable and moves mobile actions out of the name header', async () => {
+    const longName = 'פיננסי / עמלות / ריביות והוצאות בנקאיות ארוכות במיוחד';
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      categories: [categoryState({ categories: { ...categories[0], name: longName } })],
+      actuals: { total: '750.00', budgeted: '750.00', unbudgeted: '0.00' },
+    }) });
+    const table = await settle();
+    const desktopName = within(table).getByText(longName);
+    expect(desktopName).toHaveClass('budget-category__name');
+    const nameRule = budgetStyles.match(/\.budget-category__name\s*\{([^}]*)\}/)?.[1] || '';
+    expect(nameRule).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(nameRule).not.toMatch(/text-overflow|white-space:\s*nowrap/);
+
+    const mobile = screen.getByRole('list', { name: 'תקציבים לפי קטגוריית הוצאה' });
+    const card = within(mobile).getByRole('listitem');
+    expect(within(card.querySelector('.budget-mobile-card__header')).queryAllByRole('button')).toHaveLength(0);
+    expect(card.querySelector('.budget-mobile-card__footer')).toContainElement(
+      within(card).getByRole('button', { name: `עריכת תקציב עבור ${longName}` }),
+    );
+  });
+
+  it('reconciles expanded composition without adding a monthly override on top of its base', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      funding: { ...fundedState().funding, total_allocated: '2000.00', active_allocated: '2000.00' },
+      actuals: { total: '600.00', budgeted: '600.00', unbudgeted: '0.00' },
+      categories: [categoryState({
+        starting_amount: '1000.00', fallback_base: '1000.00', recurring_default: '900.00',
+        month_override: '1500.00', override_adjustment_total: '500.00', effective_base: '1500.00',
+        incoming_carryover: '400.00', outgoing_carryover: '100.00',
+        incoming_reallocation_resolution: '200.00', outgoing_reallocation: '50.00',
+        incoming_unbudgeted_resolution: '100.00', outgoing_unbudgeted_resolution: '25.00',
+        unused_disposition_adjustment: '-75.00', other_adjustments: '50.00',
+        final_funded: '2000.00', actual_spent: '600.00', remaining: '1400.00',
+      })],
+    }) });
+    const table = await settle();
+    expect(within(table).queryByText('הסכום שנקבע בתחילת החודש היה')).not.toBeInTheDocument();
+    expect(within(table).getByText('התאמה לחודש')).toBeInTheDocument();
+    await userEvent.click(within(table).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' }));
+    const details = within(table).getByLabelText('פירוט התקציב עבור מזון');
+    expect(details).toHaveAttribute('data-reconciled', 'true');
+    expect(within(details).getByText(/הסכום הזה מחליף את בסיס החודש ואינו תוספת עליו/)).toBeInTheDocument();
+    expect(within(details).getByText('יתרה שנכנסה מחודש קודם')).toBeInTheDocument();
+    expect(within(details).getByText('יתרה שהועברה לחודש הבא')).toBeInTheDocument();
+    expect(within(details).getByText('שינוי בעקבות סגירת חודש')).toBeInTheDocument();
+    expect(within(details).getAllByText('₪2,000')).toHaveLength(2);
+    expect(within(details).getByText(/התקציב החודשי הקבוע כיום הוא/)).toHaveTextContent('₪900');
+  });
+
+  it('preserves an explicit zero monthly override as visible detail rather than treating it as missing', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      funding: { ...fundedState().funding, total_allocated: '0.00', active_allocated: '0.00' },
+      actuals: { total: '0.00', budgeted: '0.00', unbudgeted: '0.00' },
+      categories: [categoryState({
+        starting_amount: '1000.00', fallback_base: '1000.00', recurring_default: '1000.00',
+        month_override: '0.00', override_adjustment_total: '-1000.00', effective_base: '0.00',
+        adjustment_total: '-1000.00', other_adjustments: '0.00', final_funded: '0.00',
+        actual_spent: '0.00', remaining: '0.00', is_active_zero: true,
+      })],
+    }) });
+    const table = await settle();
+    expect(within(table).getByText('התאמה לחודש')).toBeInTheDocument();
+    await userEvent.click(within(table).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' }));
+    const details = within(table).getByLabelText('פירוט התקציב עבור מזון');
+    expect(within(details).getByText(/התאמה לחודש זה:/)).toHaveTextContent('₪0');
+    expect(details).toHaveAttribute('data-reconciled', 'true');
+  });
+
+  it('shows positive budget balances, deficits, and Savings as separate non-netted concepts', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      funding: {
+        available: '2300.00', starting_total: '2300.00', total_allocated: '2000.00',
+        active_allocated: '2000.00', inactive_retained_funding: '0.00', unallocated: '300.00',
+      },
+      actuals: { total: '1700.00', budgeted: '1700.00', unbudgeted: '0.00' },
+      savings: { balance: '700.00' },
+      categories: [
+        categoryState({ final_funded: '1200.00', actual_spent: '700.00', remaining: '500.00' }),
+        categoryState({
+          budget_id: 12, category_id: 2, categories: categories[1], final_funded: '800.00',
+          effective_base: '800.00', starting_amount: '800.00', fallback_base: '800.00',
+          other_adjustments: '0.00', actual_spent: '1000.00', remaining: '-200.00', deficit: '200.00',
+        }),
+      ],
+    }) });
+    await settle();
+    const secondary = screen.getByLabelText('מידע משלים לתקציב');
+    expect(within(secondary).getByText('יתרות בתקציבים פעילים').parentElement.parentElement).toHaveTextContent('₪500');
+    expect(within(secondary).getByText('חריגות לא פתורות').parentElement.parentElement).toHaveTextContent('₪200');
+    expect(within(secondary).getByText('חיסכון נוכחי').parentElement.parentElement).toHaveTextContent('₪700');
+    expect(within(secondary).queryByText('₪300')).not.toBeInTheDocument();
   });
 
   it('shows deficit without consuming the unallocated balance', async () => {
@@ -325,6 +432,43 @@ describe('canonical funded monthly read', () => {
     expect((await screen.findAllByText('תחבורה')).length).toBeGreaterThan(0);
     first.resolve({ data: fundedState() });
     await waitFor(() => expect(screen.queryByText('מזון')).not.toBeInTheDocument());
+  });
+
+  it('clears expanded details when the selected month changes', async () => {
+    const table = await settle();
+    await userEvent.click(within(table).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' }));
+    expect(within(table).getByLabelText('פירוט התקציב עבור מזון')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('חודש התקציב'), { target: { value: '2026-07' } });
+    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenLastCalledWith('2026-07'));
+    const nextTable = await screen.findByRole('table', { name: 'תקציבים לפי קטגוריית הוצאה' });
+    expect(within(nextTable).queryByLabelText('פירוט התקציב עבור מזון')).not.toBeInTheDocument();
+    expect(within(nextTable).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' }))
+      .toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('labels a changed recurring default as current configuration, not historical month funding', async () => {
+    getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
+      categories: [categoryState({
+        starting_amount: '100.00', starting_kind: 'legacy_import', fallback_base: '100.00',
+        recurring_default: '900.00', month_override: '500.00', effective_base: '500.00',
+        override_adjustment_total: '400.00', adjustment_total: '400.00', other_adjustments: '0.00',
+        final_funded: '500.00', actual_spent: '200.00', remaining: '300.00',
+      })],
+      funding: { ...fundedState().funding, total_allocated: '500.00', active_allocated: '500.00' },
+      actuals: { total: '200.00', budgeted: '200.00', unbudgeted: '0.00' },
+    }) });
+    const table = await settle();
+    const row = within(table).getByText('מזון').closest('tr');
+    expect(row).toHaveTextContent('₪500');
+    expect(row).not.toHaveTextContent('₪100');
+    expect(row).not.toHaveTextContent('₪900');
+
+    await userEvent.click(within(table).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' }));
+    const details = within(table).getByLabelText('פירוט התקציב עבור מזון');
+    expect(within(details).getByText(/הסכום שנקבע בתחילת החודש היה/)).toHaveTextContent('₪100');
+    expect(within(details).getByText(/התקציב החודשי הקבוע כיום הוא/)).toHaveTextContent('₪900');
+    expect(within(details).getByText(/לא הוכחה למקור המימון בחודש שנבחר/)).toBeInTheDocument();
   });
 
   it('shows the initial skeleton, a retryable load error, and recovers on retry', async () => {
@@ -486,11 +630,14 @@ describe('funded budget commands', () => {
         remaining: '800.00',
       })],
     }) });
-    await settle();
-    expect(screen.getAllByText(/בסיס/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/יתרה מחודש קודם/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('₪1,400').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('₪400').length).toBeGreaterThan(0);
+    const table = await settle();
+    expect(within(table).queryByText(/בסיס התקציב לחודש שנבחר/)).not.toBeInTheDocument();
+    await userEvent.click(within(table).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' }));
+    const details = within(table).getByLabelText('פירוט התקציב עבור מזון');
+    expect(within(details).getByText('בסיס התקציב לחודש שנבחר')).toBeInTheDocument();
+    expect(within(details).getByText('יתרה שנכנסה מחודש קודם')).toBeInTheDocument();
+    expect(within(details).getAllByText('₪1,400').length).toBeGreaterThan(0);
+    expect(within(details).getByText('+₪400')).toBeInTheDocument();
   });
 
   it('shows close blockers and never calls apply while deficits remain', async () => {
@@ -585,10 +732,10 @@ describe('funded budget commands', () => {
       })],
     }) });
     await settle();
-    expect(screen.getAllByText(/בסיס מקורי/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/בסיס אפקטיבי/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/יתרה מחודש קודם/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/התאמות אחרות/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/בסיס מקורי/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/בסיס אפקטיבי/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('התאמה לחודש').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('יתרה נכנסת').length).toBeGreaterThan(0);
 
     await userEvent.click(screen.getAllByRole('button', { name: 'עריכת תקציב עבור מזון' })[0]);
     const input = document.getElementById('budget-amount-desktop-11');
@@ -846,11 +993,13 @@ describe('funded budget commands', () => {
         funding_action_adjustment_total: '150.00', final_funded: '1650.00', remaining: '900.00',
       })],
     }) });
-    await settle();
-    expect(screen.getAllByText(/יתרה מחודש קודם/)).toHaveLength(2);
-    expect(screen.getAllByText(/הקצאה מחדש \/ פתרון חריגה/)).toHaveLength(2);
-    expect(screen.getAllByText(/הועבר ליעד אחר/)).toHaveLength(2);
-    expect(screen.getAllByText(/התאמות אחרות/)).toHaveLength(2);
+    const table = await settle();
+    await userEvent.click(within(table).getByRole('button', { name: 'הצגת פירוט התקציב עבור מזון' }));
+    const details = within(table).getByLabelText('פירוט התקציב עבור מזון');
+    expect(within(details).getByText('יתרה שנכנסה מחודש קודם')).toBeInTheDocument();
+    expect(within(details).getByText('התקבל מהעברה או ממימון חריגה')).toBeInTheDocument();
+    expect(within(details).getByText('הועבר לקטגוריה אחרת')).toBeInTheDocument();
+    expect(within(details).getByText('שינויים ממומנים אחרים')).toBeInTheDocument();
   });
 
   it('renders an empty funded month distinctly from a zero active budget', async () => {
