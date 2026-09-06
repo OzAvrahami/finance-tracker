@@ -294,7 +294,7 @@ The boundaries are deliberate:
 
 `budget_category_composition` classifies authoritative movements through their operation items into base override, carryover, reallocation/resolution, unbudgeted resolution, unused disposition, or direct residual adjustment. The residual is the set of movements with no recognized semantic classification, rather than a total repeatedly reduced by every newer feature. `budget_assert_reconciled` verifies both the monthly envelope identity and the composition-to-final-funded identity. The canonical `get_funded_budget_month(text)` reads this layer directly; the five historical wrapper generations are removed.
 
-The eight feature-specific provenance tables introduced by Migrations 019–023 are retired only when all are empty. Migration 024 fails before structural work if any contains history. Read/write adapter views preserve deployed RPC signatures while their implementations persist only universal operations/items and authoritative postings; they are not independent ledgers.
+The eight feature-specific provenance tables introduced by Migrations 019–023 were retired only after Migration 024 proved every one empty. Migration 025 then moved the remaining command implementations directly to operations/items and removed their temporary adapter views. The steady-state read layer is nine views with current responsibilities: category state, month funding, month/category actuals, category composition, Savings state, three configuration reads, and operation history. Public RPCs remain domain-specific; no internal relation alias is part of the application contract.
 
 ## Known architectural boundaries
 

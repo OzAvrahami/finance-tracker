@@ -31,6 +31,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- Budget schema cleanup — Migration 025 rewrites all funded-Budget commands against consolidated operations/items and removes the eight feature-table compatibility views plus five obsolete intermediate read views. The final read layer is nine canonical views; public RPC behavior and financial values are unchanged.
 - Consolidated override, carryover, month-close, reallocation, deficit-resolution, and unbudgeted-resolution provenance onto `budget_operations` and typed operation items while keeping funding, allocation, Savings, lifecycle, configuration, and transactions as separate authorities.
 - Flattened `get_funded_budget_month(text)` onto the consolidated composition layer and made residual adjustments a direct classification of otherwise-unclassified movements.
 

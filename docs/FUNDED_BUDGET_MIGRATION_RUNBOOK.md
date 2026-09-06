@@ -93,7 +93,7 @@ Apply takes the transaction `SHARE` lock first, the Savings advisory mutex when 
 
 Deploy in order: establish the budget-write maintenance boundary, apply and verify Migration 022 transactionally, deploy the server, then deploy the client. Do not deploy #23 routes or UI before its RPCs and canonical read wrapper exist. Migration 022 must not be applied by an application deployment command.
 
-As of this runbook revision, Migration 022 is **not applied to production**.
+Migration 022 is deployed in production.
 
 ## Migration 023 unbudgeted-expense resolution extension
 
@@ -105,7 +105,7 @@ Apply takes the transaction `SHARE` lock first, then the Savings advisory mutex 
 
 Deploy in order: establish the budget-write maintenance boundary, apply and verify Migration 023 transactionally, deploy the server, then deploy the client. Do not deploy #22 routes or UI before the RPCs and canonical read wrapper exist. Migration 023 must not be applied by an application deployment command.
 
-As of this runbook revision, Migration 023 is **not applied to production**.
+Migration 023 is deployed in production.
 
 ## Migration 024 Budget schema consolidation
 
@@ -113,10 +113,18 @@ Migration 024 requires the exact Migration 017–023 schema and behavior. It is 
 
 Before any structural statement, the migration verifies all funded months, validates the Savings ledger and funded domains, checks the deployed RPC signatures, and requires all eight feature-specific retirement tables to contain exactly zero rows. Any row in an override event, carryover batch/transfer, disposition batch/event, funding action/leg, or unbudgeted-resolution event aborts the whole transaction. Never bypass this guard, truncate history, or edit Migration 024 to accommodate unexplained provenance.
 
-After rehearsal, verify exactly eleven physical Budget tables: the seven accounting tables, three configuration tables, and `budget_operation_items`. The old feature relation names are read/write contract adapter views only; direct application-role writes remain denied. Verify root/child operation constraints, item shape checks, append-only behavior, canonical read equivalence, absence of the five historical funded-read wrappers, and exact reconciliation through `budget_assert_reconciled`.
+After rehearsal, verify exactly eleven physical Budget tables: the seven accounting tables, three configuration tables, and `budget_operation_items`. Migration 024 initially retained temporary feature-relation adapter views; Migration 025 removes them after direct RPC conversion. Verify root/child operation constraints, item shape checks, append-only behavior, canonical read equivalence, absence of the five historical funded-read wrappers, and exact reconciliation through `budget_assert_reconciled`.
 
 Feature rehearsals must cover override, carryover, close, Savings, reallocation, deficit, and unbudgeted-resolution apply/reversal paths after consolidation. Cross-month actions must have one root operation; month-close carry-forward must not create a second action root. Stale-preview races must still write nothing. The composition equation must equal `budget_category_state.final_funded`, and `other_adjustments` must consist only of movements not classified by a recognized operation item.
 
 Deploy only after a fresh SELECT-only production preflight confirms the retirement tables remain empty. Establish a budget-write maintenance boundary, apply Migration 024 transactionally, verify retained row counts and all month/Savings reconciliation, and only then deploy compatible server/client code. The canceled pre-consolidation recurring/month Migration 024 must never be applied. The combined inline recurring/month command is a separate post-consolidation change.
 
-As of this runbook revision, Migration 024 is **not applied to production**.
+Migration 024 is deployed in production.
+
+## Migration 025 Budget schema cleanup
+
+Migration 025 requires the exact post-024 shape. It replaces the remaining override, carryover, month-close, reallocation, deficit-resolution, and unbudgeted-resolution SQL internals before explicitly dropping any compatibility relation. It does not use `CASCADE` and performs no financial or configuration data transformation.
+
+Before deployment, capture canonical reads for the current and immediately completed month and inventory catalog dependencies on every relation scheduled for removal. Rehearse the full 017–025 chain and a direct 024→025 upgrade. Verify exact equality of canonical JSON, retained-table row counts, all-month reconciliation, Savings balance, public RPC signatures, and stable error/idempotency behavior.
+
+After Migration 025, verify eleven physical Budget tables and exactly these nine read views: `budget_category_state`, `budget_month_funding_state`, `budget_month_category_actuals`, `budget_category_composition`, `budget_savings_state`, `budget_recurring_defaults_read`, `budget_month_overrides_read`, `budget_unused_balance_policies_read`, and `budget_operation_history`. Confirm all eight old feature relation names, both carryover-setting aliases, and the three composition intermediates are absent; no stored function source may reference them. Application roles retain no direct ledger/item writes, internal helpers remain non-executable, and bounded service-role RPC access remains unchanged.

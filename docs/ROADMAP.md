@@ -23,8 +23,8 @@ The next planned product capability is a substantial Savings module. Its product
 - Unused budget and Savings (#21): one category policy, explicit immediately-completed-month close, Migration 019 carry-forward reuse, next-month unallocated transfer, and one retained Savings reserve are deployed through Migration 021.
 - Reallocation and deficit resolution (#23): current-month funded moves, immediately-completed-month close preparation, atomic multi-source resolution, and deficit-only Savings withdrawal are deployed through Migration 022.
 - Unbudgeted-expense resolution (#22): explicit zero-opening late snapshots, inactive-snapshot reactivation, multi-source funding, and filtered transaction review are deployed through Migration 023.
-- Budget Schema Consolidation (#29): Migration 024 is implemented locally to make operations/items the single provenance model, preserve the separate accounting ledgers, flatten canonical composition, and retire eight empty feature write tables.
-- The atomic inline “this month and future” recurring edit will be rebuilt against the consolidated operation model after Migration 024 is deployed and verified.
+- Budget Schema Consolidation (#29): Migration 024 is deployed, making operations/items the single provenance model while preserving the separate accounting ledgers. Migration 025 completes the repository-side cleanup by removing temporary feature-relation adapters and obsolete read intermediates.
+- The atomic inline “this month and future” recurring edit remains deferred until the consolidation cleanup is deployed and verified.
 - Next dependent work remains separate: general Savings withdrawals/accounts, historical correction, and the funded summary UX (#25).
 - Income-transaction funding requires a future source-consumption model so one realized income cannot fund multiple months or allocations.
 

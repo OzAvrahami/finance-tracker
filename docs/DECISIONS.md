@@ -446,8 +446,26 @@ Migrations 019–023 added feature-specific batch, transfer, action, leg, and ev
 
 Migration 024 keeps the accounting and configuration tables, makes `budget_operations` the sole business-action header, and adds one typed append-only `budget_operation_items` table for approval-time facts. Cross-month actions use one root and child posting operations. Funding entries, movements, Savings entries, lifecycle events, and transactions remain separate authorities; operation-item amounts are never used to calculate money.
 
-The migration refuses to proceed if any retired feature table contains rows. Public commands remain domain-specific and retain their signatures. Relational adapter views support those deployed command implementations while storing no independent state. Canonical reads derive direct movement classifications and assert that composition equals authoritative final funding.
+The migration refuses to proceed if any retired feature table contains rows. Public commands remain domain-specific and retain their signatures. Migration 024 used relational adapter views only as a bounded deployment bridge. Migration 025 rewrites command internals against the consolidated model and removes those adapters. Canonical reads derive direct movement classifications and assert that composition equals authoritative final funding.
 
 ### Consequences
 
 The physical Budget model is eleven tables, action reversal is rooted in `budget_operations.reverses_operation_id`, and feature-specific provenance no longer creates additional action headers. Pure recurring-default and unused-policy changes remain configuration-only. The canceled combined recurring/month edit is rebuilt after consolidation as one bounded command and uses operation items rather than another event table.
+
+## D-026 — Internal Budget compatibility relations are temporary
+
+**Status:** Accepted
+
+**Date:** 2026-09-05
+
+### Context
+
+Migration 024 intentionally kept feature-table-shaped views so the consolidation could be deployed without simultaneously changing every PL/pgSQL command. Those aliases duplicated the old mental model in the catalog even though they stored no data.
+
+### Decision
+
+Migration 025 preserves the domain-specific public RPCs but rewrites their internals to use `budget_operations`, `budget_operation_items`, and the authoritative posting ledgers directly. It removes all eight feature compatibility relations, the two carryover-setting aliases, and the three composition intermediates. Nine canonical read views remain.
+
+### Consequences
+
+Internal SQL relation names are not compatibility contracts. Future Budget features must extend the universal operation/item model or receive explicit architectural approval; they must not introduce feature-specific tables or views as shortcuts. Migration 025 changes no funded, Savings, lifecycle, configuration, provenance, or transaction row.
