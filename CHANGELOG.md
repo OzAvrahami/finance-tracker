@@ -27,7 +27,7 @@ Finance Tracker 1.1.1 corrects the unbudgeted-expense allocation workflow so the
 ### Fixed
 
 - #22 — Removed the expense-derived allocation ceiling. A user may now create a selected-month category budget above recorded spending when the chosen sources provide sufficient authoritative capacity; preview reports the amount needed to cover spending separately, and validation errors use actionable Hebrew copy.
-- Migration 028 was applied by the user through Supabase SQL Editor on 2026-09-07. User-supplied preflight and postflight results both passed with 12 reconciled months, zero maximum delta, the corrected preview contract present, the old cap/field absent, and the consolidated 11-table/9-view boundary intact. This verifies installation and accounting invariants, not the still-pending deployed UI acceptance scenario.
+- Migration 028 was applied by the user through Supabase SQL Editor on 2026-09-07. User-supplied preflight and postflight results both passed with 12 reconciled months, zero maximum delta, the corrected preview contract present, the old cap/field absent, and the consolidated 11-table/9-view boundary intact. Separately, application commit `968c6d0` deployed successfully through Vercel and Railway, and the user accepted the production behavior with “עובד נהדר”; this functional acceptance was user-performed rather than automated browser testing.
 
 ### Removed
 

@@ -2,14 +2,15 @@
 
 ## Current release status
 
-- Prepared patch release as of 2026-09-07: **v1.1.1 — Budget Allocation Fix**.
-- **v1.1.0** is the latest published stable release until the v1.1.1 commit, deployment acceptance, tag, and GitHub Release are completed.
+- Current application version as of 2026-09-07: **v1.1.1 — Budget Allocation Fix**.
+- Application commit `968c6d0` is on remote `main`; Vercel and Railway reported successful deployments, and the user accepted the production behavior with “עובד נהדר”. This is user-performed functional acceptance, not automated browser verification.
+- The annotated tag and GitHub Release are created after this versioned documentation commit through the manual release workflow. No additional source change is required when publication completes; GitHub is authoritative for publication state.
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
 - No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
 - Repository migration history reaches Migration 028. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model, Migration 027 provides #30 future-snapshot propagation, and Migration 028 corrects #22 so selected funding capacity—not recorded spending—bounds a newly created monthly budget.
 - User-provided production Supabase verification from 2026-09-06, recovered from the preceding project conversation, reports `budget_tables = 11`, `budget_views = 9`, both Migration 027 preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This is recorded historical evidence, not a new live verification performed during release preparation.
-- On 2026-09-07 the user executed Migration 028's preflight, migration, and postflight in Supabase SQL Editor. The supplied results report both gates passing, 12 reconciled months, zero maximum delta, the corrected preview contract present, the old expense cap and `maximum_allocation` field absent, and the 11-table/9-view boundary intact. This proves installation/accounting postconditions, not the pending deployed UI acceptance scenario.
+- On 2026-09-07 the user executed Migration 028's preflight, migration, and postflight in Supabase SQL Editor. The supplied results report both gates passing, 12 reconciled months, zero maximum delta, the corrected preview contract present, the old expense cap and `maximum_allocation` field absent, and the 11-table/9-view boundary intact. This database evidence is distinct from the separately completed user acceptance of the deployed application.
 
 The application is mature, operational across its principal product areas, and stable for regular personal use. The known limitations below remain explicit post-1.0 stabilization work rather than hidden release blockers.
 
@@ -21,7 +22,7 @@ The application is mature, operational across its principal product areas, and s
 | Transactions | Operational with known limitations | Direct, itemized, installment, loan-linked, filtered, and paginated workflows. Core loan accounting is atomic; several surrounding item/LEGO/keyword operations are separate calls. |
 | Categories | Operational | Active state, keywords, quick creation, and Settings CRUD for category metadata. |
 | Payment sources | Operational | Managed in Settings and used by transactions, loans, budgets, and checkout. |
-| Monthly budgets | v1.1.1 correction prepared; production UI acceptance pending | The funded envelope, recurring defaults, overrides, carryover, explicit month close and Savings, reallocation, deficit and unbudgeted-expense resolution, consolidated operation/item model, atomic current/future recurring edit, and #25 presentation are implemented. Migration 028 is installed and postflight-verified from user-supplied production results; the compatible application commit/deployment and explicit #22 allocation/transaction-review acceptance remain pending. |
+| Monthly budgets | v1.1.1 correction deployed and accepted | The funded envelope, recurring defaults, overrides, carryover, explicit month close and Savings, reallocation, deficit and unbudgeted-expense resolution, consolidated operation/item model, atomic current/future recurring edit, and #25 presentation are implemented. Migration 028 is installed and postflight-verified from user-supplied database results; application commit `968c6d0` deployed successfully and the user accepted the #22 allocation and transaction-review production workflow. |
 | Annual summary | Operational | Dedicated annual view using API-backed financial aggregates. |
 | Loans | Operational with known limitations | Finance v3 active/closed views, details, modern creation, legacy compatibility, manual/automatic payments, CPI metadata, and early payoff. CPI automatic calculation is intentionally unsupported. |
 | Loan payments | Operational | Authoritative principal accounting with installment, catch-up, irregular, balance-adjustment, and early-payoff events. |
@@ -104,7 +105,7 @@ Latest implementation and release-preparation evidence through 2026-09-07:
 | Earlier disposable PostgreSQL attempt | Infrastructure unavailable; Docker's Linux engine did not start, so that attempt executed zero SQL tests and is not counted as a pass |
 | Migration 028 production preflight/postflight | User-executed in Supabase SQL Editor on 2026-09-07; both reported PASS with 12 reconciled months and zero maximum delta |
 
-Migrations 027 and 028 must not be applied again. Migration 027 is installed and accepted. The user-supplied Migration 028 output establishes the corrected database contract and accounting invariants, but not the final deployed UI scenario. Issue #22 remains OPEN / Verify until the v1.1.1 application commit is deployed and the user accepts allocation above spending plus the transaction-review filter/return-refresh behavior.
+Migrations 027 and 028 must not be applied again. Migration 027 is installed and accepted. The user-supplied Migration 028 output establishes the corrected database contract and accounting invariants; separately, application commit `968c6d0` deployed successfully and the user accepted the production allocation and transaction-review behavior. Issue #22 is completed.
 
 The prior v1.0.0 quality gate remains recorded below for historical context.
 
