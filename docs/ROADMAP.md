@@ -8,11 +8,17 @@ This roadmap is organized by outcomes rather than speculative dates. It distingu
 
 The stable designation reflects verified core workflows, complete release documentation, runtime and package alignment, portable quality gates, environment examples, independently verified production schema through Migration 016, external transaction contract coverage, private-artifact checks, and manual verification of the Railway runtime, Vercel origin/CORS match, and latest scheduled due-loan run.
 
-## Prepared minor release: v1.1.0 — Funded budgeting
+## Published minor release: v1.1.0 — Funded budgeting
 
-The v1.1.0 release candidate completes the funded-budget initiative: funded monthly envelopes, recurring defaults and overrides, carryover, explicit unused-balance disposition and retained Savings, reallocation and deficit resolution, unbudgeted-expense resolution, the consolidated operation/item model, atomic current/future recurring updates, and the #25 presentation redesign.
+The published v1.1.0 release completed the funded-budget initiative: funded monthly envelopes, recurring defaults and overrides, carryover, explicit unused-balance disposition and retained Savings, reallocation and deficit resolution, unbudgeted-expense resolution, the consolidated operation/item model, atomic current/future recurring updates, and the #25 presentation redesign.
 
 Migration 027 is recorded as applied in production. User-provided Supabase verification from 2026-09-06 reported 11 Budget tables, 9 Budget views, both preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This evidence was recovered from the preceding project conversation rather than obtained through a new live check. It verifies the installation postconditions but does not independently demonstrate a live combined propagation mutation.
+
+## Prepared patch release: v1.1.1 — Budget allocation fix
+
+The v1.1.1 patch preserves the accepted Budget page order—toolbar, financial summary, unbudgeted expenses, existing notices, then categories—and corrects the focused allocation workflow. Recorded spending remains the initial suggested amount, while valid selected funding capacity determines how much the user may allocate to the selected month.
+
+Migration 028 was applied by the user through Supabase SQL Editor on 2026-09-07. User-supplied preflight and postflight results both reported PASS, 12 reconciled months, zero maximum delta, the corrected contract present, the old cap/field absent, and the consolidated 11-table/9-view boundary intact. Application deployment and the explicit #22 production acceptance scenario remain pending.
 
 ## Post-1.0 stabilization
 
@@ -24,7 +30,7 @@ Migration 027 is recorded as applied in production. User-provided Supabase verif
 - Month overrides (#19): current/future month-only base configuration, immutable funded adjustments, override-aware initialization, carryover-safe composition, and explicit Budget-page actions are deployed through Migration 020.
 - Unused budget and Savings (#21): one category policy, explicit immediately-completed-month close, Migration 019 carry-forward reuse, next-month unallocated transfer, and one retained Savings reserve are deployed through Migration 021.
 - Reallocation and deficit resolution (#23): current-month funded moves, immediately-completed-month close preparation, atomic multi-source resolution, and deficit-only Savings withdrawal are deployed through Migration 022.
-- Unbudgeted-expense resolution (#22): explicit zero-opening late snapshots, inactive-snapshot reactivation, multi-source funding, and filtered transaction review are deployed through Migration 023.
+- Unbudgeted-expense resolution (#22): explicit zero-opening late snapshots, inactive-snapshot reactivation, multi-source funding, and filtered transaction review are deployed through Migration 023. Migration 028 is installed and user-postflight verified; it removes the incorrect spending-derived allocation ceiling while retaining exact source-capacity validation. The v1.1.1 application deployment and user acceptance remain pending.
 - Budget Schema Consolidation (#29): Migration 024 is deployed, making operations/items the single provenance model while preserving the separate accounting ledgers. Migration 025 completes the repository-side cleanup by removing temporary feature-relation adapters and obsolete read intermediates.
 - Combined current/recurring edit (#30): Migrations 026–027 are deployed; the corrected command includes eligible inherited future snapshots in the same atomic update while preserving explicit future customization. The recovered SQL evidence verifies Migration 027 installation, while end-to-end mutation acceptance remains a distinct functional check.
 - Funded Budget presentation (#25): the monthly summary, actionable unbudgeted-expense panel, readable category rows, and accessible composition disclosure are complete and screenshot-reviewed on desktop and mobile.

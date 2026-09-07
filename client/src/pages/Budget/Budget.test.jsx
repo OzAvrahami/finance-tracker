@@ -1065,6 +1065,80 @@ describe('funded budget commands', () => {
     await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
   });
 
+  it('allows a chosen 200.00 monthly budget when recorded spending is only 27.36', async () => {
+    const initialState = fundedState({
+      funding: {
+        ...fundedState().funding,
+        available: '2700.00',
+        unallocated: '1500.00',
+      },
+      actuals: { total: '777.36', budgeted: '750.00', unbudgeted: '27.36' },
+      categories: [categoryState(), {
+        budget_id: null, category_id: 2,
+        categories: { ...categories[1], name: 'מנוי' },
+        lifecycle_state: 'no_budget', final_funded: '0.00', actual_spent: '27.36', is_unbudgeted: true,
+      }],
+    });
+    const allocatedState = fundedState({
+      funding: {
+        ...initialState.funding,
+        total_allocated: '1400.00',
+        active_allocated: '1400.00',
+        unallocated: '1300.00',
+      },
+      actuals: { total: '777.36', budgeted: '777.36', unbudgeted: '0.00' },
+      categories: [categoryState(), categoryState({
+        budget_id: 22, category_id: 2, categories: { ...categories[1], name: 'מנוי' },
+        starting_amount: '0.00', starting_kind: 'unbudgeted_resolution',
+        effective_base: '0.00', adjustment_total: '200.00',
+        incoming_unbudgeted_resolution: '200.00', other_adjustments: '0.00',
+        final_funded: '200.00', amount: '200.00', actual_spent: '27.36',
+        remaining: '172.64', deficit: '0.00',
+      })],
+    });
+    getFundedBudgetMonth
+      .mockResolvedValueOnce({ data: initialState })
+      .mockResolvedValueOnce({ data: allocatedState });
+    getUnbudgetedResolutionPreview.mockResolvedValue({ data: {
+      can_apply: true, fingerprint: 'chosen-budget-fingerprint', resolution_mode: 'created',
+      amount_needed_to_cover_actual: '27.36', requested_allocation: '200.00',
+      resulting_funded: '200.00', remaining_deficit: '0.00',
+    } });
+
+    await settle();
+    await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב' }));
+    const dialog = screen.getByRole('dialog', { name: 'הקצאת תקציב למנוי' });
+    const amount = within(dialog).getByLabelText('סכום להקצאה');
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '200');
+
+    await waitFor(() => expect(getUnbudgetedResolutionPreview).toHaveBeenLastCalledWith(
+      new Date().toISOString().slice(0, 7), 2,
+      { requested_amount: '200.00', legs: [{ source_kind: 'unallocated', amount: '200.00' }] }
+    ));
+    expect(within(dialog).getByLabelText('הצעת הקצאה')).toHaveTextContent('₪200');
+    expect(within(dialog).getByLabelText('הצעת הקצאה')).toHaveTextContent('₪1,300');
+    expect(within(dialog).getByText('תקציב לאחר ההקצאה').parentElement).toHaveTextContent('₪200');
+    const applyButton = within(dialog).getByRole('button', { name: 'הקצה תקציב למנוי' });
+    await waitFor(() => expect(applyButton).toBeEnabled());
+    await userEvent.click(applyButton);
+    await waitFor(() => expect(applyUnbudgetedResolution).toHaveBeenCalledWith(
+      new Date().toISOString().slice(0, 7), 2,
+      {
+        requested_amount: '200.00', legs: [{ source_kind: 'unallocated', amount: '200.00' }],
+        request_key: 'request-key', preview_fingerprint: 'chosen-budget-fingerprint',
+      }
+    ));
+    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('הוצאות מחוץ לתקציב')).not.toBeInTheDocument());
+    const allocatedRow = screen.getAllByText('מנוי')
+      .map((name) => name.closest('tr'))
+      .find(Boolean);
+    expect(allocatedRow).toHaveTextContent('₪200');
+    expect(allocatedRow).toHaveTextContent('₪27.36');
+    expect(allocatedRow).toHaveTextContent('₪172.64');
+  });
+
   it('updates the default proposal when the requested amount changes without showing the old source grid', async () => {
     await settle();
     await userEvent.click(screen.getByRole('button', { name: 'הקצה תקציב' }));
@@ -1154,7 +1228,7 @@ describe('funded budget commands', () => {
     const applyButton = within(dialog).getByRole('button', { name: 'הקצה תקציב לתחבורה' });
     await waitFor(() => expect(applyButton).toBeEnabled());
     await userEvent.click(applyButton);
-    expect(await screen.findByText(/UNBUDGETED_RESOLUTION_PREVIEW_STALE/)).toBeInTheDocument();
+    expect(await screen.findByText('נתוני התקציב השתנו מאז הכנת ההצעה. בדקו את הסכום ומקורות המימון ונסו שוב.')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('סכום להקצאה')).toHaveValue(75);
     expect(applyButton).toBeDisabled();
     expect(within(dialog).getByRole('button', { name: 'נסה שוב' })).toBeInTheDocument();

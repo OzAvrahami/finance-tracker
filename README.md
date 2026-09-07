@@ -17,7 +17,7 @@ The application is designed for a personal finance workflow. It is not presented
 
 Development began in early 2026 and the application has a broad operational feature set. Formal semantic release tracking began with v0.9.0.
 
-**v1.1.0** is the prepared current application version, centered on the funded-budget initiative. **v1.0.0** remains the first stable release and **v0.9.0** the first formally tracked baseline. User-provided production verification from 2026-09-06 records Migration 027 as applied with the expected consolidated Budget object boundary; release acceptance remains distinct from application deployment and database installation evidence.
+**v1.1.1** is prepared locally as a focused Budget allocation correction. **v1.1.0** remains the latest published stable release until the prepared commit, deployment acceptance, tag, and GitHub Release are completed; **v1.0.0** remains the first stable release and **v0.9.0** the first formally tracked baseline. User-provided production verification records Migrations 027 and 028 as installed with the expected consolidated Budget object boundary, while final v1.1.1 application acceptance remains distinct from database installation evidence.
 
 See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known limitations.
 
@@ -66,7 +66,7 @@ Node handles HTTP validation, orchestration, pricing and amortization inputs. Po
 ```text
 client/                 React SPA, Finance v3 UI, tests, and Vercel SPA config
 server/                 Express API, business services, migrations, and server tests
-server/migrations/      Ordered schema history, currently 001 through 019
+server/migrations/      Ordered schema history, currently 001 through 028
 server/full_schema.sql  Consolidated schema reference
 docs/                   Canonical documentation and a retained read-only security audit
 .github/workflows/      Daily due-loan scheduler
@@ -89,7 +89,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata use the prepared `1.1.0` product version.
+Root, client, and server package metadata use the prepared `1.1.1` product version.
 
 ## Getting started
 
@@ -146,7 +146,7 @@ Copy [client/.env.example](client/.env.example) and [server/.env.example](server
 
 ## Database and migrations
 
-Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 027. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migrations 017–023 deliver the funded-budget feature set; Migrations 024–025 consolidate it into eleven physical Budget tables and nine canonical views; Migrations 026–027 provide the atomic current-and-recurring update and eligible future-snapshot propagation. On 2026-09-06 the user supplied production Supabase verification reporting 11 Budget tables, 9 Budget views, both Migration 027 preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This recovered evidence is not a new live verification by this release-preparation work and does not by itself prove that the combined propagation mutation was functionally exercised.
+Schema history is stored in `server/migrations/`, currently from Migration 001 through Migration 028. [server/full_schema.sql](server/full_schema.sql) is a consolidated reference for the intended current schema. Migrations 017–023 deliver the funded-budget feature set; Migrations 024–025 consolidate it into eleven physical Budget tables and nine canonical views; Migrations 026–027 provide the atomic current-and-recurring update and eligible future-snapshot propagation; Migration 028 removes the incorrect expense-derived ceiling from selected-month unbudgeted allocation. On 2026-09-06 the user supplied production Supabase verification for Migration 027. On 2026-09-07 the user executed Migration 028's preflight, migration, and postflight in Supabase and reported both checks passing with all 12 months reconciled, zero maximum delta, the corrected contract installed, and the 11-table/9-view boundary intact. These are user-provided production results, not new live verification by this release-preparation work, and do not alone prove the final application interaction.
 
 Funded-budget monetary API values are exact canonical decimal strings. Authoritative mutation endpoints reject JSON numbers rather than stringifying values that may already have lost precision; PostgreSQL `NUMERIC` remains the authority. JavaScript numeric conversion is limited to non-authoritative visual geometry and percentages.
 
@@ -251,9 +251,9 @@ The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. I
 
 ## Versioning
 
-Formal semantic-version-style tracking began with **v0.9.0**, the first finalized baseline. **v1.0.0** is the first stable release, and **v1.1.0** is the prepared funded-budget minor release.
+Formal semantic-version-style tracking began with **v0.9.0**, the first finalized baseline. **v1.0.0** is the first stable release, **v1.1.0** is the published funded-budget release, and **v1.1.1** is the prepared unbudgeted-allocation correction.
 
-The private root, client, and server application packages are aligned to version `1.1.0`.
+The private root, client, and server application packages are aligned to version `1.1.1`.
 
 Earlier development is recorded as historical milestones rather than assigned fictional versions. Future releases should document changes under `Unreleased`, move them into a dated release section when release content is finalized, and keep repository tags, package metadata, and documentation aligned.
 

@@ -190,7 +190,7 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
         }
       } catch (requestError) {
         if (previewSequence.current === sequence) {
-          setError(apiError(requestError, 'לא ניתן להכין את הצעת ההקצאה. אפשר לנסות שוב.'));
+          setError(unbudgetedApiError(requestError, 'לא ניתן להכין את הצעת ההקצאה. אפשר לנסות שוב.'));
         }
       } finally {
         if (previewSequence.current === sequence) setLoading(false);
@@ -212,7 +212,7 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
       onApplied();
       onClose('applied');
     } catch (requestError) {
-      setError(apiError(requestError, 'הקצאת התקציב נכשלה. הסכום ומקורות המימון נשמרו לסקירה חוזרת.'));
+      setError(unbudgetedApiError(requestError, 'הקצאת התקציב נכשלה. הסכום ומקורות המימון נשמרו לסקירה חוזרת.'));
       if (String(requestError?.response?.data?.error || requestError?.response?.data?.code || '').includes('PREVIEW_STALE')) {
         setPreview(null);
       }
@@ -351,7 +351,7 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
           <span>מצב <strong>{previewData.resolution_mode === 'reactivated' ? 'הפעלה מחדש' : 'יצירה'}</strong></span>
           <span>תקציב לאחר ההקצאה <BudgetMoneyAmount value={previewData.resulting_funded} /></span>
           <strong>חריגה שתישאר <BudgetMoneyAmount value={previewData.remaining_deficit} /></strong>
-          {!previewData.can_apply && <Alert variant="error">{previewData.reason}</Alert>}
+          {!previewData.can_apply && <Alert variant="error">{unbudgetedErrorMessage(previewData.reason)}</Alert>}
         </div>
       )}
       {error && (
@@ -367,6 +367,29 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
 };
 
 const apiError = (error, fallback) => error?.response?.data?.error || fallback;
+const UNBUDGETED_ERROR_MESSAGES = {
+  UNBUDGETED_RESOLUTION_SOURCE_INSUFFICIENT: 'אין מספיק כסף במקור המימון שנבחר. בחרו מקור נוסף או הקטינו את הסכום.',
+  SAVINGS_INSUFFICIENT: 'אין מספיק כסף בחיסכון עבור הסכום שנבחר.',
+  UNBUDGETED_RESOLUTION_LEG_TOTAL_MISMATCH: 'סכומי מקורות המימון אינם שווים לסכום ההקצאה.',
+  UNBUDGETED_RESOLUTION_PREVIEW_STALE: 'נתוני התקציב השתנו מאז הכנת ההצעה. בדקו את הסכום ומקורות המימון ונסו שוב.',
+  NO_UNBUDGETED_EXPENSE: 'לא נמצאה עוד הוצאה ללא תקציב בקטגוריה הזאת. רעננו את החודש.',
+  UNBUDGETED_RESOLUTION_REQUIRES_FUNDING: 'כדי ליצור את התקציב יש לבחור סכום חיובי ומקורות מימון מתאימים.',
+  UNBUDGETED_RESOLUTION_PENDING_OVERRIDE: 'קיימת התאמה חודשית שממתינה לאתחול. יש להשלים אותה לפני יצירת התקציב.',
+  BUDGET_MONTH_ALREADY_CLOSED: 'החודש כבר נסגר ואי אפשר ליצור בו תקציב חדש.',
+  BUDGET_ACTION_MONTH_FORBIDDEN: 'אי אפשר להקצות תקציב לחודש הזה.',
+  CATEGORY_NOT_ACTIVE: 'הקטגוריה אינה פעילה ולכן אי אפשר להקצות לה תקציב.',
+  INVALID_BUDGET_CATEGORY: 'הקטגוריה אינה זמינה להקצאת תקציב.',
+};
+const unbudgetedErrorMessage = (value, fallback = 'לא ניתן להקצות את התקציב. בדקו את הפרטים ונסו שוב.') => {
+  const raw = String(value || '');
+  const code = raw.match(/([A-Z][A-Z0-9_]+)/)?.[1];
+  if (code && UNBUDGETED_ERROR_MESSAGES[code]) return UNBUDGETED_ERROR_MESSAGES[code];
+  return /[\u0590-\u05ff]/.test(raw) ? raw : fallback;
+};
+const unbudgetedApiError = (error, fallback) => unbudgetedErrorMessage(
+  error?.response?.data?.code || error?.response?.data?.error,
+  fallback
+);
 const CANONICAL_POSITIVE_MONEY = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const isPositiveMoney = (value) => (
   typeof value === 'string' && CANONICAL_POSITIVE_MONEY.test(value) && compareMoney(value) > 0

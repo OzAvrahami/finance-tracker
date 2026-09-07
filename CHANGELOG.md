@@ -14,9 +14,24 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
-- #22 — Reworked unbudgeted-expense allocation around one requested amount, an automatic unallocated-funds preview, and progressive explicit source selection without the previous all-category funding grid.
+### Removed
+
+## [1.1.1] - 2026-09-07
+
+Finance Tracker 1.1.1 corrects the unbudgeted-expense allocation workflow so the recorded expense is a useful starting suggestion rather than a ceiling on the monthly category budget.
+
+### Changed
+
+- #22 — Reworked allocation around the selected category and one requested monthly amount, with an automatic proposal from available unallocated funding and progressive, explicitly selected category or Savings alternatives instead of the previous all-category input grid.
+
+### Fixed
+
+- #22 — Removed the expense-derived allocation ceiling. A user may now create a selected-month category budget above recorded spending when the chosen sources provide sufficient authoritative capacity; preview reports the amount needed to cover spending separately, and validation errors use actionable Hebrew copy.
+- Migration 028 was applied by the user through Supabase SQL Editor on 2026-09-07. User-supplied preflight and postflight results both passed with 12 reconciled months, zero maximum delta, the corrected preview contract present, the old cap/field absent, and the consolidated 11-table/9-view boundary intact. This verifies installation and accounting invariants, not the still-pending deployed UI acceptance scenario.
 
 ### Removed
+
+- Removed the misleading `maximum_allocation` response field and `UNBUDGETED_RESOLUTION_EXCEEDS_ACTUAL` constraint from the current unbudgeted-allocation contract.
 
 ## [1.1.0] - 2026-09-06
 

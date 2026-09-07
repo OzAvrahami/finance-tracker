@@ -49,6 +49,10 @@ const futurePropagationMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '027_budget_recurring_future_propagation.sql'),
   'utf8',
 );
+const unbudgetedAllocationAmountMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '028_unbudgeted_allocation_amount.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 const normalizedSql = (value) => value.replace(/\r\n/g, '\n').trim();
 const schemaContains = (value) => normalizedSql(fullSchema).includes(normalizedSql(value));
@@ -167,6 +171,24 @@ test('migrations 025 through 027 are ordered and preserve the consolidated objec
   assert.match(futurePropagationMigration, /future_months_to_change/i);
   assert.match(futurePropagationMigration, /parent_operation_id/i);
   assert.doesNotMatch(futurePropagationMigration, /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+public\.budget_/i);
+});
+
+test('migration 028 replaces the expense ceiling without changing the consolidated object boundary', () => {
+  assert.ok(schemaContains(unbudgetedAllocationAmountMigration));
+  assert.ok(normalizedSql(fullSchema).indexOf(normalizedSql(futurePropagationMigration))
+    < normalizedSql(fullSchema).indexOf(normalizedSql(unbudgetedAllocationAmountMigration)));
+  assert.match(unbudgetedAllocationAmountMigration, /amount_needed_to_cover_actual/i);
+  assert.match(unbudgetedAllocationAmountMigration, /selected source legs and their captured capacities/i);
+  const replacement = unbudgetedAllocationAmountMigration.slice(
+    unbudgetedAllocationAmountMigration.indexOf(
+      'CREATE OR REPLACE FUNCTION public.get_budget_unbudgeted_resolution_preview'
+    ),
+    unbudgetedAllocationAmountMigration.indexOf(
+      'REVOKE ALL ON FUNCTION public.get_budget_unbudgeted_resolution_preview'
+    )
+  );
+  assert.doesNotMatch(replacement, /UNBUDGETED_RESOLUTION_EXCEEDS_ACTUAL|maximum_allocation/i);
+  assert.doesNotMatch(unbudgetedAllocationAmountMigration, /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\b/i);
 });
 
 test('migration preflight rejects malformed legacy data instead of normalizing it', () => {

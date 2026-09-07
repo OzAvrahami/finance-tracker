@@ -2,13 +2,14 @@
 
 ## Current release status
 
-- Prepared release as of 2026-09-06: **v1.1.0 — Funded Budgeting**.
-- **v1.0.0** remains the first tagged stable release until the v1.1.0 release commit and release publication are completed.
+- Prepared patch release as of 2026-09-07: **v1.1.1 — Budget Allocation Fix**.
+- **v1.1.0** is the latest published stable release until the v1.1.1 commit, deployment acceptance, tag, and GitHub Release are completed.
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
 - No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
-- Repository migration history currently reaches Migration 027. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model, and Migration 027 provides #30 future-snapshot propagation.
+- Repository migration history reaches Migration 028. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model, Migration 027 provides #30 future-snapshot propagation, and Migration 028 corrects #22 so selected funding capacity—not recorded spending—bounds a newly created monthly budget.
 - User-provided production Supabase verification from 2026-09-06, recovered from the preceding project conversation, reports `budget_tables = 11`, `budget_views = 9`, both Migration 027 preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This is recorded historical evidence, not a new live verification performed during release preparation.
+- On 2026-09-07 the user executed Migration 028's preflight, migration, and postflight in Supabase SQL Editor. The supplied results report both gates passing, 12 reconciled months, zero maximum delta, the corrected preview contract present, the old expense cap and `maximum_allocation` field absent, and the 11-table/9-view boundary intact. This proves installation/accounting postconditions, not the pending deployed UI acceptance scenario.
 
 The application is mature, operational across its principal product areas, and stable for regular personal use. The known limitations below remain explicit post-1.0 stabilization work rather than hidden release blockers.
 
@@ -20,7 +21,7 @@ The application is mature, operational across its principal product areas, and s
 | Transactions | Operational with known limitations | Direct, itemized, installment, loan-linked, filtered, and paginated workflows. Core loan accounting is atomic; several surrounding item/LEGO/keyword operations are separate calls. |
 | Categories | Operational | Active state, keywords, quick creation, and Settings CRUD for category metadata. |
 | Payment sources | Operational | Managed in Settings and used by transactions, loans, budgets, and checkout. |
-| Monthly budgets | v1.1.0 implementation and Migration 027 installation verified | The funded envelope, recurring defaults, overrides, carryover, explicit month close and Savings, reallocation, deficit and unbudgeted-expense resolution, consolidated operation/item model, atomic current/future recurring edit, and #25 presentation are implemented. The recovered production evidence verifies Migration 027's catalog/RPC/configuration postconditions; it does not alone prove execution of a live combined propagation mutation. |
+| Monthly budgets | v1.1.1 correction prepared; production UI acceptance pending | The funded envelope, recurring defaults, overrides, carryover, explicit month close and Savings, reallocation, deficit and unbudgeted-expense resolution, consolidated operation/item model, atomic current/future recurring edit, and #25 presentation are implemented. Migration 028 is installed and postflight-verified from user-supplied production results; the compatible application commit/deployment and explicit #22 allocation/transaction-review acceptance remain pending. |
 | Annual summary | Operational | Dedicated annual view using API-backed financial aggregates. |
 | Loans | Operational with known limitations | Finance v3 active/closed views, details, modern creation, legacy compatibility, manual/automatic payments, CPI metadata, and early payoff. CPI automatic calculation is intentionally unsupported. |
 | Loan payments | Operational | Authoritative principal accounting with installment, catch-up, irregular, balance-adjustment, and early-payoff events. |
@@ -89,18 +90,21 @@ Those remaining facts require external deployment or database records; they are 
 
 ## Latest local quality gate
 
-Release-preparation checks on 2026-09-06:
+Latest implementation and release-preparation evidence through 2026-09-07:
 
 | Gate | Result |
 |---|---|
-| Client tests | 27 files, 455 tests passed |
-| Focused Budget tests after final presentation order | 46 tests passed |
+| Client tests | 458 tests passed |
+| Focused Budget tests | 49 tests passed |
 | Client lint | Passed |
 | Client production build | Passed; Vite reported the existing large-chunk advisory |
-| Canonical server tests | 306 tests passed |
-| Disposable PostgreSQL refresh | Infrastructure unavailable; Docker's Linux engine did not start, so this attempt executed zero SQL tests and is not counted as a pass |
+| Canonical server tests | 307 tests passed |
+| Focused Migration 028 PostgreSQL tests | 4 tests passed; no failures or skips |
+| Complete disposable PostgreSQL suite | 108 tests passed; no failures or skips |
+| Earlier disposable PostgreSQL attempt | Infrastructure unavailable; Docker's Linux engine did not start, so that attempt executed zero SQL tests and is not counted as a pass |
+| Migration 028 production preflight/postflight | User-executed in Supabase SQL Editor on 2026-09-07; both reported PASS with 12 reconciled months and zero maximum delta |
 
-Migration 027 must not be applied again: the recovered user-provided production verification from 2026-09-06 reports its expected 11-table/9-view boundary, preview/apply RPCs, Clothing recurring value `500.00`, and PASS status. That SQL output does not establish whether a live “this month and future” mutation was exercised end to end; if the post-deployment functional review did not include that action, it remains a separate manual acceptance check rather than a migration-installation task. Vercel and Railway reported successful application deployments for `df8e230`, which remains application-deployment evidence rather than the source of the database conclusion.
+Migrations 027 and 028 must not be applied again. Migration 027 is installed and accepted. The user-supplied Migration 028 output establishes the corrected database contract and accounting invariants, but not the final deployed UI scenario. Issue #22 remains OPEN / Verify until the v1.1.1 application commit is deployed and the user accepts allocation above spending plus the transaction-review filter/return-refresh behavior.
 
 The prior v1.0.0 quality gate remains recorded below for historical context.
 

@@ -550,7 +550,7 @@ test('funding action stale previews and lifecycle conflicts remain stable HTTP c
   }
 });
 
-test('unbudgeted resolution preview/apply preserve exact multi-source strings and request material', async () => {
+test('unbudgeted resolution preview/apply preserve a user-chosen allocation independently of actual spending', async () => {
   const fingerprint = 'abcdefabcdefabcdefabcdefabcdefab';
   const legs = [
     { source_kind: 'unallocated', amount: '500.00' },
@@ -560,8 +560,13 @@ test('unbudgeted resolution preview/apply preserve exact multi-source strings an
   const body = { requested_amount: '9007199254740993.01', legs };
   const preview = await call('getUnbudgetedResolutionPreview', {
     params: { month: '2026-09', categoryId: '3' }, body,
-  }, { fingerprint, can_apply: true });
+  }, {
+    fingerprint, can_apply: true, raw_actual: '27.36',
+    amount_needed_to_cover_actual: '27.36', requested_allocation: '9007199254740993.01',
+  });
   assert.equal(preview.res.statusCode, 200);
+  assert.equal(preview.res.body.amount_needed_to_cover_actual, '27.36');
+  assert.equal(preview.res.body.requested_allocation, '9007199254740993.01');
   assert.deepEqual(preview.calls[0], {
     name: 'get_budget_unbudgeted_resolution_preview',
     params: {
@@ -611,7 +616,7 @@ test('zero-funding reactivation and stable unbudgeted conflicts map through boun
   assert.deepEqual(zero.calls[0].params.p_legs, []);
   for (const code of [
     'UNBUDGETED_RESOLUTION_PREVIEW_STALE', 'NO_UNBUDGETED_EXPENSE',
-    'UNBUDGETED_RESOLUTION_EXCEEDS_ACTUAL', 'BUDGET_MONTH_ALREADY_CLOSED',
+    'UNBUDGETED_RESOLUTION_SOURCE_INSUFFICIENT', 'BUDGET_MONTH_ALREADY_CLOSED',
   ]) {
     const result = await call('applyUnbudgetedResolution', {
       params: { month: '2026-09', categoryId: '3' },

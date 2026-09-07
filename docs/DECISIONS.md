@@ -426,11 +426,11 @@ Transaction-authoritative expenses may exist without an active monthly snapshot.
 
 ### Decision
 
-Migration 023 creates a missing snapshot with immutable zero opening and `starting_kind = unbudgeted_resolution`, then records every selected funding source through the existing Migration 022 action/leg ledger. An inactive snapshot is explicitly reactivated without rewriting or duplicating it; retained funding is preserved and zero-additional-funding reactivation is allowed only when it already covers the actual. Preview and apply share the transaction, Savings, month, budget, and category serialization boundaries, so changed approved material returns `UNBUDGETED_RESOLUTION_PREVIEW_STALE` with no partial state.
+Migration 023 creates a missing snapshot with immutable zero opening and `starting_kind = unbudgeted_resolution`, then records every selected funding source through the existing Migration 022 action/leg ledger. An inactive snapshot is explicitly reactivated without rewriting or duplicating it; retained funding is preserved and zero-additional-funding reactivation is allowed only when it already covers the actual. Recorded spending suggests the initial amount and determines the resulting deficit, but it is not a ceiling on the monthly budget the user chooses: the selected source totals and their exact capacities are authoritative. Preview and apply share the transaction, Savings, month, budget, and category serialization boundaries, so changed approved material returns `UNBUDGETED_RESOLUTION_PREVIEW_STALE` with no partial state.
 
 ### Consequences
 
-Partial funding becomes an ordinary funded deficit for #23 and continues blocking #21 close. Full funding removes the `no_budget` blocker through canonical state. Transaction correction remains the existing Transactions workflow reached through month/category filters. Recurring defaults are never inferred, pending overrides must initialize first, and closed/older/future months remain immutable. The full Budget redesign (#25) remains separate.
+An allocation below current spending becomes an ordinary funded deficit for #23 and continues blocking #21 close. An allocation equal to or above current spending removes the `no_budget` blocker without changing the expense; any positive remaining balance is ordinary category funding. Transaction correction remains the existing Transactions workflow reached through month/category filters. Recurring defaults are never inferred, pending overrides must initialize first, and closed/older/future months remain immutable. The full Budget redesign (#25) remains separate.
 
 ## D-025 — Budget operations are the universal action header
 

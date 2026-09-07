@@ -52,6 +52,18 @@ const futurePropagationMigration = fs.readFileSync(
   path.join(__dirname, '..', 'migrations', '027_budget_recurring_future_propagation.sql'),
   'utf8',
 );
+const unbudgetedAllocationAmountMigration = fs.readFileSync(
+  path.join(__dirname, '..', 'migrations', '028_unbudgeted_allocation_amount.sql'),
+  'utf8',
+);
+const unbudgetedAllocationPreflight = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'docs', 'MIGRATION_028_PRODUCTION_PREFLIGHT.sql'),
+  'utf8',
+);
+const unbudgetedAllocationPostflight = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'docs', 'MIGRATION_028_PRODUCTION_POSTFLIGHT.sql'),
+  'utf8',
+);
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');
 
 const docker = (args, input, allowFailure = false) => {
@@ -186,6 +198,11 @@ const applyCombinedUpdateFoundation = (database) => {
   applyCleanBudgetFoundation(database);
   psql(database, combinedUpdateMigration);
   psql(database, futurePropagationMigration);
+};
+
+const applyCurrentBudgetFoundation = (database) => {
+  applyCombinedUpdateFoundation(database);
+  psql(database, unbudgetedAllocationAmountMigration);
 };
 
 before(() => {
@@ -3961,4 +3978,163 @@ test('future propagation supports safe increases and leaves missing months to re
     ]) retired(name) WHERE to_regclass('public.'||retired.name) IS NOT NULL);
   `).stdout.trim(),'t');
   psql('budget_recurring_propagation_increase','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('migration 028 funds a new monthly budget above recorded spending from unallocated money', () => {
+  createDatabase('unbudgeted_user_budget_amount');
+  psql('unbudgeted_user_budget_amount', fixture());
+  applyCurrentBudgetFoundation('unbudgeted_user_budget_amount');
+  const month = psql('unbudgeted_user_budget_amount', `SELECT to_char(
+    date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_user_budget_amount', `
+    SELECT add_manual_budget_funding('${month}',1500.00,'available funding',
+      'fa000000-0000-0000-0000-000000000001');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',27.36,3);
+  `);
+  const legs = `jsonb_build_array(jsonb_build_object(
+    'source_kind','unallocated','amount','200.00'))`;
+  const preview = JSON.parse(psql('unbudgeted_user_budget_amount', `SELECT
+    get_budget_unbudgeted_resolution_preview('${month}',3,200.00,${legs});`).stdout.trim());
+  assert.equal(preview.amount_needed_to_cover_actual, '27.36');
+  assert.equal(Object.hasOwn(preview, 'maximum_allocation'), false);
+  assert.equal(`${preview.requested_allocation}|${preview.resulting_funded}|${preview.remaining_deficit}|${preview.can_apply}`,
+    '200.00|200.00|0.00|true');
+
+  const applySql = `SELECT apply_budget_unbudgeted_resolution('${month}',3,200.00,${legs},
+    'fa000000-0000-0000-0000-000000000002','${preview.fingerprint}','chosen monthly budget');`;
+  psql('unbudgeted_user_budget_amount', applySql);
+  psql('unbudgeted_user_budget_amount', applySql);
+
+  assert.equal(psql('unbudgeted_user_budget_amount', `SELECT
+    c.opening_base||'|'||c.starting_kind||'|'||c.final_funded||'|'||c.actual_spent||'|'||
+    c.remaining||'|'||f.available||'|'||f.total_allocated||'|'||f.unallocated
+    FROM budget_category_composition c JOIN budget_month_funding_state f USING(budget_month_id)
+    WHERE c.month='${month}' AND c.category_id=3;`).stdout.trim(),
+  '0.00|unbudgeted_resolution|200.00|27.36|172.64|1500.00|200.00|1300.00');
+  assert.equal(psql('unbudgeted_user_budget_amount', `SELECT
+    (SELECT count(*) FROM budget_operations WHERE request_key='fa000000-0000-0000-0000-000000000002')||'|'||
+    (SELECT count(*) FROM budget_movements movement JOIN budget_operations operation
+      ON operation.id=movement.operation_id
+      WHERE operation.request_key='fa000000-0000-0000-0000-000000000002' AND movement.amount=200.00)||'|'||
+    (SELECT count(*) FROM budget_operation_items item JOIN budget_operations operation
+      ON operation.id=item.operation_id
+      WHERE operation.request_key='fa000000-0000-0000-0000-000000000002')||'|'||
+    (SELECT count(*) FROM budget_month_overrides WHERE category_id=3)||'|'||
+    (SELECT count(*) FROM transactions WHERE category_id=3 AND total_amount=27.36);
+  `).stdout.trim(),'1|1|3|0|1');
+  const canonical = JSON.parse(psql('unbudgeted_user_budget_amount', `SELECT get_funded_budget_month('${month}');`).stdout.trim());
+  assert.equal(canonical.categories.some((category) => category.category_id === 3 && category.lifecycle_state === 'active'), true);
+  assert.equal(canonical.categories.some((category) => category.category_id === 3 && category.lifecycle_state === 'no_budget'), false);
+  psql('unbudgeted_user_budget_amount','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('migration 028 preserves partial/exact allocation and retained-funding reactivation semantics', () => {
+  createDatabase('unbudgeted_allocation_variants');
+  psql('unbudgeted_allocation_variants', fixture());
+  applyCurrentBudgetFoundation('unbudgeted_allocation_variants');
+  const month = psql('unbudgeted_allocation_variants', `SELECT to_char(
+    date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_allocation_variants', `
+    SELECT add_manual_budget_funding('${month}',1000.00,'available funding',
+      'fb000000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',2,300.00,'manual',
+      'fb000000-0000-0000-0000-000000000002');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',100.00,1),
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',200.00,2),
+      (date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',300.00,3);
+    SELECT remove_funded_budget((SELECT budget_id FROM budget_category_state
+      WHERE month='${month}' AND category_id=2),'fb000000-0000-0000-0000-000000000003');
+  `);
+
+  const exactLegs = `jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','100.00'))`;
+  const exact = JSON.parse(psql('unbudgeted_allocation_variants', `SELECT
+    get_budget_unbudgeted_resolution_preview('${month}',1,100.00,${exactLegs});`).stdout.trim());
+  assert.equal(`${exact.amount_needed_to_cover_actual}|${exact.remaining_deficit}|${exact.can_apply}`,
+    '100.00|0.00|true');
+
+  const partialLegs = `jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','125.00'))`;
+  const partial = JSON.parse(psql('unbudgeted_allocation_variants', `SELECT
+    get_budget_unbudgeted_resolution_preview('${month}',3,125.00,${partialLegs});`).stdout.trim());
+  assert.equal(`${partial.amount_needed_to_cover_actual}|${partial.resulting_funded}|${partial.remaining_deficit}|${partial.can_apply}`,
+    '300.00|125.00|175.00|true');
+
+  const reactivation = JSON.parse(psql('unbudgeted_allocation_variants', `SELECT
+    get_budget_unbudgeted_resolution_preview('${month}',2,0.00,'[]');`).stdout.trim());
+  assert.equal(`${reactivation.resolution_mode}|${reactivation.existing_funded}|${reactivation.amount_needed_to_cover_actual}|${reactivation.can_apply}`,
+    'reactivated|200.00|0.00|true');
+  psql('unbudgeted_allocation_variants', `SELECT apply_budget_unbudgeted_resolution(
+    '${month}',2,0.00,'[]','fb000000-0000-0000-0000-000000000004','${reactivation.fingerprint}');`);
+  assert.equal(psql('unbudgeted_allocation_variants', `SELECT lifecycle_state||'|'||starting_amount||'|'||final_funded
+    FROM budget_category_state WHERE month='${month}' AND category_id=2;`).stdout.trim(),
+  'active|300.00|200.00');
+  psql('unbudgeted_allocation_variants','SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
+test('migration 028 rejects insufficient or stale funding with zero writes and keeps source restrictions', () => {
+  createDatabase('unbudgeted_allocation_safety');
+  psql('unbudgeted_allocation_safety', fixture());
+  applyCurrentBudgetFoundation('unbudgeted_allocation_safety');
+  const month = psql('unbudgeted_allocation_safety', `SELECT to_char(
+    date_trunc('month',timezone('Asia/Jerusalem',now())),'YYYY-MM');`).stdout.trim();
+  psql('unbudgeted_allocation_safety', `
+    SELECT add_manual_budget_funding('${month}',50.00,'available funding',
+      'fc000000-0000-0000-0000-000000000001');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id)
+    VALUES(date_trunc('month',timezone('Asia/Jerusalem',now()))::date,'expense',27.36,3);
+  `);
+  const insufficientLegs = `jsonb_build_array(jsonb_build_object(
+    'source_kind','unallocated','amount','200.00'))`;
+  const insufficient = JSON.parse(psql('unbudgeted_allocation_safety', `SELECT
+    get_budget_unbudgeted_resolution_preview('${month}',3,200.00,${insufficientLegs});`).stdout.trim());
+  assert.equal(`${insufficient.can_apply}|${insufficient.reason}`,
+    'false|UNBUDGETED_RESOLUTION_SOURCE_INSUFFICIENT');
+  const rejected = psql('unbudgeted_allocation_safety', `SELECT apply_budget_unbudgeted_resolution(
+    '${month}',3,200.00,${insufficientLegs},'fc000000-0000-0000-0000-000000000002',
+    '${insufficient.fingerprint}');`,true);
+  assert.notEqual(rejected.status,0);
+  assert.match(rejected.stderr,/UNBUDGETED_RESOLUTION_SOURCE_INSUFFICIENT/);
+  assert.equal(psql('unbudgeted_allocation_safety', `SELECT
+    (SELECT count(*) FROM budgets WHERE category_id=3)||'|'||
+    (SELECT count(*) FROM budget_operations WHERE request_key='fc000000-0000-0000-0000-000000000002')||'|'||
+    (SELECT count(*) FROM budget_movements);`).stdout.trim(),'0|0|0');
+
+  const validLegs = `jsonb_build_array(jsonb_build_object('source_kind','unallocated','amount','50.00'))`;
+  const stale = JSON.parse(psql('unbudgeted_allocation_safety', `SELECT
+    get_budget_unbudgeted_resolution_preview('${month}',3,50.00,${validLegs});`).stdout.trim());
+  psql('unbudgeted_allocation_safety', `UPDATE transactions SET total_amount=28.36 WHERE category_id=3;`);
+  const staleResult = psql('unbudgeted_allocation_safety', `SELECT apply_budget_unbudgeted_resolution(
+    '${month}',3,50.00,${validLegs},'fc000000-0000-0000-0000-000000000003',
+    '${stale.fingerprint}');`,true);
+  assert.notEqual(staleResult.status,0);
+  assert.match(staleResult.stderr,/UNBUDGETED_RESOLUTION_PREVIEW_STALE/);
+  assert.equal(psql('unbudgeted_allocation_safety', `SELECT
+    (SELECT count(*) FROM budgets WHERE category_id=3)||'|'||
+    (SELECT count(*) FROM budget_operations WHERE request_key='fc000000-0000-0000-0000-000000000003')||'|'||
+    (SELECT count(*) FROM budget_movements);`).stdout.trim(),'0|0|0');
+
+  const invalidCategorySource = JSON.parse(psql('unbudgeted_allocation_safety', `SELECT
+    get_budget_unbudgeted_resolution_preview('${month}',3,10.00,
+      jsonb_build_array(jsonb_build_object('source_kind','category','category_id',1,'amount','10.00')));`).stdout.trim());
+  assert.equal(invalidCategorySource.can_apply,false);
+  assert.equal(invalidCategorySource.reason,'UNBUDGETED_RESOLUTION_SOURCE_INSUFFICIENT');
+});
+
+test('migration 028 production preflight and postflight scripts validate their respective schema states', () => {
+  createDatabase('unbudgeted_allocation_deployment_checks');
+  psql('unbudgeted_allocation_deployment_checks', fixture());
+  applyCombinedUpdateFoundation('unbudgeted_allocation_deployment_checks');
+
+  const preflight = psql(
+    'unbudgeted_allocation_deployment_checks',unbudgetedAllocationPreflight
+  ).stdout;
+  assert.match(preflight,/PRODUCTION_PREFLIGHT_PASS/);
+
+  psql('unbudgeted_allocation_deployment_checks',unbudgetedAllocationAmountMigration);
+  const postflight = psql(
+    'unbudgeted_allocation_deployment_checks',unbudgetedAllocationPostflight
+  ).stdout;
+  assert.match(postflight,/MIGRATION_028_POSTFLIGHT_PASS/);
 });
