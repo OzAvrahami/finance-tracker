@@ -1,18 +1,20 @@
 # Project Status
 
-## v1.2.0 local preparation
+## v1.2.0 deployment and acceptance
 
-- #10 and #27 have presentation corrections ready for visual acceptance in Project **Verify**. #2 is accepted by the user in manual QA and does not need repeated QA; it remains open in **Verify** pending application push/deployment. All three retain the open **v1.2.0** milestone.
+- Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) was manually committed and pushed by the user. Independent GitHub readback confirmed remote main at this exact SHA and successful Vercel and Railway commit statuses.
+- User acceptance is complete: #2 with “2 סבבה”; the compact loan row/four-card grid (#10) and Dashboard-wide decoration correction (#27) with final “אושר”. No repeat QA is requested. This is user-performed acceptance, not agent browser testing inferred from deployment statuses.
+- Independent GitHub readback confirms #2, #10, and #27 are **CLOSED / COMPLETED**, their existing Finance Tracker Project #1 items are **Done**, and their **P3 — Low** priorities, labels, assignees, and milestone membership are preserved. Milestone **v1.2.0** is **closed**. #28 remains a closed duplicate; #22/#30 remain completed.
 - Previous complete bundle gates: client **480/480** tests across 28 files; server **325/325** tests; client lint and production build passed. After the presentation corrections, **65/65** affected Dashboard/Loans tests passed, along with client lint and the production build. The build retains the existing large-chunk advisory; backend/database suites were not rerun.
 - Migration 029: **3/3** targeted real disposable PostgreSQL tests passed, covering preservation, optional-field behavior, preflight/postflight, and canonical schema equivalence. No production database was accessed and no Budget PostgreSQL suite was rerun.
-- Versions remain **1.2.0**. The application bundle is still uncommitted, unpushed, undeployed, and unpublished. Only #10/#27 visual acceptance remains; no browser is connected.
+- All seven package/lockfile version fields remain **1.2.0**. Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
 - Migration 029 was applied by the user in production through Supabase SQL Editor. User-supplied results: `MIGRATION_029_PREFLIGHT_PASS`, `MIGRATION_029_POSTFLIGHT_PASS`, `list_count = 4`, `item_count = 27`, `checkout_count = 0`, matching `header_fingerprint = 1ba300c74d46b3d9208ed0bd2744a50a`, and `nullable_columns_without_defaults = true`. This is recorded user evidence, not a new agent-run production check. Do not reapply or modify Migration 029.
-- [Full handoff and migration order](RELEASE_1_2_0.md).
+- [Release completion handoff and recorded evidence](RELEASE_1_2_0.md). Documentation-only reconciliation reused prior test evidence without rerunning application/database suites.
 
-## Current release status
+## Historical v1.1.x release evidence
 
-- Current application version as of 2026-09-07: **v1.1.1 — Budget Allocation Fix**.
-- Application commit `968c6d0` is on remote `main`; Vercel and Railway reported successful deployments, and the user accepted the production behavior with “עובד נהדר”. This is user-performed functional acceptance, not automated browser verification.
+- Previous accepted application version: **v1.1.1 — Budget Allocation Fix**.
+- Application commit `968c6d0` was pushed to remote `main`; Vercel and Railway reported successful deployments, and the user accepted the production behavior with “עובד נהדר”. This is user-performed functional acceptance, not automated browser verification.
 - The annotated tag and GitHub Release are created after this versioned documentation commit through the manual release workflow. No additional source change is required when publication completes; GitHub is authoritative for publication state.
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
@@ -98,9 +100,9 @@ Those remaining facts require external deployment or database records; they are 
 - [x] Verify the deployed Vercel client origin matches the server CORS allowlist.
 - [x] Verify the latest scheduled due-loan GitHub Actions run completed successfully.
 
-## Latest local quality gate
+## Historical v1.1.1 local quality gate
 
-Latest implementation and release-preparation evidence through 2026-09-07:
+Recorded v1.1.1 implementation and release-preparation evidence through 2026-09-07 (v1.2.0 results are above):
 
 | Gate | Result |
 |---|---|

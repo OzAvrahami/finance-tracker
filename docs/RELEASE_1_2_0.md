@@ -1,6 +1,10 @@
-# Finance Tracker v1.2.0 manual QA handoff
+# Finance Tracker v1.2.0 release completion handoff
 
-Prepared locally on 2026-09-07. The application bundle is still uncommitted, unpushed, unpublished, and undeployed. #2 is accepted by the user in manual QA; no repeat acceptance is requested. Only #10/#27 visual acceptance remains. Migration 029 is installed in production according to the user evidence below. Issues #27, #10, and #2 remain open in Verify, with their existing P3 priorities and assignments preserved, under [milestone v1.2.0](https://github.com/OzAvrahami/finance-tracker/milestone/1). #28 remains a closed duplicate of #27; completed Budget work is unchanged.
+Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) (`feat: prepare v1.2.0 dashboard, loans and shopping bundle`) was manually committed and pushed by the user. Independent local GitHub CLI readback confirmed remote main at this exact SHA, **Vercel: success**, and **Railway: success** (commit-status context `finance-tracker - finance-tracker`). These deployment statuses are distinct from user acceptance and do not constitute agent-performed browser testing.
+
+The user accepted #2 with “2 סבבה” and accepted the compact nearest-ending loan row/restored four-card grid (#10) and Dashboard-wide violet-decoration correction (#27), explicitly confirming “אושר” after the final corrections. Acceptance is complete; no repeat manual QA is requested.
+
+Independent GitHub readback confirms all three issues are **CLOSED / COMPLETED** with their existing Project items **Done** and **P3 — Low** preserved. Labels, assignees, Project membership, and milestone membership are unchanged. [Milestone v1.2.0](https://github.com/OzAvrahami/finance-tracker/milestone/1) is **closed**. #28 remains a closed duplicate of #27; completed #22/#30 work is unchanged. Migration 029 is installed in production according to the separate user-supplied evidence below.
 
 ## Implemented scope
 
@@ -25,7 +29,7 @@ After the presentation corrections: **65/65 tests passed across four Dashboard/L
 | Client production build | Passed; existing large-chunk advisory only |
 | Version consistency / dependency preservation / diff check | Passed |
 
-The full application gates ran before the deliberate package-version and dated-changelog preparation. Those final edits change only release metadata/documentation; dependency versions and lockfile dependency trees are unchanged. No browser is connected, so no agent screenshot verification is claimed. #2 manual acceptance is user-supplied; #10/#27 need visual acceptance after the corrections. No production data was accessed by the agent. The unrelated `docs/github-development-standard.md` modification is preserved and excluded from this bundle.
+The full application gates ran before the deliberate package-version and dated-changelog preparation. Those final edits change only release metadata/documentation; dependency versions and lockfile dependency trees are unchanged. No agent screenshot verification is claimed. Manual acceptance of all three issues is user-supplied and complete. Application/database suites were not rerun for this documentation-only reconciliation. No production data was accessed by the agent. The unrelated `docs/github-development-standard.md` modification is preserved and excluded from this bundle.
 
 ## Migration 029
 
@@ -38,7 +42,7 @@ The completed database order is retained below as historical installation guidan
 1. Before any compatible server deployment, pause shopping-list writes briefly and run `docs/MIGRATION_029_PREFLIGHT.sql` in Supabase SQL Editor. Save its one JSON result; require `MIGRATION_029_PREFLIGHT_PASS`.
 2. Apply the complete Migration 029 file once. Do not reapply Migrations 027/028. If preflight says STOP because the columns already exist, inspect the recorded installation and postflight rather than replaying the migration.
 3. Before allowing writes, run `docs/MIGRATION_029_POSTFLIGHT.sql`. Require `MIGRATION_029_POSTFLIGHT_PASS` and equality of `list_count`, `item_count`, `checkout_count`, and `header_fingerprint` against preflight. The fingerprint excludes only the three new columns. The postflight does not infer a saved baseline or prove UI behavior.
-4. Remaining: deploy the compatible server, then client, after the user performs the application Git operations. The installed additive schema is compatible with the older deployed application. Preserve the already completed #2 acceptance; the remaining visual checks are #10 and #27.
+4. Application deployment is now confirmed separately: Vercel and Railway report success for accepted commit `c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a`. All three issues have user acceptance; no further migration or acceptance run is requested.
 
 Previously completed local verification commands, retained for reference (backend/database suites were not rerun for these presentation corrections):
 
@@ -50,7 +54,7 @@ node --test server/test/shoppingListFields.test.js
 
 The PostgreSQL test extracts the relevant canonical Shopping DDL, exercises the legacy-to-029 upgrade and fresh-schema equivalence, and removes only its own uniquely named container. It does not execute the funded-budget suite.
 
-## Local startup
+## Local startup reference (acceptance already complete)
 
 Configure `server/.env` and `client/.env.local` for an isolated development Supabase project and its authenticated test user, using the repository `.env.example` files as the variable reference. Apply Migration 029 to that development database first. The disposable SQL-only test container does not provide Supabase Auth/PostgREST for interactive app QA. Do not point interactive QA writes at production.
 
@@ -72,25 +76,20 @@ npm.cmd --prefix client run dev -- --host localhost --port 5173 --strictPort
 
 Open `http://localhost:5173`. Existing dependencies are installed; no dependency update is required.
 
-## בדיקה ידנית קצרה
+## User-owned final documentation and publication workflow
 
-- #27 — בדסקטופ ובמובייל, ב־RTL ובשתי ערכות הנושא: ודאו שאין פסים סגולים חדים בכל כרטיסי הדשבורד, במיוחד מטלות והכנסות/הוצאות; בדקו שהצבעים, הגרף, הקישורים ובורר החודש נשמרו.
-- #10 — בדקו שארבעת כרטיסי הסיכום שמרו על רוחבם, ושהשורה הקומפקטית מתחתיהם ומעל ההלוואות הפעילות מציגה שם מלא ותאריך ברור, גם במובייל ובשם ארוך, ללא גלילה אופקית. בהיעדר מועמד מתאים השורה נעלמת.
-
-#2 אושר על ידי המשתמש בבדיקה ידנית; אין צורך לחזור על הבדיקה.
-
-## User-owned Git operations after acceptance
-
-Review the staged diff before committing. This explicit allowlist excludes the existing standards-document edit. No staging, commit, push, or tag was executed by the agent.
+Application Git operations are complete. The user owns the final documentation commit/push, annotated tag, and release publication. The following documentation allowlist excludes the unrelated standards-document edit. These commands are provided for the user and were not executed by the agent.
 
 ```powershell
 Set-Location D:\code\finance-tracker
-git add -- package.json client/package.json client/package-lock.json server/package.json server/package-lock.json CHANGELOG.md README.md docs/PROJECT_STATUS.md docs/RELEASE_1_2_0.md docs/MIGRATION_029_PREFLIGHT.sql docs/MIGRATION_029_POSTFLIGHT.sql client/src/pages/Dashboard/Dashboard.css client/src/components/LoanDashboard.jsx client/src/components/LoanDashboard.test.jsx client/src/pages/Loans/Loans.css client/src/pages/Loans/Loans.test.jsx client/src/utils/loanDisplay.js client/src/utils/calendarDate.js client/src/pages/Shopping/Shopping.css client/src/pages/Shopping/Shopping.test.jsx client/src/pages/Shopping/ShoppingLists.jsx client/src/pages/Shopping/ShoppingListDetail.jsx client/src/pages/Shopping/ShoppingListDialog.jsx client/src/pages/Shopping/shoppingListFields.js server/controllers/shoppingController.js server/utils/shoppingListFields.js server/full_schema.sql server/migrations/029_shopping_list_optional_fields.sql server/test/shoppingListFields.test.js server/test/shoppingListPostgres.local.test.js
+git add -- CHANGELOG.md README.md docs/PROJECT_STATUS.md docs/RELEASE_1_2_0.md
 git diff --cached --check
 git diff --cached --stat
 git diff --cached
-git commit -m "Prepare v1.2.0 Dashboard, Loans, and Shopping bundle"
+git commit -m "docs(release): record v1.2.0 acceptance and deployment"
 git push origin main
 ```
 
-After acceptance, the user owns commits/pushes and the v1.2.0 annotated tag. Migration 029 is already installed. After application deployment verification and acceptance of the remaining visual corrections, complete the issues and Project items, close the milestone, and publish the explicitly authorized stable release using the tagged changelog notes. Publication remains a separate pending step.
+Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
+
+At the completion checkpoint, neither the v1.2.0 tag nor its GitHub Release existed. After the user pushes this documentation commit, independently verify its remote SHA and prepare annotated-tag commands targeting that verified commit. The stable release uses only the existing dated 1.2.0 changelog section body. No tag, deployment, or release publication was performed during documentation reconciliation.

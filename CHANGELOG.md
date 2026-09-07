@@ -18,7 +18,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [1.2.0] - 2026-09-07
 
-Prepared locally; #2 was accepted in user manual QA and Migration 029 was installed in production with user-supplied passing checks. Visual acceptance of #10/#27, application push/deployment, tag, and GitHub Release publication remain pending.
+Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) was committed and pushed by the user; GitHub readback confirmed remote main at that SHA and successful Vercel and Railway deployment statuses. The user accepted #2 with “2 סבבה” and accepted the final #10/#27 corrections with “אושר”. All three issues are CLOSED / COMPLETED, their existing Project items are Done with P3 preserved, and milestone v1.2.0 is closed. Acceptance is user-performed, not agent browser testing. Migration 029 was separately installed and verified by the user through Supabase SQL Editor; passing preflight/postflight evidence is recorded in [the release handoff](docs/RELEASE_1_2_0.md). Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
 
 ### Added
 
