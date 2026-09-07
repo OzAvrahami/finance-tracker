@@ -46,6 +46,9 @@ import {
   updateShoppingList,
 } from '../../services/api';
 import { SHOPPING_STATUS } from './shoppingConstants';
+import ShoppingListDialog from './ShoppingListDialog';
+import { safeShoppingLink } from './shoppingListFields';
+import { formatCalendarDate } from '../../utils/calendarDate';
 
 const ITEM_MODES = [
   { value: 'catalog', label: 'פריט מהקטלוג', icon: Package },
@@ -474,6 +477,8 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   const activateReturnFocusRef = useRef(null);
   const newCategoryInputRef = useRef(null);
   const [list, setList] = useState(null);
+  const [showEditList, setShowEditList] = useState(false);
+  const editListReturnFocusRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [catalogCategories, setCatalogCategories] = useState([]);
@@ -571,6 +576,12 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   }, [catalogItems, itemForm.catalogItemId]);
 
   const isEditable = list?.status === 'draft' || list?.status === 'active';
+
+  const saveListDetails = async (payload) => {
+    const response = await updateShoppingList(listId, payload);
+    setList((current) => ({ ...current, ...response.data, shopping_list_items: current.shopping_list_items }));
+    setShowEditList(false);
+  };
 
   const openAddForm = useCallback(() => {
     if (!isEditable) return;
@@ -812,6 +823,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
 
   const status = SHOPPING_STATUS[list.status] || SHOPPING_STATUS.draft;
   const readOnly = list.status === 'checked_out' || list.status === 'archived';
+  const savedLink = safeShoppingLink(list.link);
 
   return (
     <div className="shopping-page shopping-detail" dir="rtl">
@@ -854,6 +866,17 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
             </div>
           )}
         </div>
+
+        {(list.store || savedLink || list.target_date) && (
+          <dl className="shopping-list-metadata" aria-label="פרטים נוספים לרשימה">
+            {list.store && <div><dt>חנות</dt><dd>{list.store}</dd></div>}
+            {savedLink && <div><dt>קישור</dt><dd><a href={savedLink} target="_blank" rel="noopener noreferrer" dir="ltr">{savedLink}</a></dd></div>}
+            {list.target_date && <div><dt>תאריך יעד</dt><dd><TechnicalValue><time dateTime={list.target_date}>{formatCalendarDate(list.target_date)}</time></TechnicalValue></dd></div>}
+          </dl>
+        )}
+        {isEditable && <SecondaryButton type="button" ref={editListReturnFocusRef} className="shopping-edit-details" onClick={() => setShowEditList(true)}>
+          עריכת פרטי הרשימה
+        </SecondaryButton>}
 
         <div className="shopping-detail-kpis" aria-label="סיכום הרשימה">
           <div className="shopping-detail-kpi"><span>פריטים</span><strong><TechnicalValue>{stats.total}</TechnicalValue></strong></div>
@@ -937,6 +960,9 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
           ))}
         </div>
       )}
+
+      {showEditList && <ShoppingListDialog open initialList={list} onClose={() => setShowEditList(false)}
+        onSave={saveListDetails} returnFocusRef={editListReturnFocusRef} />}
 
       <Dialog
         open={showNewCategoryDialog}

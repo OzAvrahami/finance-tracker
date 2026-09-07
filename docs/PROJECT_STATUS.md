@@ -1,5 +1,14 @@
 # Project Status
 
+## v1.2.0 local preparation
+
+- #10 and #27 have presentation corrections ready for visual acceptance in Project **Verify**. #2 is accepted by the user in manual QA and does not need repeated QA; it remains open in **Verify** pending application push/deployment. All three retain the open **v1.2.0** milestone.
+- Previous complete bundle gates: client **480/480** tests across 28 files; server **325/325** tests; client lint and production build passed. After the presentation corrections, **65/65** affected Dashboard/Loans tests passed, along with client lint and the production build. The build retains the existing large-chunk advisory; backend/database suites were not rerun.
+- Migration 029: **3/3** targeted real disposable PostgreSQL tests passed, covering preservation, optional-field behavior, preflight/postflight, and canonical schema equivalence. No production database was accessed and no Budget PostgreSQL suite was rerun.
+- Versions remain **1.2.0**. The application bundle is still uncommitted, unpushed, undeployed, and unpublished. Only #10/#27 visual acceptance remains; no browser is connected.
+- Migration 029 was applied by the user in production through Supabase SQL Editor. User-supplied results: `MIGRATION_029_PREFLIGHT_PASS`, `MIGRATION_029_POSTFLIGHT_PASS`, `list_count = 4`, `item_count = 27`, `checkout_count = 0`, matching `header_fingerprint = 1ba300c74d46b3d9208ed0bd2744a50a`, and `nullable_columns_without_defaults = true`. This is recorded user evidence, not a new agent-run production check. Do not reapply or modify Migration 029.
+- [Full handoff and migration order](RELEASE_1_2_0.md).
+
 ## Current release status
 
 - Current application version as of 2026-09-07: **v1.1.1 — Budget Allocation Fix**.
@@ -8,7 +17,7 @@
 - **v0.9.0** was the formal pre-1.0 baseline and the starting point for semantic release tracking.
 - The complete v0.9.0 release-quality review remains the evidence supporting the stable designation.
 - No runtime functionality changed between the verified v0.9.0 baseline and the v1.0.0 promotion; only release metadata and canonical documentation changed.
-- Repository migration history reaches Migration 028. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model, Migration 027 provides #30 future-snapshot propagation, and Migration 028 corrects #22 so selected funding capacity—not recorded spending—bounds a newly created monthly budget.
+- Repository migration history reaches Migration 029; the new nullable shopping-list header fields are installed in production according to the user-supplied evidence above. Migrations 024–025 establish the authoritative consolidated 11-table/9-view Budget model, Migration 027 provides #30 future-snapshot propagation, and Migration 028 corrects #22 so selected funding capacity—not recorded spending—bounds a newly created monthly budget.
 - User-provided production Supabase verification from 2026-09-06, recovered from the preceding project conversation, reports `budget_tables = 11`, `budget_views = 9`, both Migration 027 preview/apply RPCs present, Clothing's recurring default at `500.00`, and `migration_027_status = PASS`. This is recorded historical evidence, not a new live verification performed during release preparation.
 - On 2026-09-07 the user executed Migration 028's preflight, migration, and postflight in Supabase SQL Editor. The supplied results report both gates passing, 12 reconciled months, zero maximum delta, the corrected preview contract present, the old expense cap and `maximum_allocation` field absent, and the 11-table/9-view boundary intact. This database evidence is distinct from the separately completed user acceptance of the deployed application.
 

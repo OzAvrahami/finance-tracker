@@ -21,6 +21,8 @@ Development began in early 2026 and the application has a broad operational feat
 
 See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known limitations.
 
+**v1.2.0 is prepared locally for manual QA, not published or deployed.** It contains the Dashboard selector surface correction (#27), nearest-ending active loan summary (#10), and optional shopping-list header fields (#2). See the [v1.2.0 handoff](docs/RELEASE_1_2_0.md) for verification, Migration 029 order, and acceptance steps.
+
 ## Features
 
 - Dashboard KPIs and monthly financial trends
@@ -89,7 +91,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata use the prepared `1.1.1` product version.
+Root, client, and server package metadata use the locally prepared `1.2.0` product version.
 
 ## Getting started
 

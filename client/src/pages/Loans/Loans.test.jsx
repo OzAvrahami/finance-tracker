@@ -129,7 +129,7 @@ describe('loans loading, summary, and cards', () => {
     expect(card).toHaveTextContent(/ריבית קבועה.*צמוד מדד/);
   });
 
-  it('uses the shell heading, fetches loans, and renders the four real summary metrics', async () => {
+  it('uses the shell heading, fetches loans, and preserves the existing summary metrics', async () => {
     renderPage();
 
     expect(screen.getByLabelText('טעינת הלוואות')).toBeInTheDocument();
@@ -144,8 +144,13 @@ describe('loans loading, summary, and cards', () => {
     expect(within(summary).getByText('מספר ההלוואות הפעילות')).toBeInTheDocument();
     expect(within(summary).getByText('₪74,300')).toBeInTheDocument();
     expect(within(summary).getByText('₪1,850')).toBeInTheDocument();
-    expect(within(summary).getByText('הלוואת רכב')).toBeInTheDocument();
+    expect(within(within(summary).getByText('ההלוואה בריבית הגבוהה ביותר').closest('article')).getByText('הלוואת רכב')).toBeInTheDocument();
     expect(within(summary).getByText('1')).toBeInTheDocument();
+    expect(within(summary).getAllByRole('article')).toHaveLength(4);
+    const insight = screen.getByRole('note', { name: 'ההלוואה הקרובה לסיום' });
+    const portfolio = screen.getByRole('region', { name: 'הלוואות פעילות' });
+    expect(summary.nextElementSibling).toBe(insight);
+    expect(insight.compareDocumentPosition(portfolio) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('button', { name: /הצג עוד/ })).not.toBeInTheDocument();
   });
 
@@ -255,7 +260,7 @@ describe('loans loading, summary, and cards', () => {
     const summary = await screen.findByRole('region', { name: 'סיכום תיק ההלוואות' });
     expect(within(summary).getByText('₪1,850')).toBeInTheDocument();
     expect(within(summary).getByText('1')).toBeInTheDocument();
-    expect(within(summary).getByText('הלוואת רכב')).toBeInTheDocument();
+    expect(within(within(summary).getByText('ההלוואה בריבית הגבוהה ביותר').closest('article')).getByText('הלוואת רכב')).toBeInTheDocument();
     expect(within(summary).queryByText('₪1,960.78')).not.toBeInTheDocument();
     expect(within(summary).queryByText('כאל - אקספרס 6,000')).not.toBeInTheDocument();
 

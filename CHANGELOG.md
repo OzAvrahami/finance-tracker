@@ -16,6 +16,19 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Removed
 
+## [1.2.0] - 2026-09-07
+
+Prepared locally; #2 was accepted in user manual QA and Migration 029 was installed in production with user-supplied passing checks. Visual acceptance of #10/#27, application push/deployment, tag, and GitHub Release publication remain pending.
+
+### Added
+
+- #2 — Added optional shopping-list store, HTTP(S) link, and calendar target date in create/edit and details, with nullable header columns in Migration 029, Hebrew validation, and omission-preserving partial updates.
+- #10 — Added the nearest-ending active loan in a compact information row below the original four Loans summary cards, excluding paid loans and invalid or past end dates, using Jerusalem business dates and a stable tie-break.
+
+### Fixed
+
+- #27 — Removed the fixed-size violet corner bloom across Dashboard glass cards, including the monthly summary, Tasks, and Income/Expenses, preserving the sheen, semantic colors, and shared glass styling outside Dashboard.
+
 ## [1.1.1] - 2026-09-07
 
 Finance Tracker 1.1.1 corrects the unbudgeted-expense allocation workflow so the recorded expense is a useful starting suggestion rather than a ceiling on the monthly category budget.

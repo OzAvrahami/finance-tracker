@@ -845,3 +845,16 @@
     scroll-behavior: auto !important;
   }
 }
+.shopping-list-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ft-space-5) var(--ft-space-8);
+  margin-block: var(--ft-space-5);
+}
+
+.shopping-list-metadata > div { min-width: 0; max-width: 100%; }
+.shopping-list-metadata dt { color: var(--ft-text-muted); font-size: 13px; }
+.shopping-list-metadata dd { margin: 4px 0 0; color: var(--ft-text); overflow-wrap: anywhere; }
+.shopping-list-metadata a { color: var(--ft-primary); display: inline-block; max-width: 100%; }
+.shopping-list-metadata a:focus-visible { outline: 2px solid var(--ft-primary); outline-offset: 3px; }
+.shopping-edit-details { margin-block-end: var(--ft-space-5); }

@@ -54,6 +54,12 @@
   padding: var(--ft-space-8) !important;
 }
 
+/* The fixed-size shared corner bloom ends inside Dashboard panels, leaving a
+   hard violet edge. Keep the glass sheen and semantic colors, omit this decoration. */
+.dashboard-page .ui-glass::after {
+  content: none;
+}
+
 .dashboard-monthly__header,
 .dashboard-panel__header,
 .dashboard-panel__heading,

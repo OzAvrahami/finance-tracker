@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { normalizeShoppingListFields } = require('../utils/shoppingListFields');
 
 // ========== Reference Data ==========
 
@@ -167,6 +168,8 @@ exports.getShoppingListById = async (req, res) => {
 exports.createShoppingList = async (req, res) => {
   try {
     const { title, list_type_id } = req.body;
+    const optional = normalizeShoppingListFields(req.body);
+    if (optional.error) return res.status(400).json({ error: optional.error });
 
     if (!title) {
       return res.status(400).json({ error: 'title is required' });
@@ -177,7 +180,7 @@ exports.createShoppingList = async (req, res) => {
 
     const { data, error } = await supabase
       .from('shopping_lists')
-      .insert([{ title, list_type_id, status: 'draft' }])
+      .insert([{ title, list_type_id, status: 'draft', ...optional.values }])
       .select();
 
     if (error) throw error;
@@ -191,7 +194,9 @@ exports.createShoppingList = async (req, res) => {
 exports.updateShoppingList = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = {};
+    const optional = normalizeShoppingListFields(req.body);
+    if (optional.error) return res.status(400).json({ error: optional.error });
+    const updates = { ...optional.values };
 
     if (req.body.title !== undefined) updates.title = req.body.title;
     if (req.body.list_type_id !== undefined) updates.list_type_id = req.body.list_type_id;

@@ -4,7 +4,6 @@ import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   Alert,
   ConfirmDialog,
-  Dialog,
   EmptyState,
   ErrorState,
   GlassCard,
@@ -12,14 +11,12 @@ import {
   PrimaryButton,
   ProgressBar,
   SecondaryButton,
-  Select,
   Skeleton,
   Tab,
   TabList,
   TabPanel,
   Tabs,
   TechnicalValue,
-  TextField,
 } from '../../components/ui';
 import {
   createShoppingList,
@@ -28,6 +25,7 @@ import {
   getShoppingListTypes,
 } from '../../services/api';
 import ShoppingListDetail from './ShoppingListDetail';
+import ShoppingListDialog from './ShoppingListDialog';
 import { SHOPPING_STATUS } from './shoppingConstants';
 import './Shopping.css';
 
@@ -56,110 +54,6 @@ const ShoppingOverviewSkeleton = () => (
     </div>
   </div>
 );
-
-const CreateShoppingListDialog = ({
-  open,
-  listTypes,
-  onClose,
-  onCreate,
-  returnFocusRef,
-}) => {
-  const titleRef = useRef(null);
-  const [title, setTitle] = useState('');
-  const [listTypeId, setListTypeId] = useState('');
-  const [touched, setTouched] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!open) return;
-    setTitle('');
-    setListTypeId(listTypes[0]?.id ? String(listTypes[0].id) : '');
-    setTouched(false);
-    setPending(false);
-    setError('');
-  }, [listTypes, open]);
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (pending) return;
-    setTouched(true);
-    setError('');
-    if (!title.trim() || !listTypeId) return;
-
-    setPending(true);
-    try {
-      await onCreate(title.trim(), listTypeId);
-    } catch {
-      setError('יצירת הרשימה נכשלה. הפרטים נשמרו וניתן לנסות שוב.');
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const close = (reason) => {
-    if (!pending) onClose(reason);
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onClose={close}
-      title="רשימת קניות חדשה"
-      description="הרשימה תיפתח כטיוטה. אפשר להוסיף לה פריטים ולהפעיל אותה בהמשך."
-      size="sm"
-      className="shopping-dialog shopping-create-dialog"
-      initialFocusRef={titleRef}
-      returnFocusRef={returnFocusRef}
-      closeDisabled={pending}
-      footer={(
-        <>
-          <SecondaryButton type="button" disabled={pending} onClick={() => close('cancelled')}>
-            ביטול
-          </SecondaryButton>
-          <PrimaryButton
-            type="submit"
-            form="shopping-create-form"
-            loading={pending}
-            loadingText="יוצר רשימה…"
-          >
-            יצירת הרשימה
-          </PrimaryButton>
-        </>
-      )}
-    >
-      <form id="shopping-create-form" className="shopping-dialog-form" onSubmit={handleSubmit} noValidate>
-        {error && <Alert variant="error" urgent>{error}</Alert>}
-        <TextField
-          ref={titleRef}
-          id="shopping-list-title"
-          label="שם הרשימה"
-          required
-          placeholder="למשל: קניות שבועיות"
-          value={title}
-          onValueChange={setTitle}
-          error={touched && !title.trim() ? 'יש להזין שם לרשימה' : undefined}
-          disabled={pending}
-        />
-        <Select
-          id="shopping-list-type"
-          label="סוג רשימה"
-          required
-          helperText="סוג הרשימה קובע אילו קטגוריות קטלוג יהיו זמינות לפריטים שלה."
-          value={listTypeId}
-          onValueChange={setListTypeId}
-          error={touched && !listTypeId ? 'יש לבחור סוג רשימה' : undefined}
-          disabled={pending}
-        >
-          <option value="">בחירת סוג רשימה</option>
-          {listTypes.map((type) => (
-            <option key={type.id} value={type.id}>{type.name}</option>
-          ))}
-        </Select>
-      </form>
-    </Dialog>
-  );
-};
 
 const ShoppingListCard = ({ list, onOpen, onDelete }) => {
   const status = SHOPPING_STATUS[list.status] || SHOPPING_STATUS.draft;
@@ -298,8 +192,8 @@ const ShoppingLists = () => {
     statusFilter === 'all' ? lists : lists.filter((list) => list.status === statusFilter)
   ), [lists, statusFilter]);
 
-  const handleCreate = async (title, listTypeId) => {
-    await createShoppingList({ title, list_type_id: listTypeId });
+  const handleCreate = async (payload) => {
+    await createShoppingList(payload);
     setShowCreateDialog(false);
     await refreshLists();
   };
@@ -410,11 +304,11 @@ const ShoppingLists = () => {
         </Tabs>
       )}
 
-      <CreateShoppingListDialog
+      <ShoppingListDialog
         open={showCreateDialog}
         listTypes={listTypes}
         onClose={() => setShowCreateDialog(false)}
-        onCreate={handleCreate}
+        onSave={handleCreate}
         returnFocusRef={createReturnFocusRef}
       />
 

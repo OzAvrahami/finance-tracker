@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../../components/ui';
@@ -445,5 +445,86 @@ describe('Shopping states and product truth', () => {
     expect(getShoppingListById).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('article', { name: 'עגבניות שרי' })).toBeInTheDocument();
     expect(screen.getByRole('article', { name: 'Milk English' })).toBeInTheDocument();
+  });
+});
+
+
+describe('optional shopping-list header fields', () => {
+  it('creates a list with all optional values through the shared Hebrew form', async () => {
+    renderPage();
+    await screen.findByRole('article', { name: /קניות שבועיות/ });
+    await userEvent.click(screen.getByRole('button', { name: 'רשימה חדשה' }));
+    const dialog = screen.getByRole('dialog', { name: 'רשימת קניות חדשה' });
+    await userEvent.type(within(dialog).getByLabelText(/שם הרשימה/), 'בדיקה');
+    await userEvent.type(within(dialog).getByLabelText('חנות (רשות)'), ' חנות לדוגמה ');
+    await userEvent.type(within(dialog).getByLabelText('קישור (רשות)'), 'https://example.com/list');
+    const date = within(dialog).getByLabelText('תאריך יעד (רשות)');
+    expect(date).toHaveAttribute('type', 'date');
+    expect(date).not.toBeRequired();
+    fireEvent.change(date, { target: { value: '2028-02-29' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'יצירת הרשימה' }));
+    await waitFor(() => expect(createShoppingList).toHaveBeenCalledWith({
+      title: 'בדיקה', list_type_id: '4', store: 'חנות לדוגמה', link: 'https://example.com/list', target_date: '2028-02-29',
+    }));
+  });
+
+  it('hydrates saved fields, edits them, preserves items, and explicitly clears all three', async () => {
+    getShoppingListById.mockResolvedValue({ data: detailList({ store: 'חנות', link: 'https://example.com/a', target_date: '2028-02-29' }) });
+    updateShoppingList.mockImplementation(async (id, payload) => ({ data: { id, ...payload } }));
+    await openList();
+    const link = screen.getByRole('link', { name: 'https://example.com/a' });
+    expect(link).toHaveAttribute('href', 'https://example.com/a');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getByText('29/02/2028')).toHaveAttribute('dateTime', '2028-02-29');
+    await userEvent.click(screen.getByRole('button', { name: 'עריכת פרטי הרשימה' }));
+    let dialog = screen.getByRole('dialog', { name: 'עריכת פרטי הרשימה' });
+    expect(within(dialog).getByLabelText('חנות (רשות)')).toHaveValue('חנות');
+    expect(within(dialog).getByLabelText('קישור (רשות)')).toHaveValue('https://example.com/a');
+    expect(within(dialog).getByLabelText('תאריך יעד (רשות)')).toHaveValue('2028-02-29');
+    await userEvent.clear(within(dialog).getByLabelText('חנות (רשות)'));
+    await userEvent.type(within(dialog).getByLabelText('חנות (רשות)'), 'חנות אחרת');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת הפרטים' }));
+    expect(await screen.findByText('חנות אחרת')).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Milk English' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'עריכת פרטי הרשימה' }));
+    dialog = screen.getByRole('dialog', { name: 'עריכת פרטי הרשימה' });
+    await userEvent.clear(within(dialog).getByLabelText('חנות (רשות)'));
+    await userEvent.clear(within(dialog).getByLabelText('קישור (רשות)'));
+    fireEvent.change(within(dialog).getByLabelText('תאריך יעד (רשות)'), { target: { value: '' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת הפרטים' }));
+    await waitFor(() => expect(updateShoppingList).toHaveBeenLastCalledWith(1, {
+      title: 'קניות שבועיות', store: null, link: null, target_date: null,
+    }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'עריכת פרטי הרשימה' })).not.toBeInTheDocument());
+    expect(screen.queryByLabelText('פרטים נוספים לרשימה')).not.toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Milk English' })).toBeInTheDocument();
+  });
+
+  it('rejects unsafe links locally and keeps entered values with actionable server errors', async () => {
+    await openList();
+    await userEvent.click(screen.getByRole('button', { name: 'עריכת פרטי הרשימה' }));
+    const dialog = screen.getByRole('dialog', { name: 'עריכת פרטי הרשימה' });
+    const link = within(dialog).getByLabelText('קישור (רשות)');
+    await userEvent.type(link, 'javascript:alert(1)');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת הפרטים' }));
+    expect(within(dialog).getByText(/יש להזין קישור מלא/)).toBeInTheDocument();
+    expect(updateShoppingList).not.toHaveBeenCalled();
+    await userEvent.clear(link);
+    await userEvent.type(link, 'https://example.com');
+    updateShoppingList.mockRejectedValueOnce({ response: { data: { error: 'יש להזין תאריך יעד תקין בפורמט YYYY-MM-DD' } } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'שמירת הפרטים' }));
+    expect(await within(dialog).findByText(/יש להזין תאריך יעד תקין/)).toBeInTheDocument();
+    expect(link).toHaveValue('https://example.com');
+  });
+
+  it('keeps legacy lists empty of metadata and unsafe stored links noninteractive', async () => {
+    getShoppingListById.mockResolvedValue({ data: detailList({ link: 'javascript:alert(1)' }) });
+    await openList();
+    expect(screen.queryByLabelText('פרטים נוספים לרשימה')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /javascript/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'עריכת פרטי הרשימה' }));
+    const dialog = screen.getByRole('dialog', { name: 'עריכת פרטי הרשימה' });
+    expect(within(dialog).getByLabelText('חנות (רשות)')).toHaveValue('');
+    expect(within(dialog).getByLabelText('תאריך יעד (רשות)')).toHaveValue('');
   });
 });

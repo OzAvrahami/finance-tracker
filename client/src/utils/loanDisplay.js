@@ -1,3 +1,5 @@
+import { currentBusinessDate, isCalendarDate } from './calendarDate';
+
 const DECIMAL_PATTERN = /^([+-]?)(\d+)(?:\.(\d+))?$/;
 const MONEY_SCALE = 10;
 const SCALE_FACTOR = 10n ** BigInt(MONEY_SCALE);
@@ -25,6 +27,14 @@ export const isClosedLoan = (loan) => (
 
 export const isActiveLoan = (loan) => !isClosedLoan(loan)
   && Number(loan?.current_balance) > 0;
+
+export const nearestEndingLoan = (loans, today = currentBusinessDate()) => {
+  if (!isCalendarDate(today)) return null;
+  return loans.filter((loan) => isActiveLoan(loan)
+    && isCalendarDate(loan.end_date) && loan.end_date >= today)
+    .sort((left, right) => left.end_date.localeCompare(right.end_date)
+      || String(left.id).localeCompare(String(right.id), 'en', { numeric: true }))[0] || null;
+};
 
 export const hasEarlyPayoff = (loanOrPayments) => {
   if (!Array.isArray(loanOrPayments)

@@ -116,6 +116,53 @@
   font-weight: 700;
 }
 
+.loans-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ft-space-3);
+  min-width: 0;
+}
+
+.loan-ending-insight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ft-space-2) var(--ft-space-5);
+  min-width: 0;
+  padding: var(--ft-space-3) var(--ft-space-4);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-control);
+  background: var(--ft-glass);
+  color: var(--ft-text-muted);
+  font-size: var(--ft-font-size-sm);
+  line-height: 1.5;
+}
+
+.loan-ending-insight__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ft-space-2);
+}
+
+.loan-ending-insight__label svg { flex-shrink: 0; }
+
+.loan-ending-insight__details {
+  display: flex;
+  flex: 1 1 240px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ft-space-1) var(--ft-space-4);
+  min-width: 0;
+}
+
+.loan-ending-insight__details strong {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ft-text);
+  font-weight: 650;
+}
+
 .loans-portfolio { min-width: 0; }
 
 .loans-section-heading {

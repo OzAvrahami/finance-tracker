@@ -1,7 +1,7 @@
 import { createElement, useMemo } from 'react';
-import { Banknote, Landmark, Percent, ReceiptText } from 'lucide-react';
+import { Banknote, CalendarCheck, Landmark, Percent, ReceiptText } from 'lucide-react';
 import { MoneyAmount, TechnicalValue } from './ui';
-import { isActiveLoan } from '../utils/loanDisplay';
+import { formatLoanDate, isActiveLoan, nearestEndingLoan } from '../utils/loanDisplay';
 
 const LoansDashboard = ({ loans }) => {
   const stats = useMemo(() => {
@@ -33,6 +33,7 @@ const LoansDashboard = ({ loans }) => {
     };
   }, [loans]);
 
+  const endingLoan = nearestEndingLoan(loans);
   const cards = [
     {
       label: 'סך החוב הנוכחי',
@@ -64,20 +65,34 @@ const LoansDashboard = ({ loans }) => {
   ];
 
   return (
-    <section className="loans-summary-grid" aria-label="סיכום תיק ההלוואות">
-      {cards.map(({ label, icon: Icon, tone, value, note }) => (
-        <article key={label} className={`loans-summary-card is-${tone}`}>
-          <div className="loans-summary-card__heading">
-            <span className="loans-summary-card__icon" aria-hidden="true">
-              {createElement(Icon, { size: 17 })}
-            </span>
-            <span>{label}</span>
-          </div>
-          <div className="loans-summary-card__value">{value}</div>
-          {note && <div className="loans-summary-card__note">{note}</div>}
-        </article>
-      ))}
-    </section>
+    <div className="loans-summary">
+      <section className="loans-summary-grid" aria-label="סיכום תיק ההלוואות">
+        {cards.map(({ label, icon: Icon, tone, value, note }) => (
+          <article key={label} className={`loans-summary-card is-${tone}`}>
+            <div className="loans-summary-card__heading">
+              <span className="loans-summary-card__icon" aria-hidden="true">
+                {createElement(Icon, { size: 17 })}
+              </span>
+              <span>{label}</span>
+            </div>
+            <div className="loans-summary-card__value">{value}</div>
+            {note && <div className="loans-summary-card__note">{note}</div>}
+          </article>
+        ))}
+      </section>
+      {endingLoan && (
+        <div className="loan-ending-insight" role="note" aria-label="ההלוואה הקרובה לסיום">
+          <span className="loan-ending-insight__label">
+            <CalendarCheck size={16} aria-hidden="true" />
+            ההלוואה הקרובה לסיום
+          </span>
+          <span className="loan-ending-insight__details">
+            <strong>{endingLoan.name}</strong>
+            <TechnicalValue><time dateTime={endingLoan.end_date}>{formatLoanDate(endingLoan.end_date)}</time></TechnicalValue>
+          </span>
+        </div>
+      )}
+    </div>
   );
 };
 
