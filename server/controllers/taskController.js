@@ -8,7 +8,7 @@ exports.getTasks = async (req, res) => {
 
     let query = supabase
       .from('tasks')
-      .select('*, transactions(id, description), loans(id, name)')
+      .select('*, transactions(id, description, voided_at), loans(id, name)')
       .order('created_at', { ascending: false });
 
     if (status) query = query.eq('status', status);
@@ -52,7 +52,7 @@ exports.createTask = async (req, res) => {
     const { data, error } = await supabase
       .from('tasks')
       .insert([taskData])
-      .select('*, transactions(id, description), loans(id, name)');
+      .select('*, transactions(id, description, voided_at), loans(id, name)');
     if (error) throw error;
     res.status(201).json(data[0]);
   } catch (error) {
@@ -66,7 +66,7 @@ exports.getTaskById = async (req, res) => {
     const { id } = req.params;
     const { data, error } = await supabase
       .from('tasks')
-      .select('*, transactions(id, description), loans(id, name)')
+      .select('*, transactions(id, description, voided_at), loans(id, name)')
       .eq('id', id)
       .single();
     if (error) throw error;
@@ -107,7 +107,7 @@ exports.updateTask = async (req, res) => {
       .from('tasks')
       .update(updates)
       .eq('id', id)
-      .select('*, transactions(id, description), loans(id, name)');
+      .select('*, transactions(id, description, voided_at), loans(id, name)');
     if (error) throw error;
     if (!data?.length) return res.status(404).json({ error: 'Task not found' });
     res.json(data[0]);

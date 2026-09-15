@@ -1,0 +1,13 @@
+.savings-report { min-width: 0; color: var(--ft-text); }
+.savings-report-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--ft-space-3); flex-wrap: wrap; }
+.savings-report h2 { margin: 0; font-size: var(--fs-18); }
+.savings-report p { line-height: 1.7; overflow-wrap: anywhere; }
+.savings-report-note,.savings-report dt { color: var(--ft-text-muted); font-size: 13px; }
+.savings-report-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--ft-space-4); }
+.savings-report dd { margin: 6px 0 0; }
+.savings-report summary { cursor: pointer; font-weight: 650; padding-block: var(--ft-space-3); }
+.savings-report summary:focus-visible { outline: 2px solid var(--ft-primary); outline-offset: 4px; }
+.savings-report-links { display: flex; flex-wrap: wrap; gap: var(--ft-space-3); margin-block: var(--ft-space-4); }
+.savings-report-accounts { padding-inline-start: 20px; overflow-wrap: anywhere; }
+.savings-report-accounts a { color: var(--ft-primary); }
+@media(max-width:620px) { .savings-report-metrics { grid-template-columns: minmax(0,1fr); } }

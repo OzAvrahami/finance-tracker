@@ -152,7 +152,7 @@ describe('canonical funded monthly read', () => {
     expect(within(secondary).getByText('יתרות בתקציבים פעילים')).toBeInTheDocument();
     expect(within(secondary).getByText('₪450')).toBeInTheDocument();
     expect(within(secondary).getByText('חריגות לא פתורות')).toBeInTheDocument();
-    expect(within(secondary).getByText('חיסכון נוכחי')).toBeInTheDocument();
+    expect(within(secondary).getByText('רזרבה תקציבית ישנה')).toBeInTheDocument();
     const unbudgetedHeading = screen.getByRole('heading', { name: 'הוצאות מחוץ לתקציב' });
     expect(unbudgetedHeading).toBeInTheDocument();
     expect(screen.getByText(/תחבורה/)).toBeInTheDocument();
@@ -397,7 +397,7 @@ describe('canonical funded monthly read', () => {
     const secondary = screen.getByLabelText('מידע משלים לתקציב');
     expect(within(secondary).getByText('יתרות בתקציבים פעילים').parentElement.parentElement).toHaveTextContent('₪500');
     expect(within(secondary).getByText('חריגות לא פתורות').parentElement.parentElement).toHaveTextContent('₪200');
-    expect(within(secondary).getByText('חיסכון נוכחי').parentElement.parentElement).toHaveTextContent('₪700');
+    expect(within(secondary).getByText('רזרבה תקציבית ישנה').parentElement.parentElement).toHaveTextContent('₪700');
     expect(within(secondary).queryByText('₪300')).not.toBeInTheDocument();
   });
 

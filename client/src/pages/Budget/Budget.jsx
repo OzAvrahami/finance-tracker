@@ -26,6 +26,7 @@ import {
 import BudgetSummary from './BudgetSummary';
 import BudgetList from './BudgetList';
 import { CopyBudgetDialog, DeleteBudgetDialog } from './BudgetDialogs';
+import BudgetSavingsTransfers from './BudgetSavingsTransfers';
 import {
   BudgetReallocationDialog,
   DeficitResolutionDialog,
@@ -204,12 +205,14 @@ const Budget = () => {
   const [closePreview, setClosePreview] = useState(null);
   const [closePreviewLoading, setClosePreviewLoading] = useState(false);
   const [closePending, setClosePending] = useState(false);
+  const [savingsCloseReview, setSavingsCloseReview] = useState(null);
   const [closeError, setCloseError] = useState('');
   const [showReallocation, setShowReallocation] = useState(false);
   const [deficitTarget, setDeficitTarget] = useState(null);
   const [unbudgetedTarget, setUnbudgetedTarget] = useState(null);
   const { setPageHeader } = useContext(PageHeaderContext);
   const navigate = useNavigate();
+  useEffect(() => { const refresh = () => setRequestVersion(v => v + 1); window.addEventListener('finance:cash-changed', refresh); return () => window.removeEventListener('finance:cash-changed', refresh); }, []);
 
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
   const state = query.month === selectedMonth ? query.state : emptyState(selectedMonth);
@@ -534,6 +537,9 @@ const Budget = () => {
 
   const handleMonthClose = async () => {
     if (closePending || !closePreview?.fingerprint) return;
+    if (closePreview.categories?.some(c => c.status === 'ready' && c.policy === 'savings_account')) {
+      setSavingsCloseReview(closePreview); return;
+    }
     setClosePending(true);
     setCloseError('');
     try {
@@ -582,6 +588,8 @@ const Budget = () => {
           />
         ) : null}
       />
+
+      {!pageError && <BudgetSavingsTransfers key={selectedMonth} month={selectedMonth} state={state} closePreview={savingsCloseReview} onCloseReview={() => setSavingsCloseReview(null)} onApplied={refreshBudgets} />}
 
       <ManualFundingPanel
         open={showFundingPanel}

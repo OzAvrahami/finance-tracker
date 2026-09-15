@@ -15,6 +15,9 @@ import {
   TransactionsSummary,
 } from './TransactionsList';
 import './Transactions.css';
+import { cashFlowLabels } from '../../utils/savingsReporting';
+import { getSavingsAccounts } from '../../services/api';
+import { invalidateFinance, FINANCE_CHANGED } from '../../utils/financeInvalidation';
 
 // One server page. The backend clamps anything above its own maximum (250).
 const PAGE_SIZE = 100;
@@ -58,6 +61,12 @@ const Transactions = () => {
   const [list, setList] = useState(EMPTY_LIST);
   const [categories, setCategories] = useState([]);
   const [paymentSources, setPaymentSources] = useState([]);
+  const [savingsAccounts, setSavingsAccounts] = useState([]);
+  const [selectedSavingsAccount, setSelectedSavingsAccount] = useState(searchParams.get('savingsAccountId') || 'all');
+  const [savingsFlow, setSavingsFlow] = useState(searchParams.get('savingsFlow') || 'all');
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState(null);
+  const cancellationReceipt = useRef(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState(null);
@@ -70,13 +79,15 @@ const Transactions = () => {
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
   const [selectedPaymentSource, setSelectedPaymentSource] = useState('all');
-  const [dateRange, setDateRange] = useState(() => rangeFromMonthKey(initialMonth));
+  const [dateRange, setDateRange] = useState(() => searchParams.get('from') && searchParams.get('to') ? { start: searchParams.get('from'), end: searchParams.get('to') } : rangeFromMonthKey(initialMonth));
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
   const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(initialUncategorized);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
 
   const { setPageHeader } = useContext(PageHeaderContext);
   const requestIdRef = useRef(0);
+  useEffect(() => { getSavingsAccounts().then(({ data }) => setSavingsAccounts(data || [])).catch(() => {}); }, []);
+  useEffect(() => { const refresh = () => setRetryVersion(v => v + 1); window.addEventListener(FINANCE_CHANGED, refresh); return () => window.removeEventListener(FINANCE_CHANGED, refresh); }, []);
 
   useEffect(() => {
     setPageHeader({
@@ -111,6 +122,8 @@ const Transactions = () => {
     to: dateRange.end || undefined,
     categoryId: selectedCategory,
     paymentSourceId: selectedPaymentSource,
+    savingsAccountId: selectedSavingsAccount,
+    savingsFlow,
     uncategorizedOnly: showUncategorizedOnly,
     search: debouncedSearchText,
     sortBy: sortConfig.key,
@@ -120,7 +133,8 @@ const Transactions = () => {
     dateRange.end,
     selectedCategory,
     selectedPaymentSource,
-    showUncategorizedOnly,
+    selectedSavingsAccount,
+    savingsFlow,    showUncategorizedOnly,
     debouncedSearchText,
     sortConfig.key,
     sortConfig.direction,
@@ -226,6 +240,8 @@ const Transactions = () => {
     setDateRange(getMonthRange());
     setSelectedCategory('all');
     setSelectedPaymentSource('all');
+    setSelectedSavingsAccount('all');
+    setSavingsFlow('all');
     setSearchText('');
     setDebouncedSearchText('');
     setShowUncategorizedOnly(false);
@@ -242,8 +258,21 @@ const Transactions = () => {
   const confirmDelete = async () => {
     const transaction = transactionToDelete;
     if (!transaction) return false;
+    setCancelError(null);
 
     try {
+      if (transaction.savings) {
+        if (!cancelReason.trim()) throw new Error('יש להזין סיבת ביטול');
+        const fingerprint = JSON.stringify({ id: transaction.id, cancelReason });
+        if (cancellationReceipt.current?.fingerprint !== fingerprint) cancellationReceipt.current = { fingerprint, key: crypto.randomUUID() };
+        const { data } = await deleteTransaction(transaction.id, { savings_handling: {
+          request_key: cancellationReceipt.current.key, reason: cancelReason,
+          ...(transaction.savings.active ? { entry_id: transaction.savings.entry_id, expected_revision: transaction.savings.revision }
+            : { expected_transaction_fingerprint: transaction.transaction_fingerprint }),
+        } });
+        invalidateFinance(data);
+        return true;
+      }
       await deleteTransaction(transaction.id);
       setList((previous) => {
         const amount = Number(transaction.total_amount) || 0;
@@ -264,6 +293,7 @@ const Transactions = () => {
       return true;
     } catch (error) {
       console.error('Error deleting transaction:', error);
+      if (transaction.savings) setCancelError(error.response?.data?.error || 'הביטול נדחה. בדקו את יתרת החיסכון ורעננו לפני ניסיון נוסף.');
       throw error;
     }
   };
@@ -284,6 +314,7 @@ const Transactions = () => {
   );
 
   const activeFilters = [];
+  if (savingsFlow !== 'all') activeFilters.push({ key: 'cash-flow', label: `תזרים: ${cashFlowLabels[savingsFlow]}`, accessibleName: 'סוג תזרים', onRemove: () => setSavingsFlow('all') });
   if (activeDatePreset === 'lastMonth') {
     activeFilters.push({
       key: 'date',
@@ -320,6 +351,7 @@ const Transactions = () => {
       onRemove: () => setSelectedCategory('all'),
     });
   }
+  if (selectedSavingsAccount !== 'all') activeFilters.push({ key: 'savings', label: `חיסכון: ${savingsAccounts.find(a => a.account_id === selectedSavingsAccount)?.name || selectedSavingsAccount}`, accessibleName: 'חשבון חיסכון', onRemove: () => setSelectedSavingsAccount('all') });
   if (selectedPaymentSource !== 'all') {
     activeFilters.push({
       key: 'payment-source',
@@ -369,12 +401,19 @@ const Transactions = () => {
   const datasetEmpty = activeDatePreset === 'clear'
       && selectedCategory === 'all'
       && selectedPaymentSource === 'all'
+      && selectedSavingsAccount === 'all'
+      && savingsFlow === 'all'
       && !searchText.trim()
       && !showUncategorizedOnly;
 
   return (
     <div className="transactions-page" dir="rtl">
       <TransactionsFilters
+        savingsFlow={savingsFlow}
+        onSavingsFlowChange={setSavingsFlow}
+        savingsAccounts={savingsAccounts}
+        selectedSavingsAccount={selectedSavingsAccount}
+        onSavingsAccountChange={setSelectedSavingsAccount}
         activeFilters={activeFilters}
         periodContext={activeDatePreset === 'thisMonth'
           ? `תקופה: ${formatPeriodMonth(dateRange.start)}`
@@ -408,7 +447,7 @@ const Transactions = () => {
           totals={list.totals}
           sortConfig={sortConfig}
           onSort={handleSort}
-          onRequestDelete={setTransactionToDelete}
+          onRequestDelete={(transaction) => { setCancelReason(''); setCancelError(null); setTransactionToDelete(transaction); }}
           hasMore={list.hasMore}
           loadingMore={loadingMore}
           error={moreError}
@@ -417,6 +456,9 @@ const Transactions = () => {
       )}
 
       <TransactionDeleteDialog
+        reason={cancelReason}
+        error={cancelError}
+        onReasonChange={setCancelReason}
         transaction={transactionToDelete}
         onClose={() => setTransactionToDelete(null)}
         onConfirm={confirmDelete}

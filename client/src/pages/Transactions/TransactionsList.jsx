@@ -1,3 +1,4 @@
+import { cashFlowLabels } from '../../utils/savingsReporting';
 import { Link } from 'react-router-dom';
 import {
   ArrowDown,
@@ -26,6 +27,7 @@ import {
   Select,
   Skeleton,
   TechnicalValue,
+  TextArea,
 } from '../../components/ui';
 
 const formatDate = (value) => {
@@ -40,6 +42,7 @@ const signedAmount = (transaction) => {
 };
 
 const transactionContext = (transaction) => transaction.description || `מספר ${transaction.id}`;
+const SavingsLink = ({ transaction }) => transaction.savings ? <small className="transactions-savings-link"><Link to={`/savings`}>{transaction.savings.name}</Link>{transaction.savings.active && ` · ${cashFlowLabels[transaction.cash_flow] || "תנועת חיסכון"}`}{!transaction.savings.active && ' · קישור היסטורי'}</small> : null;
 
 const CategoryBadge = ({ transaction }) => {
   const isUncategorized = transaction.category_id == null;
@@ -163,7 +166,7 @@ export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete })
             <tr key={transaction.id} className={isUncategorized ? 'is-uncategorized' : ''}>
               <td className="transactions-table__date"><TechnicalValue>{formatDate(transaction.transaction_date)}</TechnicalValue></td>
               <td className="transactions-table__category"><CategoryBadge transaction={transaction} /></td>
-              <td className="transactions-table__description"><strong>{transaction.description || 'ללא תיאור'}</strong></td>
+              <td className="transactions-table__description"><strong>{transaction.description || 'ללא תיאור'}</strong><SavingsLink transaction={transaction} /></td>
               <td className="transactions-table__source">
                 <span className="transactions-table__source-value">
                   {transaction.payment_sources?.name || <span aria-label="לא צוין">—</span>}
@@ -235,6 +238,7 @@ export const TransactionsMobileList = ({ rows, onRequestDelete }) => (
                   </div>
                 </div>
                 <h3>{transaction.description || 'ללא תיאור'}</h3>
+                <SavingsLink transaction={transaction} />
                 <dl className="transactions-mobile-card__metadata">
                   <div><dt>תאריך</dt><dd><TechnicalValue>{formatDate(transaction.transaction_date)}</TechnicalValue></dd></div>
                   <div><dt>אמצעי תשלום</dt><dd>{transaction.payment_sources?.name || 'לא צוין'}</dd></div>
@@ -328,20 +332,22 @@ export const ProgressiveLoadFooter = ({ loadedCount, totalCount, hasMore, loadin
   </footer>
 );
 
-export const TransactionDeleteDialog = ({ transaction, onClose, onConfirm }) => (
+export const TransactionDeleteDialog = ({ transaction, onClose, onConfirm, reason = '', onReasonChange, error }) => (
   <ConfirmDialog
     open={Boolean(transaction)}
     onClose={onClose}
     onConfirm={onConfirm}
-    title="מחיקת תנועה"
-    message={transaction ? (
+    title={transaction?.savings ? 'ביטול תנועת חיסכון' : 'מחיקת תנועה'}
+    message={transaction?.savings ? <div><p>התנועה תישמר כמבוטלת ותוסר מהסיכומים החיים. {transaction.savings.active ? 'הרישום בחיסכון יבוטל פעם אחת.' : 'הקישור כבר נותק; יתרת החיסכון לא תשתנה שוב.'}</p><TextArea label="סיבת הביטול" value={reason} onValueChange={onReasonChange} required /></div> : transaction ? (
       <p>
         למחוק את התנועה <strong>„{transactionContext(transaction)}”</strong>? לא ניתן לבטל את הפעולה.
       </p>
     ) : null}
-    confirmLabel="מחיקת התנועה"
+    confirmLabel={transaction?.savings ? 'ביטול התנועה הכספית' : 'מחיקת התנועה'}
     cancelLabel="ביטול"
     variant="destructive"
+    disabled={Boolean(transaction?.savings && !reason.trim())}
+    error={error}
     errorMessage="מחיקת התנועה נכשלה. הרשומה והסיכומים לא השתנו."
   />
 );

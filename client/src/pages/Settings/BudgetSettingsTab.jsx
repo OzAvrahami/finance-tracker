@@ -6,10 +6,12 @@ import {
   MoneyAmount,
   PrimaryButton,
   SecondaryButton,
+  Select,
   TextField,
 } from '../../components/ui';
 import {
   getSettingsCategories,
+  getSavingsAccounts,
   setSettingsCategoryUnusedBalancePolicy,
   setSettingsCategoryRecurringBudget,
 } from '../../services/api';
@@ -30,6 +32,9 @@ const BudgetSettingsTab = () => {
   const [recurringError, setRecurringError] = useState('');
   const [policySavingId, setPolicySavingId] = useState(null);
   const [policyError, setPolicyError] = useState('');
+  const [policyTarget, setPolicyTarget] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [destination, setDestination] = useState('');
 
   const loadCategories = useCallback(async () => {
     setLoadError(false);
@@ -88,15 +93,22 @@ const BudgetSettingsTab = () => {
     }
   };
 
-  const savePolicy = async (category, policy) => {
+  const savePolicy = async (category, policy, savingsAccountId = null) => {
+    if (policy === 'savings_account' && !savingsAccountId) {
+      setPolicyTarget(category); setDestination(category.savings_account_id || ''); setPolicyError('');
+      try { setAccounts((await getSavingsAccounts()).data); } catch { setPolicyError('טעינת חשבונות החיסכון נכשלה. סגרו ונסו שוב.'); }
+      return;
+    }
     if (policySavingId != null || !category.is_active) return;
     setPolicySavingId(category.id);
     setPolicyError('');
     try {
       await setSettingsCategoryUnusedBalancePolicy(category.id, {
         policy: policy || null,
+        savings_account_id: savingsAccountId,
       });
       await loadCategories();
+      setPolicyTarget(null);
     } catch (error) {
       setPolicyError(error.response?.data?.error || 'שמירת מדיניות היתרה נכשלה. אפשר לנסות שוב.');
     } finally {
@@ -171,14 +183,16 @@ const BudgetSettingsTab = () => {
                     id={`unused-policy-${category.id}`}
                     className="settings-budget-policy-select"
                     value={category.unused_balance_policy || ''}
-                    disabled={!category.is_active || policySavingId === category.id}
+                    disabled={!category.is_active || Boolean(category.savings_role) || policySavingId === category.id}
                     onChange={(event) => savePolicy(category, event.target.value)}
                   >
                     <option value="">לא הוגדר</option>
                     <option value="carry_forward">העבר לקטגוריה בחודש הבא</option>
-                    <option value="savings">העבר לחיסכון</option>
+                    <option value="savings">רזרבה תקציבית ישנה — ללא תנועת כסף</option>
+                    <option value="savings_account">הפקד לחשבון חיסכון נבחר</option>
                     <option value="return_to_unallocated">החזר לכסף פנוי בחודש הבא</option>
                   </select>
+                  {category.unused_balance_policy === 'savings_account' && <SecondaryButton size="sm" onClick={() => savePolicy(category, 'savings_account')}>בחירת יעד חיסכון · {category.savings_account_id}</SecondaryButton>}
                 </div>
                 <SecondaryButton
                   type="button"
@@ -202,6 +216,11 @@ const BudgetSettingsTab = () => {
         שינוי תקציב חוזר משפיע רק על חודשים שטרם אותחלו. מדיניות יתרה משפיעה רק על סגירות עתידיות; העברה או חיסכון מתבצעים רק באישור מפורש בעמוד התקציב ואינם משנים היסטוריה קיימת.
       </div>
 
+      <Dialog open={Boolean(policyTarget)} onClose={() => setPolicyTarget(null)} title={`יעד חיסכון — ${policyTarget?.name || ''}`} closeDisabled={policySavingId != null} footer={<><SecondaryButton onClick={() => setPolicyTarget(null)} disabled={policySavingId != null}>חזרה</SecondaryButton><PrimaryButton disabled={!destination} loading={policySavingId != null} onClick={() => savePolicy(policyTarget, 'savings_account', destination)}>שמירת יעד</PrimaryButton></>}>
+        <p>ההפקדה תתבצע רק בסקירה ובאישור מפורש בעמוד התקציב, עם אמצעי תשלום ותאריך. אין העברה אוטומטית.</p>
+        <Select label="חשבון חיסכון יעד" value={destination} onValueChange={setDestination} placeholder="בחירת חשבון">{accounts.map(a => <option key={a.account_id} value={a.account_id} disabled={a.status !== 'active'}>{a.name}{a.status !== 'active' ? ' — בארכיון' : ''}</option>)}</Select>
+        {policyError && <Alert variant="error" urgent>{policyError}</Alert>}
+      </Dialog>
       <Dialog
         open={Boolean(recurringTarget)}
         onClose={closeRecurring}

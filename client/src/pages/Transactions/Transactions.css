@@ -1064,3 +1064,4 @@
 @media (prefers-reduced-motion: reduce) {
   .transactions-spinner { animation: none; }
 }
+.transactions-savings-link { display: block; white-space: normal; overflow-wrap: anywhere; margin-block-start: 4px; }

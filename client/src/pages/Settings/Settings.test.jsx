@@ -267,6 +267,7 @@ describe('Budget settings', () => {
     await userEvent.selectOptions(foodPolicy, 'savings');
     await waitFor(() => expect(setSettingsCategoryUnusedBalancePolicy).toHaveBeenCalledWith(1, {
       policy: 'savings',
+      savings_account_id: null,
     }));
     expect(await screen.findByLabelText('מה קורה ליתרה שלא נוצלה?', { selector: '#unused-policy-1' })).toHaveValue('savings');
   });

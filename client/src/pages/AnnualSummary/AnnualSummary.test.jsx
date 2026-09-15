@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -5,7 +6,7 @@ import { PageHeaderContext } from '../../context/PageHeaderContext';
 import { getAnnualBudgetSummary, getMonthlyCategoryBreakdown } from '../../services/api';
 import AnnualSummary from './AnnualSummary';
 
-vi.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({ getSavingsReport: vi.fn().mockResolvedValue({ data: { accounts: [] } }),
   getAnnualBudgetSummary: vi.fn(),
   getMonthlyCategoryBreakdown: vi.fn(),
 }));
@@ -124,9 +125,9 @@ const deferred = () => {
 
 const setPageHeader = vi.fn();
 const renderPage = () => render(
-  <PageHeaderContext.Provider value={{ setPageHeader }}>
+  <MemoryRouter><PageHeaderContext.Provider value={{ setPageHeader }}>
     <AnnualSummary />
-  </PageHeaderContext.Provider>,
+  </PageHeaderContext.Provider></MemoryRouter>,
 );
 
 const settle = async () => {
@@ -141,6 +142,12 @@ beforeEach(() => {
 });
 
 describe('annual year loading and page states', () => {
+  it('keeps a funded-transfer-only cash year visible when envelope actuals and funding are zero', async () => {
+    getAnnualBudgetSummary.mockResolvedValue({ data: annualData({ summary: { yearly_planned: '0.00', yearly_actual: '0.00', cash_bridge: { cash_expenses: '300.00', funded_savings_transfers: '300.00', envelope_actuals: '0.00', manual_savings_deposits: '0.00' } } }) });
+    renderPage();
+    expect(await screen.findByText(/העברות עודף ממומן לחיסכון:/)).toHaveTextContent('300');
+    expect(screen.queryByText(`אין נתונים לשנת ${currentYear}`)).not.toBeInTheDocument();
+  });
   it('uses the shell title and requests the existing default calendar year', async () => {
     await settle();
     expect(setPageHeader).toHaveBeenCalledWith({

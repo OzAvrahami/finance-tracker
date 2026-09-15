@@ -49,6 +49,10 @@ const loanHandlingOptions = [
 const AddTransaction = () => {
   const {
     loading,
+    savingsAccounts, savingsAccountId, setSavingsAccountId, savingsRole, savingsContext,
+    savedCash, savingsReason, setSavingsReason, cutoffConfirmed, setCutoffConfirmed,
+    cashReuseConfirmed, setCashReuseConfirmed, savingsError, restoreSavingsCash,
+    cancelledTransaction,
     transaction,
     setTransaction,
     items,
@@ -97,6 +101,20 @@ const AddTransaction = () => {
   };
 
   if (loading) return <TransactionFormSkeleton />;
+  if ((savedCash || cancelledTransaction)?.savings?.source_kind === 'budget_surplus') {
+    const cash = savedCash || cancelledTransaction;
+    return <div className="transaction-form-page" dir="rtl"><Alert variant="info" title="העברת עודף ממומן — היסטוריה מקושרת">תיקון מחייב ביטול מלא דרך היסטוריית התקציב וסקירת העברה חדשה. אין לערוך או לנתק את ההוצאה בנפרד.</Alert><h2>{cash.description}</h2><p>{cash.transaction_date} · {cash.total_amount} ₪ · {cash.savings.name}{cash.voided_at ? ' · בוטלה' : ''}</p><SecondaryButton as={Link} to="/budget">מעבר לתקציב</SecondaryButton></div>;
+  }
+  if (cancelledTransaction) return <div className="transaction-form-page" dir="rtl">
+    <Alert variant="info" title="תנועה שבוטלה — לקריאה בלבד">התנועה נשמרה להיסטוריה ואינה נכללת בסיכומים חיים.</Alert>
+    <h2>{cancelledTransaction.description}</h2>
+    <p>תאריך: {cancelledTransaction.transaction_date}</p>
+    <p>סכום: {cancelledTransaction.total_amount} ₪</p>
+    {cancelledTransaction.void_reason && <p>{cancelledTransaction.void_reason}</p>}
+    {cancelledTransaction.savings && <p>חיסכון: {cancelledTransaction.savings.name}</p>}
+    {cancelledTransaction.savings?.reinstatable && <SecondaryButton onClick={restoreSavingsCash}>החזרה מפורשת באמצעות תנועה חדשה</SecondaryButton>}
+    <Link to="/transactions">חזרה לתנועות</Link>
+  </div>;
 
   const legoCategorySelected = isLegoCategory();
   const loanCategorySelected = isLoanCategory();
@@ -152,6 +170,7 @@ const AddTransaction = () => {
       )}
 
       <form className="transaction-form" onSubmit={submitForm}>
+        {savingsError && savingsContext && <Alert variant="error" urgent>{savingsError}</Alert>}
         <TransactionFormSection
           step="1"
           title="פרטי הליבה"
@@ -225,12 +244,23 @@ const AddTransaction = () => {
               rows={2}
             />
           </div>
+          {savingsContext && <div className="transaction-context-block">
+            {savedCash?.savings && <p>חיסכון מקושר: {savedCash.savings.name}{savedCash.savings.active ? '' : ' · קישור היסטורי'}</p>}
+            {savingsRole && <Select label="חשבון חיסכון" value={savingsAccountId} onValueChange={setSavingsAccountId} required placeholder="בחירת חשבון חיסכון">
+              {(savingsAccounts || []).filter(a => a.status === 'active' || a.account_id === savedCash?.savings?.account_id).map(a => <option key={a.account_id} value={a.account_id}>{a.name}{a.status === 'archived' ? ' (בארכיון — תיקון היסטורי בלבד)' : ''}</option>)}
+            </Select>}
+            <p>{savingsRole === 'withdrawal' ? 'משיכה נרשמת כהכנסה וכהפחתה בחיסכון.' : savingsRole === 'deposit' ? 'הפקדה נרשמת כהוצאה וכתוספת בחיסכון.' : savingsRole === 'interest_payout' ? 'ריבית ששולמה לעו״ש נרשמת כהכנסה וכרווח ממומש בלבד. יתרת החיסכון אינה משתנה. לתיקון היעד לריבית שנשארה בחיסכון, פתחו את היסטוריית החשבון בחסכונות.' : 'בחירת קטגוריה רגילה מנתקת את החיסכון ומשאירה את התנועה הכספית.'} תנועה ישירה בשקלים בלבד.</p>
+            {savingsRole && <label><input type="checkbox" checked={cutoffConfirmed} onChange={e => setCutoffConfirmed(e.target.checked)} /> הכסף בתנועה זו אינו כלול ביתרת הפתיחה שאושרה</label>}
+            {savedCash?.savings && <TextArea label="סיבת התיקון / הניתוק" value={savingsReason} onValueChange={setSavingsReason} required />}
+            {savedCash?.savings && !savedCash.savings.active && <label><input type="checkbox" checked={cashReuseConfirmed} onChange={e => setCashReuseConfirmed(e.target.checked)} /> {savedCash.voided_at ? 'אישור יצירת תנועה חדשה במקום התנועה שבוטלה; ההיסטוריה תישמר' : 'אישור קישור מחדש של אותה תנועה חיה, ללא יצירת כסף נוסף'}</label>}
+            {isEditMode && !savedCash?.savings && savingsRole && <Alert variant="info">התנועה הקיימת תקושר ללא יצירת תנועה נוספת. בקישור יש לשמור על הסכום, התאריכים ואמצעי התשלום המקוריים.</Alert>}
+          </div>}
         </TransactionFormSection>
 
         <TransactionFormSection
           step="2"
           title="סכום התנועה"
-          headerAside={amountMode}
+          headerAside={savingsContext ? null : amountMode}
         >
           {!hasItems && (
             <NumberField
@@ -291,7 +321,7 @@ const AddTransaction = () => {
           )}
         </TransactionFormSection>
 
-        <div className="transaction-form-split">
+        {!savingsContext && <div className="transaction-form-split">
           <TransactionFormSection step="3" title="תשלומים" className="transaction-form-section--secondary">
             {!isEditMode ? (
               <div className="transaction-installments-layout">
@@ -363,7 +393,7 @@ const AddTransaction = () => {
               <p className="transaction-currency-hint">כשהמטבע הוא שקל, השדות האלה מוסתרים.</p>
             )}
           </TransactionFormSection>
-        </div>
+        </div>}
 
         {hasContextFields && (
           <TransactionFormSection

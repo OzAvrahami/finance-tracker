@@ -412,6 +412,7 @@ exports.toggleItemPurchased = async (req, res) => {
 
 exports.checkoutList = async (req, res) => {
   try {
+    await require('../services/savingsTransactionService').rejectUnsupported(supabase, req.body, [req.body.category_id]);
     const { id } = req.params;
     const { payment_source_id, category_id } = req.body;
 

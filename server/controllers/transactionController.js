@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const axios = require('axios');
+const savingsCash = require('../services/savingsTransactionService');
 const {
   parseTransactionListQuery,
   encodeCursor,
@@ -204,6 +205,8 @@ const synchronizeTransactionLegoSets = async ({
 
 exports.createTransaction = async (req, res) => {
   try {
+    const savingsResult = await savingsCash.saveCash(supabase, req.body);
+    if (savingsResult) return res.status(201).json(savingsResult);
     const { transaction, items, loan_handling: loanHandling } = req.body;
     const transactionItems = Array.isArray(items) ? items : [];
     const pricing = buildTransactionPricing(
@@ -345,7 +348,7 @@ exports.createTransaction = async (req, res) => {
 
   } catch (error) {
     console.error("Create Transaction Error:", error);
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ error: error.message, code: error.savingsCode || error.code });
   }
 };
 
@@ -379,7 +382,13 @@ exports.getTransactions = async (req, res) => {
   const cursor = query.cursor;
 
   try {
+    const savingsFlow = req.query.savingsFlow;
+    if (savingsFlow && !['deposit','withdrawal','interest_payout','ordinary_expense','ordinary_income'].includes(savingsFlow)) return res.status(400).json({ error: 'סוג תזרים אינו תקין' });
+    const savingsAccountId = req.query.savingsAccountId;
+    if (savingsAccountId && !/^[1-9][0-9]*$/.test(savingsAccountId)) return res.status(400).json({ error: 'מזהה חיסכון אינו תקין' });
     const { data, error } = await supabase.rpc('transactions_page', {
+      ...(savingsAccountId ? { p_savings_account_id: savingsAccountId } : {}),
+      ...(savingsFlow ? { p_savings_flow: savingsFlow } : {}),
       p_from: query.from,
       p_to: query.to,
       p_category_id: query.categoryId,
@@ -444,6 +453,8 @@ exports.deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (req.body?.savings_handling) return res.status(200).json(await savingsCash.cancelCash(supabase, id, req.body.savings_handling));
+
     await deleteTransactionWithLoanPayment(supabase, id);
 
     res.status(200).json({ message: 'Transaction and all related data deleted successfully' });
@@ -470,6 +481,7 @@ exports.getTags = async (req, res) => {
 exports.getTransactionById = async (req, res) => {
   try {
     const { id } = req.params;
+    const cash = await savingsCash.readCash(supabase, id);
     const { data, error } = await supabase
       .from('transactions')
       .select(`*, transaction_items(*)`) // Fetch transaction + its items
@@ -499,7 +511,7 @@ exports.getTransactionById = async (req, res) => {
       .maybeSingle();
 
     if (loanPaymentError) throw loanPaymentError;
-    res.status(200).json({ ...data, loan_payment: loanPayment || null });
+    res.status(200).json({ ...data, ...cash, read_only: Boolean(data.voided_at), loan_payment: loanPayment || null });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -509,6 +521,8 @@ exports.getTransactionById = async (req, res) => {
 exports.updateTransaction = async (req, res) => {
   try {
     const { id } = req.params;
+    const savingsResult = await savingsCash.saveCash(supabase, req.body, id);
+    if (savingsResult) return res.status(200).json(savingsResult);
     const { transaction, items, loan_handling: loanHandling } = req.body;
     const transactionItems = Array.isArray(items) ? items : [];
     const pricing = buildTransactionPricing(

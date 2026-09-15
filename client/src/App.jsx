@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import AnnualSummary from './pages/AnnualSummary';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
+import Savings from './pages/Savings/Savings';
 
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/lego" element={<LegoCollection />} />
           <Route path="/loans" element={<Loans /> } />
+          <Route path="/savings" element={<Savings />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/import" element={<Import />} />
           <Route path="/shopping" element={<ShoppingLists />} />

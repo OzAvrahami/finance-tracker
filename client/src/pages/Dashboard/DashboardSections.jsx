@@ -148,7 +148,7 @@ export const MonthlySummary = ({ resource, selectedMonth, monthOptions, onMonthC
       <div className="dashboard-monthly__header">
         <div>
           <h2 id="dashboard-monthly-title">החודש הנבחר</h2>
-          <p>שלושת המדדים האלה — ורק הם — מתייחסים לחודש שנבחר כאן.</p>
+          <p>מדדי התזרים ופירוט החיסכון מתייחסים לחודש הנבחר. יתרות החיסכון מוצגות בנפרד כיתרות נוכחיות.</p>
         </div>
         <label className="dashboard-month-select">
           <span className="dashboard-visually-hidden">חודש לדשבורד</span>

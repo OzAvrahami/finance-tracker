@@ -196,11 +196,13 @@ const applyMonthDisposition = (supabase, {
   previewFingerprint,
   requestKey: suppliedRequestKey,
   reason = null,
+  cashConfirmations,
 }) => callBudgetRpc(supabase, 'apply_budget_month_disposition', {
   p_source_month: sourceMonth,
   p_request_key: requestKey(suppliedRequestKey),
   p_preview_fingerprint: previewFingerprint,
   p_reason: reason,
+  ...(cashConfirmations === undefined ? {} : { p_cash_confirmations: cashConfirmations }),
 });
 
 const reverseMonthDisposition = (supabase, {

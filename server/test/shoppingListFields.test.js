@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadControllerWithFake, createMockResponse } = require('./helpers/fakeSupabase');
 
 const setup = (initial = []) => {
-  const tables = { shopping_lists: structuredClone(initial), shopping_checkouts: [], transactions: [] };
+  const tables = { shopping_lists: structuredClone(initial), shopping_checkouts: [], transactions: [], categories: [] };
   const calls = [];
   const client = { from(table) {
     calls.push(table);
@@ -21,6 +21,7 @@ const setup = (initial = []) => {
     const query = {
       select() { return query; }, order() { return query; },
       eq(key, value) { filters.push([key, value]); return query; },
+      in() { return query; },
       insert(rows) { operation = 'insert'; payload = rows; return query; },
       update(values) { operation = 'update'; payload = values; return query; },
       single: async () => { const result = execute(); return { ...result, data: result.data[0] }; },

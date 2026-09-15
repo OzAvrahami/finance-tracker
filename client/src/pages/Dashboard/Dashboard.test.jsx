@@ -11,9 +11,10 @@ import {
   getTasks,
   getDashboardSummary,
   getDashboardMonthlySeries,
+  getSavingsReport,
 } from '../../services/api';
 
-vi.mock('../../services/api', () => ({
+vi.mock('../../services/api', () => ({ getSavingsReport: vi.fn().mockResolvedValue({ data: { accounts: [] } }),
   getTransactions: vi.fn(),
   getAllLoans: vi.fn(),
   getBudgetsByMonth: vi.fn(),
@@ -214,7 +215,7 @@ describe('mixed Dashboard periods', () => {
   it('labels selected-month and independent widgets explicitly', async () => {
     renderDashboard();
 
-    expect(await screen.findByText(/שלושת המדדים האלה/)).toBeInTheDocument();
+    expect(await screen.findByText(/מדדי התזרים ופירוט החיסכון/)).toBeInTheDocument();
     expect(screen.getByText('תקופה נפרדת · לא לפי החודש הנבחר')).toBeInTheDocument();
     expect(screen.getAllByText('נכון להיום')).toHaveLength(2);
     expect(screen.getByText(/החודש הנוכחי ·/)).toBeInTheDocument();
@@ -229,6 +230,11 @@ describe('mixed Dashboard periods', () => {
     const options = screen.getAllByRole('option');
     await user.selectOptions(screen.getByRole('combobox'), options[1].value);
     await waitFor(() => expect(getDashboardSummary).toHaveBeenCalledTimes(2));
+    expect(getSavingsReport).toHaveBeenLastCalledWith({
+      from: getDashboardSummary.mock.calls[1][0],
+      to: getDashboardSummary.mock.calls[1][1],
+      accountId: undefined,
+    });
 
     expect(getDashboardMonthlySeries).toHaveBeenCalledTimes(1);
     expect(getBudgetsByMonth).toHaveBeenCalledTimes(1);

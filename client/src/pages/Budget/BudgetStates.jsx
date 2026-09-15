@@ -382,7 +382,8 @@ export const UnbudgetedExpensesPanel = ({
 
 const dispositionPolicyLabel = {
   carry_forward: 'העבר לקטגוריה בחודש הבא',
-  savings: 'העבר לחיסכון',
+  savings: 'רזרבה תקציבית ישנה — ללא תנועת כסף',
+  savings_account: 'הפקדה לחשבון חיסכון נבחר',
   return_to_unallocated: 'החזר לכסף פנוי בחודש הבא',
 };
 
@@ -400,13 +401,13 @@ export const MonthClosePanel = ({ preview, history = [], loading, applying, erro
           <h2><CalendarCheck size={19} aria-hidden="true" /> סקירה וסגירת חודש</h2>
           <p>
             הסגירה מתבצעת רק לאחר אישור מפורש. יתרות מועברות לחודש הנוכחי או לחיסכון,
-            בלי לשנות הוצאות, תקציבי פתיחה או היסטוריה קיימת.
+            ללא שינוי תקציבי פתיחה או היסטוריה. הפקדה לחשבון חיסכון דורשת אישור נוסף ורושמת הוצאה אחת.
           </p>
         </div>
         <div className="budget-recurring-panel__totals" aria-label="סיכום סגירת חודש">
           <span>העברה לקטגוריות <strong><BudgetMoneyAmount value={preview.carry_forward_total} /></strong></span>
           <span>החזרה לכסף פנוי <strong><BudgetMoneyAmount value={preview.return_to_unallocated_total} /></strong></span>
-          <span>לחיסכון <strong><BudgetMoneyAmount value={preview.savings_total} /></strong></span>
+          <span>לרזרבה הישנה <strong><BudgetMoneyAmount value={preview.savings_total} /></strong></span>
         </div>
       </div>
 
@@ -428,7 +429,7 @@ export const MonthClosePanel = ({ preview, history = [], loading, applying, erro
         <ul className="budget-recurring-panel__list" aria-label="יתרות לסגירת החודש">
           {ready.map((item) => (
             <li key={item.category_id}>
-              <span>{item.category?.icon} {item.category?.name} · {dispositionPolicyLabel[item.policy]}</span>
+              <span>{item.category?.icon} {item.category?.name} · {dispositionPolicyLabel[item.policy]}{item.savings_account && ` — ${item.savings_account.name}`}</span>
               <BudgetMoneyAmount value={item.eligible_unused} />
             </li>
           ))}
@@ -442,7 +443,7 @@ export const MonthClosePanel = ({ preview, history = [], loading, applying, erro
             {blocked.map((item) => (
               <li key={item.category_id}>
                 <span>{item.category?.icon} {item.category?.name}</span>
-                <span>{item.blocked_reason}</span>
+                <span>{item.blocked_reason === 'SAVINGS_REFERENCE_INACTIVE' ? 'יעד החיסכון אינו פעיל. בחרו חשבון פעיל בהגדרות התקציב ורעננו את הסקירה.' : item.blocked_reason}</span>
               </li>
             ))}
           </ul>
@@ -452,7 +453,7 @@ export const MonthClosePanel = ({ preview, history = [], loading, applying, erro
       <p className="budget-carryover-panel__applied">
         כסף פנוי בחודש {preview.destination_month}: <BudgetMoneyAmount value={preview.destination_unallocated_before} />
         {' → '}<BudgetMoneyAmount value={preview.destination_unallocated_after} /> ·
-        חיסכון: <BudgetMoneyAmount value={preview.savings_balance_after} />
+        רזרבה תקציבית ישנה: <BudgetMoneyAmount value={preview.savings_balance_after} />
       </p>
 
       {preview.can_apply && (

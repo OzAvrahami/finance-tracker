@@ -19,6 +19,7 @@ describe('Finance Tracker route metadata', () => {
     ['/budget', 'תקציב חודשי'],
     ['/annual-summary', 'סיכום שנתי'],
     ['/loans', 'הלוואות'],
+    ['/savings', 'חסכונות'],
     ['/shopping', 'רשימות קניות'],
     ['/tasks', 'מטלות'],
     ['/import', 'ייבוא תנועות'],
@@ -34,18 +35,19 @@ describe('Finance Tracker route metadata', () => {
 });
 
 describe('shared navigation configuration', () => {
-  it('contains ten destinations and the existing add-transaction action', () => {
-    expect(navigationItems).toHaveLength(11);
-    expect(standardNavigationItems).toHaveLength(10);
+  it('contains eleven destinations and the existing add-transaction action', () => {
+    expect(navigationItems).toHaveLength(12);
+    expect(standardNavigationItems).toHaveLength(11);
     expect(addTransactionItem).toMatchObject({ path: '/add', label: 'תנועה חדשה', kind: 'action' });
   });
 
-  it('partitions mobile destinations into four primary and six More links', () => {
+  it('partitions mobile destinations into four primary and seven More links', () => {
     expect(mobilePrimaryItems.map((item) => item.path)).toEqual([
       '/', '/transactions', '/budget', '/tasks',
     ]);
-    expect(mobileMoreItems).toHaveLength(6);
-    expect([...mobilePrimaryItems, ...mobileMoreItems]).toHaveLength(10);
+    expect(mobileMoreItems).toHaveLength(7);
+    expect(mobileMoreItems.some((item) => item.path === '/savings')).toBe(true);
+    expect([...mobilePrimaryItems, ...mobileMoreItems]).toHaveLength(11);
   });
 
   it('activates Transactions for dynamic edit routes', () => {

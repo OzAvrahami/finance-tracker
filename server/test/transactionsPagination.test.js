@@ -561,3 +561,12 @@ test('a database error is surfaced, not swallowed', async () => {
   assert.equal(res.statusCode, 400);
   assert.match(res.body.error, /connection reset/);
 });
+test('Savings cash-flow filter is validated and forwarded before SQL pagination', async () => {
+  const { fake, res } = await callGetTransactions([], { savingsFlow: 'withdrawal', savingsAccountId: '9007199254740993' });
+  assert.equal(res.statusCode, 200);
+  assert.equal(fake.calls[0].params.p_savings_flow, 'withdrawal');
+  assert.equal(fake.calls[0].params.p_savings_account_id, '9007199254740993');
+  const invalid = await callGetTransactions([], { savingsFlow: 'interest_capitalized' });
+  assert.equal(invalid.res.statusCode, 400);
+  assert.equal(invalid.fake.calls.length, 0);
+});

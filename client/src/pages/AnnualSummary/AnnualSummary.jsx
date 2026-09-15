@@ -20,6 +20,8 @@ import {
 } from './AnnualSummarySections';
 import { buildAnnualInsights } from './annualSummaryPresentation';
 import './AnnualSummary.css';
+import SavingsReport from '../../components/SavingsReport';
+import AnnualMoneyAmount from './AnnualMoneyAmount';
 
 const currentCalendarYear = () => new Date().getFullYear();
 
@@ -40,6 +42,7 @@ const AnnualSummary = () => {
   const [monthRange, setMonthRange] = useState('3');
   const breakdownGeneration = useRef(0);
   const { setPageHeader } = useContext(PageHeaderContext);
+  useEffect(() => { const refresh = () => { setRequestVersion(v => v + 1); setBreakdown(emptyBreakdownState); setShowBreakdown(false); }; window.addEventListener('finance:cash-changed', refresh); return () => window.removeEventListener('finance:cash-changed', refresh); }, []);
 
   const years = useMemo(() => {
     const supportedYears = [];
@@ -121,7 +124,8 @@ const AnnualSummary = () => {
   const retryPage = () => setRequestVersion((version) => version + 1);
   const isEmpty = data
     && compareMoney(data.summary.yearly_planned ?? '0.00') === 0
-    && compareMoney(data.summary.yearly_actual ?? '0.00') === 0;
+    && compareMoney(data.summary.yearly_actual ?? '0.00') === 0
+    && compareMoney(data.summary.cash_bridge?.cash_expenses ?? '0.00') === 0;
   const insights = data ? buildAnnualInsights(data) : null;
 
   return (
@@ -134,6 +138,7 @@ const AnnualSummary = () => {
         onMonthRangeChange={setMonthRange}
       />
 
+      <SavingsReport from={String(selectedYear) + "-01-01"} to={String(selectedYear) + "-12-31"} />
       {loading && <AnnualSummarySkeleton />}
 
       {pageError && (
@@ -160,6 +165,7 @@ const AnnualSummary = () => {
         <div className="annual-summary-content">
           <SparseBudgetAlert summary={data.summary} />
           <AnnualKpis summary={data.summary} />
+          {data.summary.cash_bridge && <GlassCard padding="18px"><p>הוצאות במעטפת: <AnnualMoneyAmount value={data.summary.cash_bridge.envelope_actuals} /> + העברות עודף ממומן לחיסכון: <AnnualMoneyAmount value={data.summary.cash_bridge.funded_savings_transfers} /> = הוצאות כספיות: <AnnualMoneyAmount value={data.summary.cash_bridge.cash_expenses} />.</p><p>הפקדות חיסכון שאינן עודף ממומן בסך <AnnualMoneyAmount value={data.summary.cash_bridge.manual_savings_deposits} /> כלולות בהוצאות המעטפת.</p></GlassCard>}
           <AnnualForecastAndChart data={data} insights={insights} />
           <AnnualSpendingAnalysis data={data} />
           <AnnualCategoryAnalysis categories={data.categories} />

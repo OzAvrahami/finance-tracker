@@ -1,6 +1,7 @@
 const xlsx = require('xlsx');
 const supabase = require('../config/supabase');
 const profiles = require('../config/importProfiles');
+const { rejectUnsupported } = require('../services/savingsTransactionService');
 
 exports.previewImport = async (req, res) => {
   try {
@@ -44,7 +45,7 @@ exports.previewImport = async (req, res) => {
         }
 
         let suggestedCategory = null; 
-        const match = categories.find(cat => 
+        const match = categories.find(cat => !cat.savings_role &&
             cat.keywords && cat.keywords.some(k => description.toLowerCase().includes(k.toLowerCase()))
         );
         
@@ -89,6 +90,9 @@ exports.saveImport = async (req, res) => {
     if (!transactions || transactions.length === 0) {
       return res.status(400).json({ error: 'No transactions to save' });
     }
+
+    await rejectUnsupported(supabase, req.body, transactions.map(t => t.category_id));
+    for (const row of transactions) await rejectUnsupported(supabase, row);
 
 
 

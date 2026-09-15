@@ -60,6 +60,7 @@ export const PrimaryButton = ({
 );
 
 export const SecondaryButton = ({
+  as: Component = 'button',
   children,
   size = 'md',
   style,
@@ -70,7 +71,7 @@ export const SecondaryButton = ({
   disabled = false,
   ...props
 }) => (
-  <button
+  <Component
     {...props}
     className={`ui-btn-secondary ${className}`.trim()}
     style={{
@@ -82,12 +83,13 @@ export const SecondaryButton = ({
       border: '1px solid var(--ft-border-strong)',
       ...style,
     }}
-    disabled={disabled || loading}
+    disabled={Component === 'button' ? disabled || loading : undefined}
+    aria-disabled={Component !== 'button' && (disabled || loading) ? true : undefined}
     aria-busy={loading || undefined}
     data-loading={loading || undefined}
   >
     {renderContent(children, loading, loadingText)}
-  </button>
+  </Component>
 );
 
 export const GhostButton = ({

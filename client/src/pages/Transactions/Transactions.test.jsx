@@ -5,9 +5,10 @@ import { MemoryRouter } from 'react-router-dom';
 
 import Transactions from './Transactions';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
-import { getTransactions, getCategories, getPaymentSources, deleteTransaction } from '../../services/api';
+import { getTransactions, getCategories, getPaymentSources, deleteTransaction, getSavingsAccounts } from '../../services/api';
 
 vi.mock('../../services/api', () => ({
+  getSavingsAccounts: vi.fn().mockResolvedValue({ data: [] }),
   getTransactions: vi.fn(),
   getCategories: vi.fn(),
   getPaymentSources: vi.fn(),
@@ -107,6 +108,7 @@ function bodyRowIds() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  getSavingsAccounts.mockResolvedValue({ data: [] });
   getCategories.mockResolvedValue({ data: [{ id: 1, name: 'מזון', icon: '🍎' }] });
   getPaymentSources.mockResolvedValue({ data: [{ id: 10, name: 'ויזה' }] });
   getTransactions.mockResolvedValue(
@@ -955,4 +957,15 @@ describe('Budget deep-link filters', () => {
       from: '2026-08-01', to: '2026-08-31', categoryId: 'all', uncategorizedOnly: true,
     }));
   });
+});
+it('keeps report date bounds and cash-flow classification, and resets the filter deliberately', async () => {
+  const user = userEvent.setup();
+  getTransactions.mockResolvedValue(page([], { totals: { count: 0, income: 0, expense: 0 } }));
+  renderPage(['/transactions?from=2024-01-01&to=2024-12-31&savingsFlow=deposit']);
+  await waitFor(() => expect(getTransactions).toHaveBeenCalled());
+  expect(callArgs(0)).toMatchObject({ from:'2024-01-01',to:'2024-12-31',savingsFlow:'deposit' });
+  await user.selectOptions(screen.getByLabelText('סוג תזרים'), 'withdrawal');
+  await waitFor(() => expect(getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({savingsFlow:'withdrawal',includeTotals:true})));
+  await user.click(screen.getByRole('button',{name:'איפוס הכול'}));
+  await waitFor(() => expect(getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({savingsFlow:'all'})));
 });

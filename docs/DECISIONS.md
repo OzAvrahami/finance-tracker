@@ -487,3 +487,77 @@ Migration 026 provides one current-Asia/Jerusalem-month command that applies the
 ### Consequences
 
 All openings remain immutable, increases still require each affected month's unallocated funding, and decreases retain #19 release safety per month. The current month receives its explicit override configuration; inherited future months receive movements and typed propagation provenance without override rows, so later recurring changes can propagate again. Explicit future overrides and other proven month-specific openings are preserved. One root with deterministic child postings explains the atomic command without adding another table or view. Future-month inline editing remains month-only; future-only recurring changes stay in Settings.
+
+## D-028 — Named Savings has a separate ledger and explicit cash authority
+
+**Status:** Design accepted; SAV-02 owner acceptance recorded on 2026-09-13; SAV-03 completed using documented evidence and owner appearance confirmation; SAV-04 realized-interest commands implemented locally. Remaining commands retain their downstream ownership. Product scope and two-table/one-view boundary remain unchanged.
+
+**Date:** 2026-09-10
+
+### Context
+
+SAV-01 (#37) inspects the current loan, transaction and consolidated Budget paths before implementing parent #36. The existing retained Budget reserve is not a named bank-account balance, and current raw expense sums would count a funded transfer twice if it also created a cash expense without a provenance distinction.
+
+### Decision
+
+Use exactly `savings_accounts` and `savings_entries`, plus one nonmaterialized `savings_account_summary` view. Cash remains authoritative in transactions; held balances and realized earnings derive from typed entries. A controlled one-time reversal pointer enforces unique active cash links, while immutable financial facts and reversal/replacement rows preserve history. Cancelled Savings cash retains an excluded tombstone. Account/month occurrence claims survive cancellation and schedule edits.
+
+A funded surplus transfer removes source funding/allocation once, creates one expense and one deposit, and uses typed existing Budget provenance to exclude that specific expense from envelope actuals while retaining it in cash reporting. Ordinary manual Savings deposits remain normal envelope actuals. Opening amounts are independently declared at one cutoff; explicitly confirmed overlap with the legacy reserve retires only the duplicated reserve claim, with no invented cash or extra account deposit.
+
+### Consequences
+
+The [canonical Savings specification](SAVINGS_V1_3_0_SPEC.md) defines exact objects, commands, numerical proofs, rejection boundaries and rollout gates. SAV-02 (#38) owns the initial forward migration and compatibility foundation; later children reuse it. Migration 030 and the account/reader/UI foundation are now implemented locally; [SAVINGS_FOUNDATION.md](SAVINGS_FOUNDATION.md) separates delivered objects from later commands and records validation. Generic historical cash-linked Budget correction remains outside v1.3.0. SAV-01 #37 remains completed / Done; #38 is completed / Done after owner acceptance, with its native dependency retained. The work is local/uncommitted; no production operation or version bump is claimed.
+
+Review resolutions: budget_actual_transactions(DATE,DATE) is the read-only SECURITY DEFINER/service_role EXECUTE exception, while mutating helpers stay protected. Corrections retain original-post ordering through replacement chains. One new loan_payments link guard closes reverse-direction contention without Loan schema/grant/accounting changes. Four protected transaction void fields and a unique receipt support #39's dedicated void_detached_savings_transaction with no second Savings reversal; still-live detached cash must be explicitly reused. The four-case interest matrix conserves realized earnings for equal-amount conversions and enforces prefix solvency. #38 delivers baseline SQL/Node reads, privileges and cancelled-history handling before #39 enables writes and refetch; #43 adds reporting only. The canonical inventory contains ten public Savings RPCs and assigns all structural foundation work to #38's next-available-number migration.
+
+
+### SAV-02 implementation details, 2026-09-12
+
+The inspected next migration is 030. Static replacements of the final existing function definitions keep historical migrations immutable and make privilege/reader changes reviewable. The delivered inventory is 3 account RPCs + 9 helpers, 11 attachments and 27 existing function replacements; the full initiative totals above are not prematurely exposed commands. Account mutation requests normalize supported values, use exact decimal text and optimistic revisions, and serialize transactions before reference/account locks. A conservative final-ledger integrity scan is used for this single-user foundation; any later optimization must retain both-direction relationship and concurrency checks. The service summary SELECT casts BIGINT IDs before JSON decoding and paginates through the complete collection without adding another view/RPC. No persisted balance cache exists.
+
+Monthly plans store configuration and clipped due dates while automation is always false. Outstanding occurrence edits are rejected instead of silently advancing a plan before its owner implements settlement/skip. Budget named-account transfer/policy execution also stays explicitly gated; opening/reserve retirement is the only new Budget posting enabled here. All live reader compatibility, protected-column privileges and cancelled detail/identity handling are delivered now. Production preflight/postflight are read-only owner-run JSON artifacts; successful disposable PostgreSQL and browser checks are not production evidence or owner acceptance.
+
+### SAV-03 implementation decisions, 2026-09-13
+
+Migration 031 adds four public manual commands and one private engine without further tables/views. A cash correction preserves its transaction ID and original-post ledger ordering; detach reverses the ledger once and requires an explicit normal category. Because cancel_savings_event has no replacement-category argument, detach is transported through correct_savings_event with action=detach; cancellation uses void. This avoids guessing a category or adding a redundant overload. Still-live detached cash can only be explicitly reused; tombstones restore through new cash. Ordinary scalar edits after detach use the existing transaction RPC, retain the restricted cash shape and cannot affect Savings. Cash remains the only cash authority.
+
+The engine takes the existing transaction serialization lock before ordered referenced rows and validates the complete final ledger at commit. Historical captured Budget operations conservatively block cash changes, including after detach. This favors correctness over write throughput for the existing single-user application. The transaction filter function uses fixed-path service-only SECURITY DEFINER to read protected Savings metadata; the pagination wrapper remains SECURITY INVOKER. Imports/external integrations and checkout reject unsupported Savings input; deliberate linking follows import. At that SAV-03 boundary, realized interest and transfer/automatic execution remained with #40–#42; the SAV-04 extension is recorded below. See [the implementation/write-path audit](SAVINGS_FOUNDATION.md).
+
+
+### SAV-04 implementation decisions, 2026-09-13
+
+Migration 032 replaces only the existing private event engine and account-history reader. No extra RPC, feature table, view, column, trigger or grant expansion is needed. Capitalized interest uses action=noncash and no cash snapshot; payout uses the stable interest_payout income role and explicit create_cash/link_cash. The approved four-case correction matrix is implemented atomically: payout-to-payout retains cash ID, payout-to-capitalized voids old cash, capitalized-to-payout creates one explicitly specified income, and noncash-to-noncash writes no cash. Conversions preserve equal-amount realized earnings and validate original-post balance prefixes. Cumulative realized earnings also stay in the exact-money range.
+
+Reinstatement preserves the original destination; a subsequent destination change is a separate audited correction. Live detached cash must be explicitly linked; voided cash is replaced with a new row. Noncash cancellation uses cash_action=none and posts no cash receipt. Cash-month Budget restrictions apply only to actual old/new cash dates, so a purely noncash historical correction does not rewrite Budget history. The history RPC determines reinstatable eligibility across the whole chain, independent of pagination. Manual deposit/withdrawal kind changes remain prohibited. Descriptive annual rates and automation are unchanged. See [executed evidence and rollout](SAVINGS_FOUNDATION.md).
+
+
+### SAV-05 implementation decisions, 2026-09-13
+
+Named transfers use the existing Budget root/item and funding/movement structures with one linked Savings deposit and expense per candidate. All cash confirmations in a close are validated before any write, so shared destination accounts do not invalidate the batch's own previews. A coarse transaction/policy lock plus ordered row locks favors correctness over concurrent write throughput in this single-owner application. No bridge/batch/history relation is added.
+
+Only typed, unreversed funded-transfer provenance is excluded from Budget actuals. Ordinary manual Savings deposits remain envelope expenses; the existing paginated transaction reader supplies Annual cash reconciliation with exact decimal strings. Its PostgREST projection includes the id and movement_type columns needed for ordering/filtering, as verified against real PostgREST. The private surplus helper exposes no service-role mutation permission; its internal reverse-preview mode is reached only through the existing protected funded-month reader.
+
+A standalone transfer does not itself close a month. The foundation's conservative placeholder blocking all manual Savings activity in a transfer month is narrowed; specific funded cash remains protected and actual closed/carry/disposition history remains guarded. Eligible corrections require whole reversal followed by a new preview/apply, never an independently edited expense. Legacy reserve policy stays noncash and is named distinctly. SAV-04 owner review is deferred by the owner's explicit instruction; it is not a dependency or accepted outcome for SAV-05. [Evidence and rollout](SAVINGS_FOUNDATION.md#sav-05-funded-surplus-implementation--2026-09-13).
+
+
+## SAV-06 implementation decisions — 2026-09-14
+
+- The ledger's existing unique (account_id, occurrence_month) first-post index is the occurrence authority. Config revision, cash date and request UUID never redefine identity. Next due is recomputed from the nominal day and permanent claims inside the same mutation; a cancelled or skipped month remains claimed.
+- Explicit fulfillment of an already-linked deposit is an audited same-snapshot reversal/replacement, not mutable occurrence metadata and not another deposit/cash amount. The narrow deferred-guard exception retains its original financial ordering and requires the same account, cash and snapshots. Different amount/source fulfillment needs an explicit override and reason.
+- The oldest missed occurrence posts on the current Jerusalem cash date; another overdue month waits for another invocation. Plan edits cannot silently discard overdue work. Archive/pause preserve the due date, and restore never enables automation automatically.
+- Scheduler authorization uses a dedicated secret plus disabled-by-default enable flag. It shares operational conventions with Loans but does not change Loan settings or scheduling. No scheduled workflow is enabled here; owner migration/deployment/configuration precede activation. Automation records app activity, never transfers money at a bank.
+
+## SAV-07 reporting decisions — 2026-09-14
+
+Use one new read-only get_savings_report RPC shared by existing screens. This produces one PostgreSQL snapshot and avoids downloading paginated histories for each account or duplicating cash classification in Node/Dashboard/Annual code. It is an additive reporting function, not another table/view or monetary authority. The two existing transaction readers gain a validated optional trailing cash-flow filter, preserving old calls and default cash totals; the signature replacement is atomic and unambiguous.
+
+Current all-time holdings remain distinct from effective-date period flows. Active posts are the net result of immutable reversal/replacement history, including archived accounts. Linked cash is classified from the live relationship and stable category role/direction; detached cash returns to ordinary cash classification while retaining its historical audit link. Transactions alone supply cash; ledger amounts are never added again. Only the established typed funded transfer is excluded from Budget actuals. The existing Dashboard/Annual Budget calculations and Loan definitions are untouched.
+
+Owner confirmation on 2026-09-14 supersedes the historical deferred/pending review for #40–#42. #43 requires its own owner review. Neither confirmation nor the new disposable reporting tests asserts production execution. [Evidence and owner rollout](SAVINGS_FOUNDATION.md).
+
+
+## SAV-08 — Integrated verification and recovery boundary (2026-09-15)
+
+The canonical [release runbook](RELEASE_1_3_0.md) is the final inventory/operator handoff. Rehearse the actual029→035 chain and clean snapshot rather than counting obsolete stage-only assertions as final acceptance. Final-schema commands/readers retain two Savings tables/one view;11 public RPCs,11 helper/trigger functions with one read-only Budget exception, and two Budget overloads. Backup restoration compares financial rows, sequences and effective permissions as well as schema. A pre-Savings backup cannot retain later account/cash/receipt changes; after writes, use a verified complete current backup/PITR plus reconciliation or a compatible forward fix. No drop-ledger/old-reader rollback is approved.
+
+Owner “נראה טוב” accepts SAV-07 appearance/preview alongside recorded technical evidence. The owner subsequently approved SAV-08 integrated verification/release preparation; #44 is completed / Done. The explicitly authorized separate version step now prepares all seven fields at1.3.0 without dependency/runtime changes. Branch transfer uses a Git bundle because available deployment configuration does not establish a non-deploying branch push. No production or publication acceptance is inferred.

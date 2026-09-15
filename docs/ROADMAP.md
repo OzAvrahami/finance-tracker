@@ -1,5 +1,11 @@
 # Roadmap
 
+## Current integrated Savings handoff — 2026-09-15
+
+The owner approved the SAV-08 integrated-verification and release-preparation handoff. #37–#44 are completed / Done; #44 is independently verified Closed / Completed / Done with P2 — Medium and its existing metadata and relationships preserved. This uses the recorded technical evidence and actual owner confirmations, without inferring additional numerical/device or production checks. Parent #36 and milestone v1.3.0 remain open. The separate seven-field version step is now prepared at **1.3.0** on `feat/savings-v1.3.0`; the reviewed work is prepared for an owner-operated commit and remains uncommitted/unpublished at this handoff. Production migrations030–035 and deployment are not executed. The [canonical runbook and transfer instructions](RELEASE_1_3_0.md) record the inventory, existing verification, recovery limits and remaining owner-controlled workflow.
+
+Earlier stage-status and acceptance notes below are historical; this current handoff supersedes their pending-review wording without changing the recorded test evidence.
+
 This roadmap is organized by outcomes rather than speculative dates. It distinguishes completed release milestones from active post-1.0 work.
 
 ## Completed milestone: v1.0.0
@@ -22,6 +28,12 @@ Migration 028 was applied by the user through Supabase SQL Editor on 2026-09-07.
 
 ## Post-1.0 stabilization
 
+### v1.3.0: accepted Savings implementation; production and publication pending
+
+The approved [Savings initiative #36](https://github.com/OzAvrahami/finance-tracker/issues/36) covers named accounts, the Loans-based UI, linked cash deposits/withdrawals, realized interest, funded-surplus transfers, recurring deposits and reporting. Its database boundary is exactly two new tables and one summary view.
+
+[SAV-01 / #37](https://github.com/OzAvrahami/finance-tracker/issues/37) is completed / Done. [The canonical technical specification](SAVINGS_V1_3_0_SPEC.md) remains the contract. SAV-02 (#38) now implements [the local foundation](SAVINGS_FOUNDATION.md): Migration 030, three account RPCs, management screens, opening/legacy overlap reconciliation and baseline SQL/Node reader/privilege/cancelled-history compatibility. The owner accepted #38 and it is completed / Done. #39 now implements manual cash linkage/correction/cancellation, Migration 031, transaction filtering/refetch and full application entry points; SAV-03 is completed using its documented verification and the owner’s acceptance of the corrected appearance. The work remains uncommitted and undeployed; the separate 1.3.0 version step is now prepared. #40 realized interest (032), #41 funded surplus (033) and #42 monthly deposits (034) are accepted and Closed / Completed / Done after the owner’s confirmation on 2026-09-14, combined with documented technical verification. #43 reporting through read-only Migration035 and #44 integrated release verification are accepted and completed. All completed native dependencies remain intact. Bank balance and repository cleanup remain outside this initiative.
+
 ### Completed implementation scope: funded-budget initiative
 
 - Foundation (#17 + #26): immutable monthly opening snapshots, confirmed manual funds, append-only provenance, reconciled reads, and bounded atomic commands are deployed through Migration 017.
@@ -34,7 +46,7 @@ Migration 028 was applied by the user through Supabase SQL Editor on 2026-09-07.
 - Budget Schema Consolidation (#29): Migration 024 is deployed, making operations/items the single provenance model while preserving the separate accounting ledgers. Migration 025 completes the repository-side cleanup by removing temporary feature-relation adapters and obsolete read intermediates.
 - Combined current/recurring edit (#30): Migrations 026–027 are deployed; the corrected command includes eligible inherited future snapshots in the same atomic update while preserving explicit future customization. The recovered SQL evidence verifies Migration 027 installation, while end-to-end mutation acceptance remains a distinct functional check.
 - Funded Budget presentation (#25): the monthly summary, actionable unbudgeted-expense panel, readable category rows, and accessible composition disclosure are complete and screenshot-reviewed on desktop and mobile.
-- Next dependent work remains separate: general Savings withdrawals/accounts and historical correction.
+- Named Savings account management is implemented locally in #38; manual withdrawals are implemented locally in #39; realized interest is implemented locally in #40; funded transfers are implemented locally in #41; monthly deposits and expanded reporting are implemented locally in #42/#43 under #36, with rollout still pending. General historical cash-linked Budget correction remains outside that bounded release; the specification defines explicit rejection and real-current-cash alternatives.
 - Income-transaction funding requires a future source-consumption model so one realized income cannot fund multiple months or allocations.
 
 - Add a general CI workflow for client test/lint/build and server tests.

@@ -132,7 +132,7 @@ const TaskCard = ({
             <div className={styles.linkedEntity}>
               <LinkIcon size={14} aria-hidden="true" />
               <span className={styles.linkedEntityText} dir="auto">
-                תנועה: {task.transactions.description}
+                תנועה: {task.transactions.description}{task.transactions.voided_at ? ' (בוטלה — לקריאה בלבד)' : ''}
               </span>
               {task.transactions.total_amount !== undefined && task.transactions.total_amount !== null && (
                 <MoneyAmount

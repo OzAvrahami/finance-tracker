@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const supabase = require('../../config/supabase');
+const { rejectUnsupported } = require('../../services/savingsTransactionService');
 
 const schema = z.object({
   type: z.enum(['expense', 'income']),
@@ -25,6 +26,8 @@ const schema = z.object({
 });
 
 async function createTransaction(req, res) {
+  try { await rejectUnsupported(supabase, req.body, [req.body.category_id]); }
+  catch (error) { return res.status(422).json({ error: error.code || 'SAVINGS_UNSUPPORTED_PATH', message: error.message }); }
   const parsed = schema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -54,7 +57,7 @@ async function createTransaction(req, res) {
   if (external_id) {
     const { data: existing } = await supabase
       .from('transactions')
-      .select('id')
+      .select('id,voided_at')
       .eq('external_id', external_id)
       .maybeSingle();
 
@@ -66,12 +69,12 @@ async function createTransaction(req, res) {
           existing_id: existing.id,
         }));
         return res.status(409).json({
-          error: 'already_exists',
-          message: 'Transaction with this external_id already exists',
+          error: existing.voided_at ? 'cancelled_record_exists' : 'already_exists',
+          message: existing.voided_at ? 'המזהה החיצוני שמור לתנועה שבוטלה; אין ליצור אותה מחדש עם אותו מזהה' : 'Transaction with this external_id already exists',
           id: existing.id,
         });
       }
-      duplicateInfo = { exists: true, id: existing.id };
+      duplicateInfo = { exists: true, id: existing.id, ...(existing.voided_at ? { cancelled: true } : {}) };
     }
   }
 
@@ -82,11 +85,11 @@ async function createTransaction(req, res) {
   if (resolvedCategoryId === undefined && description) {
     const { data: categories } = await supabase
       .from('categories')
-      .select('id, name, keywords, type');
+      .select('id, name, keywords, type, savings_role');
     if (categories) {
       const descLower = description.toLowerCase();
       const match = categories.find(cat =>
-        cat.type === type &&
+        !cat.savings_role && cat.type === type &&
         cat.keywords &&
         cat.keywords.some(k => descLower.includes(k.toLowerCase()))
       );
@@ -163,6 +166,15 @@ async function createTransaction(req, res) {
   if (error) {
     // Race condition: another request won the external_id unique constraint
     if (error.code === '23505') {
+      if (external_id) {
+        const { data: existing } = await supabase.from('transactions')
+          .select('id, voided_at').eq('external_id', external_id).maybeSingle();
+        if (existing?.voided_at) return res.status(409).json({
+          error: 'cancelled_record_exists',
+          message: 'מזהה המקור שייך לתנועה שבוטלה ונשמרה בהיסטוריה; אין לייבא אותה מחדש',
+          existing_id: existing.id,
+        });
+      }
       console.log(JSON.stringify({
         event: 'v1.transaction.duplicate',
         has_external_id: Boolean(external_id),

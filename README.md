@@ -23,6 +23,12 @@ See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known lim
 
 **v1.2.0 is deployed and accepted by the user.** Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) was manually pushed; GitHub readback confirmed that remote main SHA and successful Vercel and Railway statuses. It contains the Dashboard-wide surface correction (#27), compact nearest-ending active loan row beneath the original four summary cards (#10), and optional shopping-list header fields (#2). All three issues are CLOSED / COMPLETED and Done in the linked Project with P3 preserved; milestone v1.2.0 is closed. User acceptance (“2 סבבה” for #2, then “אושר” after the final #10/#27 corrections) is separate from deployment statuses and is not agent browser testing. See the [v1.2.0 handoff](docs/RELEASE_1_2_0.md) for recorded verification and Migration 029 evidence. Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
 
+## Local Savings v1.3.0 preparation
+
+Savings accounts, cash-linked deposits/withdrawals, actual interest, funded-surplus transfers, monthly plans and reports are implemented and accepted through SAV-08. All implementation children #37–#44 are completed / Done; parent #36 and milestone v1.3.0 remain open. The seven package/lockfile version fields are prepared at **1.3.0** on `feat/savings-v1.3.0` for the owner’s commit and Windows-to-Mac continuation. At this handoff the work is uncommitted and unpublished; production migrations030–035 and deployment remain pending. See the [canonical operator runbook and transfer instructions](docs/RELEASE_1_3_0.md).
+
+Use **חסכונות** in the normal menu (mobile: **עוד**) to create an account with an independently confirmed opening/cutoff and explicit legacy overlap, set a goal, or archive/restore it. **הפקדה / משיכה** open the existing transaction form; an existing ordinary/imported cash record can be explicitly linked. **רישום ריבית** distinguishes held interest from a checking payout. Budget policy/transfer confirmation selects a named destination. Monthly settings do not enable automation: use explicit enable/pause or manual fulfillment. All-time held balances are distinct from the selected report period; this is not a live checking balance. Automation records transactions and does not transfer money at the bank.
+
 ## Features
 
 - Dashboard KPIs and monthly financial trends
@@ -68,7 +74,7 @@ Node handles HTTP validation, orchestration, pricing and amortization inputs. Po
 ```text
 client/                 React SPA, Finance v3 UI, tests, and Vercel SPA config
 server/                 Express API, business services, migrations, and server tests
-server/migrations/      Ordered schema history, currently 001 through 029
+server/migrations/      Ordered schema history: 001–035 locally; production029 is user-reported
 server/full_schema.sql  Consolidated schema reference
 docs/                   Canonical documentation and a retained read-only security audit
 .github/workflows/      Daily due-loan scheduler

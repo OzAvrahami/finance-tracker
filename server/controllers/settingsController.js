@@ -27,7 +27,7 @@ exports.getCategories = async (req, res) => {
 
     const { data: policies, error: policyError } = await supabase
       .from('budget_unused_balance_policies_read')
-      .select('category_id,policy');
+      .select('category_id,policy,savings_account_id::text');
     if (policyError) throw policyError;
     const policyByCategory = new Map(
       (policies || []).map((entry) => [String(entry.category_id), entry.policy]),
@@ -36,6 +36,7 @@ exports.getCategories = async (req, res) => {
       ...category,
       recurring_budget_amount: defaultsByCategory.get(String(category.id)) ?? null,
       unused_balance_policy: policyByCategory.get(String(category.id)) ?? null,
+      savings_account_id: (policies || []).find(p => String(p.category_id) === String(category.id))?.savings_account_id ?? null,
     })));
   } catch (error) {
     console.error('settings.getCategories Error:', error);
@@ -48,7 +49,7 @@ exports.setCategoryUnusedBalancePolicy = async (req, res) => {
   try {
     const { id } = req.params;
     const { policy } = req.body || {};
-    if (policy !== null && !['carry_forward', 'savings', 'return_to_unallocated'].includes(policy)) {
+    if (policy !== null && !['carry_forward', 'savings', 'return_to_unallocated', 'savings_account'].includes(policy)) {
       return res.status(400).json({
         error: 'policy must be carry_forward, savings, return_to_unallocated, or null',
         code: 'INVALID_UNUSED_BALANCE_POLICY',
@@ -57,6 +58,7 @@ exports.setCategoryUnusedBalancePolicy = async (req, res) => {
     const { data, error } = await supabase.rpc('set_budget_unused_balance_policy', {
       p_category_id: id,
       p_policy: policy,
+      ...(Object.hasOwn(req.body, 'savings_account_id') ? { p_savings_account_id: req.body.savings_account_id } : {}),
     });
     if (error) throw error;
     return res.status(200).json(data);

@@ -51,6 +51,7 @@ test('history API exposes immutable operations, carryover, disposition, and Savi
   assert.deepEqual(res.body, {
     month: '2026-08', history: state.history, carryover_history: [],
     unused_disposition_history: [], funding_action_history: [], savings: { balance: '0.00' },
+    savings_transfer_history: [], cash_bridge: null,
   });
   assert.equal(Object.hasOwn(res.body, 'transactions'), false);
 });
@@ -650,6 +651,14 @@ const exactAnnualFake = () => {
     ],
   };
   return {
+    rpc(name) {
+      assert.equal(name, 'transactions_filtered');
+      const chain = { select() { return chain; }, eq() { return chain; }, order() { return chain; }, range() { return Promise.resolve({ data: [
+        { row_json: { total_amount: '0.30' } },
+        { row_json: { total_amount: '300.00', savings: { active: true, source_kind: 'budget_surplus', event_kind: 'deposit' } } },
+      ], error: null }); } };
+      return chain;
+    },
     from(table) {
       const chain = {
         select() { return chain; },
@@ -667,6 +676,7 @@ test('annual compatibility aggregates final funded and actual values with exact 
   await controller.getAnnualSummary({ query: { year: '2026' } }, res);
   assert.equal(res.body.summary.yearly_planned, '9007199254740993.31');
   assert.equal(res.body.summary.yearly_actual, '0.30');
+  assert.deepEqual(res.body.summary.cash_bridge, { cash_expenses: '300.30', funded_savings_transfers: '300.00', manual_savings_deposits: '0.00', envelope_actuals: '0.30' });
   assert.equal(res.body.summary.remaining, '9007199254740993.01');
   assert.equal(res.body.monthly[0].planned, '9007199254740993.31');
   assert.equal(res.body.monthly[0].actual, '0.30');

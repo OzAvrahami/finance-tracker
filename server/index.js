@@ -111,6 +111,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/lego', legoRoutes);
 app.use('/api/loans', loanRoutes);
+app.use('/api/savings', require('./routes/savingsRoutes'));
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/shopping', shoppingRoutes);
 app.use('/api/tasks', taskRoutes);

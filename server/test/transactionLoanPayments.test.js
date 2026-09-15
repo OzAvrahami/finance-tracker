@@ -493,6 +493,8 @@ test('deleting a link-only transfer never touches loan payment state', async () 
 
 test('single-transaction API exposes the linked loan payment without inferring from loan_id', async () => {
   const fake = createTransactionFake();
+  const originalRpc = fake.rpc.bind(fake);
+  fake.rpc = async (name, args) => name === 'transactions_filtered' ? { data: [{ row_json: fake.state.transactions.find(t => t.id === args.p_transaction_id) }] } : originalRpc(name, args);
   fake.state.transactions.push({ id: 42, loan_id: 1, transaction_items: [] });
   fake.state.loanPayments.push({
     id: 901,

@@ -22,6 +22,7 @@ import {
   MonthlySummary,
 } from './DashboardSections';
 import './Dashboard.css';
+import SavingsReport from '../../components/SavingsReport';
 
 const RECENT_TRANSACTIONS_LIMIT = 5;
 const TREND_MONTHS = 6;
@@ -63,6 +64,7 @@ const useDashboardResource = (loader, initialData) => {
       requestId.current += 1;
     };
   }, [reload]);
+  useEffect(() => { const refresh = () => reload().catch(() => undefined); window.addEventListener('finance:cash-changed', refresh); return () => window.removeEventListener('finance:cash-changed', refresh); }, [reload]);
 
   return { ...resource, reload };
 };
@@ -186,6 +188,7 @@ const Dashboard = () => {
         onMonthChange={setSelectedMonth}
       />
 
+      <SavingsReport from={selectedRange.start} to={selectedRange.end} />
       <div className="dashboard-grid dashboard-grid--trend-tasks">
         <DashboardChart resource={{ ...series, data: chartData }} />
         <DashboardTasks

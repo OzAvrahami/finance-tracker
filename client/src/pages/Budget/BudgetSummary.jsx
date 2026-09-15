@@ -165,9 +165,9 @@ const BudgetSummary = ({
           unavailable={unavailable}
         />
         <SecondaryMetric
-          label="חיסכון נוכחי"
+          label="רזרבה תקציבית ישנה"
           value={summary.savings}
-          note="יתרת החיסכון הנוכחית בכלל היישום; חיסכון אינו הוצאה"
+          note="יתרה תקציבית ללא תנועת כסף; אינה יתרת חשבונות החיסכון"
           loading={loading}
           unavailable={unavailable}
         />

@@ -136,6 +136,8 @@ exports.getBudgetHistory = async (req, res) => {
       history: state.history || [],
       carryover_history: state.carryover_history || [],
       unused_disposition_history: state.unused_disposition_history || [],
+      savings_transfer_history: state.savings_transfer_history || [],
+      cash_bridge: state.cash_bridge || null,
       funding_action_history: state.funding_action_history || [],
       savings: state.savings || { balance: '0.00' },
     });
@@ -415,7 +417,7 @@ exports.applyMonthDisposition = async (req, res) => {
       });
     }
     const result = await budgetService.applyMonthDisposition(supabase, {
-      sourceMonth, previewFingerprint, requestKey, reason,
+      sourceMonth, previewFingerprint, requestKey, reason, cashConfirmations: req.body.cash_confirmations,
     });
     return res.status(200).json(result);
   } catch (error) {
@@ -789,6 +791,20 @@ exports.getAnnualSummary = async (req, res) => {
       }
     }
 
+    // Cash is authoritative in Transactions; the Budget view deliberately omits
+    // only validated funded transfers. Paginate the existing protected reader.
+    const cashBridge = { cash_expenses: '0.00', funded_savings_transfers: '0.00', manual_savings_deposits: '0.00' };
+    for (let offset = 0; ; offset += 500) {
+      const { data: cashRows, error: cashError } = await supabase.rpc('transactions_filtered', { p_from: `${year}-01-01`, p_to: `${year}-12-31` })
+        .select('id,movement_type,row_json').eq('movement_type', 'expense').order('id').range(offset, offset + 499);
+      if (cashError) throw cashError;
+      for (const { row_json: t } of cashRows || []) {
+        cashBridge.cash_expenses = money.add(cashBridge.cash_expenses, t.total_amount);
+        if (t.savings?.active && t.savings.source_kind === 'budget_surplus') cashBridge.funded_savings_transfers = money.add(cashBridge.funded_savings_transfers, t.total_amount);
+        else if (t.savings?.active && t.savings.event_kind === 'deposit') cashBridge.manual_savings_deposits = money.add(cashBridge.manual_savings_deposits, t.total_amount);
+      }
+      if (!cashRows || cashRows.length < 500) break;
+    }
     // Build outputs
     const monthly = Object.values(monthlyMap)
       .sort((a, b) => a.month.localeCompare(b.month));
@@ -831,6 +847,7 @@ exports.getAnnualSummary = async (req, res) => {
     res.json({
       year: yearNum,
       summary: {
+        cash_bridge: { ...cashBridge, envelope_actuals: yearly_actual },
         yearly_planned,
         yearly_actual,
         remaining,

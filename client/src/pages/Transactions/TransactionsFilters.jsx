@@ -1,3 +1,4 @@
+import { cashFlowLabels } from '../../utils/savingsReporting';
 import { useRef, useState } from 'react';
 import { Filter, RefreshCw, SlidersHorizontal, Tags, X } from 'lucide-react';
 import {
@@ -20,6 +21,8 @@ const FilterFields = ({
   idPrefix,
   categories,
   paymentSources,
+  savingsFlow = 'all', onSavingsFlowChange,
+  savingsAccounts = [], selectedSavingsAccount = 'all', onSavingsAccountChange,
   searchText,
   selectedCategory,
   selectedPaymentSource,
@@ -65,6 +68,14 @@ const FilterFields = ({
     />
 
     <div className="transactions-filter-grid">
+      <Select id={idPrefix + '-cash-flow'} label="סוג תזרים" value={savingsFlow} onValueChange={onSavingsFlowChange} size="compact">
+        <option value="all">כל סוגי התזרים</option>
+        {Object.entries(cashFlowLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+      </Select>
+      <Select id={idPrefix + '-savings'} label="חשבון חיסכון" value={selectedSavingsAccount} onValueChange={onSavingsAccountChange} size="compact">
+        <option value="all">כל החשבונות</option>
+        {savingsAccounts.map(a => <option key={a.account_id} value={a.account_id}>{a.name}{a.status === 'archived' ? ' (בארכיון)' : ''}</option>)}
+      </Select>
       <DateField
         id={`${idPrefix}-from`}
         label="מתאריך"

@@ -18,6 +18,7 @@ import {
 } from '../../services/api';
 
 vi.mock('../../services/api', () => ({
+  getSavingsAccounts: vi.fn().mockResolvedValue({ data: [] }),
   createCategory: vi.fn(),
   createTransaction: vi.fn(),
   getAllLoans: vi.fn(),
@@ -70,6 +71,16 @@ const settleInitialData = async () => {
   await waitFor(() => expect(getPaymentSources).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('10'));
 };
+
+it('shows cancelled history without an editable form or save action', async () => {
+  getTransactionById.mockResolvedValue({ data: { id: 400, description: 'רישום שבוטל', total_amount: '100.00', transaction_date: '2026-09-01', voided_at: '2026-09-12T00:00:00Z', void_reason: 'בוטלה לבקשת הבעלים' } });
+  renderForm('/edit-transaction/400');
+  expect(await screen.findByText('תנועה שבוטלה — לקריאה בלבד')).toBeInTheDocument();
+  expect(screen.getByText('בוטלה לבקשת הבעלים')).toBeInTheDocument();
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'חזרה לתנועות' })).toBeInTheDocument();
+  expect(updateTransaction).not.toHaveBeenCalled();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

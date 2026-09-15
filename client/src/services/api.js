@@ -32,6 +32,18 @@ api.interceptors.response.use(
 );
 
 // Categories
+export const getSavingsReport = (params) => api.get('/savings/report', { params });
+export const getSavingsAccounts = () => api.get('/savings');
+export const getSavingsSurplusPreview = body => api.post('/savings/surplus/preview', body);
+export const applySavingsSurplus = body => api.post('/savings/surplus', body);
+export const reverseSavingsSurplus = (id, body) => api.post(`/savings/surplus/${id}/reverse`, body);
+export const getSavingsAccount = (id, params) => api.get(`/savings/${id}`, { params });
+export const createSavingsAccount = (payload) => api.post('/savings', payload);
+export const updateSavingsAccount = (id, payload) => api.patch(`/savings/${id}`, payload);
+export const postSavingsEvent = (payload) => api.post('/savings/events', payload);
+export const correctSavingsEvent = (id, payload) => api.post(`/savings/events/${id}/correct`, payload);
+export const cancelSavingsEvent = (id, payload) => api.post(`/savings/events/${id}/cancel`, payload);
+
 export const createCategory = (data) => api.post('/categories', data);
 
 // Import file
@@ -67,6 +79,8 @@ export const getTransactions = ({
   to,
   categoryId,
   paymentSourceId,
+  savingsAccountId,
+  savingsFlow,
   uncategorizedOnly,
   search,
   limit,
@@ -86,6 +100,8 @@ export const getTransactions = ({
   // 'all' is the UI's "no filter" sentinel; omit it rather than sending it.
   if (categoryId && categoryId !== 'all') query.set('categoryId', String(categoryId));
   if (paymentSourceId && paymentSourceId !== 'all') query.set('paymentSourceId', String(paymentSourceId));
+  if (savingsFlow && savingsFlow !== 'all') query.set('savingsFlow', savingsFlow);
+  if (savingsAccountId && savingsAccountId !== 'all') query.set('savingsAccountId', String(savingsAccountId));
 
   if (uncategorizedOnly) query.set('uncategorizedOnly', 'true');
   if (search && search.trim()) query.set('search', search.trim());
@@ -112,7 +128,7 @@ export const getCategories = () => api.get('/transactions/categories');
 export const getPaymentSources = () => api.get('/transactions/payment-sources');
 export const getTransactionById = (id) => api.get(`transactions/${id}`);
 export const updateTransaction = (id, data) => api.put(`transactions/${id}`, data);
-export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
+export const deleteTransaction = (id, payload) => api.delete(`/transactions/${id}`, payload ? { data: payload } : undefined);
 
 // Dashboard aggregates — totals are computed in PostgreSQL and returned as a
 // small bounded payload. The Dashboard must not sum transaction rows itself.

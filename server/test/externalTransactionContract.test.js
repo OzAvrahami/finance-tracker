@@ -88,6 +88,15 @@ test('external v1 omits the TEXT tags column when tags are absent', async () => 
   assert.equal(Object.hasOwn(fake.state.insertedRows[0], 'tags'), false);
 });
 
+test('external v1 reserves cancelled identity and returns an actionable conflict without inserting', async () => {
+  const { fake, res } = await invoke({ external_id: 'cancelled-1' }, { existingExternalIds: { 'cancelled-1': { id: 901, voided_at: '2026-09-12T00:00:00Z' } } });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.error, 'cancelled_record_exists');
+  assert.match(res.body.message, /בוטלה/);
+  assert.equal(fake.state.insertedRows.length, 0);
+  assert.deepEqual(fake.state.externalIdLookups, ['cancelled-1']);
+});
+
 test('external v1 omits the TEXT tags column for an empty array', async () => {
   const { fake, res } = await invoke({ tags: [] });
 

@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { getSavingsAccounts } from '../services/api';
+import { invalidateFinance } from '../utils/financeInvalidation';
+import { currentBusinessDate as getJerusalemToday } from '../utils/calendarDate';
 import { createTransaction, updateTransaction, getTransactionById, getTags, getLegoThemes, getLegoSetDetails, getCategories, getPaymentSources, createCategory, getAllLoans } from '../services/api';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getTransactionTotalValue } from '../utils/transactionPricing';
 import { invalidateLegoCollection } from '../utils/legoCollectionInvalidation';
 import { addCalendarMonthIso, validateManualLoanPayment } from '../utils/manualLoanPayment';
@@ -33,8 +36,18 @@ const useTransactionForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
+  const [searchParams] = useSearchParams();
+  const [savingsAccounts, setSavingsAccounts] = useState([]);
+  const [savingsAccountId, setSavingsAccountId] = useState(searchParams.get('savingsAccountId') || '');
+  const [savedCash, setSavedCash] = useState(null);
+  const [savingsReason, setSavingsReason] = useState('');
+  const [cutoffConfirmed, setCutoffConfirmed] = useState(false);
+  const [cashReuseConfirmed, setCashReuseConfirmed] = useState(false);
+  const [savingsError, setSavingsError] = useState('');
+  const savingsReceipt = useRef(null);
 
   const [loading, setLoading] = useState(Boolean(id));
+  const [cancelledTransaction, setCancelledTransaction] = useState(null);
   const [items, setItems] = useState([]);
   const [availableTags, setAvailableTags] = useState([]);
   const [legoThemes, setLegoThemes] = useState([]);
@@ -85,6 +98,11 @@ const useTransactionForm = () => {
         setAvailableTags(tagsRes.data);
         setLegoThemes(themesRes.data);
         setCategories(catsRes.data);
+        const role = searchParams.get('savingsRole');
+        const savingsCategory = ['deposit', 'withdrawal', 'interest_payout'].includes(role)
+          ? catsRes.data.find(category => category.savings_role === role) : null;
+        if (!id && savingsCategory) setTransaction(prev => ({ ...prev, category_id: savingsCategory.id,
+          movement_type: role === 'deposit' ? 'expense' : 'income', transaction_date: getJerusalemToday(), charge_date: getJerusalemToday() }));
         setPaymentSources(psRes.data);
         // Set default payment_source_id to first active source
         if (psRes.data.length > 0 && !id) {
@@ -106,6 +124,11 @@ const useTransactionForm = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    getSavingsAccounts().then(({ data }) => setSavingsAccounts(data || []))
+      .catch(() => setSavingsError('לא ניתן לטעון חשבונות חיסכון. רעננו לפני פעולת חיסכון.'));
+  }, []);
+
   // Load Transaction for Edit
   useEffect(() => {
     if (isEditMode) {
@@ -115,6 +138,10 @@ const useTransactionForm = () => {
         .then(res => {
           const data = res.data;
           if (!data) return;
+          setSavedCash(data);
+          if (data.savings) setSavingsAccountId(data.savings.account_id);
+          setCancelledTransaction(data.voided_at ? data : null);
+          if (data.voided_at) { setLoading(false); return; }
 
           setTransaction({
             transaction_date: data.transaction_date || new Date().toISOString().split('T')[0],
@@ -183,6 +210,8 @@ const useTransactionForm = () => {
   const isLoanCategory = () => {
     return String(transaction.category_id) === '24';
   };
+  const savingsRole = categories.find(c => String(c.id) === String(transaction.category_id))?.savings_role;
+  const savingsContext = Boolean(savingsRole || savedCash?.savings);
 
   // Keep the complete loan records available for form/accounting behavior,
   // while preventing new activity from being linked to a paid loan. An edit
@@ -212,7 +241,7 @@ const useTransactionForm = () => {
 
       // לוגיקה לזיהוי אוטומטי של קטגוריה לפי תיאור
       if (name === 'description') {
-        const foundCategory = categories.find(cat =>
+        const foundCategory = categories.find(cat => !cat.savings_role &&
           cat.keywords && cat.keywords.some(k => value.toLowerCase().includes(k.toLowerCase()))
         );
 
@@ -315,6 +344,30 @@ const useTransactionForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingsRole || savedCash?.savings) {
+      setSavingsError('');
+      const selected = savingsAccounts.find(a => a.account_id === String(savingsAccountId));
+      if (!selected) { setSavingsError('בחרו חשבון חיסכון'); return; }
+      if (savedCash?.savings && !savingsReason.trim()) { setSavingsError('יש להזין סיבה לתיקון'); return; }
+      if (savingsRole && savedCash?.savings && !savedCash.savings.active && !cashReuseConfirmed) { setSavingsError('יש לאשר שימוש מפורש בכסף הקיים או יצירה חדשה במקום תנועה שבוטלה'); return; }
+      const history = savedCash?.savings;
+      const mode = history?.active ? (savingsRole ? 'correct' : 'detach') : history ? (savingsRole ? 'reinstate' : 'edit_detached') : isEditMode ? 'link' : 'create';
+      const payload = { transaction: { ...transaction, total_amount: String(transaction.total_amount),
+        category_id: String(transaction.category_id), payment_source_id: String(transaction.payment_source_id) }, items,
+        savings_handling: { mode, account_id: String(savingsAccountId), event_kind: savingsRole || history?.event_kind,
+          expected_revision: history?.revision || selected.revision, expected_destination_revision: selected.revision,
+          entry_id: history?.entry_id, expected_transaction_fingerprint: savedCash?.transaction_fingerprint,
+          reason: savingsReason, cutoff_confirmed: cutoffConfirmed, was_voided: Boolean(savedCash?.voided_at) } };
+      const fingerprint = JSON.stringify(payload);
+      if (savingsReceipt.current?.fingerprint !== fingerprint) savingsReceipt.current = { fingerprint, key: crypto.randomUUID() };
+      payload.savings_handling.request_key = savingsReceipt.current.key;
+      try {
+        const { data } = isEditMode ? await updateTransaction(id, payload) : await createTransaction(payload);
+        invalidateFinance(data);
+        navigate(searchParams.has('savingsAccountId') ? '/savings' : '/transactions');
+      } catch (error) { setSavingsError(error.response?.data?.error || 'שמירת התנועה בחיסכון נכשלה. בדקו את הפרטים ורעננו אם הנתונים השתנו.'); }
+      return;
+    }
     const selectedLoan = loans.find((loan) => String(loan.id) === String(transaction.loan_id));
     const repaymentSelected = isLoanCategory()
       && selectedLoan?.calculation_mode === 'loan_payments'
@@ -435,6 +488,18 @@ const useTransactionForm = () => {
   return {
     // State
     loading,
+    savingsAccounts, savingsAccountId, setSavingsAccountId, savingsRole, savingsContext,
+    savedCash, savingsReason, setSavingsReason, cutoffConfirmed, setCutoffConfirmed,
+    cashReuseConfirmed, setCashReuseConfirmed, savingsError,
+    restoreSavingsCash: () => {
+      const role = savedCash.savings.event_kind;
+      const category = categories.find(c => c.savings_role === role);
+      if (!category) { setSavingsError('קטגוריית החיסכון אינה זמינה; יש לרענן לפני ההחזרה'); return; }
+      setCancelledTransaction(null);
+      setTransaction(prev => ({ ...Object.fromEntries(Object.keys(prev).map(k => [k, savedCash[k] ?? prev[k]])),
+        category_id: category.id, movement_type: role === 'deposit' ? 'expense' : 'income' }));
+    },
+    cancelledTransaction,
     transaction,
     setTransaction,
     items,

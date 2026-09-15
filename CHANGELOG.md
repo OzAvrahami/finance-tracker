@@ -8,11 +8,35 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+## [1.3.0] - Prepared (unpublished)
+
+Version metadata and release content prepared on 2026-09-15; this is a preparation date, not a publication date. The owner accepted SAV-01–08 and #37–#44 are completed / Done. The branch is prepared for an owner-operated commit; production migrations030–035, deployment, tagging and publication remain pending. Parent #36 and milestone v1.3.0 remain open. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state.
+
 ### Added
+
+- SAV-08 (#44): Integrated final-schema accounting/concurrency matrix, representative029→030–035 upgrade and clean-install comparison, binary backup/restore rehearsal, one-result final SQL audit, canonical production/recovery runbook and reviewed v1.3.0 release-note draft. No new runtime behavior or migration was needed for integrated verification. SAV-07 preview and SAV-08 handoff acceptance are recorded; the separate seven-field 1.3.0 version step is now prepared. Production/publication remain unexecuted.
+
+- SAV-07 (#43): Dashboard, Savings monthly reports and Annual Summary now separate current held Savings from period deposits, withdrawals and realized interest. Cash reconciliation distinguishes ordinary expenses, Savings deposits, returned funds and paid-out interest, with authoritative transaction filters and account navigation. Migration 035 adds one read-only aggregate RPC and extends two existing reader signatures; no new tables/views or financial write changes. Archived accounts and corrected history remain included; opening balances and capitalized interest never inflate period cash. SAV-04–06 owner acceptance is recorded; SAV-07 subsequently received owner appearance/preview acceptance; production rollout is still pending.
+
+- SAV-06 (#42): Monthly Savings plans now support explicit automation enable/pause, due-only processing, one permanent account/nominal-month claim, manual/imported fulfillment, audited skips and restoration. Migration 034 replaces five existing functions without new relations or backfill. Cash uses the actual Jerusalem processing date; short months retain the nominal day and each invocation handles only the oldest outstanding month. The separately protected scheduler is disabled by default; no production activation or bank transfer is performed. The owner subsequently accepted SAV-04–06 on 2026-09-14; production rollout remains pending.
+
+- SAV-05 (#41): Added named Savings destinations to Budget policies, exact funded-surplus preview/apply and explicitly confirmed month-close deposits. Migration 033 atomically records source funding/allocation out, one expense and one Savings deposit per candidate; provenance-only Budget exclusion prevents double consumption. Protected whole-transfer reversal, stale-preview/idempotency/locking checks, a cash/envelope bridge in Budget and Annual, and explicit legacy-reserve terminology preserve existing accounting. No new tables/views, automation, version bump or deployment. The owner subsequently accepted SAV-04–06; production execution remains pending.
+
+- SAV-04 (#40): Record actual net interest inside Savings or as one new/explicitly linked checking income. Audited amount/date/account/destination corrections, all four cash/noncash conversions, cancellation and explicit restoration preserve exact earnings and historical solvency. Migration 032 replaces only the existing event engine and history reader; no new tables/views or estimated-interest execution. Savings uses the accepted Finance v3 controls; ordinary entry retains its released design. Local verification and subsequent owner appearance confirmation are recorded separately from pending production deployment.
+
+- SAV-03 (#39): Added manual Savings deposits/withdrawals through the normal transaction form and Savings page, explicit existing-cash linkage, audited corrections/detach/reinstatement and idempotent linked/detached cancellation. Migration 031 preserves the two-table/one-view boundary; live paging/totals, account filters and basic financial refetch support the commands. SAV-02 owner acceptance is recorded separately from local automated checks. Realized interest is added by SAV-04 above; funded transfers are added by SAV-05 above; automation is added by SAV-06 above.
+
+- SAV-01 (#37): Completed design review and integrated the canonical Savings v1.3.0 specification: two tables/one view, ten public RPCs, explicit Budget read privileges, stable correction ordering, Loan-side link protection, idempotent detached-cash cancellation, interest-conversion rules, recurrence and reserve/funded-transfer reconciliation. This SAV-01 entry records design work only; its foundation implementation is recorded separately below.
+
+- SAV-02 (#38): Added Savings account setup, exact-money opening/summary/history APIs, Loans-based active/archive management and stored monthly settings. Migration 030 adds exactly two tables and one summary view, protected immutable history/void receipts, original-post correction ordering, Loan link integrity and explicit atomic legacy-reserve overlap retirement. Cash commands, realized-interest actions, transfers and automation remain with their later issue owners; no version bump or deployment is included.
 
 ### Changed
 
+- SAV-02 (#38): Delivered baseline live-transaction and Budget/Annual reader filtering, service-only Budget helper privileges, read-only cancelled details and retained external-ID conflicts before cancellation commands can be enabled. Ordinary Loan/transaction accounting and historical migrations remain unchanged.
+
 ### Fixed
+
+- SAV-03 (#39) visual review: ordinary transaction creation retains the released expense/category/charge-date defaults when category Savings roles are null. Savings actions now use shared Finance v3 controls with real navigation links; account-card spacing and typography follow Loans. The isolated full-app preview now reuses the application's HTML/font loading. Ordinary form styling, global backgrounds and the accepted Dashboard treatment are preserved. The owner subsequently accepted the corrected appearance; SAV-03 completion uses this confirmation and its existing implementation/verification evidence.
 
 ### Removed
 
