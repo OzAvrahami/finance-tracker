@@ -23,9 +23,9 @@ See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known lim
 
 **v1.2.0 is deployed and accepted by the user.** Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) was manually pushed; GitHub readback confirmed that remote main SHA and successful Vercel and Railway statuses. It contains the Dashboard-wide surface correction (#27), compact nearest-ending active loan row beneath the original four summary cards (#10), and optional shopping-list header fields (#2). All three issues are CLOSED / COMPLETED and Done in the linked Project with P3 preserved; milestone v1.2.0 is closed. User acceptance (“2 סבבה” for #2, then “אושר” after the final #10/#27 corrections) is separate from deployment statuses and is not agent browser testing. See the [v1.2.0 handoff](docs/RELEASE_1_2_0.md) for recorded verification and Migration 029 evidence. Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
 
-## Local Savings v1.3.0 preparation
+## Current release: Savings v1.3.0
 
-Savings accounts, cash-linked deposits/withdrawals, actual interest, funded-surplus transfers, monthly plans and reports are implemented and accepted through SAV-08. All implementation children #37–#44 are completed / Done; parent #36 and milestone v1.3.0 remain open. The seven package/lockfile version fields are prepared at **1.3.0** on `feat/savings-v1.3.0` for the owner’s commit and Windows-to-Mac continuation. At this handoff the work is uncommitted and unpublished; production migrations030–035 and deployment remain pending. See the [canonical operator runbook and transfer instructions](docs/RELEASE_1_3_0.md).
+**v1.3.0 is published, deployed and accepted by the owner.** Its annotated tag points to `19c148441f125adb3d9dfbb598b3b745382f84e4`; [GitHub Release v1.3.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.3.0) records publication. #36–#44 are completed and milestone v1.3.0 is closed. Loan scheduling has been restored. Deployment, acceptance and scheduler restoration are owner-provided completion context; this documentation change did not access production. All seven authoritative package/lockfile fields are `1.3.0`. The [v1.3.0 runbook](docs/RELEASE_1_3_0.md) preserves the earlier preparation, verification and transfer evidence as historical records.
 
 Use **חסכונות** in the normal menu (mobile: **עוד**) to create an account with an independently confirmed opening/cutoff and explicit legacy overlap, set a goal, or archive/restore it. **הפקדה / משיכה** open the existing transaction form; an existing ordinary/imported cash record can be explicitly linked. **רישום ריבית** distinguishes held interest from a checking payout. Budget policy/transfer confirmation selects a named destination. Monthly settings do not enable automation: use explicit enable/pause or manual fulfillment. All-time held balances are distinct from the selected report period; this is not a live checking balance. Automation records transactions and does not transfer money at the bank.
 
@@ -97,7 +97,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata use the accepted `1.2.0` product version.
+Root, client, and server package metadata and lockfile root entries use the accepted `1.3.0` product version; see the [authoritative field inventory](docs/github-development-standard.md#continuous-changelog-and-coordinated-version-preparation).
 
 ## Getting started
 
@@ -263,9 +263,9 @@ The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. I
 
 Formal semantic-version-style tracking began with **v0.9.0**, the first finalized baseline. **v1.0.0** is the first stable release, **v1.1.0** is the funded-budget release, and **v1.1.1** is the accepted unbudgeted-allocation correction.
 
-The private root, client, and server application packages and corresponding lockfile version fields are aligned to version `1.2.0`.
+The private root, client, and server application packages and corresponding lockfile version fields are aligned to version `1.3.0`.
 
-Earlier development is recorded as historical milestones rather than assigned fictional versions. Future releases should document changes under `Unreleased`, move them into a dated release section when release content is finalized, and keep repository tags, package metadata, and documentation aligned.
+Earlier development is recorded as historical milestones rather than assigned fictional versions. Follow the canonical [Release / Version policy and handoff gate](docs/github-development-standard.md#release-policy) for every implementation. It defines SemVer decisions, grouped releases, continuous Unreleased entries, the complete version inventory, owner acceptance and the separate owner-operated release workflow. Root [AGENTS.md](AGENTS.md) and the Issue Forms bring that gate into normal agent/intake workflows; they do not provide an executable publication check.
 
 ## License / project status
 

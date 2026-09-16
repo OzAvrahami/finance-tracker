@@ -45,3 +45,26 @@ body:
       label: Acceptance notes
       description: List the essential behavior or boundaries that would make the enhancement complete.
 
+  - type: dropdown
+    id: release-impact
+    attributes:
+      label: Initial release impact
+      description: Intake may remain unknown. The implementing agent must resolve impact before the verification handoff.
+      options:
+        - Pending / not yet known
+        - "Yes"
+        - "No"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: release-context
+    attributes:
+      label: Release context (optional)
+      description: If known, explain the impact or link an existing grouped release candidate. No version decision is required at intake.
+
+  - type: markdown
+    attributes:
+      value: |
+        Before Verify, the implementing agent must report the complete [Release / Version gate](https://github.com/OzAvrahami/finance-tracker/blob/main/docs/github-development-standard.md#release--version-gate) on this Issue and in the final handoff. Resolve release and SemVer impact, record every gate status, and leave owner acceptance Pending until confirmed. Version preparation and publication may be explicitly deferred under that policy.
