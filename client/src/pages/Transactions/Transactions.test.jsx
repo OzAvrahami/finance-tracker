@@ -828,8 +828,9 @@ describe('Finance v3 responsive parity and sorting', () => {
       expect(within(table).getByText(text)).toBeInTheDocument();
       expect(within(card).getByText(text, { exact: false })).toBeInTheDocument();
     }
-    expect(within(table).getByRole('link', { name: /עריכת התנועה/ })).toHaveAttribute('href', '/edit-transaction/7');
-    expect(within(card).getByRole('link', { name: /עריכת התנועה/ })).toHaveAttribute('href', '/edit-transaction/7');
+    const editHref = within(table).getByRole('link', { name: /עריכת התנועה/ }).getAttribute('href');
+    expect(editHref).toMatch(/^\/edit-transaction\/7\?returnTo=/);
+    expect(within(card).getByRole('link', { name: /עריכת התנועה/ })).toHaveAttribute('href', editHref);
     expect(within(table).getByRole('button', { name: /מחיקת התנועה/ })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: /מחיקת התנועה/ })).toBeInTheDocument();
   });

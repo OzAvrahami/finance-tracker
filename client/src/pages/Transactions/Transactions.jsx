@@ -15,13 +15,14 @@ import {
   TransactionsSummary,
 } from './TransactionsList';
 import './Transactions.css';
+import { defaultTransactionCriteria, readTransactionCriteria, transactionCriteriaParams, transactionsDestination, DEFAULT_TRANSACTION_SORT } from '../../utils/transactionsNavigation';
 import { cashFlowLabels } from '../../utils/savingsReporting';
 import { getSavingsAccounts } from '../../services/api';
 import { invalidateFinance, FINANCE_CHANGED } from '../../utils/financeInvalidation';
 
 // One server page. The backend clamps anything above its own maximum (250).
 const PAGE_SIZE = 100;
-const DEFAULT_SORT = { key: 'transaction_date', direction: 'desc' };
+const DEFAULT_SORT = DEFAULT_TRANSACTION_SORT;
 const EMPTY_TOTALS = { count: 0, income: 0, expense: 0 };
 const EMPTY_LIST = {
   rows: [],
@@ -45,25 +46,27 @@ const formatPeriodMonth = (value) => {
   }).format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)));
 };
 
-const rangeFromMonthKey = (month) => {
-  const match = String(month || '').match(/^(\d{4})-(\d{2})$/);
-  if (!match) return getMonthRange();
-  return getMonthRange(new Date(Number(match[1]), Number(match[2]) - 1, 1));
-};
-
 const Transactions = () => {
-  const [searchParams] = useSearchParams();
-  const initialMonth = searchParams.get('month');
-  const initialCategory = searchParams.get('categoryId');
-  const initialUncategorized = searchParams.get('uncategorized') === '1';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const criteria = useMemo(() => readTransactionCriteria(searchParams) || defaultTransactionCriteria(), [searchParams]);
+  const { dateRange, selectedCategory, selectedPaymentSource, selectedSavingsAccount, savingsFlow, searchText, showUncategorizedOnly, sortConfig } = criteria;
+  const updateCriteria = (patch) => setSearchParams(transactionCriteriaParams({ ...criteria, ...patch }), { replace: true });
+  const setter = key => value => updateCriteria({ [key]: typeof value === 'function' ? value(criteria[key]) : value });
+  const setDateRange = setter('dateRange');
+  const setSelectedCategory = setter('selectedCategory');
+  const setSelectedPaymentSource = setter('selectedPaymentSource');
+  const setSelectedSavingsAccount = setter('selectedSavingsAccount');
+  const setSavingsFlow = setter('savingsFlow');
+  const setSearchText = setter('searchText');
+  const setShowUncategorizedOnly = setter('showUncategorizedOnly');
+  const setSortConfig = setter('sortConfig');
+  const editReturnTo = transactionsDestination(criteria);
   // The query result stays in one object so a filter/sort change resets rows,
   // whole-filter totals, cursor, and error atomically.
   const [list, setList] = useState(EMPTY_LIST);
   const [categories, setCategories] = useState([]);
   const [paymentSources, setPaymentSources] = useState([]);
   const [savingsAccounts, setSavingsAccounts] = useState([]);
-  const [selectedSavingsAccount, setSelectedSavingsAccount] = useState(searchParams.get('savingsAccountId') || 'all');
-  const [savingsFlow, setSavingsFlow] = useState(searchParams.get('savingsFlow') || 'all');
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState(null);
   const cancellationReceipt = useRef(null);
@@ -72,16 +75,8 @@ const Transactions = () => {
   const [moreError, setMoreError] = useState(null);
   const [retryVersion, setRetryVersion] = useState(0);
 
-  // Sorting remains server-owned and uses the established default/toggle rule.
-  const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
-
-  // Filters remain page-owned. Only free text is debounced.
-  const [searchText, setSearchText] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
-  const [selectedPaymentSource, setSelectedPaymentSource] = useState('all');
-  const [dateRange, setDateRange] = useState(() => searchParams.get('from') && searchParams.get('to') ? { start: searchParams.get('from'), end: searchParams.get('to') } : rangeFromMonthKey(initialMonth));
-  const [debouncedSearchText, setDebouncedSearchText] = useState('');
-  const [showUncategorizedOnly, setShowUncategorizedOnly] = useState(initialUncategorized);
+  // The URL owns visible criteria. Only the API search request is debounced.
+  const [debouncedSearchText, setDebouncedSearchText] = useState(searchText);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
 
   const { setPageHeader } = useContext(PageHeaderContext);
@@ -134,7 +129,8 @@ const Transactions = () => {
     selectedCategory,
     selectedPaymentSource,
     selectedSavingsAccount,
-    savingsFlow,    showUncategorizedOnly,
+    savingsFlow,
+    showUncategorizedOnly,
     debouncedSearchText,
     sortConfig.key,
     sortConfig.direction,
@@ -237,15 +233,8 @@ const Transactions = () => {
   };
 
   const resetAllFilters = () => {
-    setDateRange(getMonthRange());
-    setSelectedCategory('all');
-    setSelectedPaymentSource('all');
-    setSelectedSavingsAccount('all');
-    setSavingsFlow('all');
-    setSearchText('');
+    updateCriteria(defaultTransactionCriteria());
     setDebouncedSearchText('');
-    setShowUncategorizedOnly(false);
-    setSortConfig(DEFAULT_SORT);
   };
 
   const retryInitialLoad = () => {
@@ -443,6 +432,7 @@ const Transactions = () => {
 
       {!list.loading && !list.error && list.rows.length > 0 && (
         <TransactionsLoadedContent
+          editReturnTo={editReturnTo}
           rows={list.rows}
           totals={list.totals}
           sortConfig={sortConfig}

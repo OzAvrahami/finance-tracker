@@ -33,7 +33,11 @@ const endpoint = (value) => {
   return { kind: 'category', categoryId: Number(value.replace('category:', '')) };
 };
 
-export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallocated, savings, onClose, onApplied }) => {
+// Both entry points share selection/preview UI; the operation remains explicit.
+const AllocationResolutionDialog = ({ open, month, category, rows, unallocated, savings, onClose, onApplied, mode }) => {
+  const isDeficit = mode === 'deficit';
+  const applyingRef = useRef(false);
+  const receiptRef = useRef(null);
   const [requestedAmount, setRequestedAmount] = useState('');
   const [unallocatedAmount, setUnallocatedAmount] = useState('0.00');
   const [additionalSources, setAdditionalSources] = useState([]);
@@ -99,10 +103,12 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
     () => legs.reduce((sum, leg) => addMoney(sum, leg.amount), '0.00'),
     [legs]
   );
-  const isZeroReactivation = category?.budget_id && compareMoney(requestedAmount || '0.00') === 0;
+  const isZeroReactivation = !isDeficit && category?.budget_id && isValidNonNegativeMoney(requestedAmount) && compareMoney(requestedAmount) === 0;
   const sourceKeys = additionalSources.map((source) => source.sourceKey).filter(Boolean);
   const hasDuplicateSources = new Set(sourceKeys).size !== sourceKeys.length;
-  const capacityProblem = compareMoney(unallocatedAmount || '0.00', unallocated || '0.00') > 0
+  const safeUnallocatedAmount = isValidNonNegativeMoney(unallocatedAmount) ? canonicalMoney(unallocatedAmount) : '0.00';
+  const hasInvalidUnallocated = Boolean(unallocatedAmount) && !isValidNonNegativeMoney(unallocatedAmount);
+  const capacityProblem = compareMoney(safeUnallocatedAmount, unallocated || '0.00') > 0
     ? 'הסכום שנבחר מכסף שטרם הוקצה גבוה מהיתרה הזמינה.'
     : additionalSources.reduce((problem, source) => {
       if (problem || !source.sourceKey || !isPositiveMoney(source.amount)) return problem;
@@ -112,17 +118,19 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
     }, '');
   const hasIncompleteSource = additionalSources.some((source) => !source.sourceKey || !isPositiveMoney(source.amount));
   const requestedCanonical = isValidNonNegativeMoney(requestedAmount) ? canonicalMoney(requestedAmount) : null;
-  const canPreview = Boolean(requestedCanonical) && !hasDuplicateSources && !hasIncompleteSource && !capacityProblem
+  const canPreview = Boolean(requestedCanonical) && !hasDuplicateSources && !hasIncompleteSource && !hasInvalidUnallocated && !capacityProblem
     && ((compareMoney(requestedCanonical) > 0 && compareMoney(selectedTotal, requestedCanonical) === 0)
       || (isZeroReactivation && legs.length === 0));
   const proposal = useMemo(() => (
-    canPreview ? { requested_amount: requestedCanonical, legs } : null
-  ), [canPreview, legs, requestedCanonical]);
+    canPreview ? (isDeficit ? { legs } : { requested_amount: requestedCanonical, legs }) : null
+  ), [canPreview, isDeficit, legs, requestedCanonical]);
   const proposalKey = proposal ? JSON.stringify(proposal) : '';
-  const previewIsCurrent = Boolean(preview?.data && preview.proposalKey === proposalKey);
+  const contextKey = JSON.stringify({ mode, month, categoryId, funded: category?.final_funded, actual: category?.actual_spent,
+    unallocated, savings, capacities: rows.map(row => [row.category_id, row.sourceCapacity]) });
+  const previewIsCurrent = Boolean(preview?.data && preview.proposalKey === proposalKey && preview.contextKey === contextKey);
   const requestedGap = requestedCanonical ? subtractMoney(requestedCanonical, selectedTotal) : '0.00';
-  const unallocatedAfter = compareMoney(unallocated || '0.00', unallocatedAmount || '0.00') >= 0
-    ? subtractMoney(unallocated || '0.00', unallocatedAmount || '0.00')
+  const unallocatedAfter = compareMoney(unallocated || '0.00', safeUnallocatedAmount) >= 0
+    ? subtractMoney(unallocated || '0.00', safeUnallocatedAmount)
     : '0.00';
 
   const resetPreview = () => {
@@ -184,9 +192,9 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
     setError('');
     const timer = setTimeout(async () => {
       try {
-        const response = await getUnbudgetedResolutionPreview(month, categoryId, proposal);
+        const response = await (isDeficit ? getDeficitResolutionPreview : getUnbudgetedResolutionPreview)(month, categoryId, proposal);
         if (previewSequence.current === sequence) {
-          setPreview({ data: response.data, proposalKey });
+          setPreview({ data: response.data, proposalKey, contextKey });
         }
       } catch (requestError) {
         if (previewSequence.current === sequence) {
@@ -197,16 +205,22 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
       }
     }, 200);
 
-    return () => clearTimeout(timer);
-  }, [categoryId, month, open, previewAttempt, proposal, proposalKey]);
+    return () => {
+      clearTimeout(timer);
+      if (previewSequence.current === sequence) previewSequence.current += 1;
+    };
+  }, [categoryId, contextKey, isDeficit, month, open, previewAttempt, proposal, proposalKey]);
 
   const apply = async () => {
-    if (!category || !proposal || !previewIsCurrent || !preview.data.can_apply || applying) return;
+    if (!category || !proposal || !previewIsCurrent || !preview.data.can_apply || applyingRef.current) return;
+    applyingRef.current = true;
     setApplying(true); setError('');
     try {
-      await applyUnbudgetedResolution(month, category.category_id, {
+      const signature = JSON.stringify([contextKey, proposalKey, preview.data.fingerprint]);
+      if (receiptRef.current?.signature !== signature) receiptRef.current = { signature, key: requestKey() };
+      await (isDeficit ? applyDeficitResolution : applyUnbudgetedResolution)(month, category.category_id, {
         ...proposal,
-        request_key: requestKey(),
+        request_key: receiptRef.current.key,
         preview_fingerprint: preview.data.fingerprint,
       });
       onApplied();
@@ -216,7 +230,7 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
       if (String(requestError?.response?.data?.error || requestError?.response?.data?.code || '').includes('PREVIEW_STALE')) {
         setPreview(null);
       }
-    } finally { setApplying(false); }
+    } finally { applyingRef.current = false; setApplying(false); }
   };
 
   const previewData = previewIsCurrent ? preview.data : null;
@@ -231,22 +245,24 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
     <Dialog
       open={open && Boolean(category)}
       onClose={onClose}
-      title={`הקצאת תקציב ל${categoryName}`}
-      description="בחרו כמה להקצות לקטגוריה. ההקצאה תתבצע רק לאחר אישור מפורש."
+      title={isDeficit ? `פתרון חריגה — ${categoryName}` : `הקצאת תקציב ל${categoryName}`}
+      description={isDeficit ? 'בחרו מימון נוסף לכיסוי מלא או חלקי של החריגה, ללא שינוי בהוצאה בפועל.' : 'בחרו כמה להקצות לקטגוריה. ההקצאה תתבצע רק לאחר אישור מפורש.'}
       size="lg"
       closeDisabled={applying}
       className="budget-funding-dialog budget-unbudgeted-resolution-dialog"
       footer={(
         <PrimaryButton type="button" disabled={!previewData?.can_apply || loading} loading={applying} loadingText="מקצה..." onClick={apply}>
-          <ShieldCheck size={16} aria-hidden="true" /> הקצה תקציב ל{categoryName}
+          <ShieldCheck size={16} aria-hidden="true" /> {isDeficit ? 'פתרון החריגה' : `הקצה תקציב ל${categoryName}`}
         </PrimaryButton>
       )}
     >
+      <fieldset disabled={applying} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div className="budget-unbudgeted-resolution__context" aria-label="פרטי ההוצאה והתקציב">
         <span>חודש <strong>{formatBudgetMonth(month)}</strong></span>
         <span>הוצאה בפועל <BudgetMoneyAmount value={category?.actual_spent || '0.00'} /></span>
         <span>מימון קיים בקטגוריה <BudgetMoneyAmount value={category?.final_funded || '0.00'} /></span>
-        {category?.budget_id && <strong className="budget-unbudgeted-resolution__mode">הפעלת תקציב קיים מחדש</strong>}
+        {isDeficit && <strong>חריגה נוכחית <BudgetMoneyAmount value={subtractMoney(category?.actual_spent || '0.00', category?.final_funded || '0.00')} /></strong>}
+        {!isDeficit && category?.budget_id && <strong className="budget-unbudgeted-resolution__mode">הפעלת תקציב קיים מחדש</strong>}
       </div>
       <div className="budget-unbudgeted-resolution__amount">
         <NumberField id="unbudgeted-resolution-amount" label="סכום להקצאה" min="0" step="0.01" value={requestedAmount} onChange={(event) => changeRequestedAmount(event.target.value)} />
@@ -339,16 +355,17 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
       )}
 
       {compareMoney(requestedGap) > 0 && (
-        <Alert variant="warning">מכסף שטרם הוקצה נבחרו <BudgetMoneyAmount value={unallocatedAmount || '0.00'} />. {fundingMismatch}.</Alert>
+        <Alert variant="warning">מכסף שטרם הוקצה נבחרו <BudgetMoneyAmount value={safeUnallocatedAmount} />. {fundingMismatch}.</Alert>
       )}
       {compareMoney(requestedGap) < 0 && <Alert variant="error">{fundingMismatch}.</Alert>}
       {hasDuplicateSources && <Alert variant="error">אי אפשר לבחור את אותו מקור מימון יותר מפעם אחת.</Alert>}
+      {((requestedAmount && !requestedCanonical) || hasInvalidUnallocated || additionalSources.some(source => source.amount && !isValidNonNegativeMoney(source.amount))) && <Alert variant="error">יש להזין סכום לא שלילי עם עד שתי ספרות אחרי הנקודה.</Alert>}
       {capacityProblem && <Alert variant="error">{capacityProblem}</Alert>}
 
       {loading && <p className="budget-unbudgeted-resolution__preview-status" role="status">מכין הצעה מאובטחת...</p>}
       {previewData && (
-        <div className="budget-funding-preview" aria-label="סקירת הקצאת תקציב להוצאה ללא תקציב">
-          <span>מצב <strong>{previewData.resolution_mode === 'reactivated' ? 'הפעלה מחדש' : 'יצירה'}</strong></span>
+        <div className="budget-funding-preview" aria-label={isDeficit ? 'סקירת פתרון חריגה' : 'סקירת הקצאת תקציב להוצאה ללא תקציב'}>
+          {!isDeficit && <span>מצב <strong>{previewData.resolution_mode === 'reactivated' ? 'הפעלה מחדש' : 'יצירה'}</strong></span>}
           <span>תקציב לאחר ההקצאה <BudgetMoneyAmount value={previewData.resulting_funded} /></span>
           <strong>חריגה שתישאר <BudgetMoneyAmount value={previewData.remaining_deficit} /></strong>
           {!previewData.can_apply && <Alert variant="error">{unbudgetedErrorMessage(previewData.reason)}</Alert>}
@@ -362,12 +379,30 @@ export const UnbudgetedResolutionDialog = ({ open, month, category, rows, unallo
           )}
         </Alert>
       )}
+      </fieldset>
     </Dialog>
   );
 };
 
+export const UnbudgetedResolutionDialog = (props) => <AllocationResolutionDialog {...props} mode="unbudgeted" />;
+
+export const DeficitResolutionDialog = ({ row, ...props }) => (
+  <AllocationResolutionDialog
+    {...props}
+    mode="deficit"
+    category={row ? {
+      category_id: row.category_id,
+      final_funded: row.planned,
+      actual_spent: row.actual,
+      categories: { name: row.categoryName },
+    } : null}
+  />
+);
+
 const apiError = (error, fallback) => error?.response?.data?.error || fallback;
 const UNBUDGETED_ERROR_MESSAGES = {
+  DEFICIT_RESOLUTION_PREVIEW_STALE: 'נתוני התקציב השתנו מאז הכנת ההצעה. בדקו את מקורות המימון וסקרו שוב.',
+  DEFICIT_RESOLUTION_EXCEEDS_DEFICIT: 'המימון הנוסף גבוה מהחריגה הנוכחית. הקטינו את הסכום וסקרו שוב.',
   UNBUDGETED_RESOLUTION_SOURCE_INSUFFICIENT: 'אין מספיק כסף במקור המימון שנבחר. בחרו מקור נוסף או הקטינו את הסכום.',
   SAVINGS_INSUFFICIENT: 'אין מספיק כסף בחיסכון עבור הסכום שנבחר.',
   UNBUDGETED_RESOLUTION_LEG_TOTAL_MISMATCH: 'סכומי מקורות המימון אינם שווים לסכום ההקצאה.',
@@ -375,7 +410,7 @@ const UNBUDGETED_ERROR_MESSAGES = {
   NO_UNBUDGETED_EXPENSE: 'לא נמצאה עוד הוצאה ללא תקציב בקטגוריה הזאת. רעננו את החודש.',
   UNBUDGETED_RESOLUTION_REQUIRES_FUNDING: 'כדי ליצור את התקציב יש לבחור סכום חיובי ומקורות מימון מתאימים.',
   UNBUDGETED_RESOLUTION_PENDING_OVERRIDE: 'קיימת התאמה חודשית שממתינה לאתחול. יש להשלים אותה לפני יצירת התקציב.',
-  BUDGET_MONTH_ALREADY_CLOSED: 'החודש כבר נסגר ואי אפשר ליצור בו תקציב חדש.',
+  BUDGET_MONTH_ALREADY_CLOSED: 'החודש כבר נסגר ואי אפשר לשנות בו את ההקצאה.',
   BUDGET_ACTION_MONTH_FORBIDDEN: 'אי אפשר להקצות תקציב לחודש הזה.',
   CATEGORY_NOT_ACTIVE: 'הקטגוריה אינה פעילה ולכן אי אפשר להקצות לה תקציב.',
   INVALID_BUDGET_CATEGORY: 'הקטגוריה אינה זמינה להקצאת תקציב.',
@@ -491,100 +526,6 @@ export const BudgetReallocationDialog = ({ open, month, rows, unallocated, onClo
           <span>יעד לפני <BudgetMoneyAmount value={preview.destination_before} /></span>
           <span>יעד אחרי <BudgetMoneyAmount value={preview.destination_after} /></span>
           <span>טרם הוקצה אחרי <BudgetMoneyAmount value={preview.unallocated_after} /></span>
-          {!preview.can_apply && <Alert variant="error">{preview.reason}</Alert>}
-        </div>
-      )}
-      {error && <Alert variant="error" urgent>{error}</Alert>}
-    </Dialog>
-  );
-};
-
-export const DeficitResolutionDialog = ({ open, month, row, rows, unallocated, savings, onClose, onApplied }) => {
-  const [amounts, setAmounts] = useState({});
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [applying, setApplying] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (open) { setAmounts({}); setPreview(null); setError(''); }
-  }, [open, row?.id]);
-
-  const candidates = rows.filter((candidate) => candidate.id !== row?.id && compareMoney(candidate.sourceCapacity) > 0);
-  const legs = useMemo(() => Object.entries(amounts)
-    .filter(([, amount]) => isPositiveMoney(amount))
-    .map(([key, amount]) => {
-      if (key === 'unallocated' || key === 'savings') return { source_kind: key, amount };
-      return { source_kind: 'category', category_id: Number(key.replace('category:', '')), amount };
-    }), [amounts]);
-  const selectedTotal = useMemo(() => legs.reduce((sum, leg) => addMoney(sum, leg.amount), '0.00'), [legs]);
-
-  const updateAmount = (key, value) => {
-    setAmounts((current) => ({ ...current, [key]: value }));
-    setPreview(null);
-  };
-
-  const review = async () => {
-    if (!row || legs.length === 0 || loading) return;
-    setLoading(true); setError(''); setPreview(null);
-    try {
-      const response = await getDeficitResolutionPreview(month, row.category_id, { legs });
-      setPreview(response.data);
-    } catch (requestError) {
-      setError(apiError(requestError, 'לא ניתן להכין את סקירת פתרון החריגה.'));
-    } finally { setLoading(false); }
-  };
-
-  const apply = async () => {
-    if (!row || !preview?.can_apply || applying) return;
-    setApplying(true); setError('');
-    try {
-      await applyDeficitResolution(month, row.category_id, {
-        legs, request_key: requestKey(), preview_fingerprint: preview.fingerprint,
-      });
-      onApplied();
-      onClose('applied');
-    } catch (requestError) {
-      setError(apiError(requestError, 'פתרון החריגה נכשל. בחירת מקורות המימון נשמרה.'));
-    } finally { setApplying(false); }
-  };
-
-  return (
-    <Dialog
-      open={open && Boolean(row)}
-      onClose={onClose}
-      title={`פתרון חריגה — ${row?.categoryName || ''}`}
-      description="אפשר לממן את החריגה באופן מלא או חלקי מכמה מקורות בפעולה אטומית אחת."
-      size="lg"
-      closeDisabled={applying}
-      className="budget-funding-dialog"
-      footer={(
-        <>
-          <SecondaryButton type="button" disabled={applying || legs.length === 0} onClick={review} loading={loading} loadingText="בודק...">סקירת המימון</SecondaryButton>
-          <PrimaryButton type="button" disabled={!preview?.can_apply} loading={applying} loadingText="מממן..." onClick={apply}>
-            <ShieldCheck size={16} aria-hidden="true" /> פתרון החריגה
-          </PrimaryButton>
-        </>
-      )}
-    >
-      <div className="budget-deficit-summary">
-        <span>ממומן <BudgetMoneyAmount value={row?.planned || '0.00'} /></span>
-        <span>בפועל <BudgetMoneyAmount value={row?.actual || '0.00'} /></span>
-        <strong>חריגה <BudgetMoneyAmount value={row?.remainingAbsolute || '0.00'} /></strong>
-      </div>
-      <div className="budget-deficit-sources">
-        <NumberField id="deficit-source-unallocated" label={`טרם הוקצה (זמין ${unallocated})`} min="0" step="0.01" value={amounts.unallocated || ''} onChange={(event) => updateAmount('unallocated', event.target.value)} />
-        <NumberField id="deficit-source-savings" label={`חיסכון (זמין ${savings})`} min="0" step="0.01" value={amounts.savings || ''} onChange={(event) => updateAmount('savings', event.target.value)} />
-        {candidates.map((candidate) => (
-          <NumberField key={candidate.id} id={`deficit-source-${candidate.id}`} label={`${candidate.categoryName} (זמין ${candidate.sourceCapacity})`} min="0" step="0.01" value={amounts[`category:${candidate.category_id}`] || ''} onChange={(event) => updateAmount(`category:${candidate.category_id}`, event.target.value)} />
-        ))}
-      </div>
-      <p className="budget-funding-dialog__selected">נבחר למימון: <BudgetMoneyAmount value={selectedTotal} /></p>
-      {preview && (
-        <div className="budget-funding-preview" aria-label="סקירת פתרון חריגה">
-          <span>סכום שיוחל <BudgetMoneyAmount value={preview.requested_resolution} /></span>
-          <span>מימון אחרי <BudgetMoneyAmount value={preview.resulting_funded} /></span>
-          <strong>חריגה שתישאר <BudgetMoneyAmount value={preview.remaining_deficit} /></strong>
           {!preview.can_apply && <Alert variant="error">{preview.reason}</Alert>}
         </div>
       )}

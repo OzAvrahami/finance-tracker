@@ -8,6 +8,16 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+## [1.3.1] - Prepared (unpublished)
+
+Prepared on 2026-09-18 after explicit owner acceptance of #49, #51 and #47. One Patch candidate, coordinated by #49, including the #51 bigint Savings-ID correction. All seven application-version fields are synchronized to 1.3.1. Commit, push, deployment, annotated tag and GitHub Release publication remain pending; this preparation date is not a publication date. Temporary preview-harness repairs are excluded. See [release notes](docs/RELEASE_1_3_1.md) and [verification evidence](docs/PATCH_1_3_1_REVIEW.md).
+
+### Fixed
+
+- #49: Keep long category dropdowns bounded above or below the field, with internal wheel/touch scrolling and visible keyboard selection in Add Transaction.
+- #51: Restore the originating Transactions date range, filters (including bigint Savings account IDs), visible search and sorting after Save, Cancel or Back from editing, while loading fresh results.
+- #47: Use the compact, contextual allocation interface for Budget deficits, preserving full/partial coverage and the separate deficit-resolution accounting operation.
+
 ## [1.3.0] - Prepared (unpublished)
 
 Version metadata and release content prepared on 2026-09-15; this is a preparation date, not a publication date. The owner accepted SAV-01–08 and #37–#44 are completed / Done. The branch is prepared for an owner-operated commit; production migrations030–035, deployment, tagging and publication remain pending. Parent #36 and milestone v1.3.0 remain open. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state.

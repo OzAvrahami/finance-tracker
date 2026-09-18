@@ -1,3 +1,4 @@
+import { transactionReturnDestination } from '../utils/transactionsNavigation';
 import { useState, useEffect, useRef } from 'react';
 import { getSavingsAccounts } from '../services/api';
 import { invalidateFinance } from '../utils/financeInvalidation';
@@ -37,6 +38,7 @@ const useTransactionForm = () => {
   const { id } = useParams();
   const isEditMode = Boolean(id);
   const [searchParams] = useSearchParams();
+  const returnTo = isEditMode ? transactionReturnDestination(searchParams) : '/transactions';
   const [savingsAccounts, setSavingsAccounts] = useState([]);
   const [savingsAccountId, setSavingsAccountId] = useState(searchParams.get('savingsAccountId') || '');
   const [savedCash, setSavedCash] = useState(null);
@@ -364,7 +366,7 @@ const useTransactionForm = () => {
       try {
         const { data } = isEditMode ? await updateTransaction(id, payload) : await createTransaction(payload);
         invalidateFinance(data);
-        navigate(searchParams.has('savingsAccountId') ? '/savings' : '/transactions');
+        navigate(isEditMode ? returnTo : searchParams.has('savingsAccountId') ? '/savings' : '/transactions');
       } catch (error) { setSavingsError(error.response?.data?.error || 'שמירת התנועה בחיסכון נכשלה. בדקו את הפרטים ורעננו אם הנתונים השתנו.'); }
       return;
     }
@@ -416,7 +418,7 @@ const useTransactionForm = () => {
           invalidateLegoCollection();
         }
         alert('העסקה עודכנה בהצלחה! 💾');
-        navigate('/transactions');
+        navigate(returnTo);
         return;
       } else {
         await createTransaction(payload);
@@ -512,6 +514,7 @@ const useTransactionForm = () => {
     legoThemes,
     availableTags,
     isEditMode,
+    returnTo,
     showNewCategoryModal,
     setShowNewCategoryModal,
     newCategoryName,

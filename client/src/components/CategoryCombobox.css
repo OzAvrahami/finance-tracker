@@ -14,13 +14,14 @@
 }
 
 .category-combobox__popup {
-  position: absolute;
-  z-index: 70;
-  inset-block-start: calc(100% + var(--ft-space-1));
-  inset-inline: 0;
+  position: fixed;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
   min-width: 0;
   max-height: min(320px, 45vh);
-  overflow-y: auto;
+  overflow: hidden;
   padding: var(--ft-space-2);
   background: var(--ft-surface-solid);
   border: 1px solid var(--ft-border-strong);
@@ -30,7 +31,12 @@
 
 .category-combobox__listbox {
   display: flex;
+  position: relative;
+  min-height: 0;
   min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   flex-direction: column;
   gap: 2px;
 }
@@ -41,6 +47,7 @@
   width: 100%;
   min-width: 0;
   min-height: 44px;
+  flex-shrink: 0;
   align-items: center;
   gap: var(--ft-space-3);
   padding: 9px 11px;

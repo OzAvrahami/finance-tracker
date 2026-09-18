@@ -54,10 +54,10 @@ const CategoryBadge = ({ transaction }) => {
   );
 };
 
-const TransactionActions = ({ transaction, onRequestDelete, mobile = false }) => (
+const TransactionActions = ({ transaction, onRequestDelete, editReturnTo, mobile = false }) => (
   <div className={`transactions-actions${mobile ? ' transactions-actions--mobile' : ''}`}>
     <Link
-      to={`/edit-transaction/${transaction.id}`}
+      to={`/edit-transaction/${transaction.id}${editReturnTo ? `?${new URLSearchParams({ returnTo: editReturnTo })}` : ''}`}
       className="transactions-action transactions-action--edit"
       aria-label={`עריכת התנועה ${transactionContext(transaction)}`}
       title="עריכה"
@@ -134,7 +134,7 @@ export const SortableHeader = ({ label, sortKey, sortConfig, onSort, className =
   );
 };
 
-export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete }) => (
+export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete, editReturnTo }) => (
   <div className="transactions-table-region" role="region" aria-label="טבלת תנועות מסוננות" tabIndex="0">
     <table className="transactions-table">
       <caption>תנועות שנטענו מתוך התוצאות המסוננות</caption>
@@ -181,7 +181,7 @@ export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete })
               <td className="transactions-table__notes">
                 {transaction.notes ? <span title={transaction.notes}>{transaction.notes}</span> : <span className="transactions-quiet-value" aria-label="אין הערות">—</span>}
               </td>
-              <td className="transactions-table__actions-cell"><TransactionActions transaction={transaction} onRequestDelete={onRequestDelete} /></td>
+              <td className="transactions-table__actions-cell"><TransactionActions transaction={transaction} onRequestDelete={onRequestDelete} editReturnTo={editReturnTo} /></td>
             </tr>
           );
         })}
@@ -220,7 +220,7 @@ export const TransactionsMobileSortControl = ({ sortConfig, onSort }) => {
   );
 };
 
-export const TransactionsMobileList = ({ rows, onRequestDelete }) => (
+export const TransactionsMobileList = ({ rows, onRequestDelete, editReturnTo }) => (
     <section className="transactions-mobile-list" aria-labelledby="transactions-mobile-list-heading">
       <h2 id="transactions-mobile-list-heading">התנועות שנטענו</h2>
       <ul>
@@ -249,7 +249,7 @@ export const TransactionsMobileList = ({ rows, onRequestDelete }) => (
                     <span><strong>הערה:</strong> {transaction.notes}</span>
                   </div>
                 )}
-                <TransactionActions transaction={transaction} onRequestDelete={onRequestDelete} mobile />
+                <TransactionActions transaction={transaction} onRequestDelete={onRequestDelete} editReturnTo={editReturnTo} mobile />
               </article>
             </li>
           );
@@ -352,10 +352,10 @@ export const TransactionDeleteDialog = ({ transaction, onClose, onConfirm, reaso
   />
 );
 
-export const TransactionsLoadedContent = ({ rows, totals, sortConfig, onSort, onRequestDelete, ...footerProps }) => (
+export const TransactionsLoadedContent = ({ rows, totals, sortConfig, onSort, onRequestDelete, editReturnTo, ...footerProps }) => (
   <section className="transactions-results" aria-label="תוצאות התנועות">
-    <TransactionsTable rows={rows} sortConfig={sortConfig} onSort={onSort} onRequestDelete={onRequestDelete} />
-    <TransactionsMobileList rows={rows} onRequestDelete={onRequestDelete} />
+    <TransactionsTable rows={rows} sortConfig={sortConfig} onSort={onSort} onRequestDelete={onRequestDelete} editReturnTo={editReturnTo} />
+    <TransactionsMobileList rows={rows} onRequestDelete={onRequestDelete} editReturnTo={editReturnTo} />
     <ProgressiveLoadFooter loadedCount={rows.length} totalCount={totals.count} {...footerProps} />
   </section>
 );

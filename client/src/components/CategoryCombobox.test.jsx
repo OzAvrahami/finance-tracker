@@ -29,6 +29,44 @@ const ControlledHarness = ({ initialValue = '', initialCategories = categories, 
 };
 
 describe('CategoryCombobox semantics', () => {
+  it('portals outside clipping ancestors and fits above a field near the viewport bottom', async () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      if (this.tagName === 'INPUT') return { top: 700, bottom: 744, left: 20, width: 260 };
+      return { top: 0, bottom: 200, height: 200, left: 0, width: 260 };
+    });
+    try {
+      const { container } = render(<div style={{ overflow: 'hidden' }}><ControlledHarness /></div>);
+      await userEvent.setup().click(screen.getByRole('combobox', { name: 'קטגוריה' }));
+      const popup = screen.getByRole('listbox').parentElement;
+      expect(container).not.toContainElement(popup);
+      expect(popup.parentElement).toBe(document.body);
+      expect(parseFloat(popup.style.top)).toBeLessThan(700);
+      expect(parseFloat(popup.style.maxHeight)).toBeLessThanOrEqual(320);
+    } finally { rect.mockRestore(); }
+  });
+
+  it('reveals End/Home inside the list without calling page-scrolling APIs', async () => {
+    render(<ControlledHarness />);
+    const input = screen.getByRole('combobox', { name: 'קטגוריה' });
+    const user = userEvent.setup();
+    await user.click(input);
+    const list = screen.getByRole('listbox');
+    vi.spyOn(list, 'getBoundingClientRect').mockReturnValue({ top: 100, bottom: 180 });
+    const first = screen.getByRole('option', { name: 'מזון וסופר' });
+    const last = screen.getByRole('option', { name: 'תחבורה' });
+    vi.spyOn(last, 'getBoundingClientRect').mockReturnValue({ top: 200, bottom: 244 });
+    vi.spyOn(first, 'getBoundingClientRect').mockReturnValue({ top: 36, bottom: 80 });
+    const pageScroll = vi.spyOn(window, 'scrollTo');
+    await user.keyboard('{End}');
+    expect(list.scrollTop).toBe(64);
+    await user.keyboard('{Home}');
+    expect(list.scrollTop).toBe(0);
+    expect(pageScroll).not.toHaveBeenCalled();
+    // A touch pointer is allowed to start native panning rather than cancelled.
+    expect(fireEvent.pointerDown(last, { pointerType: 'touch', cancelable: true })).toBe(true);
+    pageScroll.mockRestore();
+  });
+
   it('associates a visible Field label and exposes the combobox/listbox contract', async () => {
     const user = userEvent.setup();
     render(

@@ -98,6 +98,114 @@ before(async () => {
 });
 after(() => { if (created) run(['rm', '-f', container]); });
 
+test('issue 47 allocation contracts on complete v1.3.0 schema 035', () => {
+  const upgraded = 'issue47_schema035';
+  sql('postgres', `CREATE DATABASE ${upgraded} TEMPLATE baseline_029;`);
+  for (const file of files) sql(upgraded, read('server/migrations/' + file));
+  assert.deepEqual(catalog(upgraded), catalog('clean_035'));
+  save('issue47-schema', { baseline: 'full_schema.sql consolidated through 029',
+    applied: files, clean035CatalogEquivalent: true,
+    sha256: Object.fromEntries(['server/full_schema.sql', ...files.map(f => 'server/migrations/' + f)]
+      .map(f => [f, crypto.createHash('sha256').update(read(f)).digest('hex')])) });
+  const snapshot = db => json(db, `SELECT jsonb_build_object(
+    'cash',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM transactions t),
+    'entries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM savings_entries t),
+    'operations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM budget_operations t),
+    'items',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM budget_operation_items t),
+    'funding',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM budget_funding_entries t),
+    'movements',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM budget_movements t),
+    'reserve',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM budget_savings_entries t));`);
+  for (const partial of [false, true]) {
+    const db = partial ? 'issue47_partial035' : 'issue47_full035';
+    sql('postgres', `CREATE DATABASE ${db} TEMPLATE ${upgraded};`);
+    sql(db, `INSERT INTO categories(id,name,type) VALUES(100,'deficit','expense'),(101,'source','expense'),(102,'upper','expense'),(103,'reserve history','expense');
+      INSERT INTO payment_sources(id,name,slug,method) VALUES(1,'local','local','bank_transfer');`);
+    const month = scalar(db, "SELECT to_char(timezone('Asia/Jerusalem',now()),'YYYY-MM');");
+    const previous = scalar(db, "SELECT to_char(timezone('Asia/Jerusalem',now())-interval '1 month','YYYY-MM');");
+    // A legacy reserve is not a named Savings account. Retire overlap explicitly.
+    call(db, 'add_manual_budget_funding', [previous, '500', 'legacy fixture', key(4701)]);
+    call(db, 'establish_funded_budget', [previous, '103', '500', 'manual', key(4702)]);
+    call(db, 'set_budget_unused_balance_policy', ['103', 'savings']);
+    const disposition = call(db, 'get_budget_month_disposition_preview', [previous]);
+    call(db, 'apply_budget_month_disposition', [previous, key(4703), disposition.fingerprint]);
+    call(db, 'create_savings_account', [key(4704), { name: 'named savings', opened_on: '2020-01-01', tracking_start_date: '2020-01-01' }, '1000', '200', 'synthetic overlap']);
+    assert.equal(scalar(db, 'SELECT balance_text FROM budget_savings_state;'), '300.00');
+    call(db, 'add_manual_budget_funding', [month, '1000', 'current fixture', key(4705)]);
+    call(db, 'establish_funded_budget', [month, '100', '400', 'manual', key(4706)]);
+    call(db, 'establish_funded_budget', [month, '101', '300', 'manual', key(4707)]);
+    // Exercise 033 provenance: this known fixture transfer creates cash ONCE before
+    // the allocation assertions. It must not consume Budget actuals a second time.
+    const today = scalar(db, "SELECT timezone('Asia/Jerusalem',now())::date;");
+    const surplus = call(db, 'get_savings_surplus_preview', [month, '101', '1', '20', '1', today]);
+    call(db, 'apply_savings_surplus', [key(4708), surplus.fingerprint,
+      { source_month: month, category_id: '101', account_id: '1', amount: '20', payment_source_id: '1', cash_date: today }]);
+    // New expenses arrive after the valid surplus transfer. Existing month-wide
+    // guards correctly forbid creating a surplus transfer while deficits exist.
+    sql(db, `INSERT INTO transactions(description,total_amount,movement_type,transaction_date,charge_date,category_id,payment_source_id)
+      VALUES('actual',530,'expense','${month}-02','${month}-02',100,1),
+      ('source actual',100,'expense','${month}-02','${month}-02',101,1),
+      ('upper actual',75,'expense','${month}-02','${month}-02',102,1);`);
+    const state = () => call(db, 'get_funded_budget_month', [month]);
+    const sources = () => json(db, `SELECT jsonb_object_agg(source_kind||coalesce(':'||category_id,''),capacity::text)
+      FROM budget_funding_source_rows('${month}',100);`);
+    assert.deepEqual(sources(), { 'category:101': '180.00', savings: '300.00', unallocated: '300.00' });
+    assert.equal(state().actuals.total, '705.00');
+    const cashBefore = snapshot(db).cash, savingsBefore = snapshot(db).entries;
+    const leg = (source_kind, amount, category_id) => ({ source_kind, amount, ...(category_id ? { category_id } : {}) });
+    const fullLegs = [leg('unallocated','50.00'), leg('category','50.00',101), leg('savings','30.00')];
+    const fullPreview = call(db, 'get_budget_deficit_resolution_preview', [month, '100', fullLegs]);
+    assert.equal(`${fullPreview.current_funded}|${fullPreview.actual}|${fullPreview.deficit}|${fullPreview.resulting_funded}|${fullPreview.remaining_deficit}|${fullPreview.can_apply}`,
+      '400.00|530.00|130.00|530.00|0.00|true');
+    const beforePreview = snapshot(db);
+    call(db, 'get_budget_deficit_resolution_preview', [month, '100', fullLegs]);
+    const insufficient = call(db, 'get_budget_unbudgeted_resolution_preview', [month, '102', '181', [leg('category','181.00',101)]]);
+    assert.equal(insufficient.can_apply, false);
+    assert.deepEqual(snapshot(db), beforePreview); // preview/cancel/rejected source: no writes
+    // A genuine balance change invalidates the old fingerprint; failed apply is atomic.
+    call(db, 'add_manual_budget_funding', [month, '1', 'stale preview fixture', key(4709)]);
+    const beforeStale = snapshot(db);
+    const stale = sql(db, `SET ROLE service_role; SELECT apply_budget_deficit_resolution('${month}',100,
+      '${JSON.stringify(fullLegs)}','${key(4710)}','${fullPreview.fingerprint}');`, true);
+    assert.notEqual(stale.status, 0); assert.match(stale.stderr, /PREVIEW_STALE/);
+    assert.deepEqual(snapshot(db), beforeStale);
+    const batches = partial ? [[leg('unallocated','50.00')], [leg('category','50.00',101),leg('savings','30.00')]] : [fullLegs];
+    for (const [index, legs] of batches.entries()) {
+      const preview = call(db, 'get_budget_deficit_resolution_preview', [month, '100', legs]);
+      assert.equal(preview.can_apply, true);
+      call(db, 'apply_budget_deficit_resolution', [month, '100', legs, key(4711 + index), preview.fingerprint]);
+      const committed = snapshot(db);
+      call(db, 'apply_budget_deficit_resolution', [month, '100', legs, key(4711 + index), preview.fingerprint]);
+      assert.deepEqual(snapshot(db), committed);
+      const category = state().categories.find(c => String(c.category_id) === '100');
+      assert.equal(category.actual_spent, '530.00');
+      assert.equal(category.final_funded, partial && index === 0 ? '450.00' : '530.00');
+      assert.equal(category.deficit, partial && index === 0 ? '80.00' : '0.00');
+      assert.deepEqual(committed.cash, cashBefore); assert.deepEqual(committed.entries, savingsBefore);
+    }
+    assert.deepEqual(sources(), { 'category:101': '130.00', savings: '270.00', unallocated: '251.00' });
+    const deficitState = state();
+    assert.equal(deficitState.funding.available, '1011.00'); assert.equal(deficitState.funding.total_allocated, '760.00');
+    // Upper allocation calls its own RPC, with requested_amount, for an unbudgeted category.
+    const upperLegs = [leg('unallocated','25.00'),leg('category','25.00',101),leg('savings','25.00')];
+    const upper = call(db, 'get_budget_unbudgeted_resolution_preview', [month, '102', '75', upperLegs]);
+    assert.equal(upper.can_apply, true);
+    call(db, 'apply_budget_unbudgeted_resolution', [month, '102', '75', upperLegs, key(4720), upper.fingerprint]);
+    const after = state(), upperCategory = after.categories.find(c => String(c.category_id) === '102');
+    assert.equal(`${upperCategory.final_funded}|${upperCategory.actual_spent}|${upperCategory.deficit}`, '75.00|75.00|0.00');
+    assert.equal(after.funding.available, '1036.00'); assert.equal(after.funding.total_allocated, '810.00');
+    assert.equal(after.funding.unallocated, '226.00'); assert.equal(after.actuals.total, '705.00');
+    assert.equal(sources().savings, '245.00'); assert.equal(sources()['category:101'], '105.00');
+    assert.equal(call(db, 'get_savings_account', ['1']).summary.current_balance, '1020.00');
+    assert.deepEqual(snapshot(db).cash, cashBefore); assert.deepEqual(snapshot(db).entries, savingsBefore);
+    const operations = json(db, `SELECT jsonb_object_agg(operation_type,n) FROM
+      (SELECT operation_type,count(*) n FROM budget_operations WHERE operation_type IN ('deficit_resolution','unbudgeted_resolution') GROUP BY operation_type) x;`);
+    assert.deepEqual(operations, { deficit_resolution: partial ? 2 : 1, unbudgeted_resolution: 1 });
+    sql(db, 'SELECT budget_assert_reconciled(id) FROM budget_months;');
+    save(db, { fullPreview, deficitState, finalState: after, sources: sources(), operations,
+      unchangedCashRows: cashBefore.length, namedSavingsBalance: '1020.00', noAllocationCashOrSavingsWrites: true });
+  }
+});
+
 for (const reserve of [0, 500]) test(`029 → 035 with reserve ${reserve}: preservation, clean equivalence, overlap and recovery`, () => {
   const db = `upgrade_${reserve}`;
   sql('postgres', `CREATE DATABASE ${db} TEMPLATE baseline_029;`);

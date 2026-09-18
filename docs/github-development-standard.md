@@ -115,7 +115,7 @@ For Release impact: Yes, CHANGELOG must already be Updated under Unreleased at i
 
 Update [CHANGELOG.md](../CHANGELOG.md) under Unreleased during release-relevant implementation, with Issue references and user/operational impact. Keep unreleased content there until candidate finalization. Move only the finalized candidate's entries to its release section; leave unrelated entries under Unreleased. A preparation date must be labelled as preparation, not claimed as publication. Preserve historical release evidence.
 
-Version changes are a later, deliberate release-preparation action after candidate scope/version is finalized. The current authoritative application-version inventory is **seven fields across five tracked files**, all at `1.3.0` as inspected for #48:
+Version changes are a later, deliberate release-preparation action after candidate scope/version is finalized. The current authoritative application-version inventory is **seven fields across five tracked files**, reconfirmed and synchronized to prepared `1.3.1` for #49, #51 and #47 on 2026-09-18. This is preparation metadata, not evidence of publication:
 
 | File | Synchronized fields |
 | --- | --- |

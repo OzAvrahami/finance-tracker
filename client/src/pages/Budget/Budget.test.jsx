@@ -924,6 +924,35 @@ describe('funded budget commands', () => {
     });
   });
 
+  it('refreshes the Budget category, source and summary after covering the 400/530/130 deficit', async () => {
+    const state = fundedState({
+      funding: { available: '700.00', total_allocated: '400.00', unallocated: '300.00' },
+      actuals: { total: '530.00', budgeted: '530.00', unbudgeted: '0.00' },
+      categories: [categoryState({ final_funded: '400.00', actual_spent: '530.00', remaining: '-130.00', deficit: '130.00' })],
+    });
+    getFundedBudgetMonth.mockResolvedValue({ data: state });
+    getDeficitResolutionPreview.mockResolvedValue({ data: { can_apply: true, fingerprint: 'deficit-130', requested_resolution: '130.00', resulting_funded: '530.00', remaining_deficit: '0.00' } });
+    applyDeficitResolution.mockImplementation(async () => {
+      getFundedBudgetMonth.mockResolvedValue({ data: {
+        ...state,
+        funding: { ...state.funding, total_allocated: '530.00', unallocated: '170.00' },
+        categories: [categoryState({ final_funded: '530.00', actual_spent: '530.00', remaining: '0.00', deficit: '0.00' })],
+      } });
+      return { data: {} };
+    });
+    await settle();
+    await userEvent.click(screen.getAllByRole('button', { name: 'פתרון חריגה' })[0]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'פתרון החריגה' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: 'פתרון החריגה' }));
+    await waitFor(() => expect(getFundedBudgetMonth).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'פתרון חריגה' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/סיכום תקציב/)).toHaveTextContent('530');
+    expect(screen.getByLabelText(/סיכום תקציב/)).toHaveTextContent('170');
+    expect(applyUnbudgetedResolution).not.toHaveBeenCalled();
+    expect(applyDeficitResolution.mock.calls[0][2].legs).toEqual([{ source_kind: 'unallocated', amount: '130.00' }]);
+  });
+
   it('submits an exact multi-source partial deficit resolution and retains choices on stale preview', async () => {
     getFundedBudgetMonth.mockResolvedValue({ data: fundedState({
       savings: { balance: '500.00' },
@@ -947,25 +976,31 @@ describe('funded budget commands', () => {
     const resolveButtons = screen.getAllByRole('button', { name: 'פתרון חריגה' });
     expect(resolveButtons).toHaveLength(2);
     await userEvent.click(resolveButtons[0]);
-    fireEvent.change(document.getElementById('deficit-source-unallocated'), { target: { value: '100.00' } });
-    fireEvent.change(document.getElementById('deficit-source-savings'), { target: { value: '100.00' } });
-    fireEvent.change(document.getElementById('deficit-source-12'), { target: { value: '150.00' } });
-    await userEvent.click(screen.getByRole('button', { name: 'סקירת המימון' }));
+    fireEvent.change(screen.getByLabelText('סכום להקצאה'), { target: { value: '350.00' } });
+    fireEvent.change(document.getElementById('unbudgeted-source-unallocated'), { target: { value: '100.00' } });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת מקור נוסף' }));
+    await userEvent.selectOptions(screen.getByLabelText('מקור נוסף'), 'savings');
+    fireEvent.change(screen.getByLabelText('סכום להעברה'), { target: { value: '100.00' } });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת מקור נוסף' }));
+    await userEvent.selectOptions(screen.getAllByLabelText('מקור נוסף')[1], 'category:2');
+    fireEvent.change(screen.getAllByLabelText('סכום להעברה')[1], { target: { value: '150.00' } });
     const legs = [
       { source_kind: 'unallocated', amount: '100.00' },
       { source_kind: 'savings', amount: '100.00' },
       { source_kind: 'category', category_id: 2, amount: '150.00' },
     ];
-    expect(getDeficitResolutionPreview).toHaveBeenCalledWith(fundedState().month, 1, { legs });
+    await waitFor(() => expect(getDeficitResolutionPreview).toHaveBeenCalledWith(fundedState().month, 1, { legs }));
     expect(screen.getByLabelText('סקירת פתרון חריגה')).toHaveTextContent('150');
     await userEvent.click(screen.getByRole('button', { name: 'פתרון החריגה' }));
     expect(applyDeficitResolution).toHaveBeenCalledWith(fundedState().month, 1, {
       legs, request_key: 'request-key', preview_fingerprint: 'abcdefabcdefabcdefabcdefabcdefab',
     });
-    expect(await screen.findByText('DEFICIT_RESOLUTION_PREVIEW_STALE: refresh')).toBeInTheDocument();
-    expect(document.getElementById('deficit-source-unallocated')).toHaveValue(100);
-    expect(document.getElementById('deficit-source-savings')).toHaveValue(100);
-    expect(document.getElementById('deficit-source-12')).toHaveValue(150);
+    expect(await screen.findByText(/נתוני התקציב השתנו מאז הכנת ההצעה/)).toBeInTheDocument();
+    expect(document.getElementById('unbudgeted-source-unallocated')).toHaveValue(100);
+    expect(screen.getAllByLabelText('סכום להעברה')[0]).toHaveValue(100);
+    expect(screen.getAllByLabelText('סכום להעברה')[1]).toHaveValue(150);
+    expect(screen.getByRole('button', { name: 'פתרון החריגה' })).toBeDisabled();
+    expect(applyUnbudgetedResolution).not.toHaveBeenCalled();
   });
 
   it('limits Move budget to current month while keeping deficit resolution in the completed unclosed month', async () => {

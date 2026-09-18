@@ -25,9 +25,13 @@ See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known lim
 
 ## Current release: Savings v1.3.0
 
-**v1.3.0 is published, deployed and accepted by the owner.** Its annotated tag points to `19c148441f125adb3d9dfbb598b3b745382f84e4`; [GitHub Release v1.3.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.3.0) records publication. #36–#44 are completed and milestone v1.3.0 is closed. Loan scheduling has been restored. Deployment, acceptance and scheduler restoration are owner-provided completion context; this documentation change did not access production. All seven authoritative package/lockfile fields are `1.3.0`. The [v1.3.0 runbook](docs/RELEASE_1_3_0.md) preserves the earlier preparation, verification and transfer evidence as historical records.
+**v1.3.0 is published, deployed and accepted by the owner.** Its annotated tag points to `19c148441f125adb3d9dfbb598b3b745382f84e4`; [GitHub Release v1.3.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.3.0) records publication. #36–#44 are completed and milestone v1.3.0 is closed. Loan scheduling has been restored. Deployment, acceptance and scheduler restoration are owner-provided completion context; this documentation change did not access production. The published release used `1.3.0` package metadata. The [v1.3.0 runbook](docs/RELEASE_1_3_0.md) preserves the earlier preparation, verification and transfer evidence as historical records.
 
 Use **חסכונות** in the normal menu (mobile: **עוד**) to create an account with an independently confirmed opening/cutoff and explicit legacy overlap, set a goal, or archive/restore it. **הפקדה / משיכה** open the existing transaction form; an existing ordinary/imported cash record can be explicitly linked. **רישום ריבית** distinguishes held interest from a checking payout. Budget policy/transfer confirmation selects a named destination. Monthly settings do not enable automation: use explicit enable/pause or manual fulfillment. All-time held balances are distinct from the selected report period; this is not a live checking balance. Automation records transactions and does not transfer money at the bank.
+
+## Prepared release: v1.3.1 (unpublished)
+
+The owner accepted #49, #51 and #47, including the #51 bigint Savings-ID correction, and finalized one Patch candidate coordinated by #49. All seven package/lockfile fields are synchronized to `1.3.1`; commit, push, deployment, tagging and publication remain pending. See the [release notes](docs/RELEASE_1_3_1.md) and [review/commit handoff](docs/PATCH_1_3_1_REVIEW.md). v1.3.0 remains the published release; temporary preview-harness repairs are excluded.
 
 ## Features
 
@@ -97,7 +101,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata and lockfile root entries use the accepted `1.3.0` product version; see the [authoritative field inventory](docs/github-development-standard.md#continuous-changelog-and-coordinated-version-preparation).
+Root, client, and server package metadata and lockfile root entries use the prepared, unpublished `1.3.1` product version; see the [authoritative field inventory](docs/github-development-standard.md#continuous-changelog-and-coordinated-version-preparation).
 
 ## Getting started
 

@@ -64,6 +64,7 @@ const AddTransaction = () => {
     loanPaymentError,
     legoThemes,
     isEditMode,
+    returnTo,
     showNewCategoryModal,
     setShowNewCategoryModal,
     newCategoryName,
@@ -113,7 +114,7 @@ const AddTransaction = () => {
     {cancelledTransaction.void_reason && <p>{cancelledTransaction.void_reason}</p>}
     {cancelledTransaction.savings && <p>חיסכון: {cancelledTransaction.savings.name}</p>}
     {cancelledTransaction.savings?.reinstatable && <SecondaryButton onClick={restoreSavingsCash}>החזרה מפורשת באמצעות תנועה חדשה</SecondaryButton>}
-    <Link to="/transactions">חזרה לתנועות</Link>
+    <Link to={returnTo}>חזרה לתנועות</Link>
   </div>;
 
   const legoCategorySelected = isLegoCategory();
@@ -150,7 +151,7 @@ const AddTransaction = () => {
   return (
     <div className="transaction-form-page" dir="rtl">
       <div className="transaction-form-toolbar">
-        <Link className="transaction-form-back-link" to="/transactions">
+        <Link className="transaction-form-back-link" to={returnTo}>
           <ChevronRight size={16} aria-hidden="true" />
           חזרה לתנועות
         </Link>
@@ -502,7 +503,7 @@ const AddTransaction = () => {
             <MoneyAmount value={transaction.total_amount} />
           </div>
           <div className="transaction-form-actions__submit">
-            <Link className="transaction-form-cancel" to="/transactions">ביטול</Link>
+            <Link className="transaction-form-cancel" to={returnTo}>ביטול</Link>
             <Button
               type="submit"
               size="lg"

@@ -3534,6 +3534,49 @@ test('post-cleanup override, reallocation, deficit, and unbudgeted commands use 
   psql('budget_cleanup_actions','SELECT budget_assert_reconciled(id) FROM budget_months;');
 });
 
+test('issue 47 compact allocation contracts preserve 400/530/130 accounting and distinct operation types', () => {
+  const database = 'budget_issue_47';
+  createDatabase(database);
+  psql(database, fixture());
+  applyCurrentBudgetFoundation(database);
+  const month = psql(database, `SELECT to_char(timezone('Asia/Jerusalem',now()),'YYYY-MM');`).stdout.trim();
+  psql(database, `
+    SELECT add_manual_budget_funding('${month}',1000,'fixture','f4700000-0000-0000-0000-000000000001');
+    SELECT establish_funded_budget('${month}',1,400,'manual','f4700000-0000-0000-0000-000000000002');
+    INSERT INTO transactions(transaction_date,movement_type,total_amount,category_id) VALUES
+      ('${month}-12','expense',530,1),('${month}-12','expense',75,3);`);
+  const cashBefore = psql(database, 'SELECT count(*)||\'|\'||sum(total_amount) FROM transactions;').stdout.trim();
+  const categoryState = () => psql(database, `SELECT final_funded||'|'||actual_spent||'|'||deficit
+    FROM budget_category_composition WHERE month='${month}' AND category_id=1;`).stdout.trim();
+  assert.equal(categoryState(), '400.00|530.00|130.00');
+  // Match the shared UI's exact additional-funding payload: deficit has legs only.
+  const fullLegs = `'[{"source_kind":"unallocated","amount":"130.00"}]'::jsonb`;
+  const full = JSON.parse(psql(database, `SELECT get_budget_deficit_resolution_preview('${month}',1,${fullLegs});`).stdout.trim());
+  assert.equal(`${full.resulting_funded}|${full.remaining_deficit}|${full.can_apply}`, '530.00|0.00|true');
+  assert.equal(categoryState(), '400.00|530.00|130.00'); // preview/cancellation is read-only
+  // Apply partial coverage, then cover the remainder: total additional funding 130.
+  for (const [index, amount] of ['50.00', '80.00'].entries()) {
+    const legs = `'[{"source_kind":"unallocated","amount":"${amount}"}]'::jsonb`;
+    const preview = JSON.parse(psql(database, `SELECT get_budget_deficit_resolution_preview('${month}',1,${legs});`).stdout.trim());
+    const command = `SELECT apply_budget_deficit_resolution('${month}',1,${legs},
+      'f4700000-0000-0000-0000-00000000000${index + 3}','${preview.fingerprint}');`;
+    psql(database, command);
+    psql(database, command); // idempotent receipt retry must not allocate twice
+    assert.equal(categoryState(), index === 0 ? '450.00|530.00|80.00' : '530.00|530.00|0.00');
+  }
+  // The upper entry point still creates an unbudgeted allocation with requested_amount.
+  const upperLegs = `'[{"source_kind":"unallocated","amount":"75.00"}]'::jsonb`;
+  const upper = JSON.parse(psql(database, `SELECT get_budget_unbudgeted_resolution_preview('${month}',3,75,${upperLegs});`).stdout.trim());
+  psql(database, `SELECT apply_budget_unbudgeted_resolution('${month}',3,75,${upperLegs},
+    'f4700000-0000-0000-0000-000000000005','${upper.fingerprint}');`);
+  assert.equal(psql(database, `SELECT string_agg(item_kind||':'||count,',' ORDER BY item_kind)
+    FROM (SELECT item_kind,count(*) count FROM budget_operation_items
+      WHERE item_kind IN ('deficit_resolution','unbudgeted_resolution') GROUP BY item_kind) grouped;`).stdout.trim(),
+  'deficit_resolution:2,unbudgeted_resolution:1');
+  assert.equal(psql(database, 'SELECT count(*)||\'|\'||sum(total_amount) FROM transactions;').stdout.trim(), cashBefore);
+  psql(database, 'SELECT budget_assert_reconciled(id) FROM budget_months;');
+});
+
 test('post-cleanup mixed month close and reversal preserve one root and permanent closed state', () => {
   createDatabase('budget_cleanup_close');
   psql('budget_cleanup_close', fixture());
