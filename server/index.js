@@ -49,6 +49,11 @@ app.use(compression());
 // Prevent HTTP parameter pollution
 app.use(hpp());
 
+// Dedicated Shortcut boundary owns authentication, small-body parsing, throttling
+// and sanitized logging before the general logger/parser/JWT middleware.
+const { PATH: applePayPath, createApplePayRouter } = require('./routes/applePayRoutes');
+app.use(applePayPath, createApplePayRouter({ db: require('./config/supabase') }));
+
 // Logging
 app.use(morgan("combined"));
 
@@ -119,7 +124,9 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 const PORT = process.env.PORT || 5050;
-app.listen(PORT, () => console.log(`Architecture is solid on port ${PORT}`));
+if (require.main === module) {
+    app.listen(PORT, () => console.log(`Architecture is solid on port ${PORT}`));
+}
 
 // 404 handler
 app.use((req, res) => {
@@ -134,3 +141,5 @@ app.use((err, req, res, next) => {
     }
     res.status(500).json({ error: "Internal server error" });
 });
+
+module.exports = app;

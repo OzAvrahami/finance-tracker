@@ -10,6 +10,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #81 (APY-03): Add an opt-in Apple Shortcut ingestion endpoint with dedicated scoped authentication, server-bound selected-card mapping, exact ILS text normalization, merchant/name fallback, bounded requests and invocation retry safety through the APY foundation. Final on-device text conversion, HTTP capture and production activation remain pending.
 - #80 (APY-02): Add private, atomic transaction source ingestion with auditable provenance, source-scoped retry protection, conservative cross-source reconciliation, and review/cancellation foundations. Preserve legacy external-ID API behavior; Apple Shortcut and CAL producer integrations remain future APY work.
 
 ## [1.3.1] - Prepared (unpublished)

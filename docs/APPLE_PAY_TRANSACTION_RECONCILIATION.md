@@ -218,10 +218,24 @@ unsupported matching evidence, not a new rejection of previously accepted input.
 
 | Field | Contract |
 | --- | --- |
-| transaction_date | Existing effective/accounting DATE; immutable during automated reconciliation. Use explicit source purchase date on creation. If absent, derive from a timezone-qualified occurred_at in the source's verified business timezone (Asia/Jerusalem for the Israeli adapter). If neither is known, reject new automatic purchase creation; never substitute today. |
+| transaction_date | Existing effective/accounting DATE; immutable during automated reconciliation. Use explicit source purchase date on creation. If absent, derive from a timezone-qualified occurred_at in the source's verified business timezone (Asia/Jerusalem for the Israeli adapter). Otherwise reject new automatic purchase creation, except for the explicit owner-authorized Apple capture-date policy below. Never silently substitute server today. |
 | occurred_at | Optional source actual purchase instant, stored on the observation as TIMESTAMPTZ plus original timestamp text, original offset/zone and precision (`second`, `minute`, fractional digits, or unknown). No time means NULL, not midnight. A timestamp without a resolvable timezone is retained only as non-comparable source text; no guessed offset or DST fold. |
 | observed_at | Server timestamp when a successfully accepted observation is first recorded. Replays keep it. Use a separate event timestamp for later receipt/amendment, not overwrite. Legacy backfill uses migration-recording time with `evidence_origin=legacy_backfill`; original receipt time is unknown, not transactions.created_at reinterpreted as UTC. |
 | charge_date | Existing bank/card charge DATE, not candidate purchase date. New Apple cash defaults it to transaction_date solely because current schema requires it; record origin `provisional_purchase_date`. CAL may replace that provisional value once with explicit charge date under §9; no claim the fallback is real settlement. |
+
+**APY-03 owner-device clarification:** the owner's iOS 27.0 Transaction picker has
+no purchase-date/time property. For this Apple Shortcut flow only, the owner
+authorizes the automation to capture its execution date once in the user's local
+timezone and supply that DATE as `transaction_date` when no source date exists.
+This is an accounting fallback, **not provider purchase-date/time evidence**.
+Keep `occurred_at` null and server `observed_at` independent. Persist/retry the
+original DATE and invocation UUID unchanged; no server-receipt-date substitution.
+Delayed execution across midnight or travel can yield a different accounting day
+from the purchase: do not automatically shift dates or widen matching to compensate.
+Use explicit owner correction/review when known; adjacent-day date-only evidence
+remains review-only. See the [APY-03 guide](APY_03_APPLE_PAY_SHORTCUT.md) for the
+verified picker evidence, pending runtime mapping and capture procedure. This is
+a narrow owner-authorized clarification, not a change to other source contracts.
 
 Validate actual calendar dates. Preserve explicit provider DATE even when an instant
 converts to an adjacent Jerusalem date: record both and a discrepancy flag. Retrieval
