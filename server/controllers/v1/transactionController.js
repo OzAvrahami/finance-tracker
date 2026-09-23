@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const supabase = require('../../config/supabase');
 const { rejectUnsupported } = require('../../services/savingsTransactionService');
+const { insertLegacyTransaction } = require('../../services/transactionIngestionService');
 
 const schema = z.object({
   type: z.enum(['expense', 'income']),
@@ -157,11 +158,7 @@ async function createTransaction(req, res) {
     });
   }
 
-  const { data, error } = await supabase
-    .from('transactions')
-    .insert(row)
-    .select('id, external_id, created_at')
-    .single();
+  const { data, error } = await insertLegacyTransaction(supabase, row);
 
   if (error) {
     // Race condition: another request won the external_id unique constraint

@@ -8,6 +8,10 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- #80 (APY-02): Add private, atomic transaction source ingestion with auditable provenance, source-scoped retry protection, conservative cross-source reconciliation, and review/cancellation foundations. Preserve legacy external-ID API behavior; Apple Shortcut and CAL producer integrations remain future APY work.
+
 ## [1.3.1] - Prepared (unpublished)
 
 Prepared on 2026-09-18 after explicit owner acceptance of #49, #51 and #47. One Patch candidate, coordinated by #49, including the #51 bigint Savings-ID correction. All seven application-version fields are synchronized to 1.3.1. Commit, push, deployment, annotated tag and GitHub Release publication remain pending; this preparation date is not a publication date. Temporary preview-harness repairs are excluded. See [release notes](docs/RELEASE_1_3_1.md) and [verification evidence](docs/PATCH_1_3_1_REVIEW.md).
