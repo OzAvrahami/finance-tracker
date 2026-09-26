@@ -1,5 +1,11 @@
 # FlowLink native Wallet ingestion: planning decision
 
+> **FLI-01 follow-up, 2026-09-26:** the implementation-ready
+> [native ingestion contract](FLOWLINK_NATIVE_INGESTION_CONTRACT.md) now defines
+> the owner gate, pairing, device/binding APIs and atomic APY authorization for
+> owner review. #86 acceptance remains Pending. The original planning record below
+> is preserved as history; it does not authorize downstream implementation.
+
 Date: 2026-09-26. **Planning only; FLI-01 has not started.** FlowLink is a working
 name, not a branding project. The owner selected a native companion to replace the
 complex user-authored APY-03 Shortcut client. This record defines the work to review
