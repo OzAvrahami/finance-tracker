@@ -205,10 +205,11 @@ test('domain-protected Loan and itemized cash cannot use generic APY cancellatio
   sql(c.db,`UPDATE transactions SET loan_id=NULL WHERE id=${a.transaction_id};INSERT INTO transaction_items(transaction_id,item_name) VALUES(${a.transaction_id},'item');`);
   const item=detail(c,a.observation_id);assert.equal(call(c.db,'cancel_ingested_transaction',[key(),{transaction_id:a.transaction_id,expected_revision:item.decision_revision,expected_transaction_fingerprint:item.expected_transaction_fingerprint,reason:'attempt',actor:'owner'}]).reason_code,'protected_transaction');
 });
-test('ordered 029 foundation through 030-036 equals clean installation; failed upgrade rolls back', () => {
+test('ordered 029 foundation through current migrations equals clean installation; failed 036 upgrade rolls back', () => {
   const db='ordered',broken='interrupted';sql('postgres',`CREATE DATABASE ${db}; CREATE DATABASE ${broken} TEMPLATE apy_baseline;`);
   sql(db,full.split('-- Migration 030: Savings foundation')[0]);
-  for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^03[0-6]_.*\.sql$/.test(f)).sort())sql(db,read('server/migrations/'+f));
+  // full_schema includes later additive migrations; compare the same schema boundary.
+  for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>=30).sort())sql(db,read('server/migrations/'+f));
   const inventory=d=>json(d,"SELECT jsonb_build_object('functions',(SELECT jsonb_object_agg(oid::regprocedure::text,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND prokind='f'),'indexes',(SELECT jsonb_object_agg(indexname,indexdef) FROM pg_indexes WHERE schemaname='public'),'constraints',(SELECT jsonb_object_agg(conrelid::regclass::text||'.'||conname,pg_get_constraintdef(oid)) FROM pg_constraint WHERE connamespace='public'::regnamespace),'triggers',(SELECT jsonb_object_agg(tgname||tgrelid::regclass::text,pg_get_triggerdef(oid)) FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace='public'::regnamespace)));");
   assert.deepEqual(inventory(db),inventory('apy_clean'));
   assert.notEqual(sql(broken,migration.replace(/COMMIT;\s*$/,'SELECT 1/0;\nCOMMIT;'),true).status,0);

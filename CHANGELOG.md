@@ -10,6 +10,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #87 (FLI-02): Add owner-authorized FlowLink device enrollment, single-use pairing with safe lost-response recovery, independent digest-only device credentials, replacement/revocation and restricted device status APIs. Card bindings, native Wallet ingestion and the iOS client remain later work; no production activation is included.
 - #81 (APY-03): Add an opt-in Apple Shortcut ingestion endpoint with dedicated scoped authentication, server-bound selected-card mapping, exact ILS text normalization, merchant/name fallback, bounded requests and invocation retry safety through the APY foundation. Final on-device text conversion, HTTP capture and production activation remain pending.
 - #80 (APY-02): Add private, atomic transaction source ingestion with auditable provenance, source-scoped retry protection, conservative cross-source reconciliation, and review/cancellation foundations. Preserve legacy external-ID API behavior; Apple Shortcut and CAL producer integrations remain future APY work.
 

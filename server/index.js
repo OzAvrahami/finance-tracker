@@ -54,6 +54,11 @@ app.use(hpp());
 const { PATH: applePayPath, createApplePayRouter } = require('./routes/applePayRoutes');
 app.use(applePayPath, createApplePayRouter({ db: require('./config/supabase') }));
 
+// Device enrollment has its own owner/capability/device authority and safe logger.
+// No binding or native Wallet-ingestion routes are mounted by FLI-02.
+const { PATH: flowlinkPath, createFlowlinkRouter } = require('./routes/flowlinkRoutes');
+app.use(flowlinkPath, createFlowlinkRouter({ db: require('./config/supabase') }));
+
 // Logging
 app.use(morgan("combined"));
 
