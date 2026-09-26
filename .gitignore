@@ -43,3 +43,8 @@ CLAUDE.md
 
 # Local Claude Design references
 design-reference/finance-v2/
+
+# Xcode local state; shared projects and schemes remain tracked
+ios/**/xcuserdata/
+ios/**/DerivedData/
+ios/**/*.xcuserstate

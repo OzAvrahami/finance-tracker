@@ -10,6 +10,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #89 (FLI-04): Add the FlowLink iPhone app foundation (0.1.0, build 1), with protected pairing recovery, device-only Keychain credentials, safe device status and approved card binding discovery. Wallet capture/App Intents, distribution and production activation remain deferred.
+
 - #88 (FLI-03): Add owner-managed multi-card FlowLink bindings, stable per-binding APY sources, private atomic device-authorized Wallet ingestion, safe device binding discovery and a Settings management panel. Native ingestion is disabled by default and reuses existing APY reconciliation; the iOS client, Wallet validation and production activation remain later work.
 
 - #87 (FLI-02): Add owner-authorized FlowLink device enrollment, single-use pairing with safe lost-response recovery, independent digest-only device credentials, replacement/revocation and restricted device status APIs. Card bindings, native Wallet ingestion and the iOS client remain later work; no production activation is included.
