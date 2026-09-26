@@ -21,6 +21,7 @@ function requireFlowlinkDevice(service) {
     try {
       const token = bearer(req.headers.authorization);
       if (!credential(token)) fail('unauthorized');
+      req.flowlinkToken = token;
       req.flowlinkDevice = await service.device(token); // Fresh DB check on every request.
       next();
     } catch (error) { next(error); }

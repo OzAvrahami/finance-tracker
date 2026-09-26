@@ -70,7 +70,8 @@ const command = (name) => (db, requestKey, payload) => {
 // mirrors nonempty external IDs in the SAME INSERT transaction, including callers
 // outside this wrapper. Dry-run never calls this adapter; no source matching occurs.
 const insertLegacyTransaction = (db, row) => db.from('transactions').insert(row).select('id, external_id, created_at').single();
-module.exports = { ingestObservation, amendObservation: command('amend_observation'),
+module.exports = { ingestObservation,
+  ingestFlowlinkObservation: (db, digest, request) => rpc(db, 'ingest_flowlink_observation', { p_credential_sha256: digest, p_request: request }), amendObservation: command('amend_observation'),
   resolveObservation: command('resolve_observation'), cancelIngestedTransaction: command('cancel_ingested_transaction'),
   configureSource: command('configure_ingestion_source'), insertLegacyTransaction,
   getObservation: (db, id) => rpc(db, 'get_ingestion_observation', { p_observation_id: identifier(id) }),

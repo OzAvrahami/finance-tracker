@@ -733,3 +733,9 @@
     transition: none;
   }
 }
+
+.flowlink-bindings { display: grid; gap: var(--ft-space-4); }
+.flowlink-binding-list { display: grid; gap: var(--ft-space-3); }
+.flowlink-bindings .settings-record { flex-wrap: wrap; }
+
+.flowlink-bindings form { display: grid; gap: var(--ft-space-3); }

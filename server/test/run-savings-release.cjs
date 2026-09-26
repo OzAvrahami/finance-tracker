@@ -28,6 +28,11 @@ for (const [stage, pattern] of cases) {
   text = text.replace(migration, "const migration = ''; // Already at final release schema.")
     .replace(baseline, "const baseline = read('server/full_schema.sql');")
     .replace("path.join(__dirname, '../..', p)", `path.join(${JSON.stringify(root)}, p)`);
+  // The image's temporary initialization server accepts Unix-socket connections
+  // before shutting down. Wait for the final listener inside the portless container.
+  const readiness = "'pg_isready', '-U', 'postgres'";
+  assert(text.includes(readiness), 'Review disposable PostgreSQL readiness probe');
+  text = text.replace(readiness, "'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'");
   if (stage === 'Reporting') {
     const anchor = "const r=report(db,month(db)+'-01');";
     assert(text.includes(anchor));

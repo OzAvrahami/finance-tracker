@@ -117,9 +117,9 @@ test('device rejects broad credentials and client-selected identity', async t =>
   assert.equal((await c.send('/device?device_id=' + randomUUID())).status, 400);
   assert.equal(c.calls.length, 0);
 });
-test('no card-binding, Wallet ingestion, review or payment-source endpoints are exposed', async t => {
+test('device credentials cannot reach owner payment sources or unimplemented review endpoints', async t => {
   const c = await harness(t);
-  for (const path of ['/device/bindings', '/wallet-transactions', '/owner/payment-sources', '/review', '/cancel']) {
+  for (const path of ['/wallet-transactions', '/owner/payment-sources', '/review', '/cancel']) {
     assert.equal((await c.send(path, undefined, { headers: { Authorization: `Bearer ${token()}` } })).status, path.startsWith('/owner') ? 401 : 404);
   }
 });

@@ -6,6 +6,7 @@ import BudgetSettingsTab from './BudgetSettingsTab';
 import CategoriesTab from './CategoriesTab';
 import PaymentSourcesTab from './PaymentSourcesTab';
 import ShoppingSettingsTab from './ShoppingSettingsTab';
+import FlowlinkBindingsTab from './FlowlinkBindingsTab';
 import './Settings.css';
 
 const TABS = [
@@ -13,6 +14,7 @@ const TABS = [
   { key: 'budget', label: 'תקציב', icon: <PiggyBank size={16} aria-hidden="true" /> },
   { key: 'payment-sources', label: 'אמצעי תשלום', icon: <CreditCard size={16} aria-hidden="true" /> },
   { key: 'shopping', label: 'הגדרות קניות', icon: <ShoppingBasket size={16} aria-hidden="true" /> },
+  { key: 'flowlink', label: 'FlowLink', icon: <CreditCard size={16} aria-hidden="true" /> },
 ];
 
 const Settings = () => {
@@ -39,6 +41,9 @@ const Settings = () => {
             ))}
           </TabList>
 
+          <TabPanel value="flowlink" className="settings-tabs__panel">
+            {activeTab === 'flowlink' && <FlowlinkBindingsTab />}
+          </TabPanel>
           <TabPanel value="categories" className="settings-tabs__panel">
             {activeTab === 'categories' && <CategoriesTab />}
           </TabPanel>

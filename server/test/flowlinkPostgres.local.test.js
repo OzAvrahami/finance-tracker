@@ -75,7 +75,7 @@ before(async () => {
   run(['run', '-d', '--rm', '--name', container, '--label', 'finance.disposable=flowlink02', '-e', 'POSTGRES_PASSWORD=local_test_only', 'postgres:16-alpine']);started = true;
   const info = JSON.parse(run(['inspect', container]).stdout)[0];assert.equal(info.Config.Labels['finance.disposable'], 'flowlink02');
   assert.equal(info.Config.Image, 'postgres:16-alpine');assert.deepEqual(info.HostConfig.PortBindings || {}, {});
-  for (let i = 0; i < 60; i++) { if (run(['exec', container, 'pg_isready', '-U', 'postgres'], undefined, true).status === 0) break; await new Promise(r => setTimeout(r, 200)); }
+  for (let i = 0; i < 60; i++) { if (run(['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status === 0) break; await new Promise(r => setTimeout(r, 200)); }
   sql('postgres', 'CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role BYPASSRLS;CREATE DATABASE flowlink_clean;CREATE DATABASE flowlink_baseline;');
   sql('flowlink_baseline', baseline);sql('flowlink_clean', full);
 });
@@ -87,7 +87,9 @@ test('036 upgrade, clean installation, rerun and rollback preserve financial sch
   const snapshot = financialSnapshot(db);
   const broken = migration.replace('COMMIT;', "SELECT 1/0; COMMIT;");
   assert.notEqual(sql(db, broken, true).status, 0);assert.equal(scalar(db, "SELECT to_regclass('public.flowlink_devices') IS NULL;"), 't');
-  sql(db, migration);sql(db, migration);assert.deepEqual(financialSnapshot(db), snapshot);
+  sql(db, migration);sql(db, migration);
+  for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).filter(f => /^\d{3}_.*\.sql$/.test(f) && Number(f.slice(0, 3)) > 37).sort()) sql(db, fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
+  assert.deepEqual(financialSnapshot(db), snapshot);
   const definitions = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE '%flowlink%';");
   assert.deepEqual(definitions(db), definitions('flowlink_clean'));
   const existing = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'apy_%' OR proname LIKE 'savings_%' OR proname='ingest_observation');");
@@ -278,11 +280,11 @@ test('bounded cleanup expires/prunes only old capabilities and preserves devices
   assert.equal(scalar(c.db, `SELECT status FROM flowlink_pairing_capabilities WHERE id=${quote(recent.pairing_id)};`), 'expired');
   assert.equal(count(c.db, 'flowlink_devices'), 1);
 });
-test('no card-binding/native-money tables or APY sources were added', async t => {
+test('enrollment creates no bindings or APY sources and native money stays disabled', async t => {
   const c = await make(t);await enroll(c);
-  assert.equal(scalar(c.db, "SELECT to_regclass('public.flowlink_card_bindings') IS NULL;"), 't');
+  assert.equal(count(c.db, 'flowlink_card_bindings'), 0);
   assert.equal(scalar(c.db, "SELECT count(*) FROM transaction_ingestion_sources WHERE source_kind='apple_pay';"), '0');
-  assert.equal((await c.send('/wallet-transactions', {})).status, 404);
+  assert.equal((await c.send('/wallet-transactions', {})).status, 503);
 });
 
 test('receipt recovery ends after 24 hours without invalidating the stored device credential', async t => {

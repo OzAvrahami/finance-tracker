@@ -246,3 +246,10 @@ export const updateTask = (id, data) => api.put(`/tasks/${id}`, data);
 export const deleteTask = (id) => api.delete(`/tasks/${id}`);
 
 export default api;
+
+// Owner gate is enforced by the isolated FlowLink backend, never by client IDs.
+export const getFlowlinkDevices = cursor => api.get('/flowlink/v1/owner/devices', { params: cursor ? { cursor } : {} });
+export const getFlowlinkPaymentSources = cursor => api.get('/flowlink/v1/owner/payment-sources', { params: cursor ? { cursor } : {} });
+export const getFlowlinkBindings = (id, cursor) => api.get(`/flowlink/v1/owner/devices/${id}/bindings`, { params: cursor ? { cursor } : {} });
+export const createFlowlinkBinding = (id, body) => api.post(`/flowlink/v1/owner/devices/${id}/bindings`, body);
+export const updateFlowlinkBinding = (id, body) => api.patch(`/flowlink/v1/owner/bindings/${id}`, body);
