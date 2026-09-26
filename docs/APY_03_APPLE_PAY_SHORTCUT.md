@@ -1,5 +1,27 @@
 # APY-03: Apple Wallet probe and Finance Tracker Shortcut
 
+> **2026-09-26 direction/status update:** the owner superseded the complex
+> user-authored Shortcut client with the native FlowLink initiative
+> [#85](https://github.com/OzAvrahami/finance-tracker/issues/85). See the additive
+> [native planning record](FLOWLINK_NATIVE_INGESTION_PLAN.md). The backend, security
+> patterns, safe result envelope, tests and device evidence below remain useful;
+> the global environment credential and single-card setup are transitional.
+> Do not follow this historical guide to activate production. #81 remains
+> Open / Verify / P1 with owner acceptance **Pending**; no Shortcut HTTP/E2E
+> acceptance is implied.
+>
+> The owner reports Migration 036 applied with preflight and postflight 01-11/
+> OVERALL PASS, schema-cache reload, unchanged canonical rows/totals and legacy
+> backfill of 1 source / 1,531 observations / 0 events. Railway success at
+> `98efa80f45b4d2006b2601a9e1fdd620b797a459` and non-posting health 200 / Apple
+> 503 `apple_ingestion_disabled` were independently checked during planning.
+> `APPLE_PAY_INGESTION_ENABLED` must remain false. Transitional credential/source
+> environment configuration was owner-provisioned; its values were not inspected,
+> and environment configuration does not establish database source registration.
+> Earlier statements below about unapplied migration/undeployed code/unconfigured
+> credentials describe the historical implementation handoff, not current state.
+> No production change or SQL was performed in this planning update.
+
 [#81](https://github.com/OzAvrahami/finance-tracker/issues/81), parent
 [#78](https://github.com/OzAvrahami/finance-tracker/issues/78). Implements the thin
 adapter over the accepted [APY contract](APPLE_PAY_TRANSACTION_RECONCILIATION.md)

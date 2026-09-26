@@ -1,5 +1,14 @@
 # APY transaction ingestion and reconciliation contract
 
+> **2026-09-26 adapter direction:** native FlowLink planning
+> [#85](https://github.com/OzAvrahami/finance-tracker/issues/85) supersedes the complex
+> APY-03 user-authored Shortcut client. The accepted canonical/source identity,
+> optional source-time/reference, exact-money, ambiguity and compatibility rules in
+> this document remain authoritative. Device credentials and server-owned per-card
+> bindings are a future authorization adapter over this foundation, not a second
+> financial ingestion system. See [the planning record](FLOWLINK_NATIVE_INGESTION_PLAN.md);
+> FLI-01 is not started or accepted, and #81 owner acceptance remains Pending.
+
 APY-01 ([#79](https://github.com/OzAvrahami/finance-tracker/issues/79)), under
 [APY #78](https://github.com/OzAvrahami/finance-tracker/issues/78). Design complete
 for owner review; acceptance **Pending**. Audited 2026-09-22 at
