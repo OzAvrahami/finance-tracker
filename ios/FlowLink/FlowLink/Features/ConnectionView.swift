@@ -28,7 +28,7 @@ struct ConnectionView: View {
           Text("Connection")
         } footer: {
           Text(
-            "A private connection to Finance Tracker. Wallet capture is not included in this version."
+            "A private connection to Finance Tracker. Wallet parameter compatibility is awaiting on-device verification."
           )
         }
         if model.hasDraft {
@@ -94,6 +94,12 @@ struct ConnectionView: View {
             Text("Cards")
           }
         }
+        Section("Wallet captures") {
+          NavigationLink("Capture receipts") { CaptureHistoryView() }
+          Text(
+            "Do not uninstall or forget this connection while captures are unresolved. Review receipts first; local removal cannot cancel server transactions."
+          ).font(.caption).foregroundStyle(.secondary)
+        }
         Section("Diagnostics") {
           Button("Refresh") { Task { await model.restore() } }.disabled(model.busy)
           Button("Test Connection") { Task { await model.refresh() } }.disabled(
@@ -126,7 +132,7 @@ struct ConnectionView: View {
         Button("Forget", role: .destructive) { model.confirmReset() }
       } message: {
         Text(
-          "This clears this installation’s credential and saved pairing. It does not revoke the device on the server. Ask the owner to review any uncertain pairing before starting again."
+          "Review unresolved capture receipts before continuing. This clears this installation’s credential and saved pairing, making its receipts unavailable until the same device identity is restored. It does not revoke the device on the server. Ask the owner to review any uncertain pairing before starting again."
         )
       }
     }

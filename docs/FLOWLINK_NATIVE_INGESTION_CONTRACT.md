@@ -424,7 +424,7 @@ behavior; no automatic category learning or funding allocation is added.
 | 413 / 415 | Oversized/unsupported media or encoding; no automatic retry. |
 | 422 rejected | Invalid money/currency/merchant/date or inactive payment source; no automatic retry until reviewed, never mutate an uncertain receipt. |
 | 429 | Respect Retry-After, same key/body. |
-| 503 | flowlink_ingestion_disabled, flowlink_configuration_invalid, source/config mismatch or ingestion_unavailable; same-key retry only for transient service failure. Disabled/config errors pause until explicit resume. |
+| 503 | `flowlink_ingestion_disabled` creates a durable **held-for-owner-review** receipt, never automatic retry; only explicit confirmed manual retry may submit it. Other configuration/source mismatches pause. Only genuine transient service failures retry automatically with the same key/body. |
 
 Safe APY envelope remains `outcome, original_outcome, observation_id, transaction_id,
 disposition, review_required, reason_code, replayed, decision_revision`; numeric IDs
@@ -508,8 +508,9 @@ FLI-05 must execute this bounded experiment before declaring the action usable:
 
 AppEntity/EntityQuery follow Apple's [entity contract](https://developer.apple.com/documentation/appintents/appentity).
 Action output is a safe dialog/result status: Recorded, Already recorded, Pending
-retry, Needs review, or Not recorded with safe reason. No routine approval for valid
-cash. No notification implementation. Real discoverability, invocation/lock behavior
+retry, Held for review, Needs review, or Not recorded with safe reason. Normal enabled
+ingestion does not require routine approval; a disabled-ingestion hold always requires
+explicit owner review/manual retry. No notification implementation. Real discoverability, invocation/lock behavior
 and localized Hebrew/RTL status presentation require later device tests.
 
 ## 10. Frozen capture receipt and retry
@@ -517,7 +518,7 @@ and localized Hebrew/RTL status presentation require later device tests.
 At entry capture Gregorian local calendar DATE once with the device's current timezone
 and locale-independent YYYY-MM-DD formatting; generate UUIDv4 once. Never use a retry's
 clock or server receipt date. After native normalization, **durably commit a receipt
-before any HTTP**. Unsupported values fail locally with no submission. A failed
+before any ingestion POST** (binding/status reads do not post money). Unsupported values fail locally with no submission. A failed
 durable write means Not recorded; do not send and then attempt to persist the key.
 
 Use a small SQLite store in Application Support, excluded from backup, with
@@ -529,11 +530,12 @@ concurrent-intent and crash behavior rather than assuming an in-memory Swift act
 alone serializes all executions.
 
 Receipt fields: `idempotency_key` UUID PK, `installation_id`, `device_id`,
-`backend_origin`, `binding_id`, `payload_version=1`, immutable UTF-8 request bytes,
+`backend_origin`, `binding_id`, safe approved binding display-label snapshot, `payload_version=1`, immutable UTF-8 request bytes,
 their SHA-256, selected original merchant, canonical amount/currency/date (within
 those bytes), local `captured_at` for diagnostics only, `state`, `attempt_count`,
 `next_attempt_at`, `last_attempt_at`, safe `last_error_code`, safe response IDs/outcome/
-disposition/revision. No credential, raw Wallet objects, card label or provider time.
+disposition/revision. No credential, raw Wallet objects, raw Wallet card label or provider time.
+The owner-approved binding label is local review metadata, not payment authority or an HTTP field.
 Identity/date/payload are immutable; statuses update separately. Local captured_at
 is never sent as occurred_at or used for reconciliation.
 
@@ -541,9 +543,10 @@ is never sent as occurred_at or used for reconciliation.
 | --- | --- |
 | queued / in_flight | Persist attempt start; load current Keychain credential only at transmission. 20-second request timeout. One worker claim per receipt. Crash/timeout/lost response resets to retry_wait with original bytes/key; even duplicate sends are APY-idempotent. |
 | transient timeout/network/503 ingestion_unavailable/429 | Backoff 30s, 2m, 10m, 1h, then 6h; honor longer Retry-After, ±20% jitter. At most one HTTP attempt per intent invocation; foreground app resumes due work, max 3 attempts per receipt per foreground session. No sleeps keeping intent alive, no promised background delivery. |
+| 503 flowlink_ingestion_disabled | Persist held-for-owner-review separately from transient retry. Retain exact receipt through restart. Launch/foreground and later backend enablement must not send it. Show merchant, amount/currency, original date, binding label and held status. Only confirmed manual retry sends the same original bytes/key with current Keychain credential; still disabled means held again. |
 | acknowledged created/reconciled | Terminal delivered; retain safe receipt 30 days then remove. already_observed evaluates original/current disposition: pending -> needs_review, cancelled -> needs_review, otherwise delivered. |
 | ambiguous/conflict/rejected | needs_review or failed; no automatic retry or new key. Retain full receipt pending explicit owner resolution. APY-05 financial review UI remains out of scope; app only shows safe status and asks owner to inspect Finance Tracker. |
-| 401 / disabled config / binding unavailable | paused; credential recovery or explicit owner resume needed. Rotation keeps same device/binding/payload. Retired binding cannot be substituted. |
+| 401 / other invalid config / binding unavailable | paused; credential recovery or explicit owner resume needed. Rotation keeps same device/binding/payload. Retired binding cannot be substituted. |
 | queued longer than 7 days or 20 attempts | paused for explicit review; do not unexpectedly auto-post old cash. Manual resume uses same payload/key only. |
 
 Bound local store to **500 receipts and 5 MiB** (including payload data); evict only
@@ -562,6 +565,16 @@ Concurrent equal legitimate captures use independent UUIDs. Two automation invoc
 for one physical purchase may still produce two cash rows: Wallet offers no verified
 durable event ID and APY does not auto-merge Apple↔Apple. Do not hash merchant/amount/
 date/card into identity. Configure only one automation per selected device/card.
+
+**Owner decision, 2026-09-27:** real Wallet runtime/locked-event evidence is deferred,
+not an implementation completion blocker for #90. Prepare infrastructure with both
+ingestion flags false, capture/hold a later natural event, inspect it before any
+financial posting, then authorize native enablement and manually retry the original
+receipt. No pre-purchase enablement is required. Configuration-time direct Amount,
+Merchant and Name mapping is owner-verified; actual runtime values remain unverified.
+The [owner rollout and deferred #91 checklist](FLOWLINK_OWNER_ROLLOUT.md) supplies
+migration/security evidence, production setup and the legacy CAL duplicate boundary.
+This decision changes no backend route, request, authorization or financial RPC.
 
 Date limitations: delayed execution across midnight or travel can produce a different
 accounting date than purchase. Retain the captured date and let owner review/correct

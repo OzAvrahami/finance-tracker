@@ -32,7 +32,30 @@ struct FlowLinkConfiguration: Equatable {
     -> Self
   {
     #if DEBUG
-      return try Self(environment["FLOWLINK_API_BASE_URL"] ?? defaultBase, allowLocalHTTP: true)
+      // Intent launches do not inherit Xcode's Run environment. Persist only the
+      // validated, non-secret development endpoint in the non-backed-up app container.
+      var folder = try FileManager.default.url(
+        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+      ).appendingPathComponent("FlowLink", isDirectory: true)
+      try FileManager.default.createDirectory(
+        at: folder, withIntermediateDirectories: true,
+        attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+      var values = URLResourceValues()
+      values.isExcludedFromBackup = true
+      try folder.setResourceValues(values)
+      let selection = folder.appendingPathComponent("backend-selection.json")
+      if let override = environment["FLOWLINK_API_BASE_URL"] {
+        let config = try Self(override, allowLocalHTTP: true)
+        try JSONEncoder().encode(config.baseURL.absoluteString).write(
+          to: selection, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        return config
+      }
+      if FileManager.default.fileExists(atPath: selection.path) {
+        return try Self(
+          JSONDecoder().decode(String.self, from: Data(contentsOf: selection)), allowLocalHTTP: true
+        )
+      }
+      return try Self(defaultBase)
     #else
       return try Self(defaultBase)
     #endif

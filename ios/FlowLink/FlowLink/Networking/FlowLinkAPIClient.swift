@@ -37,7 +37,7 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
     completionHandler(nil)
   }
 }
-@MainActor final class FlowLinkAPIClient: FlowLinkAPI {
+@MainActor final class FlowLinkAPIClient: FlowLinkAPI, WalletTransport {
   let configuration: FlowLinkConfiguration
   private let session: URLSession
   init(
@@ -75,6 +75,37 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
     else { throw FlowLinkError.malformedResponse }
     try value.bindings.forEach { try $0.validate() }
     return value.bindings
+  }
+  func sendCapture(_ bytes: Data, credential: DeviceCredential) async -> DeliveryDecision {
+    var request = URLRequest(
+      url: configuration.baseURL.appendingPathComponent("wallet-transactions"), timeoutInterval: 20)
+    request.httpMethod = "POST"
+    request.httpBody = bytes
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.setValue(credential.authorization, forHTTPHeaderField: "Authorization")
+    do {
+      let (stream, response) = try await session.bytes(for: request)
+      guard let http = response as? HTTPURLResponse else {
+        return .init(state: .paused, code: "unknown_response")
+      }
+      var data = Data()
+      for try await byte in stream {
+        guard data.count < 65_536 else { return .init(state: .paused, code: "unknown_response") }
+        data.append(byte)
+      }
+      return WalletDelivery.interpret(
+        status: http.statusCode, data: data,
+        retryAfter: http.value(forHTTPHeaderField: "Retry-After"), now: Date())
+    } catch let error as URLError {
+      if [
+        .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
+        .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+      ].contains(error.code) {
+        return .init(state: .paused, code: "configuration")
+      }
+      return .init(state: .retryWait, code: "unknown_delivery")
+    } catch { return .init(state: .retryWait, code: "unknown_delivery") }
   }
   private func call<T: Decodable>(
     _ path: String, credential: DeviceCredential? = nil, body: Data? = nil,

@@ -190,4 +190,47 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
       } catch { XCTAssertEqual(error as? FlowLinkError, .malformedResponse) }
     }
   }
+  func testWalletRequestUsesFrozenBytesAndDeviceAuthorization() async throws {
+    let body = Data(
+      "{\"outcome\":\"created\",\"disposition\":\"created\",\"review_required\":false,\"reason_code\":\"no_candidate\"}"
+        .utf8)
+    let (api, stub) = try client(status: 201, body: body)
+    let request = WalletRequest(
+      binding_id: Fixture.deviceID, amount: "4.00", currency: "ILS", merchant: "Israel Post",
+      transaction_date: "2026-09-26", idempotency_key: Fixture.credentialID)
+    let bytes = try JSONEncoder().encode(request)
+    let result = await api.sendCapture(bytes, credential: try Fixture.credential())
+    XCTAssertEqual(result.state, .delivered)
+    let sent = try XCTUnwrap(stub.requests.first)
+    XCTAssertEqual(sent.url?.path, "/api/flowlink/v1/wallet-transactions")
+    XCTAssertEqual(sent.httpMethod, "POST")
+    XCTAssertEqual(
+      sent.value(forHTTPHeaderField: "Authorization"), try Fixture.credential().authorization)
+    let stream = try XCTUnwrap(sent.httpBodyStream)
+    stream.open()
+    defer { stream.close() }
+    var buffer = [UInt8](repeating: 0, count: 4096)
+    let count = stream.read(&buffer, maxLength: buffer.count)
+    XCTAssertEqual(Data(buffer.prefix(max(0, count))), bytes)
+  }
+  func testWalletTimeoutAndMalformedResponseKeepOriginalReceiptRetrySafe() async throws {
+    let (offline, _) = try client(failure: URLError(.timedOut))
+    let timed = await offline.sendCapture(Data("{}".utf8), credential: try Fixture.credential())
+    XCTAssertEqual(timed.state, .retryWait)
+    let (malformed, _) = try client(body: Data("private server details".utf8))
+    let result = await malformed.sendCapture(Data("{}".utf8), credential: try Fixture.credential())
+    XCTAssertEqual(result.state, .paused)
+    XCTAssertEqual(result.code, "unknown_response")
+  }
+  func testExactServerDisabledEnvelopeBecomesOwnerHold() async throws {
+    let body = Data(
+      #"{"outcome":"rejected","original_outcome":null,"observation_id":null,"transaction_id":null,"disposition":"pending","review_required":false,"reason_code":"flowlink_ingestion_disabled","replayed":false,"decision_revision":null}"#
+        .utf8)
+    let (api, stub) = try client(status: 503, body: body)
+    let decision = await api.sendCapture(Data("{}".utf8), credential: try Fixture.credential())
+    XCTAssertEqual(decision.state, .heldForOwnerReview)
+    XCTAssertEqual(decision.code, "flowlink_ingestion_disabled")
+    XCTAssertEqual(stub.requests.count, 1)
+  }
+
 }
