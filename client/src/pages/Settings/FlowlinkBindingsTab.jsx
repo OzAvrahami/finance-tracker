@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, ConfirmDialog, PrimaryButton, SecondaryButton, Select, TextField } from '../../components/ui';
 import { createFlowlinkBinding, getFlowlinkBindings, getFlowlinkDevices, getFlowlinkPaymentSources, updateFlowlinkBinding } from '../../services/api';
+import FlowlinkPairingDialog from './FlowlinkPairingDialog';
 import { SettingsSkeleton } from './SettingsComponents';
 
 const statusLabels = { active: 'פעיל', disabled: 'מושבת', retired: 'הוצא משימוש' };
@@ -37,6 +38,10 @@ export default function FlowlinkBindingsTab() {
       .finally(() => { if (current) setListLoading(false); });
     return () => { current = false; };
   }, [deviceId, reload]);
+  const [pairingOpen, setPairingOpen] = useState(false);
+  const refreshDevices = useCallback(async () => {
+    const rows = await pages(getFlowlinkDevices, 'devices'); setDevices(rows); return rows;
+  }, []);
   const selected = devices.find(d => d.id === deviceId);
   async function execute(command) {
     setPending(command);setBusy(true);setError('');setNotice('');
@@ -64,6 +69,11 @@ export default function FlowlinkBindingsTab() {
     {pending && <SecondaryButton disabled={busy} onClick={() => execute(pending)}>ניסיון חוזר לאותה פעולה</SecondaryButton>}
     {!pending && <SecondaryButton disabled={busy} onClick={() => setReload(v => v + 1)}>רענון</SecondaryButton>}
     {allowed && <>
+      <PrimaryButton disabled={busy || Boolean(pending)} onClick={() => setPairingOpen(true)}>חיבור iPhone חדש</PrimaryButton>
+      {pairingOpen && <FlowlinkPairingDialog refreshDevices={refreshDevices}
+        onConnected={device => { setPaymentId(''); setLabel(''); setDeviceId(device.id); setPairingOpen(false); setNotice('ה־iPhone נוסף לרשימה. בדקו את שמו ב־FlowLink והוסיפו לו שיוך כרטיס.'); }}
+        onClose={message => { setPairingOpen(false); if (message) setNotice(message); }} />}
+
       <Select label="מכשיר FlowLink" value={deviceId} onValueChange={setDeviceId} disabled={busy || Boolean(pending)}>
         <option value="">בחרו מכשיר</option>
         {devices.map(d => <option key={d.id} value={d.id}>{d.label} · {d.id.slice(0, 8)}{d.status === 'revoked' ? ' · בוטל' : ''}</option>)}

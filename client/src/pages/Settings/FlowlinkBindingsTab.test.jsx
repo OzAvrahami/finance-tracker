@@ -1,9 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import FlowlinkBindingsTab from './FlowlinkBindingsTab';
-import { createFlowlinkBinding, getFlowlinkBindings, getFlowlinkDevices, getFlowlinkPaymentSources, updateFlowlinkBinding } from '../../services/api';
-vi.mock('../../services/api', () => ({ createFlowlinkBinding: vi.fn(), getFlowlinkBindings: vi.fn(), getFlowlinkDevices: vi.fn(), getFlowlinkPaymentSources: vi.fn(), updateFlowlinkBinding: vi.fn() }));
+import { createFlowlinkBinding, createFlowlinkPairing, cancelFlowlinkPairing, getFlowlinkBindings, getFlowlinkDevices, getFlowlinkPaymentSources, updateFlowlinkBinding } from '../../services/api';
+vi.mock('../../services/api', () => ({ createFlowlinkPairing: vi.fn(), cancelFlowlinkPairing: vi.fn(), createFlowlinkBinding: vi.fn(), getFlowlinkBindings: vi.fn(), getFlowlinkDevices: vi.fn(), getFlowlinkPaymentSources: vi.fn(), updateFlowlinkBinding: vi.fn() }));
 const device = { id: '11111111-1111-4111-8111-111111111111', label: 'My phone', status: 'active' };
 const card = { id: '9223372036854775806', name: 'Explicit card', last4: '1234' };
 const binding = { id: '22222222-2222-4222-8222-222222222222', device_id: device.id, label: 'My binding', payment_source_id: card.id, status: 'active', revision: '1' };
@@ -65,4 +65,37 @@ it('a revoked device retains history but cannot create or re-enable a binding', 
   getFlowlinkBindings.mockResolvedValue({ data: { bindings: [{ ...binding, status: 'disabled' }], next_cursor: null } });
   await selectDevice();expect(screen.queryByRole('button', { name: 'יצירת שיוך' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'הפעלה מחדש' })).toBeDisabled();
+});
+
+it('owner can open QR onboarding without choosing a payment source or using developer tools', async () => {
+  const user = userEvent.setup(); render(<FlowlinkBindingsTab />);
+  await user.click(await screen.findByRole('button', { name: 'חיבור iPhone חדש' }));
+  await user.type(screen.getByLabelText(/שם המכשיר/), 'Noya iPhone');
+  createFlowlinkPairing.mockResolvedValue({ data: { pairing_id: 'pair', pairing_text: `flpair1.11111111-1111-4111-8111-111111111111.${'A'.repeat(43)}`, expires_at: new Date(Date.now() + 600000).toISOString() } });
+  cancelFlowlinkPairing.mockResolvedValue({});
+  await user.click(screen.getByRole('button', { name: 'יצירת QR' }));
+  await screen.findByText('ממתינים לחיבור ה־iPhone…');
+  expect(createFlowlinkPairing).toHaveBeenCalledWith({ purpose: 'enroll', label: 'Noya iPhone' });
+  expect(createFlowlinkBinding).not.toHaveBeenCalled();
+});
+
+it('refreshes and selects the newly enrolled device with no inherited card choice', async () => {
+  vi.useFakeTimers();
+  try {
+    await act(async () => render(<FlowlinkBindingsTab />));
+    fireEvent.click(screen.getByRole('button', { name: 'חיבור iPhone חדש' }));
+    fireEvent.change(screen.getByLabelText(/שם המכשיר/), { target: { value: 'Noya iPhone' } });
+    createFlowlinkPairing.mockResolvedValue({ data: { pairing_id: 'pair', pairing_text: `flpair1.11111111-1111-4111-8111-111111111111.${'A'.repeat(43)}`, expires_at: new Date(Date.now() + 600000).toISOString() } });
+    cancelFlowlinkPairing.mockResolvedValue({});
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'יצירת QR' })));
+    const enrolled = { id: 'new-device', label: 'Noya iPhone', status: 'active' };
+    getFlowlinkDevices.mockResolvedValue({ data: { devices: [device, enrolled], next_cursor: null } });
+    getFlowlinkBindings.mockResolvedValue({ data: { bindings: [], next_cursor: null } });
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('מכשיר FlowLink')).toHaveValue(enrolled.id);
+    expect(getFlowlinkBindings).toHaveBeenCalledWith(enrolled.id, undefined);
+    expect(screen.getByRole('combobox', { name: /אמצעי תשלום לשיוך/ })).toHaveValue('');
+    expect(createFlowlinkBinding).not.toHaveBeenCalled();
+  } finally { cleanup(); vi.useRealTimers(); }
 });

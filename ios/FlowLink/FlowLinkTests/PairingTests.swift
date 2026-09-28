@@ -3,6 +3,49 @@ import XCTest
 @testable import FlowLink
 
 @MainActor final class PairingTests: XCTestCase {
+  func testScannedCodeUsesExistingConnectionAndKeychainFlowExactlyOnce() async throws {
+    let (service, vault, _, api, config) = try Fixture.context()
+    let model = ConnectionModel(api: api, pairing: service, configuration: config)
+    let gate = PairingScanGate()
+    let code = try XCTUnwrap(gate.accept(Fixture.code))
+    XCTAssertEqual(gate.state, .accepted)
+    XCTAssertNil(gate.accept(Fixture.code))
+    await model.connect(code: code)
+    XCTAssertEqual(api.drafts.count, 1)
+    XCTAssertEqual(model.state, .paired)
+    XCTAssertNotNil(vault.values["current"])
+    XCTAssertNil(vault.values["pairing-draft"])
+    XCTAssertEqual(model.status?.ingestionEnabled, false)
+  }
+  func testInvalidQRNeverBecomesAConnectionOrURL() {
+    let gate = PairingScanGate()
+    for code in [
+      "https://example.com", "javascript:alert(1)", "fldev1_" + String(repeating: "A", count: 43),
+      "flpair1.invalid.secret",
+    ] {
+      XCTAssertNil(gate.accept(code))
+      XCTAssertEqual(gate.state, .scanning)
+      XCTAssertNotNil(gate.message)
+    }
+    XCTAssertNotNil(gate.accept(Fixture.code))
+  }
+  func testCameraDeniedAndUnavailableFailSafely() {
+    for denied in [true, false] {
+      let gate = PairingScanGate()
+      gate.cameraFailed(denied: denied)
+      XCTAssertEqual(gate.state, denied ? .denied : .unavailable)
+      XCTAssertNotNil(gate.message)
+      XCTAssertNil(gate.accept(Fixture.code))
+    }
+  }
+  func testScannerStopRejectsQueuedCallbacksAndFailureCannotUndoAcceptance() {
+    let gate = PairingScanGate()
+    XCTAssertNotNil(gate.accept(Fixture.code))
+    gate.cameraFailed(denied: false)
+    XCTAssertEqual(gate.state, .accepted)
+    gate.stop()
+    XCTAssertNil(gate.accept(Fixture.code))
+  }
   func testKeychainFirstSuccessfulPairingPromotesAndRemovesDraft() async throws {
     let (service, vault, metadata, api, _) = try Fixture.context()
     try service.prepare(Fixture.code)

@@ -1,0 +1,4 @@
+.flowlink-pairing { display: grid; gap: 1rem; justify-items: center; text-align: center; }
+.flowlink-pairing__qr { padding: 20px; background: #fff; border-radius: 12px; max-width: 100%; }
+.flowlink-pairing__qr svg { display: block; max-width: 100%; height: auto; }
+.flowlink-pairing__code { display: block; overflow-wrap: anywhere; user-select: all; padding: 1rem 0; }

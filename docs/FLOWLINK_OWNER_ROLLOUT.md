@@ -4,6 +4,9 @@ Prepared for [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/9
 
 The target ready state is deployed enrollment/bindings with **both `FLOWLINK_INGESTION_ENABLED=false` and `APPLE_PAY_INGESTION_ENABLED=false`**. Keep them false before and during the first natural purchase. No last-minute enablement is needed. The native app stores the event, receives `503 / flowlink_ingestion_disabled`, and holds it for explicit review. Enabling the server later does not release that hold. Only a confirmed manual retry sends the original receipt.
 
+
+**Owner update, 2026-09-28:** main/production `f7b1e7003d1f9d272dda5cc34c0282089f62bf4a` has migrations 037/038 deployed and verified, owner authority configured and both ingestion flags false. The migration instructions below are retained for installations that have not reached that state; **do not rerun them for the QR onboarding correction**. This correction needs only a later owner-operated web/app update. No production state was inspected or changed during its implementation.
+
 ## 1. Reviewed commit, recovery point and maintenance
 
 1. Owner reviews #90, commits with `feat(flowlink): add Wallet App Intent ingestion`, and merges to main manually. Record the resulting full SHA; do not substitute the pre-implementation SHA. Pause automatic Railway deployment **before pushing** migration-dependent code, so pushing cannot race the database steps. If pushing already occurred, inspect the current deployment before proceeding. This runbook is not permission to deploy from a dirty worktree.
@@ -161,27 +164,9 @@ xcrun devicectl device install app --device '<owner-device-UDID>' \
 
 Its fixed API base is `https://finance-tracker-production-d34c.up.railway.app/api/flowlink/v1`. No LAN, `.local`, `.invalid` URL or custom root is used. If the owner chooses Debug instead, explicitly set `FLOWLINK_API_BASE_URL` to that production URL and launch once; merely removing the Xcode environment variable leaves the persisted Debug selection in place. Verify the intended build/configuration before pairing. Do not uninstall to switch endpoints: uninstall may lose receipts. Origin changes isolate credentials/local identity.
 2. Open the app and confirm it runs. Check the actual local provisioning profile expiry and signing validity for the expected later-week capture window; Personal Team installation is not indefinite distribution. Renew the same development app before expiry without uninstalling or deleting receipts. No purchase-time flag action is required, but an expired/non-running app, insufficient storage, unavailable protected data or a Wallet automation that iOS does not execute cannot capture an event. These are not proven away by configuration-time mapping.
-3. Owner creates one enroll capability (10-minute TTL):
-
-```js
-const flPairing = await flOwner('/owner/pairings', { purpose: 'enroll', label: 'Owner iPhone' });
-copy(flPairing.pairing_text); // DevTools clipboard helper; paste directly into FlowLink, not logs/issues.
-```
-
-Use FlowLink's protected paste/connect flow. Do not extract its Keychain credential. On lost response, use **Retry pairing** with the persisted draft. Do not blindly create a second device. Inspect owner `GET /owner/devices` if uncertain; cancel an unused capability explicitly before deliberate replacement.
-4. In FlowLink, **Refresh / Test Connection** consumes `GET /device`. Verify active device, expected label, credential revision, protocol 1 and **ingestion disabled**. In the owner web tab, `await flOwner('/owner/devices')` lists safe enrolled devices; paginate `next_cursor` and match the phone identity explicitly.
-5. Read `await flOwner('/owner/payment-sources')`, following `next_cursor`. Owner explicitly chooses the correct active payment source; no label/last4 inference or hardcoded ID. Create the binding in the deployed Settings → FlowLink panel if that frontend version is deployed, or with this owner API command:
-
-```js
-const flDeviceID = '<verified-enrolled-device-uuid>';
-const flBindingCommand = {
-  request_id: crypto.randomUUID(), label: '<owner-approved-display-label>',
-  payment_source_id: '<explicit-active-decimal-payment-source-id>'
-};
-const flBinding = await flOwner(`/owner/devices/${flDeviceID}/bindings`, flBindingCommand);
-```
-
-On an uncertain response, retain/reuse **that exact command and request_id**; do not allocate another UUID. Store only safe command/response metadata in private rollout evidence. The new binding maps one device and payment source to its stable `apple_pay / flowlink:<binding UUID>` APY source. Changing cards means retiring/creating identities, never remapping queued receipts.
+3. In the normal signed-in Finance Tracker web app, open **Settings → FlowLink → חיבור iPhone חדש** (Connect new iPhone). Enter a friendly unique label, e.g. “Oz iPhone” or “Noya iPhone”, and choose **יצירת QR**. The QR is generated locally, expires after ten minutes and is not displayed as raw text. No developer console, owner UUID or bearer token is involved in enrollment. Section 5's administrative identity verification is a separate initial infrastructure procedure, not household onboarding.
+4. On that iPhone, open FlowLink → **Scan QR** → allow camera → scan → **Connect**. If needed, use **Having trouble scanning?** and the web **לא מצליחים לסרוק?** fallback. After a lost response use **Retry pairing** with the saved draft; do not create another device blindly. Verify Connected, expected device label/revision and **ingestion disabled**. The web polls only devices; a unique newly enrolled matching label is selected automatically. Ambiguous concurrent same-name results require explicit selection. Closing an unused QR attempts cancellation; consumed pairing refreshes devices safely.
+5. In Settings → FlowLink, confirm the selected device against the label shown on its phone. Enter the binding label and **explicitly select** the intended active payment source, then Create Binding. There is no inferred/default card. On uncertain response, use the panel's same-command retry. Never remap an old binding/queued receipt to a different card.
 6. Refresh FlowLink's Cards (`GET /device/bindings`). Verify the correct safe label, active status/revision and available=true even while ingestion=false. Pairing/status/binding reads and owner management remain usable while disabled. Source/payment IDs stay in owner APIs, never in the phone UI.
 7. Run the read-only snapshot again, while ordinary writers are still quiet, and compare with enrollment allowances:
 

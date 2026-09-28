@@ -253,3 +253,6 @@ export const getFlowlinkPaymentSources = cursor => api.get('/flowlink/v1/owner/p
 export const getFlowlinkBindings = (id, cursor) => api.get(`/flowlink/v1/owner/devices/${id}/bindings`, { params: cursor ? { cursor } : {} });
 export const createFlowlinkBinding = (id, body) => api.post(`/flowlink/v1/owner/devices/${id}/bindings`, body);
 export const updateFlowlinkBinding = (id, body) => api.patch(`/flowlink/v1/owner/bindings/${id}`, body);
+
+export const createFlowlinkPairing = body => api.post('/flowlink/v1/owner/pairings', body, { timeout: 15000 });
+export const cancelFlowlinkPairing = id => api.post(`/flowlink/v1/owner/pairings/${id}/cancel`, {}, { timeout: 15000 });

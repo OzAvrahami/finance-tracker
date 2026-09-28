@@ -10,6 +10,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #90 onboarding correction: Add owner-web local QR enrollment with friendly device names, expiry/cancellation and device refresh, plus native in-app QR scanning and confirmation. Manual pairing-code transfer is a secondary fallback; existing single-use enrollment, Keychain recovery and explicit card mappings remain unchanged. Add concise Wallet setup guidance; no production activation or runtime Wallet verification is implied.
+
 - #90 (FLI-05, verification in progress): Add the native FlowLink Wallet App Intent, approved binding selection, exact ILS normalization, protected SQLite capture receipts with binding-label snapshots, same-payload retries and capture-status UI. Explicit ingestion-disabled responses are held for owner review and cannot auto-submit on app launch or later server enablement; only confirmed manual retry sends the original receipt. The owner verified direct Shortcuts Amount/Merchant/Name mapping; runtime Wallet-event values, locked-device behavior and production E2E remain unverified; no production activation is included.
 
 - #89 (FLI-04): Add the FlowLink iPhone app foundation (0.1.0, build 1), with protected pairing recovery, device-only Keychain credentials, safe device status and approved card binding discovery. Wallet capture/App Intents, distribution and production activation remain deferred.

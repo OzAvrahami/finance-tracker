@@ -3,6 +3,8 @@ import SwiftUI
 struct ConnectionView: View {
   @Bindable var model: ConnectionModel
   @State private var pairingText = ""
+  @State private var showScanner = false
+  @State private var showManualPairing = false
   @FocusState private var pairingFocused: Bool
   var body: some View {
     NavigationStack {
@@ -28,7 +30,7 @@ struct ConnectionView: View {
           Text("Connection")
         } footer: {
           Text(
-            "A private connection to Finance Tracker. Wallet parameter compatibility is awaiting on-device verification."
+            "A private connection to Finance Tracker. Connect once; no pairing code is needed for everyday use."
           )
         }
         if model.hasDraft {
@@ -41,17 +43,22 @@ struct ConnectionView: View {
           }
         } else if model.session == nil {
           Section("Connect this iPhone") {
-            Text("Ask the Finance Tracker owner for a pairing code, then paste it here.")
-            SecureField("Pairing code", text: $pairingText)
-              .textInputAutocapitalization(.never).autocorrectionDisabled()
-              .accessibilityIdentifier("pairingCode")
-              .focused($pairingFocused)
-            Button("Connect") {
-              pairingFocused = false
-              let code = pairingText
-              pairingText = ""
-              Task { await model.connect(code: code) }
-            }.disabled(model.busy || pairingText.isEmpty).accessibilityIdentifier("connect")
+            Text("On Finance Tracker, open Settings → FlowLink → Connect new iPhone.")
+            Button("Scan QR", systemImage: "qrcode.viewfinder") { showScanner = true }
+              .disabled(model.busy).accessibilityIdentifier("scanQR")
+            DisclosureGroup("Having trouble scanning?", isExpanded: $showManualPairing) {
+              Text("Reveal the code below the QR in Finance Tracker, then paste it here.")
+              SecureField("Pairing code", text: $pairingText)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .accessibilityIdentifier("pairingCode")
+                .focused($pairingFocused)
+              Button("Connect") {
+                pairingFocused = false
+                let code = pairingText
+                pairingText = ""
+                Task { await model.connect(code: code) }
+              }.disabled(model.busy || pairingText.isEmpty).accessibilityIdentifier("connect")
+            }
             if let message = model.message {
               Text(message).font(.callout).foregroundStyle(.secondary)
                 .accessibilityIdentifier("safeMessage")
@@ -94,6 +101,21 @@ struct ConnectionView: View {
             Text("Cards")
           }
         }
+        if model.state == .paired && model.cards.contains(where: \.isAvailable) {
+          Section("Finish Wallet setup") {
+            Text(
+              "In Shortcuts, create a Wallet personal automation for your selected card. Add FlowLink → Record Wallet Transaction."
+            )
+            Text(
+              "Choose the matching approved card binding. Set Amount to Transaction.Amount, Merchant to Transaction.Merchant, and Name to Transaction.Name."
+            )
+            Text(
+              "Turn Show When Run off and keep the automation on. No Card or Pass or extra actions are needed."
+            )
+            Text("You set up this personal automation yourself; FlowLink cannot create it for you.")
+              .font(.caption).foregroundStyle(.secondary)
+          }
+        }
         Section("Wallet captures") {
           NavigationLink("Capture receipts") { CaptureHistoryView() }
           Text(
@@ -113,7 +135,9 @@ struct ConnectionView: View {
             Text("Backend status not yet verified").foregroundStyle(.secondary)
           }
           LabeledContent("FlowLink", value: "0.1.0 (1)")
-          Text(model.backend).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+          DisclosureGroup("Connection details") {
+            Text(model.backend).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+          }
           if model.session != nil {
             Button("Forget local connection", role: .destructive) { model.requestReset() }.disabled(
               model.busy)
@@ -123,6 +147,11 @@ struct ConnectionView: View {
       .navigationTitle("FlowLink")
       .task { await model.restore() }
       .onDisappear { pairingText = "" }
+      .sheet(isPresented: $showScanner) {
+        PairingScannerView(
+          connect: { code in Task { await model.connect(code: code) } },
+          paste: { showManualPairing = true })
+      }
       .alert(
         "Forget local connection?",
         isPresented: Binding(

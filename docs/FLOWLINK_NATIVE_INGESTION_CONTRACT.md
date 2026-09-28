@@ -97,9 +97,10 @@ No admin secret or reusable bootstrap credential is involved.
 
 1. Owner's authenticated web panel creates a capability with label and purpose
    `enroll`, or `replace_credential` for an existing active device. Owner gets an
-   opaque copyable pairing text once. First implementation uses copy/paste into the
-   foreground app (same phone's authenticated web page, or private owner-assisted
-   transfer). No QR scanner or deep link is required; do not place it in a URL.
+   opaque pairing text once. The FLI-05 owner web panel renders that exact text as
+   a local QR; the foreground native scanner validates it and uses the same pairing
+   service after confirmation. Secure copy/paste is a secondary fallback. No external
+   QR service, URL/deep link, new protocol or alternate authority is introduced.
 2. Wire text is `flpair1.<pairing UUID>.<43 base64url characters>`. The last component
    is 32 CSPRNG bytes, unpadded. UUID is only the lookup identifier. Server stores
    SHA-256 of the complete UTF-8 text, never plaintext; UI clears it on expiry/leave.

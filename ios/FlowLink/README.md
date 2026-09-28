@@ -50,7 +50,12 @@ Backend origin (scheme, lowercase host, effective port) is hashed into the Keych
 
 ## Pairing and recovery
 
-1. Obtain a one-time pairing capability through the existing authorized owner enrollment workflow. The binding Settings panel is not a replacement for the enrollment API. Paste `flpair1.<UUIDv4>.<43 base64url chars>` into the secure input.
+1. **Owner web:** Settings → FlowLink → **חיבור iPhone חדש** (Connect new iPhone). Enter a unique friendly name (for example, “Noya iPhone”), then **יצירת QR**. **iPhone:** open FlowLink → **Scan QR**, allow camera access, point at that QR and tap **Connect**. The owner list refreshes and selects a unique new active device with that name. Verify the device label on the phone, then explicitly choose its payment source and create its card binding in web Settings. No console, token copying, owner login on the phone or developer tools are needed.
+   - QR rendering uses local `react-qr-code` SVG, never an external image service. Its payload is the exact existing `flpair1.<UUIDv4>.<43 base64url chars>` capability, not a URL. Keep the QR private.
+   - Enrollment expires after **10 minutes**; the web countdown removes the QR at expiry and offers **Generate new QR**. This limit applies only to enrollment, never everyday Wallet capture. Closing/navigation attempts cancellation; server expiry remains authoritative if offline. A consumed/cancel race refreshes devices rather than revoking anything.
+   - Web polling reads only safe devices (first after 5 seconds, then every 30 seconds). The current API exposes no consumed-pairing status/correlation endpoint: auto-selection requires exactly one newly seen active device with the chosen unique label. Concurrent same-name results require manual selection; no financial mapping is inferred. Confirm the label on the phone before binding a card.
+   - **Having trouble scanning?** reveals the manual secure paste field. On the web, **לא מצליחים לסרוק?** reveals/copies the code only on demand. Camera denial/unavailability provides the same fallback. No screenshots/code enter analytics or logs.
+   - AVFoundation reads QR metadata only. The existing `PairingCode` parser rejects unrelated QR/URLs; an accepted code stops capture and queued duplicates. Cancel/background/disappearance stops the camera. Confirmation calls the existing `ConnectionModel.connect(code:)`; no second pairing service exists.
 2. Validate locally. Generate a UUIDv4 redemption ID and a `fldev1_` credential from 32 bytes of `SecRandomCopyBytes` randomness.
 3. Save the complete protected draft to Keychain **before** sending `POST /pairings/redeem`. This request has no Authorization header.
 4. On success, atomically store the current credential with its device identity in Keychain, persist non-secret metadata, then delete the draft. The input is cleared on submission.
@@ -66,7 +71,7 @@ Generic-password service: `FlowLink.credentials.v1`. Accounts: `<SHA256 canonica
 
 [Apple documents this accessibility class](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly) as device-only storage available after the first unlock following a restart. Real lock/restart/reinstall behavior remains a physical-device verification item. Unit tests use a fake credential-store protocol, never the developer's actual Keychain.
 
-Application Support contains only a random installation marker and origin-specific non-secret device metadata. The directory is excluded from backup and files use complete-until-first-user-authentication protection. A missing marker creates a new namespace; an invalid marker fails closed. Reinstallation therefore never silently adopts leftover Keychain credentials. Pairing secrets and credentials never enter UserDefaults, ordinary metadata files, logs or observable UI models.
+Application Support contains only a random installation marker and origin-specific non-secret device metadata. The directory is excluded from backup and files use complete-until-first-user-authentication protection. A missing marker creates a new namespace; an invalid marker fails closed. Reinstallation therefore never silently adopts leftover Keychain credentials. Credentials never enter UserDefaults, ordinary metadata files, logs or observable UI models. Pairing text lives briefly in the secure input/scanner confirmation memory, then only in the protected Keychain draft for recovery; it is never ordinary persisted state.
 
 ## Build and test
 
@@ -232,3 +237,59 @@ Debug `FLOWLINK_API_BASE_URL` is validated and persisted as non-secret, non-back
 - Owner acceptance / verification: **Pending** for #90; #89 accepted and completed.
 
 See the canonical [Release / Version gate](../../docs/github-development-standard.md#release--version-gate). Owner commit/push and any production or publication work remain separate. Wallet App Intent/capture/SQLite receipts and owner-held review are implemented in #90. Real purchase runtime/locked evidence is deferred to the separately authorized #91 checkpoint; notifications/APNs, App Store/TestFlight/Unlisted distribution and a full finance mobile app are excluded.
+
+## QR onboarding acceptance (#90)
+
+The second-iPhone workflow is identical: owner generates a QR labelled “Noya iPhone”; that phone scans and connects; the owner selects the new phone and explicitly creates its card binding. No spouse production enrollment was performed while implementing this correction.
+
+Once at least one approved card is available, **Finish Wallet setup** explains the verified iOS 27 configuration: selected Wallet card trigger → FlowLink **Record Wallet Transaction**, chosen binding, direct Transaction.Amount / Merchant / Name, Show When Run off, automation on. FlowLink cannot create a personal automation. Real purchase values and locked/background execution remain deferred; QR compilation/tests do not prove optical scanning on hardware. Owner review should exercise permission allow/deny, scanning, connected status and new-device selection on a non-production setup before any separately authorized enrollment.
+
+Both ingestion flags remain false. QR enrollment changes no money, ingestion retry/hold behavior, schema, credential format or authorization policy. Migrations 037/038 are already deployed per owner; do not rerun them for this UX change.
+
+### QR correction verification — 2026-09-28
+
+Starting HEAD: `f7b1e7003d1f9d272dda5cc34c0282089f62bf4a`; branch: `feat/flowlink-qr-pairing-90`. Xcode 27.0 (27A266a), `/Applications/Xcode.app/Contents/Developer`, iOS deployment target 17.0. Existing Personal Team and `com.ozavrahami.flowlink.local` signing preserved.
+
+| Check | Result |
+| --- | --- |
+| Targeted web pairing/bindings/API | 37 passed, 0 failed |
+| Full client suite, bounded concurrency | 562 passed, 4 failed (566 total, 38 files) |
+| Unchanged starting-commit Import tests | Same 4 failed, 9 passed; existing tests look for portalled category options inside the table |
+| FlowLink server authentication/enrollment/bindings | 33 passed, 0 failed |
+| Native unit tests | 62 passed, 0 failed |
+| Native UI tests | 3 passed, 0 failed: primary scanner/fallback, invalid paste, RTL/large text |
+| Debug and Release simulator builds | Passed |
+| Debug physical iPhone build | Passed, Oz’s iPhone / iPhone 17 Pro Max, existing local signing; no new installation/enrollment performed |
+| Client production build | Passed; existing bundle-size advisory remains |
+| Plist/project validation | 3 passed |
+| Changed-file UTF-8 / Markdown file links | 20 files / 30 local links passed |
+
+Commands from repository root (logs/DerivedData outside Git):
+
+```sh
+npm --prefix client test -- src/pages/Settings/FlowlinkBindingsTab.test.jsx src/pages/Settings/FlowlinkPairingDialog.test.jsx src/services/api.test.js
+npm --prefix client test -- --maxWorkers=2
+npm --prefix client run build
+node --test server/test/flowlink.test.js server/test/flowlinkBindings.test.js
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-qr-sim build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-qr-sim test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-qr-release build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS,id=00008150-00181C513E30C01C' -derivedDataPath /private/tmp/flowlink90-qr-device build
+plutil -lint ios/FlowLink/FlowLink/Info-Debug.plist ios/FlowLink/FlowLink/Info-Release.plist ios/FlowLink/FlowLink.xcodeproj/project.pbxproj
+git diff --check
+```
+
+Intermediate results are not hidden: the first targeted run found an accessibility-role mismatch in the new error alert; using the existing Alert `urgent` property fixed it. One full client run overlapped Xcode work and also timed out an unchanged AddTransaction test at its 5-second limit; bounded-concurrency rerun passed that test without changing it. The four Import failures reproduce in an isolated archive of starting HEAD with the same dependencies. No unrelated Import behavior/tests were changed.
+
+The new QR dependency is pinned `react-qr-code@2.2.0`, a local SVG renderer. No QR network service, camera photo recording, arbitrary scanned URL handling, notification/APNs code, database/server change, production invocation or distribution asset was added. All seven Finance Tracker fields remain 1.3.1; FlowLink remains 0.1.0/build 1. Optical scanning, camera permission behavior on the owner's physical phone, real enrollment and owner acceptance are pending; build success is not that evidence.
+
+### Release / Version gate
+
+- Release impact: **Yes** — usable owner-web/native QR enrollment and Wallet setup guidance.
+- SemVer impact: **Minor**, backward-compatible onboarding capability within FLI-05.
+- Candidate release: **proposed v1.4.0**, final decision [#84](https://github.com/OzAvrahami/finance-tracker/issues/84).
+- Grouping / included release candidate: existing FlowLink [#85](https://github.com/OzAvrahami/finance-tracker/issues/85), coordinated by #84; no per-Issue bump.
+- CHANGELOG status: **Updated under Unreleased**, #90 onboarding correction.
+- Version-bump status: **Deferred** to owner-coordinated #84 preparation; seven product fields 1.3.1 and native 0.1.0/build 1 unchanged.
+- Publication status: **Out of scope**; no tag or GitHub Release.
+- Owner acceptance / verification: **Pending**, #90 remains open for Verify. Real Wallet runtime/locked-event evidence remains deferred; #91 was not started.

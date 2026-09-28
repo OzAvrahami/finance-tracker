@@ -33,6 +33,8 @@ vi.mock('axios', () => ({
 }));
 
 const {
+  createFlowlinkPairing,
+  cancelFlowlinkPairing,
   addManualBudgetFunding,
   applyBudgetReallocation,
   applyDeficitResolution,
@@ -243,5 +245,15 @@ describe('funded budget API boundary', () => {
     expect(postMock).toHaveBeenNthCalledWith(4, '/budgets/funded/months/2026-09/categories/2/deficit-resolution', {
       ...resolution, request_key: 'resolve-key', preview_fingerprint: 'fingerprint',
     });
+  });
+});
+
+describe('FlowLink owner pairing API', () => {
+  it('uses the authenticated instance with bounded requests and no capability in URLs', () => {
+    postMock.mockClear();
+    createFlowlinkPairing({ purpose: 'enroll', label: 'Noya iPhone' });
+    cancelFlowlinkPairing('11111111-1111-4111-8111-111111111111');
+    expect(postMock).toHaveBeenNthCalledWith(1, '/flowlink/v1/owner/pairings', { purpose: 'enroll', label: 'Noya iPhone' }, { timeout: 15000 });
+    expect(postMock).toHaveBeenNthCalledWith(2, '/flowlink/v1/owner/pairings/11111111-1111-4111-8111-111111111111/cancel', {}, { timeout: 15000 });
   });
 });

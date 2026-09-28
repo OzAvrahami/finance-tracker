@@ -17,8 +17,19 @@ final class FlowLinkUITests: XCTestCase {
     app.launch()
     return app
   }
+  @MainActor func testScannerIsPrimaryAndManualFallbackRemainsAvailable() {
+    let app = launch()
+    XCTAssertTrue(app.buttons["scanQR"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.secureTextFields["pairingCode"].exists)
+    app.buttons["scanQR"].tap()
+    let paste = app.buttons["scannerPaste"]
+    XCTAssertTrue(paste.waitForExistence(timeout: 10))
+    paste.tap()
+    XCTAssertTrue(app.secureTextFields["pairingCode"].waitForExistence(timeout: 5))
+  }
   @MainActor func testUnpairedAndInvalidCodeShowsSafeError() {
     let app = launch()
+    app.buttons["Having trouble scanning?"].tap()
     let field = app.secureTextFields["pairingCode"]
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()
@@ -31,6 +42,9 @@ final class FlowLinkUITests: XCTestCase {
   @MainActor func testRTLAndLargeTextPairingControlAccessible() {
     let app = launch(rtl: true)
     XCTAssertTrue(app.navigationBars["FlowLink"].waitForExistence(timeout: 10))
+    let fallback = app.buttons["Having trouble scanning?"]
+    for _ in 0..<12 where !fallback.isHittable { app.swipeUp() }
+    fallback.tap()
     let field = app.secureTextFields["pairingCode"]
     for _ in 0..<12 where !field.isHittable {
       app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))

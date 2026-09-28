@@ -30,6 +30,7 @@
 		4AD73711D72CBF871C653BE7 = {isa = PBXBuildFile; fileRef = 50805DE04F3B13B22932D053; };
 		7EC3D2DDB3669141B37A84A0 = {isa = PBXBuildFile; fileRef = 5A20A167A0455054FF2B5F0D; };
 4E451D5A05896AA238D7D18C = {isa = PBXBuildFile; fileRef = 304573270C81F7B73E1549B7; };
+CDEF00000000000000000002 = {isa = PBXBuildFile; fileRef = CDEF00000000000000000001; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +79,7 @@
 		50805DE04F3B13B22932D053 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Wallet/WalletIntent.swift"; sourceTree = "<group>"; };
 		5A20A167A0455054FF2B5F0D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Wallet/WalletRuntime.swift"; sourceTree = "<group>"; };
 304573270C81F7B73E1549B7 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WalletCaptureTests.swift"; sourceTree = "<group>"; };
+CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/PairingScanner.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -159,6 +161,7 @@
 				E35D9070C1093F81A41222A4 /* App/FlowLinkApp.swift */,
 				B468F926F5DF6182680C7AB2 /* Domain/Models.swift */,
 				BD04444764F7C572351759D1 /* Features/ConnectionModel.swift */,
+				CDEF00000000000000000001,
 				F79C64FD10F3D6AD21045E10 /* Features/ConnectionView.swift */,
 				89F4984DF4EBAD908AAB23E0 /* Features/PairingService.swift */,
 				7C3D2758C1A1EF7675357CCD /* Networking/FlowLinkAPIClient.swift */,
@@ -306,6 +309,7 @@
 				DAAF2E63DFE666F57489B425 /* App/FlowLinkApp.swift in Sources */,
 				01CDAF4F45FE28A9F5B8EC6F /* Domain/Models.swift in Sources */,
 				CD0123893AB0D8D56DABA9C6 /* Features/ConnectionModel.swift in Sources */,
+				CDEF00000000000000000002,
 				8A9951AEF694E4B633D0F1DD /* Features/ConnectionView.swift in Sources */,
 				CAE88FD8325728140E031DAB /* Features/PairingService.swift in Sources */,
 				C21E37FE87867BCDA9179446 /* Networking/FlowLinkAPIClient.swift in Sources */,
