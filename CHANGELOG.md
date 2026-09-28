@@ -8,20 +8,29 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
-### Added
+## [1.4.0] - Prepared (unpublished)
 
-- #50: Preserve explicit Monthly Budget origin while reviewing/editing unbudgeted transactions, with a Hebrew return action to the original month and safe category/section restoration. Keep ordinary Transactions navigation and existing edit-return filters intact.
-- #90 onboarding correction: Add owner-web local QR enrollment with friendly device names, expiry/cancellation and device refresh, plus native in-app QR scanning and confirmation. Manual pairing-code transfer is a secondary fallback; existing single-use enrollment, Keychain recovery and explicit card mappings remain unchanged. Add concise Wallet setup guidance; no production activation or runtime Wallet verification is implied.
+Prepared on 2026-09-28 from main `0bd74dc35d8d91440059acd1a460229c121fd4bd`, compared with published v1.3.1 (`c600dc036b03f5ae3f9266eb1b9de935b8683d38`). This is one Minor release of the actual repository tree, coordinated on #50; it is not completion of APY or FlowLink. All seven product-version fields are prepared at 1.4.0; FlowLink remains independently 0.1.0 / build 1. The final preparation commit, owner integration/push, deployment verification, annotated tag and publication remain pending. See [release notes and scope/evidence](docs/RELEASE_1_4_0.md). Older preparation records below remain historical; GitHub Releases is authoritative for publication.
 
-- #90 (FLI-05, verification in progress): Add the native FlowLink Wallet App Intent, approved binding selection, exact ILS normalization, protected SQLite capture receipts with binding-label snapshots, same-payload retries and capture-status UI. Explicit ingestion-disabled responses are held for owner review and cannot auto-submit on app launch or later server enablement; only confirmed manual retry sends the original receipt. The owner verified direct Shortcuts Amount/Merchant/Name mapping; runtime Wallet-event values, locked-device behavior and production E2E remain unverified; no production activation is included.
+### Added - accepted capabilities
 
-- #89 (FLI-04): Add the FlowLink iPhone app foundation (0.1.0, build 1), with protected pairing recovery, device-only Keychain credentials, safe device status and approved card binding discovery. Wallet capture/App Intents, distribution and production activation remain deferred.
+- #50: Preserve Monthly Budget origin through reviewing and editing unbudgeted transactions, with a Hebrew return action to the original month and safe category/section restoration. Ordinary Transactions navigation and existing edit-return filters remain intact.
+- #80 (APY-02): Add private atomic source ingestion, auditable provenance, source-scoped retry protection and conservative reconciliation/review/cancellation foundations while preserving legacy external-ID API behavior. This foundation does not complete CAL producer integration or reconciliation UI.
+- #87 (FLI-02): Add owner-authorized device enrollment, single-use pairing with lost-response recovery, independently revocable digest-only credentials and restricted device status APIs.
+- #88 (FLI-03): Add owner-managed multi-card bindings, stable per-binding APY sources, atomic device-authorized ingestion and Settings management. Financial ingestion remains disabled pending separately authorized verification/enablement.
+- #89 (FLI-04): Add the native FlowLink foundation (0.1.0 / build 1), protected pairing recovery, device-only Keychain storage, safe device status and approved binding discovery. App distribution and full Wallet acceptance are not included.
 
-- #88 (FLI-03): Add owner-managed multi-card FlowLink bindings, stable per-binding APY sources, private atomic device-authorized Wallet ingestion, safe device binding discovery and a Settings management panel. Native ingestion is disabled by default and reuses existing APY reconciliation; the iOS client, Wallet validation and production activation remain later work.
+### Included implementation - experimental / not owner-accepted
 
-- #87 (FLI-02): Add owner-authorized FlowLink device enrollment, single-use pairing with safe lost-response recovery, independent digest-only device credentials, replacement/revocation and restricted device status APIs. Card bindings, native Wallet ingestion and the iOS client remain later work; no production activation is included.
-- #81 (APY-03): Add an opt-in Apple Shortcut ingestion endpoint with dedicated scoped authentication, server-bound selected-card mapping, exact ILS text normalization, merchant/name fallback, bounded requests and invocation retry safety through the APY foundation. Final on-device text conversion, HTTP capture and production activation remain pending.
-- #80 (APY-02): Add private, atomic transaction source ingestion with auditable provenance, source-scoped retry protection, conservative cross-source reconciliation, and review/cancellation foundations. Preserve legacy external-ID API behavior; Apple Shortcut and CAL producer integrations remain future APY work.
+- #81 (APY-03): The dedicated Apple Shortcut HTTP adapter remains in the tree, with scoped authentication, selected-card mapping, exact ILS normalization, bounded requests and APY retry protection. Its complex Shortcut client UX was superseded by FlowLink; #81 remains Open / Verify, not owner-accepted. Keep `APPLE_PAY_INGESTION_ENABLED=false`.
+- #90 (FLI-05): Include the native Wallet App Intent, approved binding selection, exact ILS normalization, protected SQLite receipts, same-payload retries and capture-status UI. Ingestion-disabled responses are held for owner review; later server enablement or app launch does not automatically submit them. Include the QR onboarding correction: local owner-web QR, friendly device labels, native scanner/confirmation and manual-code fallback.
+- #90 remains Open / Verify with acceptance Pending. Configuration-time Amount/Merchant/Name mapping is owner-verified; actual Wallet-event values, real-charge posting, locked/background behavior and optical QR/enrollment review remain outstanding. Keep `FLOWLINK_INGESTION_ENABLED=false`; this release does not enable ingestion, distribute an iOS app or establish device-to-production E2E acceptance.
+
+### Scope and operational limits
+
+- Includes additive migrations 036-038 and architecture/rollout documentation already on main. Existing installations follow their recorded migration state; do not rerun migrations merely to change version metadata. This preparation runs no migration or deployment and changes no flag/credential/configuration.
+- APY #82 CAL integration, #83 review UI and #84 integrated verification, plus FlowLink #91 E2E verification, remain unfinished. Parents #78/#85 are not completed by this release. #84 must select the appropriate later release for remaining scope; its earlier proposed v1.4.0 did not reserve the number.
+- Uncommitted #64 multi-user architecture documents and all MTU implementation are excluded. Existing implementation evidence and four independently reproduced baseline Import test failures remain disclosed in the release notes; no additional test/device coverage is implied.
 
 ## [1.3.1] - Prepared (unpublished)
 

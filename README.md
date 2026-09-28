@@ -23,15 +23,17 @@ See [Project Status](docs/PROJECT_STATUS.md) for current readiness and known lim
 
 **v1.2.0 is deployed and accepted by the user.** Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) was manually pushed; GitHub readback confirmed that remote main SHA and successful Vercel and Railway statuses. It contains the Dashboard-wide surface correction (#27), compact nearest-ending active loan row beneath the original four summary cards (#10), and optional shopping-list header fields (#2). All three issues are CLOSED / COMPLETED and Done in the linked Project with P3 preserved; milestone v1.2.0 is closed. User acceptance (“2 סבבה” for #2, then “אושר” after the final #10/#27 corrections) is separate from deployment statuses and is not agent browser testing. See the [v1.2.0 handoff](docs/RELEASE_1_2_0.md) for recorded verification and Migration 029 evidence. Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
 
-## Current release: Savings v1.3.0
+## Historical release: Savings v1.3.0
 
 **v1.3.0 is published, deployed and accepted by the owner.** Its annotated tag points to `19c148441f125adb3d9dfbb598b3b745382f84e4`; [GitHub Release v1.3.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.3.0) records publication. #36–#44 are completed and milestone v1.3.0 is closed. Loan scheduling has been restored. Deployment, acceptance and scheduler restoration are owner-provided completion context; this documentation change did not access production. The published release used `1.3.0` package metadata. The [v1.3.0 runbook](docs/RELEASE_1_3_0.md) preserves the earlier preparation, verification and transfer evidence as historical records.
 
 Use **חסכונות** in the normal menu (mobile: **עוד**) to create an account with an independently confirmed opening/cutoff and explicit legacy overlap, set a goal, or archive/restore it. **הפקדה / משיכה** open the existing transaction form; an existing ordinary/imported cash record can be explicitly linked. **רישום ריבית** distinguishes held interest from a checking payout. Budget policy/transfer confirmation selects a named destination. Monthly settings do not enable automation: use explicit enable/pause or manual fulfillment. All-time held balances are distinct from the selected report period; this is not a live checking balance. Automation records transactions and does not transfer money at the bank.
 
-## Prepared release: v1.3.1 (unpublished)
+## Published release: v1.3.1; prepared candidate: v1.4.0
 
-The owner accepted #49, #51 and #47, including the #51 bigint Savings-ID correction, and finalized one Patch candidate coordinated by #49. All seven package/lockfile fields are synchronized to `1.3.1`; commit, push, deployment, tagging and publication remain pending. See the [release notes](docs/RELEASE_1_3_1.md) and [review/commit handoff](docs/PATCH_1_3_1_REVIEW.md). v1.3.0 remains the published release; temporary preview-harness repairs are excluded.
+[**v1.3.1 is published**](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.3.1), at `c600dc036b03f5ae3f9266eb1b9de935b8683d38`. The earlier [Patch preparation](docs/RELEASE_1_3_1.md) and [review record](docs/PATCH_1_3_1_REVIEW.md) are historical evidence.
+
+**v1.4.0 is prepared, unpublished and uncommitted for owner review.** It records the current main tree through `0bd74dc35d8d91440059acd1a460229c121fd4bd`: accepted Budget navigation and APY/FlowLink foundations, plus explicitly experimental #81/#90 implementation. Real Wallet-charge verification and unfinished APY work are not claimed complete. Both ingestion flags stay disabled; version preparation does not enable or deploy them. See [release scope, notes and verification limits](docs/RELEASE_1_4_0.md). FlowLink retains its independent 0.1.0 / build 1 version.
 
 ## Features
 
@@ -101,7 +103,7 @@ docs/                   Canonical documentation and a retained read-only securit
 - npm
 - Access to a compatible Supabase project for database-backed development
 
-Root, client, and server package metadata and lockfile root entries use the prepared, unpublished `1.3.1` product version; see the [authoritative field inventory](docs/github-development-standard.md#continuous-changelog-and-coordinated-version-preparation).
+Root, client, and server package metadata and lockfile root entries use the prepared, unpublished `1.4.0` product version; see the [authoritative field inventory](docs/github-development-standard.md#continuous-changelog-and-coordinated-version-preparation).
 
 ## Getting started
 
@@ -267,7 +269,7 @@ The workflow runs at `07:15` in `Asia/Jerusalem` and supports manual dispatch. I
 
 Formal semantic-version-style tracking began with **v0.9.0**, the first finalized baseline. **v1.0.0** is the first stable release, **v1.1.0** is the funded-budget release, and **v1.1.1** is the accepted unbudgeted-allocation correction.
 
-The private root, client, and server application packages and corresponding lockfile version fields are aligned to version `1.3.0`.
+The private root, client, and server application packages and corresponding lockfile version fields are prepared together at version `1.4.0`; publication remains pending. FlowLink app metadata remains independently `0.1.0` / build `1`.
 
 Earlier development is recorded as historical milestones rather than assigned fictional versions. Follow the canonical [Release / Version policy and handoff gate](docs/github-development-standard.md#release-policy) for every implementation. It defines SemVer decisions, grouped releases, continuous Unreleased entries, the complete version inventory, owner acceptance and the separate owner-operated release workflow. Root [AGENTS.md](AGENTS.md) and the Issue Forms bring that gate into normal agent/intake workflows; they do not provide an executable publication check.
 
