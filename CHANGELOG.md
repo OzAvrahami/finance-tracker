@@ -10,6 +10,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- #50: Preserve explicit Monthly Budget origin while reviewing/editing unbudgeted transactions, with a Hebrew return action to the original month and safe category/section restoration. Keep ordinary Transactions navigation and existing edit-return filters intact.
 - #90 onboarding correction: Add owner-web local QR enrollment with friendly device names, expiry/cancellation and device refresh, plus native in-app QR scanning and confirmation. Manual pairing-code transfer is a secondary fallback; existing single-use enrollment, Keychain recovery and explicit card mappings remain unchanged. Add concise Wallet setup guidance; no production activation or runtime Wallet verification is implied.
 
 - #90 (FLI-05, verification in progress): Add the native FlowLink Wallet App Intent, approved binding selection, exact ILS normalization, protected SQLite capture receipts with binding-label snapshots, same-payload retries and capture-status UI. Explicit ingestion-disabled responses are held for owner review and cannot auto-submit on app launch or later server enablement; only confirmed manual retry sends the original receipt. The owner verified direct Shortcuts Amount/Merchant/Name mapping; runtime Wallet-event values, locked-device behavior and production E2E remain unverified; no production activation is included.

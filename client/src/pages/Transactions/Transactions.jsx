@@ -19,6 +19,8 @@ import { defaultTransactionCriteria, readTransactionCriteria, transactionCriteri
 import { cashFlowLabels } from '../../utils/savingsReporting';
 import { getSavingsAccounts } from '../../services/api';
 import { invalidateFinance, FINANCE_CHANGED } from '../../utils/financeInvalidation';
+import { readBudgetOrigin } from '../../utils/transactionsNavigation';
+import BudgetOriginNotice from '../../components/BudgetOriginNotice';
 
 // One server page. The backend clamps anything above its own maximum (250).
 const PAGE_SIZE = 100;
@@ -49,8 +51,9 @@ const formatPeriodMonth = (value) => {
 const Transactions = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const criteria = useMemo(() => readTransactionCriteria(searchParams) || defaultTransactionCriteria(), [searchParams]);
+  const budgetOrigin = readBudgetOrigin(searchParams);
   const { dateRange, selectedCategory, selectedPaymentSource, selectedSavingsAccount, savingsFlow, searchText, showUncategorizedOnly, sortConfig } = criteria;
-  const updateCriteria = (patch) => setSearchParams(transactionCriteriaParams({ ...criteria, ...patch }), { replace: true });
+  const updateCriteria = (patch) => setSearchParams(transactionCriteriaParams({ ...criteria, ...patch }, budgetOrigin), { replace: true });
   const setter = key => value => updateCriteria({ [key]: typeof value === 'function' ? value(criteria[key]) : value });
   const setDateRange = setter('dateRange');
   const setSelectedCategory = setter('selectedCategory');
@@ -60,7 +63,7 @@ const Transactions = () => {
   const setSearchText = setter('searchText');
   const setShowUncategorizedOnly = setter('showUncategorizedOnly');
   const setSortConfig = setter('sortConfig');
-  const editReturnTo = transactionsDestination(criteria);
+  const editReturnTo = transactionsDestination(criteria, budgetOrigin);
   // The query result stays in one object so a filter/sort change resets rows,
   // whole-filter totals, cursor, and error atomically.
   const [list, setList] = useState(EMPTY_LIST);
@@ -397,6 +400,7 @@ const Transactions = () => {
 
   return (
     <div className="transactions-page" dir="rtl">
+      <BudgetOriginNotice origin={budgetOrigin} />
       <TransactionsFilters
         savingsFlow={savingsFlow}
         onSavingsFlowChange={setSavingsFlow}

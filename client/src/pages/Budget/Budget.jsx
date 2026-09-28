@@ -1,5 +1,6 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { budgetReviewDestination, isBudgetMonth, readBudgetTarget } from '../../utils/transactionsNavigation';
 import { Alert, ErrorState } from '../../components/ui';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
@@ -176,7 +177,18 @@ const enrichBudget = (budget) => {
 };
 
 const Budget = () => {
-  const [selectedMonth, setSelectedMonth] = useState(currentCalendarMonth);
+  const [params, setParams] = useSearchParams();
+  const month = params.getAll('month').length === 1 && isBudgetMonth(params.get('month'))
+    ? params.get('month') : currentCalendarMonth();
+  // URL is the sole month owner. A month change also discards month-local dialogs,
+  // previews and selections, including when it comes from browser Back/Forward.
+  return <BudgetMonth key={month} selectedMonth={month} setSelectedMonth={value => setParams({ month: value })} />;
+};
+
+const BudgetMonth = ({ selectedMonth, setSelectedMonth }) => {
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const restoredLocation = useRef(null);
   const [requestVersion, setRequestVersion] = useState(0);
   const [query, setQuery] = useState({ month: null, version: -1, state: emptyState(currentCalendarMonth()), error: null });
   const [categories, setCategories] = useState([]);
@@ -217,6 +229,16 @@ const Budget = () => {
   const loading = query.month !== selectedMonth || query.version !== requestVersion;
   const state = query.month === selectedMonth ? query.state : emptyState(selectedMonth);
   const pageError = !loading && query.error;
+  useEffect(() => {
+    if (loading || restoredLocation.current === location.key) return;
+    const target = readBudgetTarget(params);
+    if (!target) return;
+    const element = document.getElementById(`budget-unbudgeted-${target.category}`)
+      || document.getElementById('budget-unbudgeted') || document.getElementById('budget-page');
+    element?.focus({ preventScroll: true });
+    element?.scrollIntoView?.({ block: 'start' });
+    restoredLocation.current = location.key;
+  }, [loading, location.key, params]);
   const activeBudgets = useMemo(
     () => state.categories.filter((category) => category.budget_id && category.lifecycle_state === 'active'),
     [state.categories]
@@ -361,7 +383,7 @@ const Budget = () => {
   };
 
   const changeMonth = (month) => {
-    if (!month || month === selectedMonth) return;
+    if (!isBudgetMonth(month) || month === selectedMonth) return;
     closeAddPanel();
     closeFundingPanel();
     setEditingId(null);
@@ -561,7 +583,7 @@ const Budget = () => {
   };
 
   return (
-    <div className="budget-page" dir="rtl">
+    <div className="budget-page" id="budget-page" tabIndex={-1} aria-label="תקציב חודשי" dir="rtl">
       <BudgetSummary
         selectedMonth={selectedMonth}
         onMonthChange={changeMonth}
@@ -580,10 +602,7 @@ const Budget = () => {
             canAllocate={['current', 'immediately_completed_unclosed'].includes(actionLifecycle)}
             onAllocate={setUnbudgetedTarget}
             onReviewTransactions={(category) => {
-              const transactionQuery = new URLSearchParams({ month: selectedMonth });
-              if (category.category_id) transactionQuery.set('categoryId', String(category.category_id));
-              else transactionQuery.set('uncategorized', '1');
-              navigate(`/transactions?${transactionQuery.toString()}`);
+              navigate(budgetReviewDestination(selectedMonth, category.category_id));
             }}
           />
         ) : null}

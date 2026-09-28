@@ -315,7 +315,7 @@ export const CarryoverPanel = ({ carryover, applying, error, onApply }) => (
 export const UnbudgetedExpensesPanel = ({
   categories, total, canAllocate, onAllocate, onReviewTransactions,
 }) => (
-  <GlassCard className="budget-unbudgeted-panel" padding="18px">
+  <GlassCard className="budget-unbudgeted-panel" padding="18px" id="budget-unbudgeted" tabIndex={-1} aria-label="הוצאות מחוץ לתקציב">
     <div className="budget-unbudgeted-panel__heading">
       <div>
         <h2><AlertTriangle size={19} aria-hidden="true" /> הוצאות מחוץ לתקציב</h2>
@@ -344,6 +344,8 @@ export const UnbudgetedExpensesPanel = ({
           return (
             <div
               className="budget-unbudgeted-panel__row"
+              id={`budget-unbudgeted-${item.category_id ?? 'uncategorized'}`}
+              tabIndex={-1}
               role="row"
               aria-label={`${categoryName}, ללא תקציב`}
               key={item.category_id ?? 'uncategorized'}

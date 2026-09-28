@@ -1,0 +1,22 @@
+.budget-origin-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--ft-border);
+  border-radius: 12px;
+  color: var(--ft-text);
+  background: var(--ft-glass);
+}
+.budget-origin-notice a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 8px;
+}
+.budget-origin-notice a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}

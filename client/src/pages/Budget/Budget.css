@@ -1678,3 +1678,8 @@
     transition: none;
   }
 }
+.budget-page#budget-page,
+#budget-unbudgeted,
+.budget-unbudgeted-panel__row[id] {
+  scroll-margin-block-start: 6rem;
+}

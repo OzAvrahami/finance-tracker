@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import BudgetOriginNotice from '../../components/BudgetOriginNotice';
+import { readBudgetOrigin } from '../../utils/transactionsNavigation';
 import {
   ChevronRight,
   FileUp,
@@ -102,11 +104,13 @@ const AddTransaction = () => {
   };
 
   if (loading) return <TransactionFormSkeleton />;
+  const budgetOrigin = readBudgetOrigin(new URL(returnTo, 'https://local.invalid').searchParams);
   if ((savedCash || cancelledTransaction)?.savings?.source_kind === 'budget_surplus') {
     const cash = savedCash || cancelledTransaction;
     return <div className="transaction-form-page" dir="rtl"><Alert variant="info" title="העברת עודף ממומן — היסטוריה מקושרת">תיקון מחייב ביטול מלא דרך היסטוריית התקציב וסקירת העברה חדשה. אין לערוך או לנתק את ההוצאה בנפרד.</Alert><h2>{cash.description}</h2><p>{cash.transaction_date} · {cash.total_amount} ₪ · {cash.savings.name}{cash.voided_at ? ' · בוטלה' : ''}</p><SecondaryButton as={Link} to="/budget">מעבר לתקציב</SecondaryButton></div>;
   }
   if (cancelledTransaction) return <div className="transaction-form-page" dir="rtl">
+    <BudgetOriginNotice origin={budgetOrigin} />
     <Alert variant="info" title="תנועה שבוטלה — לקריאה בלבד">התנועה נשמרה להיסטוריה ואינה נכללת בסיכומים חיים.</Alert>
     <h2>{cancelledTransaction.description}</h2>
     <p>תאריך: {cancelledTransaction.transaction_date}</p>
@@ -150,6 +154,7 @@ const AddTransaction = () => {
 
   return (
     <div className="transaction-form-page" dir="rtl">
+      <BudgetOriginNotice origin={budgetOrigin} />
       <div className="transaction-form-toolbar">
         <Link className="transaction-form-back-link" to={returnTo}>
           <ChevronRight size={16} aria-hidden="true" />
