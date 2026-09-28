@@ -11,7 +11,7 @@
  * correct. This file is a second implementation of the same contract, so the
  * two can agree with each other and both be wrong about PostgreSQL. The SQL is
  * verified separately against the real database — see the read-only script in
- * docs/audit_003_readonly.sql.
+ * docs/operations/sql/audit_003_readonly.sql.
  *
  * Two modelling rules are load-bearing and must not be "simplified":
  *   1. Description ordering compares UTF-8 BYTES, mirroring COLLATE "C".

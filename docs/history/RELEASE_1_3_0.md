@@ -1,8 +1,10 @@
 # Savings v1.3.0 preparation and operator runbook
 
-> **Completion context recorded for #48 (2026-09-16):** v1.3.0 is [published](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.3.0); its annotated tag resolves to `19c148441f125adb3d9dfbb598b3b745382f84e4`. The owner reports deployment/production acceptance and restored Loan scheduling; #36–#44 and milestone v1.3.0 are completed/closed. No production check was run for #48. The preparation dates, pending-state statements, release-note draft, transfer commands and verification evidence below are retained as the historical September 14–15 handoff, not current instructions to repeat completed release operations. Future work follows the canonical [Release / Version policy](github-development-standard.md#release-policy), including its [current version inventory](github-development-standard.md#continuous-changelog-and-coordinated-version-preparation). Closed Savings Issues are not retroactively migrated to the gate.
+> Historical record: dated statements, commands, acceptance and production claims below describe their original checkpoint. They are not current operating status. See the [documentation index](../README.md) and linked GitHub evidence before use.
 
-Prepared locally on 2026-09-14–15 for SAV-08 [#44](https://github.com/OzAvrahami/finance-tracker/issues/44). This is the canonical integrated runbook and release-note draft. The [accounting specification](SAVINGS_V1_3_0_SPEC.md) and [implementation handoffs](SAVINGS_FOUNDATION.md) retain detailed APIs, reader/write-path audits and earlier evidence.
+> **Completion context recorded for #48 (2026-09-16):** v1.3.0 is [published](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.3.0); its annotated tag resolves to `19c148441f125adb3d9dfbb598b3b745382f84e4`. The owner reports deployment/production acceptance and restored Loan scheduling; #36–#44 and milestone v1.3.0 are completed/closed. No production check was run for #48. The preparation dates, pending-state statements, release-note draft, transfer commands and verification evidence below are retained as the historical September 14–15 handoff, not current instructions to repeat completed release operations. Future work follows the canonical [Release / Version policy](../github-development-standard.md#release-policy), including its [current version inventory](../github-development-standard.md#continuous-changelog-and-coordinated-version-preparation). Closed Savings Issues are not retroactively migrated to the gate.
+
+Prepared locally on 2026-09-14–15 for SAV-08 [#44](https://github.com/OzAvrahami/finance-tracker/issues/44). This is the canonical integrated runbook and release-note draft. The [accounting specification](../architecture/SAVINGS_V1_3_0_SPEC.md) and [implementation handoffs](SAVINGS_FOUNDATION.md) retain detailed APIs, reader/write-path audits and earlier evidence.
 
 **Preparation is accepted; production and publication are unexecuted.** All seven package/lockfile version fields are now **1.3.0**, prepared on `feat/savings-v1.3.0` for an owner-operated commit. At this handoff the work is local/uncommitted and unavailable on remote main; the branch base remains `e5dec682a6c18df7d52da6cb77180f8438d63830`. #37–#44 are completed / Done, with #44 independently verified Closed / Completed / Done / P2 — Medium. Parent #36 and milestone v1.3.0 remain open. Commit and transfer verification below establish the later owner-created SHA; GitHub is authoritative for deployment, tag and Release state. This dated preparation record does not assert those later actions or require another documentation-only commit after publication.
 
@@ -97,16 +99,16 @@ For each row, execute the **complete preflight**, save its one JSON result, requ
 
 | Installed stage required | Preflight | Migration | Postflight |
 | --- | --- | --- | --- |
-| 029, Savings absent | [030 pre](MIGRATION_030_PRODUCTION_PREFLIGHT.sql) | [030 foundation](../server/migrations/030_savings_foundation.sql) | [030 post](MIGRATION_030_PRODUCTION_POSTFLIGHT.sql) |
-| 030 | [031 pre](MIGRATION_031_PRODUCTION_PREFLIGHT.sql) | [031 manual](../server/migrations/031_savings_manual_transactions.sql) | [031 post](MIGRATION_031_PRODUCTION_POSTFLIGHT.sql) |
-| 031 | [032 pre](MIGRATION_032_PRODUCTION_PREFLIGHT.sql) | [032 interest](../server/migrations/032_savings_realized_interest.sql) | [032 post](MIGRATION_032_PRODUCTION_POSTFLIGHT.sql) |
-| 032 | [033 pre](MIGRATION_033_PRODUCTION_PREFLIGHT.sql) | [033 funded surplus](../server/migrations/033_savings_funded_surplus.sql) | [033 post](MIGRATION_033_PRODUCTION_POSTFLIGHT.sql) |
-| 033 | [034 pre](MIGRATION_034_PRODUCTION_PREFLIGHT.sql) | [034 monthly](../server/migrations/034_savings_monthly_deposits.sql) | [034 post](MIGRATION_034_PRODUCTION_POSTFLIGHT.sql) |
-| 034 | [035 pre](MIGRATION_035_PRODUCTION_PREFLIGHT.sql) | [035 reports](../server/migrations/035_savings_reporting.sql) | [035 post](MIGRATION_035_PRODUCTION_POSTFLIGHT.sql) |
+| 029, Savings absent | [030 pre](../operations/sql/MIGRATION_030_PRODUCTION_PREFLIGHT.sql) | [030 foundation](../../server/migrations/030_savings_foundation.sql) | [030 post](../operations/sql/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql) |
+| 030 | [031 pre](../operations/sql/MIGRATION_031_PRODUCTION_PREFLIGHT.sql) | [031 manual](../../server/migrations/031_savings_manual_transactions.sql) | [031 post](../operations/sql/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql) |
+| 031 | [032 pre](../operations/sql/MIGRATION_032_PRODUCTION_PREFLIGHT.sql) | [032 interest](../../server/migrations/032_savings_realized_interest.sql) | [032 post](../operations/sql/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql) |
+| 032 | [033 pre](../operations/sql/MIGRATION_033_PRODUCTION_PREFLIGHT.sql) | [033 funded surplus](../../server/migrations/033_savings_funded_surplus.sql) | [033 post](../operations/sql/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql) |
+| 033 | [034 pre](../operations/sql/MIGRATION_034_PRODUCTION_PREFLIGHT.sql) | [034 monthly](../../server/migrations/034_savings_monthly_deposits.sql) | [034 post](../operations/sql/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql) |
+| 034 | [035 pre](../operations/sql/MIGRATION_035_PRODUCTION_PREFLIGHT.sql) | [035 reports](../../server/migrations/035_savings_reporting.sql) | [035 post](../operations/sql/MIGRATION_035_PRODUCTION_POSTFLIGHT.sql) |
 
 For030 compare `financial_history`, `legacy_reserve` and `budget_state_fingerprint` exactly; table/view totals increase by2/1. For031–035 compare the entire paired `evidence` objects exactly, including stage-specific unchanged-function fingerprints. Keep both saved results; a PASS without that comparison does not prove preservation. Every030–035 preflight was executed before its migration in the disposable rehearsal, proving it does not depend on later objects. Older stage hash assertions are not final035 checks. If already migrated, inspect recorded stage results and use the correct remaining stage; stop on any unexplained mismatch or partial installation.
 
-After035 run [SAVINGS_RELEASE_POSTFLIGHT.sql](SAVINGS_RELEASE_POSTFLIGHT.sql). Require all18 checks true and `SAVINGS_RELEASE_POSTFLIGHT_PASS`. At first rollout expect zero Savings accounts/entries and zero enabled flags, unchanged legacy reserve/cash/Loan/Budget history, total public tables28/views10 on this baseline. After intentional account/activity creation, nonzero Savings counts are expected; compare them to recorded commands instead of demanding zeros. The audit checks original-order solvency, reversal/cash links, Loan disjointness, permanent occurrence claims, protected permissions and the cash bridge. It is read-only and returns one JSON result.
+After035 run [SAVINGS_RELEASE_POSTFLIGHT.sql](../operations/sql/SAVINGS_RELEASE_POSTFLIGHT.sql). Require all18 checks true and `SAVINGS_RELEASE_POSTFLIGHT_PASS`. At first rollout expect zero Savings accounts/entries and zero enabled flags, unchanged legacy reserve/cash/Loan/Budget history, total public tables28/views10 on this baseline. After intentional account/activity creation, nonzero Savings counts are expected; compare them to recorded commands instead of demanding zeros. The audit checks original-order solvency, reversal/cash links, Loan disjointness, permanent occurrence claims, protected permissions and the cash bridge. It is read-only and returns one JSON result.
 
 ### 4. Reload, deploy compatibly and reconcile
 
@@ -619,26 +621,26 @@ client/src/pages/Transactions/TransactionsList.jsx
 client/src/services/api.js
 client/src/utils/financeInvalidation.js
 client/src/utils/savingsReporting.js
-docs/ARCHITECTURE.md
-docs/DECISIONS.md
-docs/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql
-docs/MIGRATION_030_PRODUCTION_PREFLIGHT.sql
-docs/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql
-docs/MIGRATION_031_PRODUCTION_PREFLIGHT.sql
-docs/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql
-docs/MIGRATION_032_PRODUCTION_PREFLIGHT.sql
-docs/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql
-docs/MIGRATION_033_PRODUCTION_PREFLIGHT.sql
-docs/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql
-docs/MIGRATION_034_PRODUCTION_PREFLIGHT.sql
-docs/MIGRATION_035_PRODUCTION_POSTFLIGHT.sql
-docs/MIGRATION_035_PRODUCTION_PREFLIGHT.sql
-docs/PROJECT_STATUS.md
-docs/RELEASE_1_3_0.md
-docs/ROADMAP.md
-docs/SAVINGS_FOUNDATION.md
-docs/SAVINGS_RELEASE_POSTFLIGHT.sql
-docs/SAVINGS_V1_3_0_SPEC.md
+docs/architecture/ARCHITECTURE.md
+docs/architecture/DECISIONS.md
+docs/operations/sql/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql
+docs/operations/sql/MIGRATION_030_PRODUCTION_PREFLIGHT.sql
+docs/operations/sql/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql
+docs/operations/sql/MIGRATION_031_PRODUCTION_PREFLIGHT.sql
+docs/operations/sql/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql
+docs/operations/sql/MIGRATION_032_PRODUCTION_PREFLIGHT.sql
+docs/operations/sql/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql
+docs/operations/sql/MIGRATION_033_PRODUCTION_PREFLIGHT.sql
+docs/operations/sql/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql
+docs/operations/sql/MIGRATION_034_PRODUCTION_PREFLIGHT.sql
+docs/operations/sql/MIGRATION_035_PRODUCTION_POSTFLIGHT.sql
+docs/operations/sql/MIGRATION_035_PRODUCTION_PREFLIGHT.sql
+docs/history/PROJECT_STATUS.md
+docs/history/RELEASE_1_3_0.md
+docs/history/ROADMAP.md
+docs/history/SAVINGS_FOUNDATION.md
+docs/operations/sql/SAVINGS_RELEASE_POSTFLIGHT.sql
+docs/architecture/SAVINGS_V1_3_0_SPEC.md
 package.json
 server/controllers/budgetController.js
 server/controllers/importController.js

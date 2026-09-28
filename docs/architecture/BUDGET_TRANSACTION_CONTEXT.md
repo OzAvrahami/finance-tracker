@@ -1,8 +1,10 @@
 # Budget transaction review context (#50)
 
+> Contract/technical reference. Dated implementation and verification notes are historical checkpoints; use the [documentation index](../README.md) for current release/acceptance boundaries and GitHub for live workflow state.
+
 Implemented on `feat/budget-context-50` from
 `ede60ae0eff5161e642199ef35e697bfd2319353`. Extends #51's existing
-[navigation contract](../client/src/utils/transactionsNavigation.js); no additional
+[navigation contract](../../client/src/utils/transactionsNavigation.js); no additional
 editor-return mechanism, accounting change or persistent filter preference.
 
 ## Eight decisions

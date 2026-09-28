@@ -57,11 +57,11 @@ const unbudgetedAllocationAmountMigration = fs.readFileSync(
   'utf8',
 );
 const unbudgetedAllocationPreflight = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'docs', 'MIGRATION_028_PRODUCTION_PREFLIGHT.sql'),
+  path.join(__dirname, '..', '..', 'docs', 'operations', 'sql', 'MIGRATION_028_PRODUCTION_PREFLIGHT.sql'),
   'utf8',
 );
 const unbudgetedAllocationPostflight = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'docs', 'MIGRATION_028_PRODUCTION_POSTFLIGHT.sql'),
+  path.join(__dirname, '..', '..', 'docs', 'operations', 'sql', 'MIGRATION_028_PRODUCTION_POSTFLIGHT.sql'),
   'utf8',
 );
 const fullSchema = fs.readFileSync(path.join(__dirname, '..', 'full_schema.sql'), 'utf8');

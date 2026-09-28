@@ -11,8 +11,8 @@ let created = false;
 const read = (file) => fs.readFileSync(path.join(__dirname, '..', '..', file), 'utf8');
 const schema = read('server/full_schema.sql');
 const migration = read('server/migrations/029_shopping_list_optional_fields.sql');
-const preflight = read('docs/MIGRATION_029_PREFLIGHT.sql');
-const postflight = read('docs/MIGRATION_029_POSTFLIGHT.sql');
+const preflight = read('docs/operations/sql/MIGRATION_029_PREFLIGHT.sql');
+const postflight = read('docs/operations/sql/MIGRATION_029_POSTFLIGHT.sql');
 const tables = ['shopping_list_types', 'shopping_catalog_categories', 'shopping_catalog_items', 'shopping_lists', 'shopping_list_items', 'shopping_checkouts'];
 const definitions = tables.map((name) => {
   const match = schema.match(new RegExp(`CREATE TABLE IF NOT EXISTS ${name} \\([\\s\\S]*?\\n\\);`));

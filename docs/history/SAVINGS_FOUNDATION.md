@@ -1,5 +1,7 @@
 # Savings implementation handoffs
 
+> Historical record: dated statements, commands, acceptance and production claims below describe their original checkpoint. They are not current operating status. See the [documentation index](../README.md) and linked GitHub evidence before use.
+
 ## Current integrated Savings handoff — 2026-09-15
 
 The owner approved the SAV-08 integrated-verification and release-preparation handoff. #37–#44 are completed / Done; #44 is independently verified Closed / Completed / Done with P2 — Medium and its existing metadata and relationships preserved. This uses the recorded technical evidence and actual owner confirmations, without inferring additional numerical/device or production checks. Parent #36 and milestone v1.3.0 remain open. The separate seven-field version step is now prepared at **1.3.0** on `feat/savings-v1.3.0`; the reviewed work is prepared for an owner-operated commit and remains uncommitted/unpublished at this handoff. Production migrations030–035 and deployment are not executed. The [canonical runbook and transfer instructions](RELEASE_1_3_0.md) record the inventory, existing verification, recovery limits and remaining owner-controlled workflow.
@@ -13,7 +15,7 @@ The owner confirmed “הכל נראה תקין גם המשימות האחרות
 Independent GitHub readback: #40 Closed / Completed / Done / P2 — Medium; #41 Closed / Completed / Done / P1 — High; #42 Closed / Completed / Done / P2 — Medium. Existing membership, labels, assignees, milestone v1.3.0, parent #36 and native dependencies remain. #43 is Open / Verify / P2 — Medium for owner review. #44 has not started. Work remains local/uncommitted; production rollout remains owner-controlled.
 
 
-Local implementation for [#38](https://github.com/OzAvrahami/finance-tracker/issues/38), 2026-09-12. The approved contract is [SAVINGS_V1_3_0_SPEC.md](SAVINGS_V1_3_0_SPEC.md); its incoming SAV-01 handoff hash was `d03d510a1791e9135440d495de2465a17c4c3f71a32a6cffb1c92fa501ce6b70`. This work is uncommitted and not deployed. On 2026-09-13 the owner explicitly accepted SAV-02: “בנוגע לחסכון מאושר אפשר להתקדם”. This is owner-reported acceptance, not a claim about individual checks performed. #38 was independently read back as Closed / Completed / Done, P1 — High, with its existing milestone and relationships preserved. Production installation and deployment remain pending. Package versions remain 1.2.0; v1.3.0 is a milestone, not a published version.
+Local implementation for [#38](https://github.com/OzAvrahami/finance-tracker/issues/38), 2026-09-12. The approved contract is [SAVINGS_V1_3_0_SPEC.md](../architecture/SAVINGS_V1_3_0_SPEC.md); its incoming SAV-01 handoff hash was `d03d510a1791e9135440d495de2465a17c4c3f71a32a6cffb1c92fa501ce6b70`. This work is uncommitted and not deployed. On 2026-09-13 the owner explicitly accepted SAV-02: “בנוגע לחסכון מאושר אפשר להתקדם”. This is owner-reported acceptance, not a claim about individual checks performed. #38 was independently read back as Closed / Completed / Done, P1 — High, with its existing milestone and relationships preserved. Production installation and deployment remain pending. Package versions remain 1.2.0; v1.3.0 is a milestone, not a published version.
 
 Historical SAV-07 preview: http://127.0.0.1:5182/savings. SAV-07 and SAV-08 have since been accepted and completed; see the current handoff above. Windows preview processes and disposable persistence do not transfer through Git.
 
@@ -38,7 +40,7 @@ At the SAV-02 handoff no downstream command endpoint or callable placeholder exi
 
 ## Migration and actual inventory
 
-The next available migration was [030_savings_foundation.sql](../server/migrations/030_savings_foundation.sql). The identical migration is appended to [full_schema.sql](../server/full_schema.sql). Historical migrations 001–029 are unchanged.
+The next available migration was [030_savings_foundation.sql](../../server/migrations/030_savings_foundation.sql). The identical migration is appended to [full_schema.sql](../../server/full_schema.sql). Historical migrations 001–029 are unchanged.
 
 | Object group | Actual #38 change |
 | --- | --- |
@@ -98,9 +100,9 @@ git diff --check
 
 Owner production order, after review/commit under the owner's workflow:
 
-1. Confirm the production schema is through 029 and quiesce writes for comparable evidence. Run [MIGRATION_030_PRODUCTION_PREFLIGHT.sql](MIGRATION_030_PRODUCTION_PREFLIGHT.sql); save its single JSON result. Every check must be true. Resolve seed-name conflicts explicitly; do not reinterpret an existing category or infer overlap.
+1. Confirm the production schema is through 029 and quiesce writes for comparable evidence. Run [MIGRATION_030_PRODUCTION_PREFLIGHT.sql](../operations/sql/MIGRATION_030_PRODUCTION_PREFLIGHT.sql); save its single JSON result. Every check must be true. Resolve seed-name conflicts explicitly; do not reinterpret an existing category or infer overlap.
 2. Apply only Migration 030, not full_schema or old migrations.
-3. Run [MIGRATION_030_PRODUCTION_POSTFLIGHT.sql](MIGRATION_030_PRODUCTION_POSTFLIGHT.sql) immediately, before account creation. Save its single JSON result. Compare **all** financial-history counts/fingerprints, reserve and Budget fingerprint to preflight; expect +2 tables/+1 view and empty new tables. A structural PASS alone does not prove the before/after comparison. Later accounts intentionally fail the installation-empty check; never delete them to obtain PASS.
+3. Run [MIGRATION_030_PRODUCTION_POSTFLIGHT.sql](../operations/sql/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql) immediately, before account creation. Save its single JSON result. Compare **all** financial-history counts/fingerprints, reserve and Budget fingerprint to preflight; expect +2 tables/+1 view and empty new tables. A structural PASS alone does not prove the before/after comparison. Later accounts intentionally fail the installation-empty check; never delete them to obtain PASS.
 4. Deploy compatible readers before allowing any voided history. SAV-02 owner acceptance is already granted as recorded above; the listed isolated tests are agent evidence, not a claim that the owner performed each check.
 5. #38 acceptance is now recorded; follow the SAV-03 rollout below for Migration 031 and its cash commands. Interest, transfers, monthly processing and expanded reports retain their separate gates. Automation stays off.
 
@@ -145,14 +147,14 @@ server/
 
 docs/
 
-- `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md`
-- `docs/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql`
-- `docs/MIGRATION_030_PRODUCTION_PREFLIGHT.sql`
-- `docs/PROJECT_STATUS.md`
-- `docs/ROADMAP.md`
-- `docs/SAVINGS_FOUNDATION.md`
-- `docs/SAVINGS_V1_3_0_SPEC.md`
+- `docs/architecture/ARCHITECTURE.md`
+- `docs/architecture/DECISIONS.md`
+- `docs/operations/sql/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql`
+- `docs/operations/sql/MIGRATION_030_PRODUCTION_PREFLIGHT.sql`
+- `docs/history/PROJECT_STATUS.md`
+- `docs/history/ROADMAP.md`
+- `docs/history/SAVINGS_FOUNDATION.md`
+- `docs/architecture/SAVINGS_V1_3_0_SPEC.md`
 
 CHANGELOG.md
 
@@ -184,7 +186,7 @@ The canonical `cancel_savings_event` signature has no ordinary-category paramete
 
 ### Migration 031 inventory
 
-[031_savings_manual_transactions.sql](../server/migrations/031_savings_manual_transactions.sql) is appended identically to [full_schema.sql](../server/full_schema.sql). Migration 030 and all historical migrations remain immutable.
+[031_savings_manual_transactions.sql](../../server/migrations/031_savings_manual_transactions.sql) is appended identically to [full_schema.sql](../../server/full_schema.sql). Migration 030 and all historical migrations remain immutable.
 
 | Object group | Exact change |
 | --- | --- |
@@ -228,7 +230,7 @@ Owner preview: **http://127.0.0.1:5180/savings**. This mounts actual `App`/share
 ### Owner deployment order (not executed)
 
 1. Complete owner review/commit workflow. If production is only through 029, install 030 with its existing pre/postflight first. If 030 is already installed, verify its state and do not reapply it or demand empty existing Savings tables.
-2. Pause application/import/scheduler writes for comparable evidence; run [031 preflight](MIGRATION_031_PRODUCTION_PREFLIGHT.sql) and save the consolidated JSON. Apply only Migration 031, then [031 postflight](MIGRATION_031_PRODUCTION_POSTFLIGHT.sql). Every check must pass and all evidence fingerprints/counts, reserve, Budget state and table/view counts must match exactly. Do not execute the schema snapshot as a migration.
+2. Pause application/import/scheduler writes for comparable evidence; run [031 preflight](../operations/sql/MIGRATION_031_PRODUCTION_PREFLIGHT.sql) and save the consolidated JSON. Apply only Migration 031, then [031 postflight](../operations/sql/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql). Every check must pass and all evidence fingerprints/counts, reserve, Budget state and table/view counts must match exactly. Do not execute the schema snapshot as a migration.
 3. Deploy the compatible server/client together before allowing Savings cash cancellation; old pre-foundation readers cannot safely consume voided history. Keep automatic Savings execution off. Verify authenticated full-application flows and direct Budget/Annual reads in the owner's deployment workflow.
 4. A failure after data exists requires disabling new writes and a compatible forward fix, never deleting entries, unvoiding tombstones or restoring retired reserve blindly. #40–#43 remain separate work.
 
@@ -258,14 +260,14 @@ The subsequent visual-review correction additionally changes `client/src/compone
 - `client/src/pages/Transactions/TransactionsList.jsx`
 - `client/src/services/api.js`
 - `client/src/utils/financeInvalidation.js`
-- `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md`
-- `docs/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql`
-- `docs/MIGRATION_031_PRODUCTION_PREFLIGHT.sql`
-- `docs/PROJECT_STATUS.md`
-- `docs/ROADMAP.md`
-- `docs/SAVINGS_FOUNDATION.md`
-- `docs/SAVINGS_V1_3_0_SPEC.md`
+- `docs/architecture/ARCHITECTURE.md`
+- `docs/architecture/DECISIONS.md`
+- `docs/operations/sql/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql`
+- `docs/operations/sql/MIGRATION_031_PRODUCTION_PREFLIGHT.sql`
+- `docs/history/PROJECT_STATUS.md`
+- `docs/history/ROADMAP.md`
+- `docs/history/SAVINGS_FOUNDATION.md`
+- `docs/architecture/SAVINGS_V1_3_0_SPEC.md`
 - `server/controllers/importController.js`
 - `server/controllers/savingsController.js`
 - `server/controllers/shoppingController.js`
@@ -347,9 +349,9 @@ Numerical contract executed in PostgreSQL and the full-app preview:
 
 ### SAV-04 database inventory and rollout
 
-[032_savings_realized_interest.sql](../server/migrations/032_savings_realized_interest.sql) is the inspected next migration, appended identically to full_schema.sql. It replaces exactly savings_post_event_locked(UUID,JSONB) and get_savings_account(BIGINT,DATE,DATE,BIGINT,INTEGER). It creates no object signatures, tables, views, columns, indexes or triggers, changes no Loan definitions/grants, and performs no row migration/backfill. The initiative remains exactly savings_accounts, savings_entries and savings_account_summary; seven of ten public Savings RPCs and ten of eleven helper/trigger functions (ten private plus the read-only Budget exception) are delivered. The existing read-only service_role Budget-helper exception remains; mutating helpers and protected void fields remain private.
+[032_savings_realized_interest.sql](../../server/migrations/032_savings_realized_interest.sql) is the inspected next migration, appended identically to full_schema.sql. It replaces exactly savings_post_event_locked(UUID,JSONB) and get_savings_account(BIGINT,DATE,DATE,BIGINT,INTEGER). It creates no object signatures, tables, views, columns, indexes or triggers, changes no Loan definitions/grants, and performs no row migration/backfill. The initiative remains exactly savings_accounts, savings_entries and savings_account_summary; seven of ten public Savings RPCs and ten of eleven helper/trigger functions (ten private plus the read-only Budget exception) are delivered. The existing read-only service_role Budget-helper exception remains; mutating helpers and protected void fields remain private.
 
-Owner order (not executed in production): install missing 030/031 in order with their existing checks; pause writes; run [032 preflight](MIGRATION_032_PRODUCTION_PREFLIGHT.sql), apply only 032, run [032 postflight](MIGRATION_032_PRODUCTION_POSTFLIGHT.sql), compare every evidence field exactly, then deploy compatible server/client before enabling interest. Each artifact returns one consolidated JSON result and checks the expected function bodies/grants. Compare preserved row counts/fingerprints, table/view counts, unaffected function/grant fingerprint, Budget state and legacy reserve. A PASS without matching evidence is insufficient. Keep automation disabled. Recovery is a compatible forward fix, never ledger deletion/unvoiding or a destructive down migration.
+Owner order (not executed in production): install missing 030/031 in order with their existing checks; pause writes; run [032 preflight](../operations/sql/MIGRATION_032_PRODUCTION_PREFLIGHT.sql), apply only 032, run [032 postflight](../operations/sql/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql), compare every evidence field exactly, then deploy compatible server/client before enabling interest. Each artifact returns one consolidated JSON result and checks the expected function bodies/grants. Compare preserved row counts/fingerprints, table/view counts, unaffected function/grant fingerprint, Budget state and legacy reserve. A PASS without matching evidence is insufficient. Keep automation disabled. Recovery is a compatible forward fix, never ledger deletion/unvoiding or a destructive down migration.
 
 ### SAV-04 executed verification
 
@@ -378,10 +380,10 @@ Files changed relative to this task’s initial working tree (earlier SAV-01–0
 - `client/src/pages/Savings/Savings.jsx`
 - `client/src/pages/Savings/SavingsInterestDialog.jsx`
 - `client/src/pages/Savings/SavingsInterestDialog.test.jsx`
-- `docs/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql`
-- `docs/MIGRATION_032_PRODUCTION_PREFLIGHT.sql`
-- `docs/SAVINGS_FOUNDATION.md`
-- `docs/SAVINGS_V1_3_0_SPEC.md`
+- `docs/operations/sql/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql`
+- `docs/operations/sql/MIGRATION_032_PRODUCTION_PREFLIGHT.sql`
+- `docs/history/SAVINGS_FOUNDATION.md`
+- `docs/architecture/SAVINGS_V1_3_0_SPEC.md`
 - `server/migrations/032_savings_realized_interest.sql`
 - `server/routes/savingsRoutes.js`
 - `server/services/savingsTransactionService.js`
@@ -391,10 +393,10 @@ Files changed relative to this task’s initial working tree (earlier SAV-01–0
 - `client/src/hooks/useTransactionForm.js`
 - `client/src/pages/AddTransaction/AddTransaction.jsx`
 - `client/src/services/api.js`
-- `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md`
-- `docs/PROJECT_STATUS.md`
-- `docs/ROADMAP.md`
+- `docs/architecture/ARCHITECTURE.md`
+- `docs/architecture/DECISIONS.md`
+- `docs/history/PROJECT_STATUS.md`
+- `docs/history/ROADMAP.md`
 - `server/full_schema.sql`
 
 
@@ -421,7 +423,7 @@ The owner said “בוא נתקדם אני לא אבדוק עכשיו את הר�
 | Existing Settings policy PUT | New `set_budget_unused_balance_policy(BIGINT,TEXT,BIGINT)` overload; explicit nullable destination. Legacy two-argument callers cannot silently erase an existing named destination. |
 | Existing Budget month-close POST | New `apply_budget_month_disposition(TEXT,UUID,TEXT,TEXT,JSONB)` overload; complete `cash_confirmations`. The four-argument wrapper cannot execute named transfers without confirmations. |
 
-[033_savings_funded_surplus.sql](../server/migrations/033_savings_funded_surplus.sql) adds **six function signatures**: three public Savings RPCs, two Budget overloads and private `savings_apply_surplus_locked(UUID,JSONB)`. Its internal read-only `reverse_preview` branch is reached through the existing funded-month reader; service_role has no direct helper EXECUTE grant.
+[033_savings_funded_surplus.sql](../../server/migrations/033_savings_funded_surplus.sql) adds **six function signatures**: three public Savings RPCs, two Budget overloads and private `savings_apply_surplus_locked(UUID,JSONB)`. Its internal read-only `reverse_preview` branch is reached through the existing funded-month reader; service_role has no direct helper EXECUTE grant.
 
 It replaces **15 existing function signatures**: `validate_budget_unused_balance_policy`, `validate_budget_operation_tree`, `validate_budget_operation_item`, `savings_assert_links`, `budget_actual_transactions`, `budget_month_disposition_candidate_rows`, `get_budget_month_disposition_preview`, the two-argument `set_budget_unused_balance_policy`, the four-argument `apply_budget_month_disposition`, `savings_post_event_locked`, `reverse_budget_month_disposition`, `savings_guard_transaction`, `group_budget_posting_operation`, `get_funded_budget_month`, and `transactions_filtered`. The existing `budget_category_composition` view is replaced to classify the typed transfer movement. No new physical table, view, column, index, trigger, sequence or migration backfill is added. Existing trigger attachments are reused.
 
@@ -450,45 +452,45 @@ Current-month owner fixture: category **“בדיקת בעלים SAV-05 — עו
 
 Interest owner review remains deferred; this checklist does not request it again.
 
-Owner production order (not executed): install missing030→031→032 with their own checks, pause application/import/scheduler writes, save [033 preflight](MIGRATION_033_PRODUCTION_PREFLIGHT.sql), apply033 once, save [033 postflight](MIGRATION_033_PRODUCTION_POSTFLIGHT.sql), compare every evidence count/fingerprint, reload PostgREST schema cache, then deploy the compatible server/client before enabling transfers. Each artifact emits one consolidated JSON result and was exercised only against disposable databases. Never apply full_schema.sql to production. Actual production installation, deployment and owner acceptance remain pending.
+Owner production order (not executed): install missing030→031→032 with their own checks, pause application/import/scheduler writes, save [033 preflight](../operations/sql/MIGRATION_033_PRODUCTION_PREFLIGHT.sql), apply033 once, save [033 postflight](../operations/sql/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql), compare every evidence count/fingerprint, reload PostgREST schema cache, then deploy the compatible server/client before enabling transfers. Each artifact emits one consolidated JSON result and was exercised only against disposable databases. Never apply full_schema.sql to production. Actual production installation, deployment and owner acceptance remain pending.
 
 Only the new preview processes may be stopped: the PID in `C:\Users\ozavr\AppData\Local\Temp\finance-sav05-20260913\preview.pid` (verify its command line ends with that directory's preview.mjs before Stop-Process), and Docker container `finance-sav05-postgrest`. Do not stop the older Savings preview, shared disposable PostgreSQL container or unrelated containers. No stage, commit, push, version bump, release or deployment occurred.
 
 
 ### SAV-05 files changed relative to the initial working tree
 
-- [CHANGELOG.md](../CHANGELOG.md)
-- [client/src/pages/AddTransaction/AddTransaction.jsx](../client/src/pages/AddTransaction/AddTransaction.jsx)
-- [client/src/pages/AnnualSummary/AnnualSummary.jsx](../client/src/pages/AnnualSummary/AnnualSummary.jsx)
-- [client/src/pages/AnnualSummary/AnnualSummary.test.jsx](../client/src/pages/AnnualSummary/AnnualSummary.test.jsx)
-- [client/src/pages/Budget/Budget.jsx](../client/src/pages/Budget/Budget.jsx)
-- [client/src/pages/Budget/Budget.test.jsx](../client/src/pages/Budget/Budget.test.jsx)
-- [client/src/pages/Budget/BudgetSavingsTransfers.jsx](../client/src/pages/Budget/BudgetSavingsTransfers.jsx)
-- [client/src/pages/Budget/BudgetSavingsTransfers.test.jsx](../client/src/pages/Budget/BudgetSavingsTransfers.test.jsx)
-- [client/src/pages/Budget/BudgetStates.jsx](../client/src/pages/Budget/BudgetStates.jsx)
-- [client/src/pages/Budget/BudgetSummary.jsx](../client/src/pages/Budget/BudgetSummary.jsx)
-- [client/src/pages/Settings/BudgetSettingsTab.jsx](../client/src/pages/Settings/BudgetSettingsTab.jsx)
-- [client/src/pages/Settings/Settings.test.jsx](../client/src/pages/Settings/Settings.test.jsx)
-- [client/src/services/api.js](../client/src/services/api.js)
-- [docs/ARCHITECTURE.md](ARCHITECTURE.md)
-- [docs/DECISIONS.md](DECISIONS.md)
-- [docs/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql](MIGRATION_033_PRODUCTION_POSTFLIGHT.sql)
-- [docs/MIGRATION_033_PRODUCTION_PREFLIGHT.sql](MIGRATION_033_PRODUCTION_PREFLIGHT.sql)
-- [docs/PROJECT_STATUS.md](PROJECT_STATUS.md)
-- [docs/ROADMAP.md](ROADMAP.md)
-- [docs/SAVINGS_FOUNDATION.md](SAVINGS_FOUNDATION.md)
-- [docs/SAVINGS_V1_3_0_SPEC.md](SAVINGS_V1_3_0_SPEC.md)
-- [server/controllers/budgetController.js](../server/controllers/budgetController.js)
-- [server/controllers/savingsController.js](../server/controllers/savingsController.js)
-- [server/controllers/settingsController.js](../server/controllers/settingsController.js)
-- [server/full_schema.sql](../server/full_schema.sql)
-- [server/migrations/033_savings_funded_surplus.sql](../server/migrations/033_savings_funded_surplus.sql)
-- [server/routes/savingsRoutes.js](../server/routes/savingsRoutes.js)
-- [server/services/budgetService.js](../server/services/budgetService.js)
-- [server/services/savingsService.js](../server/services/savingsService.js)
-- [server/test/budgetController.test.js](../server/test/budgetController.test.js)
-- [server/test/savingsSurplus.test.js](../server/test/savingsSurplus.test.js)
-- [server/test/savingsSurplusPostgres.local.test.js](../server/test/savingsSurplusPostgres.local.test.js)
+- [CHANGELOG.md](../../CHANGELOG.md)
+- [client/src/pages/AddTransaction/AddTransaction.jsx](../../client/src/pages/AddTransaction/AddTransaction.jsx)
+- [client/src/pages/AnnualSummary/AnnualSummary.jsx](../../client/src/pages/AnnualSummary/AnnualSummary.jsx)
+- [client/src/pages/AnnualSummary/AnnualSummary.test.jsx](../../client/src/pages/AnnualSummary/AnnualSummary.test.jsx)
+- [client/src/pages/Budget/Budget.jsx](../../client/src/pages/Budget/Budget.jsx)
+- [client/src/pages/Budget/Budget.test.jsx](../../client/src/pages/Budget/Budget.test.jsx)
+- [client/src/pages/Budget/BudgetSavingsTransfers.jsx](../../client/src/pages/Budget/BudgetSavingsTransfers.jsx)
+- [client/src/pages/Budget/BudgetSavingsTransfers.test.jsx](../../client/src/pages/Budget/BudgetSavingsTransfers.test.jsx)
+- [client/src/pages/Budget/BudgetStates.jsx](../../client/src/pages/Budget/BudgetStates.jsx)
+- [client/src/pages/Budget/BudgetSummary.jsx](../../client/src/pages/Budget/BudgetSummary.jsx)
+- [client/src/pages/Settings/BudgetSettingsTab.jsx](../../client/src/pages/Settings/BudgetSettingsTab.jsx)
+- [client/src/pages/Settings/Settings.test.jsx](../../client/src/pages/Settings/Settings.test.jsx)
+- [client/src/services/api.js](../../client/src/services/api.js)
+- [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md)
+- [docs/architecture/DECISIONS.md](../architecture/DECISIONS.md)
+- [docs/operations/sql/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql](../operations/sql/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql)
+- [docs/operations/sql/MIGRATION_033_PRODUCTION_PREFLIGHT.sql](../operations/sql/MIGRATION_033_PRODUCTION_PREFLIGHT.sql)
+- [docs/history/PROJECT_STATUS.md](PROJECT_STATUS.md)
+- [docs/history/ROADMAP.md](ROADMAP.md)
+- [docs/history/SAVINGS_FOUNDATION.md](SAVINGS_FOUNDATION.md)
+- [docs/architecture/SAVINGS_V1_3_0_SPEC.md](../architecture/SAVINGS_V1_3_0_SPEC.md)
+- [server/controllers/budgetController.js](../../server/controllers/budgetController.js)
+- [server/controllers/savingsController.js](../../server/controllers/savingsController.js)
+- [server/controllers/settingsController.js](../../server/controllers/settingsController.js)
+- [server/full_schema.sql](../../server/full_schema.sql)
+- [server/migrations/033_savings_funded_surplus.sql](../../server/migrations/033_savings_funded_surplus.sql)
+- [server/routes/savingsRoutes.js](../../server/routes/savingsRoutes.js)
+- [server/services/budgetService.js](../../server/services/budgetService.js)
+- [server/services/savingsService.js](../../server/services/savingsService.js)
+- [server/test/budgetController.test.js](../../server/test/budgetController.test.js)
+- [server/test/savingsSurplus.test.js](../../server/test/savingsSurplus.test.js)
+- [server/test/savingsSurplusPostgres.local.test.js](../../server/test/savingsSurplusPostgres.local.test.js)
 
 
 ### SAV-05 final tracking and preservation readback
@@ -522,7 +524,7 @@ The due payload is account_id, occurrence_month, expected_due_date and plan_revi
 
 The scheduler reads the existing summary view in complete pages, captures the candidate set once, then calls the existing atomic posting RPC. Reports contain processed/alreadyClaimed/skipped/failed and bounded identifiers/codes, not upstream connection errors or secrets. A transient serialization/deadlock retry uses the same request UUID and is bounded to one retry. Database claim uniqueness remains authoritative across invocations, concurrency and manual races. No workflow has been scheduled or enabled by this task, and the existing Loan workflow/endpoint/authentication is unchanged.
 
-[034_savings_monthly_deposits.sql](../server/migrations/034_savings_monthly_deposits.sql) replaces exactly:
+[034_savings_monthly_deposits.sql](../../server/migrations/034_savings_monthly_deposits.sql) replaces exactly:
 
 1. `savings_validate_account()` — configuration validation and claim-based next due.
 2. `update_savings_account(BIGINT,BIGINT,UUID,JSONB)` — explicit automation flag and old/new source locks before the account.
@@ -553,7 +555,7 @@ Prepared account: **“בדיקת בעלים SAV-06 — הפקדה חודשית 
 3. הסדירו את המועד פעם אחת: צפו להוצאה אחת, הפקדה אחת ויתרה1,300₪; המועד הבא14/10. לחלופין קשרו הפקדה קיימת במפורש בלי כפל כסף/יתרה.
 4. בדקו רענון, היסטוריה, דילוג עם סיבה והחזרה מפורשת; ביטול הפקדה אינו פותח מחדש את המועד לאוטומציה. בדקו נייד/מחשב, שתי ערכות נושא ומקלדת.
 
-Owner-controlled production order, **not executed**: complete review/commit workflow, install any missing030→031→032→033 with their own checks, disable Savings jobs and pause application/import writes, save [034 preflight](MIGRATION_034_PRODUCTION_PREFLIGHT.sql), apply only034 once, save [034 postflight](MIGRATION_034_PRODUCTION_POSTFLIGHT.sql), and compare every evidence count/fingerprint exactly. Each script returns one consolidated JSON result; both require automation off during installation and support existing Savings history. They passed on the disposable upgrade fixture. The later running preview intentionally has enabled test plans, so its final function-only revision check compared history and function hashes separately rather than calling that active-demo state an installation PASS.
+Owner-controlled production order, **not executed**: complete review/commit workflow, install any missing030→031→032→033 with their own checks, disable Savings jobs and pause application/import writes, save [034 preflight](../operations/sql/MIGRATION_034_PRODUCTION_PREFLIGHT.sql), apply only034 once, save [034 postflight](../operations/sql/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql), and compare every evidence count/fingerprint exactly. Each script returns one consolidated JSON result; both require automation off during installation and support existing Savings history. They passed on the disposable upgrade fixture. The later running preview intentionally has enabled test plans, so its final function-only revision check compared history and function hashes separately rather than calling that active-demo state an installation PASS.
 
 Reload PostgREST schema cache, deploy compatible server/client and verify authenticated manual/read/cancellation paths. Only then configure a dedicated Savings job secret, explicitly enable the server gate and intended account plans, and arrange an owner-controlled daily authenticated invocation of `/api/internal/jobs/process-due-savings`. Rehearse first against isolated data; inspect per-account failures before retrying. No new GitHub scheduled workflow is activated here. Rollback after activity means stop the job/new writes and deliver a compatible forward fix, never drop history or release permanent occurrence claims.
 
@@ -567,10 +569,10 @@ Files changed relative to the recorded initial working tree; earlier Savings wor
 - `client/src/pages/Savings/SavingsAccountDialog.jsx`
 - `client/src/pages/Savings/SavingsMonthlyDialog.jsx`
 - `client/src/pages/Savings/SavingsMonthlyDialog.test.jsx`
-- `docs/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql`
-- `docs/MIGRATION_034_PRODUCTION_PREFLIGHT.sql`
-- `docs/SAVINGS_FOUNDATION.md`
-- `docs/SAVINGS_V1_3_0_SPEC.md`
+- `docs/operations/sql/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql`
+- `docs/operations/sql/MIGRATION_034_PRODUCTION_PREFLIGHT.sql`
+- `docs/history/SAVINGS_FOUNDATION.md`
+- `docs/architecture/SAVINGS_V1_3_0_SPEC.md`
 - `server/controllers/savingsJobController.js`
 - `server/middleware/savingsJobAuth.js`
 - `server/migrations/034_savings_monthly_deposits.sql`
@@ -578,10 +580,10 @@ Files changed relative to the recorded initial working tree; earlier Savings wor
 - `server/test/dueSavingsDeposits.test.js`
 - `server/test/savingsMonthlyPostgres.local.test.js`
 - `CHANGELOG.md`
-- `docs/ARCHITECTURE.md`
-- `docs/DECISIONS.md`
-- `docs/PROJECT_STATUS.md`
-- `docs/ROADMAP.md`
+- `docs/architecture/ARCHITECTURE.md`
+- `docs/architecture/DECISIONS.md`
+- `docs/history/PROJECT_STATUS.md`
+- `docs/history/ROADMAP.md`
 - `server/full_schema.sql`
 - `server/routes/internalJobRoutes.js`
 
@@ -604,7 +606,7 @@ Independent GitHub readback confirms #42 Open / Verify / P2 — Medium, one exis
 
 GET /api/savings/report?from=YYYY-MM-DD&to=YYYY-MM-DD&accountId=optional-exact-id is authenticated through the existing Savings route. It validates dates and exact identifiers, returning decimal text, current held balance, period deposits/withdrawals/capitalized and paid-out interest, cash classification/reconciliation, and per-account flows/current summaries.
 
-[035_savings_reporting.sql](../server/migrations/035_savings_reporting.sql) adds one read-only get_savings_report(DATE,DATE,BIGINT DEFAULT NULL) RPC. One STABLE statement supplies a consistent snapshot from savings_account_summary, current ledger posts and transactions_filtered; there is no per-account history download or Node arithmetic.
+[035_savings_reporting.sql](../../server/migrations/035_savings_reporting.sql) adds one read-only get_savings_report(DATE,DATE,BIGINT DEFAULT NULL) RPC. One STABLE statement supplies a consistent snapshot from savings_account_summary, current ledger posts and transactions_filtered; there is no per-account history download or Node arithmetic.
 
 It replaces transactions_filtered with a ninth optional p_savings_flow TEXT argument and transactions_page with a seventeenth optional p_savings_flow TEXT argument. Earlier positional/named calls remain valid through defaults. The old signatures are dropped and recreated atomically to avoid RPC ambiguity. Default cash totals and cursor ordering are unchanged. Both new signatures retain service_role EXECUTE only; the filtered/report readers use SECURITY DEFINER and pinned search paths, while pagination remains SECURITY INVOKER. Existing private mutation helpers remain denied.
 
@@ -625,7 +627,7 @@ The actual full application remains **http://127.0.0.1:5182/savings**, using the
 
 בדיקת בעלים קצרה: בחרו ספטמבר2026 בדוח החיסכון, פתחו פירוט ובחרו את חשבון הבדיקה; בדקו את ההפרדה בין יתרה נוכחית, הפקדות, משיכות וריבית. החליפו חודש/שנה ובדקו שזרימות התקופה משתנות והיתרה הנוכחית נשמרת. עברו מהדוח לתנועות לפי סוג תזרים ולפרטי החשבון. בדקו RTL, מובייל ושתי ערכות הנושא. זו בדיקת SAV-07 בלבד; אין צורך לחזור על קבלת SAV-04–06.
 
-Owner-controlled upgrade: ensure030→031→032→033→034 are installed in order; pause application/import/job invocations, run [035 preflight](MIGRATION_035_PRODUCTION_PREFLIGHT.sql) →035 once → [035 postflight](MIGRATION_035_PRODUCTION_POSTFLIGHT.sql), compare evidence exactly, reload PostgREST schema, then deploy the compatible server/client. Account automation flags are preserved;035 neither enables nor invokes a scheduler. Keep production scheduler enablement under the earlier explicit owner-controlled prerequisites. No stage, commit, push, version bump, release, production migration or deployment occurred. #44 remains unstarted.
+Owner-controlled upgrade: ensure030→031→032→033→034 are installed in order; pause application/import/job invocations, run [035 preflight](../operations/sql/MIGRATION_035_PRODUCTION_PREFLIGHT.sql) →035 once → [035 postflight](../operations/sql/MIGRATION_035_PRODUCTION_POSTFLIGHT.sql), compare evidence exactly, reload PostgREST schema, then deploy the compatible server/client. Account automation flags are preserved;035 neither enables nor invokes a scheduler. Keep production scheduler enablement under the earlier explicit owner-controlled prerequisites. No stage, commit, push, version bump, release, production migration or deployment occurred. #44 remains unstarted.
 
 ### Files changed in SAV-07 (relative to the initial local snapshot)
 
@@ -636,10 +638,10 @@ Owner-controlled upgrade: ensure030→031→032→033→034 are installed in ord
 - client/src/pages/Savings/Savings.jsx
 - client/src/pages/Savings/Savings.test.jsx
 - client/src/utils/savingsReporting.js
-- docs/MIGRATION_035_PRODUCTION_POSTFLIGHT.sql
-- docs/MIGRATION_035_PRODUCTION_PREFLIGHT.sql
-- docs/SAVINGS_FOUNDATION.md
-- docs/SAVINGS_V1_3_0_SPEC.md
+- docs/operations/sql/MIGRATION_035_PRODUCTION_POSTFLIGHT.sql
+- docs/operations/sql/MIGRATION_035_PRODUCTION_PREFLIGHT.sql
+- docs/history/SAVINGS_FOUNDATION.md
+- docs/architecture/SAVINGS_V1_3_0_SPEC.md
 - server/controllers/savingsController.js
 - server/migrations/035_savings_reporting.sql
 - server/routes/savingsRoutes.js
@@ -657,10 +659,10 @@ Owner-controlled upgrade: ensure030→031→032→033→034 are installed in ord
 - client/src/pages/Transactions/TransactionsFilters.jsx
 - client/src/pages/Transactions/TransactionsList.jsx
 - client/src/services/api.js
-- docs/ARCHITECTURE.md
-- docs/DECISIONS.md
-- docs/PROJECT_STATUS.md
-- docs/ROADMAP.md
+- docs/architecture/ARCHITECTURE.md
+- docs/architecture/DECISIONS.md
+- docs/history/PROJECT_STATUS.md
+- docs/history/ROADMAP.md
 - server/controllers/transactionController.js
 - server/full_schema.sql
 - server/test/transactionsPagination.test.js
@@ -702,4 +704,4 @@ Preview: **http://127.0.0.1:5182/savings?accountId=14**. Prepared account **בד
 
 ### Completion boundary
 
-The owner subsequently approved this integrated-verification/release-preparation handoff. Independent readback confirms #44 Closed / Completed / Done / P2 — Medium; #36 and milestonev1.3.0 remain open. All labels, assignees, priorities, unique Project items and native dependencies remain. The separately authorized seven-field version step is prepared at1.3.0 on feat/savings-v1.3.0, and selective staging prepares the accepted bundle for the owner’s commit and Git-bundle transfer. Existing verification is reused; no new financial/database/browser campaign was run for this metadata step. Commit, production backup/restore validation, migrations030–035, deployment/smoke, explicit scheduler enablement, tag and publication remain owner-controlled and unexecuted. See the canonical runbook for Mac continuation and preservation checks. The unrelated github-development-standard.md modification is preserved and excluded. New SAV-08 files are server/test/savingsReleasePostgres.local.test.js, server/test/run-savings-release.cjs, docs/SAVINGS_RELEASE_POSTFLIGHT.sql and docs/RELEASE_1_3_0.md. Companion changes are README, CHANGELOG, ARCHITECTURE, DECISIONS, PROJECT_STATUS, ROADMAP and the canonical specification/current handoff.
+The owner subsequently approved this integrated-verification/release-preparation handoff. Independent readback confirms #44 Closed / Completed / Done / P2 — Medium; #36 and milestonev1.3.0 remain open. All labels, assignees, priorities, unique Project items and native dependencies remain. The separately authorized seven-field version step is prepared at1.3.0 on feat/savings-v1.3.0, and selective staging prepares the accepted bundle for the owner’s commit and Git-bundle transfer. Existing verification is reused; no new financial/database/browser campaign was run for this metadata step. Commit, production backup/restore validation, migrations030–035, deployment/smoke, explicit scheduler enablement, tag and publication remain owner-controlled and unexecuted. See the canonical runbook for Mac continuation and preservation checks. The unrelated github-development-standard.md modification is preserved and excluded. New SAV-08 files are server/test/savingsReleasePostgres.local.test.js, server/test/run-savings-release.cjs, docs/operations/sql/SAVINGS_RELEASE_POSTFLIGHT.sql and docs/RELEASE_1_3_0.md. Companion changes are README, CHANGELOG, ARCHITECTURE, DECISIONS, PROJECT_STATUS, ROADMAP and the canonical specification/current handoff.

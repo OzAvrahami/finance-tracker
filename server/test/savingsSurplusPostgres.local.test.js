@@ -147,9 +147,9 @@ test('upgrade from 032 preserves reserve retirement, every financial row and obj
  const p=call(db,'get_budget_month_disposition_preview',[previous(db)]);call(db,'apply_budget_month_disposition',[previous(db),key(12),p.fingerprint,null]);
  call(db,'create_savings_account',[key(1),{name:'confirmed opening',opened_on:'2020-01-01',tracking_start_date:'2020-01-01'},'1200','300','confirmed overlap']);
  assert.equal(balance(db),'1200.00');assert.equal(scalar(db,'SELECT balance_text FROM budget_savings_state;'),'200.00');
- const before=financial(db),pre=json(db,read('docs/MIGRATION_033_PRODUCTION_PREFLIGHT.sql'));assert.equal(pre.result,'MIGRATION_033_PREFLIGHT_PASS',JSON.stringify(pre.checks));
+ const before=financial(db),pre=json(db,read('docs/operations/sql/MIGRATION_033_PRODUCTION_PREFLIGHT.sql'));assert.equal(pre.result,'MIGRATION_033_PREFLIGHT_PASS',JSON.stringify(pre.checks));
  sql(db,migration);assert.deepEqual(financial(db),before);
- const after=json(db,read('docs/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_033_POSTFLIGHT_PASS',JSON.stringify(after.checks));assert.deepEqual(after.evidence,pre.evidence);
+ const after=json(db,read('docs/operations/sql/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_033_POSTFLIGHT_PASS',JSON.stringify(after.checks));assert.deepEqual(after.evidence,pre.evidence);
  assert.equal(scalar(db,"SELECT count(*) FROM budget_savings_entries WHERE entry_kind='account_opening_retirement';"),'1');assert.equal(scalar(db,'SELECT count(*) FROM transactions;'),'1'); // only the isolated zero-spend fixture, never fabricated cash
  sql('postgres','CREATE DATABASE sav05_clean;');sql('sav05_clean',read('server/full_schema.sql'));
  for(const name of ['apply_savings_surplus(uuid,text,jsonb)','reverse_savings_surplus(uuid,bigint,text,text)','apply_budget_month_disposition(text,uuid,text,text,jsonb)','budget_actual_transactions(date,date)'])assert.equal(scalar(db,`SELECT pg_get_functiondef('${name}'::regprocedure);`),scalar('sav05_clean',`SELECT pg_get_functiondef('${name}'::regprocedure);`));

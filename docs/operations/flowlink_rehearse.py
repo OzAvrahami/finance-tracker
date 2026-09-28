@@ -36,7 +36,7 @@ def sql(db, text):
 
 def snapshot(stage):
     path = out / f'{stage}.jsonl'
-    path.write_text(sql('rehearsal', (root/'docs/operations/flowlink_snapshot.sql').read_text()))
+    path.write_text(sql('rehearsal', (root/'docs/operations/sql/flowlink_snapshot.sql').read_text()))
     return read(path)
 
 def check(condition, description):
@@ -71,7 +71,7 @@ try:
     sql('postgres', 'CREATE DATABASE consolidated;')
     sql('consolidated', full)
     final = out/'consolidated.jsonl'
-    final.write_text(sql('consolidated', (root/'docs/operations/flowlink_snapshot.sql').read_text()))
+    final.write_text(sql('consolidated', (root/'docs/operations/sql/flowlink_snapshot.sql').read_text()))
     check(not compare(after38, read(final)), 'ordered 037/038 catalog matches consolidated schema')
     sql('rehearsal', """INSERT INTO flowlink_devices(id,label,created_by) VALUES('11111111-1111-4111-8111-111111111111','Fixture','22222222-2222-4222-8222-222222222222');
     SELECT public.create_flowlink_binding('22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333',

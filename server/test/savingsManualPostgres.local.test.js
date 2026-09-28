@@ -63,10 +63,10 @@ test('owner pre/postflight JSON proves 031 leaves existing foundation/cash histo
   const db = `case_${++sequence}`;
   sql('postgres', `CREATE DATABASE ${db} TEMPLATE sav03_baseline;`);
   open(db, '1200');
-  const pre = json(db, read('docs/MIGRATION_031_PRODUCTION_PREFLIGHT.sql'));
+  const pre = json(db, read('docs/operations/sql/MIGRATION_031_PRODUCTION_PREFLIGHT.sql'));
   assert.equal(pre.result, 'MIGRATION_031_PREFLIGHT_PASS', JSON.stringify(pre.checks));
   sql(db, migration);
-  const postflight = json(db, read('docs/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql'));
+  const postflight = json(db, read('docs/operations/sql/MIGRATION_031_PRODUCTION_POSTFLIGHT.sql'));
   assert.equal(postflight.result, 'MIGRATION_031_POSTFLIGHT_PASS', JSON.stringify(postflight.checks));
   assert.deepEqual(pre.evidence, postflight.evidence);
 });

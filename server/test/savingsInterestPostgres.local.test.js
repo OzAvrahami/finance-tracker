@@ -80,9 +80,9 @@ test('032 upgrade preserves all rows, object counts, Loan definitions/grants; cl
   const db='upgrade_031';sql('postgres',`CREATE DATABASE ${db} TEMPLATE sav04_baseline;`);
   sql(db,"INSERT INTO payment_sources(id,name,slug,method) VALUES(1,'local','local','bank_transfer');");
   open(db,'10000'); post(db,2,'deposit','500');
-  const pre=json(db,read('docs/MIGRATION_032_PRODUCTION_PREFLIGHT.sql')); assert.equal(pre.result,'MIGRATION_032_PREFLIGHT_PASS',JSON.stringify(pre.checks));
+  const pre=json(db,read('docs/operations/sql/MIGRATION_032_PRODUCTION_PREFLIGHT.sql')); assert.equal(pre.result,'MIGRATION_032_PREFLIGHT_PASS',JSON.stringify(pre.checks));
   const before=financial(db); sql(db,migration); assert.deepEqual(financial(db),before);
-  const after=json(db,read('docs/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_032_POSTFLIGHT_PASS',JSON.stringify(after.checks));assert.deepEqual(after.evidence,pre.evidence);
+  const after=json(db,read('docs/operations/sql/MIGRATION_032_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_032_POSTFLIGHT_PASS',JSON.stringify(after.checks));assert.deepEqual(after.evidence,pre.evidence);
   const objects="SELECT jsonb_object_agg(relkind,n) FROM (SELECT relkind,count(*) n FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN ('r','v') GROUP BY relkind) x;";
   assert.equal(scalar(db,objects),scalar('sav04_baseline',objects));
   const loans="SELECT jsonb_agg(jsonb_build_object('definition',pg_get_functiondef(oid),'acl',proacl) ORDER BY oid::regprocedure::text) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE '%loan%';";

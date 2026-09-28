@@ -69,7 +69,7 @@ function readEnvValue(file, key) {
  * Caveat, and it matters for the grants: a secret key resolves to service_role
  * by default, but Supabase allows a secret key to be bound to a custom role.
  * The prefix proves the family, not the specific role — confirm the effective
- * role in the dashboard (or with PART 3 of docs/audit_003_readonly.sql) before
+ * role in the dashboard (or with PART 3 of docs/operations/sql/audit_003_readonly.sql) before
  * relying on it.
  */
 const OPAQUE_PREFIXES = {
@@ -171,6 +171,6 @@ if (failures > 0) {
     console.log('CAVEAT: the role above was inferred from the sb_* key family, not read');
     console.log('from a signed claim. Supabase permits binding a secret key to a custom');
     console.log('role, so confirm the effective role with PART 3 of');
-    console.log('docs/audit_003_readonly.sql before applying the migration.');
+    console.log('docs/operations/sql/audit_003_readonly.sql before applying the migration.');
   }
 }

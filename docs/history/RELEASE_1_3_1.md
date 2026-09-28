@@ -1,5 +1,7 @@
 # Finance Tracker v1.3.1 — release notes
 
+> Historical record: dated statements, commands, acceptance and production claims below describe their original checkpoint. They are not current operating status. See the [documentation index](../README.md) and linked GitHub evidence before use.
+
 **Prepared / unpublished — 2026-09-18.** The owner accepted #49, #51 and #47
 and finalized this single Patch candidate, coordinated by #49. These notes do
 not establish a commit, push, deployment, tag or published GitHub Release.

@@ -1,5 +1,7 @@
 # v1.3.1 prepared release review: #49, #51, #47
 
+> Historical record: dated statements, commands, acceptance and production claims below describe their original checkpoint. They are not current operating status. See the [documentation index](../README.md) and linked GitHub evidence before use.
+
 **Owner acceptance: Accepted on 2026-09-18.** The owner explicitly stated:
 “The owner has explicitly accepted all three fixes: #49, #51, and #47.”
 This includes the related #51 bigint Savings-ID correction. No repeat acceptance
@@ -38,7 +40,7 @@ preserved; unrelated Project items were unchanged.
 | [#51](https://github.com/OzAvrahami/finance-tracker/issues/51) | UI changes existed only in component state and edit/return links discarded them. Make criteria URL-addressable and carry a validated snapshot on both desktop and mobile edit links; Save, Cancel and Back use the same destination. | `client/src/utils/transactionsNavigation.js`; `client/src/pages/Transactions/Transactions.jsx`, `TransactionsList.jsx`, `Transactions.test.jsx`, `TransactionsRoundTrip.test.jsx`; `client/src/hooks/useTransactionForm.js`; `client/src/pages/AddTransaction/AddTransaction.jsx` |
 | [#47](https://github.com/OzAvrahami/finance-tracker/issues/47) | Separate deficit and unbudgeted dialogs had diverged. Share the existing compact source selector and contextual preview while choosing the operation explicitly: deficit uses `{legs}` and deficit endpoints; upper allocation uses `{requested_amount, legs}` and unbudgeted endpoints. Preserve exact-money validation, availability/lifecycle checks, preview fingerprints, receipt retries and duplicate guards. | `client/src/pages/Budget/BudgetFundingActions.jsx`, `Budget.test.jsx`, `BudgetAllocation.test.jsx`; `server/test/fundedBudgetPostgres.local.test.js`, `server/test/savingsReleasePostgres.local.test.js` |
 
-Shared records: [CHANGELOG.md](../CHANGELOG.md) and this review document. The initial
+Shared records: [CHANGELOG.md](../../CHANGELOG.md) and this review document. The initial
 working tree and index were clean; there were no pre-existing edits to separate.
 No backend implementation, schema, migrations or financial formulas changed.
 Release preparation additionally updates the five package/lockfiles, README,
@@ -227,7 +229,7 @@ setup. The commands/checklist below are retained as reference, not a request to
 repeat acceptance or a claim that a local authenticated test was performed.
 
 For the normal authenticated application, use the existing development-only
-configuration described in [README.md](../README.md#environment-configuration),
+configuration described in [README.md](../operations/DEVELOPMENT.md#configuration-authority),
 pointing at a development database. In separate PowerShell terminals:
 
 ```powershell
@@ -268,12 +270,12 @@ product changes or part of this release commit.
 - SemVer impact: **Patch** for each; backward-compatible fixes, no new product capability.
 - Candidate release: **v1.3.1 finalized**, relative to published v1.3.0, by explicit owner instruction.
 - Grouping / included release candidate: Existing [#49](https://github.com/OzAvrahami/finance-tracker/issues/49) coordinates **#49, #51, #47**. Highest applicable impact: Patch. No new milestone or tracker.
-- CHANGELOG status: **Finalized in [1.3.1] — Prepared (unpublished)** in [CHANGELOG.md](../CHANGELOG.md); only the three candidate entries moved, Unreleased retained. [Release notes](RELEASE_1_3_1.md) prepared.
+- CHANGELOG status: **Finalized in [1.3.1] — Prepared (unpublished)** in [CHANGELOG.md](../../CHANGELOG.md); only the three candidate entries moved, Unreleased retained. [Release notes](RELEASE_1_3_1.md) prepared.
 - Version-bump status: **Synchronized — 1.3.1**, all seven authoritative fields across five files verified; dependency trees and unrelated metadata unchanged. No root lockfile created.
 - Publication status: **Deferred** to the owner's separate release step tracked on #49. No new tag/Release; published v1.3.0 remains unchanged.
 - Owner verification / acceptance status: **Accepted** for #49, #51 and #47 by the explicit owner statement recorded above, including the #51 bigint correction. No additional tests or production acceptance are implied.
 
-The [canonical policy](github-development-standard.md#release--version-gate)
+The [canonical policy](../github-development-standard.md#release--version-gate)
 governs this gate. Implementation, automated checks, owner acceptance, candidate
 finalization, coordinated version synchronization, owner commit/push, annotated
 tag and published GitHub Release remain distinct. A tag alone is not publication.
@@ -343,8 +345,8 @@ $releaseFiles = @(
   'server/package.json'
   'server/package-lock.json'
   'docs/github-development-standard.md'
-  'docs/PATCH_1_3_1_REVIEW.md'
-  'docs/RELEASE_1_3_1.md'
+  'docs/history/PATCH_1_3_1_REVIEW.md'
+  'docs/history/RELEASE_1_3_1.md'
   'client/src/components/CategoryCombobox.css'
   'client/src/components/CategoryCombobox.jsx'
   'client/src/components/CategoryCombobox.test.jsx'

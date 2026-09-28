@@ -6,11 +6,13 @@ Formal release tracking begins with **v0.9.0**, the first formally tracked Finan
 
 This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and will use semantic-version-style tracking for formal releases.
 
+> Publication readback (2026-09-28): [v1.4.0 is published and Latest](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0) at `9b84a3cd112f28886d96cea249947371de6f5ac9`. Prepared/unpublished labels and pending steps in the dated records below describe their preparation checkpoint, not current publication status. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) remains authoritative.
+
 ## [Unreleased]
 
 ## [1.4.0] - Prepared (unpublished)
 
-Prepared on 2026-09-28 from main `0bd74dc35d8d91440059acd1a460229c121fd4bd`, compared with published v1.3.1 (`c600dc036b03f5ae3f9266eb1b9de935b8683d38`). This is one Minor release of the actual repository tree, coordinated on #50; it is not completion of APY or FlowLink. All seven product-version fields are prepared at 1.4.0; FlowLink remains independently 0.1.0 / build 1. The final preparation commit, owner integration/push, deployment verification, annotated tag and publication remain pending. See [release notes and scope/evidence](docs/RELEASE_1_4_0.md). Older preparation records below remain historical; GitHub Releases is authoritative for publication.
+Prepared on 2026-09-28 from main `0bd74dc35d8d91440059acd1a460229c121fd4bd`, compared with published v1.3.1 (`c600dc036b03f5ae3f9266eb1b9de935b8683d38`). This is one Minor release of the actual repository tree, coordinated on #50; it is not completion of APY or FlowLink. All seven product-version fields are prepared at 1.4.0; FlowLink remains independently 0.1.0 / build 1. The final preparation commit, owner integration/push, deployment verification, annotated tag and publication remain pending. See [release notes and scope/evidence](docs/history/RELEASE_1_4_0.md). Older preparation records below remain historical; GitHub Releases is authoritative for publication.
 
 ### Added - accepted capabilities
 
@@ -34,7 +36,7 @@ Prepared on 2026-09-28 from main `0bd74dc35d8d91440059acd1a460229c121fd4bd`, com
 
 ## [1.3.1] - Prepared (unpublished)
 
-Prepared on 2026-09-18 after explicit owner acceptance of #49, #51 and #47. One Patch candidate, coordinated by #49, including the #51 bigint Savings-ID correction. All seven application-version fields are synchronized to 1.3.1. Commit, push, deployment, annotated tag and GitHub Release publication remain pending; this preparation date is not a publication date. Temporary preview-harness repairs are excluded. See [release notes](docs/RELEASE_1_3_1.md) and [verification evidence](docs/PATCH_1_3_1_REVIEW.md).
+Prepared on 2026-09-18 after explicit owner acceptance of #49, #51 and #47. One Patch candidate, coordinated by #49, including the #51 bigint Savings-ID correction. All seven application-version fields are synchronized to 1.3.1. Commit, push, deployment, annotated tag and GitHub Release publication remain pending; this preparation date is not a publication date. Temporary preview-harness repairs are excluded. See [release notes](docs/history/RELEASE_1_3_1.md) and [verification evidence](docs/history/PATCH_1_3_1_REVIEW.md).
 
 ### Fixed
 
@@ -76,7 +78,7 @@ Version metadata and release content prepared on 2026-09-15; this is a preparati
 
 ## [1.2.0] - 2026-09-07
 
-Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) was committed and pushed by the user; GitHub readback confirmed remote main at that SHA and successful Vercel and Railway deployment statuses. The user accepted #2 with “2 סבבה” and accepted the final #10/#27 corrections with “אושר”. All three issues are CLOSED / COMPLETED, their existing Project items are Done with P3 preserved, and milestone v1.2.0 is closed. Acceptance is user-performed, not agent browser testing. Migration 029 was separately installed and verified by the user through Supabase SQL Editor; passing preflight/postflight evidence is recorded in [the release handoff](docs/RELEASE_1_2_0.md). Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
+Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) was committed and pushed by the user; GitHub readback confirmed remote main at that SHA and successful Vercel and Railway deployment statuses. The user accepted #2 with “2 סבבה” and accepted the final #10/#27 corrections with “אושר”. All three issues are CLOSED / COMPLETED, their existing Project items are Done with P3 preserved, and milestone v1.2.0 is closed. Acceptance is user-performed, not agent browser testing. Migration 029 was separately installed and verified by the user through Supabase SQL Editor; passing preflight/postflight evidence is recorded in [the release handoff](docs/history/RELEASE_1_2_0.md). Annotated tagging and GitHub Release publication follow the user-owned workflow after this final documentation commit is pushed and its remote SHA verified. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) is authoritative for publication state; this acceptance record does not require another documentation-only commit after publication.
 
 ### Added
 

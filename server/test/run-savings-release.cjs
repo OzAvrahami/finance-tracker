@@ -36,7 +36,7 @@ for (const [stage, pattern] of cases) {
   if (stage === 'Reporting') {
     const anchor = "const r=report(db,month(db)+'-01');";
     assert(text.includes(anchor));
-    text = text.replace(anchor, anchor + " const audit=json(db,read('docs/SAVINGS_RELEASE_POSTFLIGHT.sql')); assert.equal(audit.result,'SAVINGS_RELEASE_POSTFLIGHT_PASS',JSON.stringify(audit));");
+    text = text.replace(anchor, anchor + " const audit=json(db,read('docs/operations/sql/SAVINGS_RELEASE_POSTFLIGHT.sql')); assert.equal(audit.result,'SAVINGS_RELEASE_POSTFLIGHT_PASS',JSON.stringify(audit));");
   }
   const generated = path.join(output, stage + '.local.test.cjs');
   fs.writeFileSync(generated, text, 'utf8');

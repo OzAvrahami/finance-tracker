@@ -1,5 +1,7 @@
 # Finance Tracker v1.4.0 — prepared / unpublished
 
+> Historical record: dated statements, commands, acceptance and production claims below describe their original checkpoint. They are not current operating status. See the [documentation index](../README.md) and linked GitHub evidence before use.
+
 Prepared 2026-09-28 under the owner's explicit release-preparation instruction. Coordinator: [#50](https://github.com/OzAvrahami/finance-tracker/issues/50). This is a release of the **actual main tree**, not a claim that the APY or FlowLink initiatives have finished. No final release commit or tag exists from this preparation yet.
 
 ## Release notes
@@ -61,7 +63,7 @@ The four known Import failures concern table-scoped queries for portalled catego
 
 GitHub commit statuses for implementation SHA `0bd74dc35d8d91440059acd1a460229c121fd4bd` independently report Vercel and Railway success. Deployment status is not runtime testing, a live flag inspection or proof that a later preparation commit deployed.
 
-Repository migration range is through **038**. Owner-recorded [APY-03 production evidence](https://github.com/OzAvrahami/finance-tracker/issues/81#issuecomment-5847181997) should be read from the current #81 record; [FlowLink rollout history](FLOWLINK_OWNER_ROLLOUT.md) records 037/038 deployed/verified and both flags false on 2026-09-28. This preparation performs no production access or SQL and does not independently re-prove that database state. The source contains disabled defaults and explicit guards for `APPLE_PAY_INGESTION_ENABLED` and `FLOWLINK_INGESTION_ENABLED`; they remain untouched. For an installation missing 036–038, use the existing separately authorized migration/recovery runbooks, not a blind version-bump migration command.
+Repository migration range is through **038**. Owner-recorded [APY-03 production evidence](https://github.com/OzAvrahami/finance-tracker/issues/81#issuecomment-5847181997) should be read from the current #81 record; [FlowLink rollout history](../operations/FLOWLINK_OWNER_ROLLOUT.md) records 037/038 deployed/verified and both flags false on 2026-09-28. This preparation performs no production access or SQL and does not independently re-prove that database state. The source contains disabled defaults and explicit guards for `APPLE_PAY_INGESTION_ENABLED` and `FLOWLINK_INGESTION_ENABLED`; they remain untouched. For an installation missing 036–038, use the existing separately authorized migration/recovery runbooks, not a blind version-bump migration command.
 
 No new migration is needed for this release-preparation diff. Preserve APY source/observation history and FlowLink identities: once these exist, do not drop provenance or revert to code that hard-deletes managed financial history. Disable ingestion and forward-fix under the existing runbooks if necessary. Do not automatically retry held native captures or enable CAL reconciliation as part of releasing version metadata.
 

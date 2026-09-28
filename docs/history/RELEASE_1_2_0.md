@@ -1,5 +1,7 @@
 # Finance Tracker v1.2.0 release completion handoff
 
+> Historical record: dated statements, commands, acceptance and production claims below describe their original checkpoint. They are not current operating status. See the [documentation index](../README.md) and linked GitHub evidence before use.
+
 Application commit [c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a](https://github.com/OzAvrahami/finance-tracker/commit/c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a) (`feat: prepare v1.2.0 dashboard, loans and shopping bundle`) was manually committed and pushed by the user. Independent local GitHub CLI readback confirmed remote main at this exact SHA, **Vercel: success**, and **Railway: success** (commit-status context `finance-tracker - finance-tracker`). These deployment statuses are distinct from user acceptance and do not constitute agent-performed browser testing.
 
 The user accepted #2 with “2 סבבה” and accepted the compact nearest-ending loan row/restored four-card grid (#10) and Dashboard-wide violet-decoration correction (#27), explicitly confirming “אושר” after the final corrections. Acceptance is complete; no repeat manual QA is requested.
@@ -39,9 +41,9 @@ Migration: `server/migrations/029_shopping_list_optional_fields.sql`. It transac
 
 The completed database order is retained below as historical installation guidance, not a request to rerun it:
 
-1. Before any compatible server deployment, pause shopping-list writes briefly and run `docs/MIGRATION_029_PREFLIGHT.sql` in Supabase SQL Editor. Save its one JSON result; require `MIGRATION_029_PREFLIGHT_PASS`.
+1. Before any compatible server deployment, pause shopping-list writes briefly and run `docs/operations/sql/MIGRATION_029_PREFLIGHT.sql` in Supabase SQL Editor. Save its one JSON result; require `MIGRATION_029_PREFLIGHT_PASS`.
 2. Apply the complete Migration 029 file once. Do not reapply Migrations 027/028. If preflight says STOP because the columns already exist, inspect the recorded installation and postflight rather than replaying the migration.
-3. Before allowing writes, run `docs/MIGRATION_029_POSTFLIGHT.sql`. Require `MIGRATION_029_POSTFLIGHT_PASS` and equality of `list_count`, `item_count`, `checkout_count`, and `header_fingerprint` against preflight. The fingerprint excludes only the three new columns. The postflight does not infer a saved baseline or prove UI behavior.
+3. Before allowing writes, run `docs/operations/sql/MIGRATION_029_POSTFLIGHT.sql`. Require `MIGRATION_029_POSTFLIGHT_PASS` and equality of `list_count`, `item_count`, `checkout_count`, and `header_fingerprint` against preflight. The fingerprint excludes only the three new columns. The postflight does not infer a saved baseline or prove UI behavior.
 4. Application deployment is now confirmed separately: Vercel and Railway report success for accepted commit `c7129c5cbe016177b5c0ccac0d93d72d8fd54b4a`. All three issues have user acceptance; no further migration or acceptance run is requested.
 
 Previously completed local verification commands, retained for reference (backend/database suites were not rerun for these presentation corrections):
@@ -82,7 +84,7 @@ Application Git operations are complete. The user owns the final documentation c
 
 ```powershell
 Set-Location D:\code\finance-tracker
-git add -- CHANGELOG.md README.md docs/PROJECT_STATUS.md docs/RELEASE_1_2_0.md
+git add -- CHANGELOG.md README.md docs/history/PROJECT_STATUS.md docs/history/RELEASE_1_2_0.md
 git diff --cached --check
 git diff --cached --stat
 git diff --cached

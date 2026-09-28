@@ -79,12 +79,12 @@ test('clean installation and upgrade add exactly two tables/one view, preserve h
   const before = scalar(name, "SELECT to_jsonb(t) FROM transactions t WHERE id=100;");
   const inventory = "SELECT jsonb_build_object('tables',(SELECT count(*) FROM pg_tables WHERE schemaname='public'),'views',(SELECT count(*) FROM pg_views WHERE schemaname='public'));";
   const old = json(name, inventory);
-  const preflight = json(name, read('docs/MIGRATION_030_PRODUCTION_PREFLIGHT.sql'));
+  const preflight = json(name, read('docs/operations/sql/MIGRATION_030_PRODUCTION_PREFLIGHT.sql'));
   assert.equal(preflight.result, 'MIGRATION_030_PREFLIGHT_PASS');
   const loanDefinitions = "SELECT jsonb_agg(jsonb_build_object('signature',oid::regprocedure::text,'body',pg_get_functiondef(oid),'acl',proacl) ORDER BY oid::regprocedure::text) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE '%loan%';";
   const oldLoanDefinitions = scalar(name, loanDefinitions);
   sql(name, migration);
-  const postflight = json(name, read('docs/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql'));
+  const postflight = json(name, read('docs/operations/sql/MIGRATION_030_PRODUCTION_POSTFLIGHT.sql'));
   assert.equal(postflight.result, 'MIGRATION_030_POSTFLIGHT_PASS');
   assert.deepEqual(postflight.evidence.financial_history, preflight.evidence.financial_history);
   assert.equal(postflight.evidence.legacy_reserve, preflight.evidence.legacy_reserve);

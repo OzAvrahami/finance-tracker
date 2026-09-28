@@ -1,5 +1,7 @@
 # FlowLink owner rollout — capture first, review before posting
 
+> Contract/technical reference. Dated implementation and verification notes are historical checkpoints; use the [documentation index](../README.md) for current release/acceptance boundaries and GitHub for live workflow state.
+
 Prepared for [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/90). **Instructions for later owner execution, not evidence that production was changed.** This run does not start [FLI-06 #91](https://github.com/OzAvrahami/finance-tracker/issues/91). The owner operates Git, production SQL, deployment and configuration manually after reviewing/committing/pushing the implementation.
 
 The target ready state is deployed enrollment/bindings with **both `FLOWLINK_INGESTION_ENABLED=false` and `APPLE_PAY_INGESTION_ENABLED=false`**. Keep them false before and during the first natural purchase. No last-minute enablement is needed. The native app stores the event, receives `503 / flowlink_ingestion_disabled`, and holds it for explicit review. Enabling the server later does not release that hold. Only a confirmed manual retry sends the original receipt.
@@ -11,12 +13,12 @@ The target ready state is deployed enrollment/bindings with **both `FLOWLINK_ING
 
 1. Owner reviews #90, commits with `feat(flowlink): add Wallet App Intent ingestion`, and merges to main manually. Record the resulting full SHA; do not substitute the pre-implementation SHA. Pause automatic Railway deployment **before pushing** migration-dependent code, so pushing cannot race the database steps. If pushing already occurred, inspect the current deployment before proceeding. This runbook is not permission to deploy from a dirty worktree.
 2. Verify `git branch --show-current` is `main`, `git status --porcelain` is empty, and `git rev-parse HEAD`, `git rev-parse origin/main`, and `git ls-remote origin refs/heads/main` agree after the owner's push/fetch. Save `git show --no-patch --format=fuller HEAD` and `shasum -a 256 server/migrations/037_flowlink_device_enrollment.sql server/migrations/038_flowlink_card_bindings.sql` in private rollout evidence.
-3. Reconfirm published stable release using `gh release view --json tagName,isDraft,isPrerelease` (expected v1.3.1), seven product fields 1.3.1 per [version inventory](github-development-standard.md#continuous-changelog-and-coordinated-version-preparation), FlowLink 0.1.0/build 1. Proposed grouped v1.4.0 is not published; #84 finalizes it. Stop for an unexplained release/commit mismatch.
+3. Reconfirm published stable release using `gh release view --json tagName,isDraft,isPrerelease` (expected v1.3.1), seven product fields 1.3.1 per [version inventory](../github-development-standard.md#continuous-changelog-and-coordinated-version-preparation), FlowLink 0.1.0/build 1. Proposed grouped v1.4.0 is not published; #84 finalizes it. Stop for an unexplained release/commit mismatch.
 4. Confirm a recoverable Supabase backup/PITR point, its UTC time, retention and restore procedure. Rehearse on a disposable copy where available. A row fingerprint is **not a backup**. Record the existing Railway deployment SHA and recovery image; keep the additive database objects when reverting application code.
 5. Arrange a bounded quiet window: owner web/mobile writes, spreadsheet/external/CAL importers, integrations, Loan job (`.github/workflows/process-due-loans.yml`), Savings/manual/internal jobs and other writers must be quiescent. Record how/when each is restored. Both ingestion flags must already be false/absent; stop if either is true. Do not inspect other secrets to do this. Fingerprints are meaningful only across a quiet window; each snapshot is internally repeatable-read, but separate snapshots do not freeze intervening writers.
 6. Owner configures an existing secure libpq service called `finance_owner` using the verified production host/database and an authorized migration role (with complete table visibility), TLS `verify-full`, and a protected password file/prompt. Never put a password or full secret URL in a command line, shell history, Issue or repository. All following `psql service=finance_owner` commands are **owner-only production operations**. Confirm the connection's project/host in the Supabase dashboard before using it; no URL is inferred from repository files.
 
-The checked-in preflight/postflight SQL is [operations/flowlink_snapshot.sql](operations/flowlink_snapshot.sql). It is READ ONLY, sets row_security=off (insufficient privilege fails rather than hiding rows), and emits JSONL catalog/security definitions and full-row SHA-256 aggregates for **every public application table/materialized view**. It covers Transactions/items, Budget, Savings, Loans, LEGO, Shopping, settings, APY sources/observations/events and other public domains. No financial row bodies or credential values are printed. Keep fingerprints private outside Git. Definitions include columns/defaults, constraints, indexes, triggers, views, functions, owners, pinned settings, RLS/policies and direct/effective grants. Extension-owned objects are excluded; they are not modified by 037/038.
+The checked-in preflight/postflight SQL is [operations/flowlink_snapshot.sql](sql/flowlink_snapshot.sql). It is READ ONLY, sets row_security=off (insufficient privilege fails rather than hiding rows), and emits JSONL catalog/security definitions and full-row SHA-256 aggregates for **every public application table/materialized view**. It covers Transactions/items, Budget, Savings, Loans, LEGO, Shopping, settings, APY sources/observations/events and other public domains. No financial row bodies or credential values are printed. Keep fingerprints private outside Git. Definitions include columns/defaults, constraints, indexes, triggers, views, functions, owners, pinned settings, RLS/policies and direct/effective grants. Extension-owned objects are excluded; they are not modified by 037/038.
 
 ## 2. Reference catalog and read-only 036 preflight
 
@@ -34,7 +36,7 @@ Prepare protected evidence storage on the owner's Mac:
 umask 077
 mkdir -p "$HOME/flowlink-rollout-evidence"
 psql 'service=finance_owner' -X -qAt -v ON_ERROR_STOP=1 \
-  -f docs/operations/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/before-036.jsonl"
+  -f docs/operations/sql/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/before-036.jsonl"
 python3 docs/operations/flowlink_compare.py \
   /private/tmp/flowlink-reference-reviewed/036.jsonl \
   "$HOME/flowlink-rollout-evidence/before-036.jsonl"
@@ -51,7 +53,7 @@ PGOPTIONS='-c lock_timeout=10s -c statement_timeout=120s' \
   psql 'service=finance_owner' -X -v ON_ERROR_STOP=1 \
   -f server/migrations/037_flowlink_device_enrollment.sql
 psql 'service=finance_owner' -X -qAt -v ON_ERROR_STOP=1 \
-  -f docs/operations/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/after-037.jsonl"
+  -f docs/operations/sql/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/after-037.jsonl"
 python3 docs/operations/flowlink_compare.py \
   /private/tmp/flowlink-reference-reviewed/037.jsonl \
   "$HOME/flowlink-rollout-evidence/after-037.jsonl" \
@@ -65,7 +67,7 @@ PGOPTIONS='-c lock_timeout=10s -c statement_timeout=120s' \
   psql 'service=finance_owner' -X -v ON_ERROR_STOP=1 \
   -f server/migrations/038_flowlink_card_bindings.sql
 psql 'service=finance_owner' -X -qAt -v ON_ERROR_STOP=1 \
-  -f docs/operations/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/after-038.jsonl"
+  -f docs/operations/sql/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/after-038.jsonl"
 python3 docs/operations/flowlink_compare.py \
   /private/tmp/flowlink-reference-reviewed/038.jsonl \
   "$HOME/flowlink-rollout-evidence/after-038.jsonl" \
@@ -172,7 +174,7 @@ Its fixed API base is `https://finance-tracker-production-d34c.up.railway.app/ap
 
 ```sh
 psql 'service=finance_owner' -X -qAt -v ON_ERROR_STOP=1 \
-  -f docs/operations/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/ready-held.jsonl"
+  -f docs/operations/sql/flowlink_snapshot.sql > "$HOME/flowlink-rollout-evidence/ready-held.jsonl"
 python3 docs/operations/flowlink_compare.py \
   /private/tmp/flowlink-reference-reviewed/038.jsonl \
   "$HOME/flowlink-rollout-evidence/ready-held.jsonl" \
@@ -209,4 +211,4 @@ The local HTTPS mock/CA is no longer a completion gate. Useful fixture checks re
 
 If **FlowLink Local Test CA - 2026-09-26** was installed on the iPhone: Settings → General → VPN & Device Management → that exact profile → Remove Profile → confirm/passcode. Confirm it disappears from Settings → General → About → Certificate Trust Settings. If it was never installed, **no iPhone CA cleanup is needed**. This run does not assume either case. [Apple profile removal instructions](https://support.apple.com/guide/personal-safety/review-and-delete-configuration-profiles-ips327569a75/1.0/web/1.0).
 
-No commit/push/deploy/production SQL/configuration/secret/financial action is performed by preparing this document. No production devices/bindings, notification/APNs or Apple distribution are created. See [FLI-05 implementation and release gate](../ios/FlowLink/README.md#release--version-gate).
+No commit/push/deploy/production SQL/configuration/secret/financial action is performed by preparing this document. No production devices/bindings, notification/APNs or Apple distribution are created. See [FLI-05 implementation and release gate](../../ios/FlowLink/README.md#release--version-gate).

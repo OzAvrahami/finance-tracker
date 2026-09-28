@@ -3,13 +3,13 @@
 FlowLink is a small iPhone companion for Finance Tracker. The FLI-04 foundation pairs a device and lists approved cards. [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/90) adds a native Wallet action and durable delivery receipts. **The owner verified direct Shortcuts parameter mapping on iPhone 17 Pro Max / iOS 27. Runtime Wallet-event values and locked-device behavior remain unverified; this is not production E2E acceptance.**
 
 - Project: `ios/FlowLink/FlowLink.xcodeproj`, shared scheme **FlowLink**.
-- App version **0.1.0**, build **1**, independent of Finance Tracker **1.3.1**.
+- App version **0.1.0**, build **1**, independent of the Finance Tracker product version (see the [documentation index](../../docs/README.md)).
 - Temporary bundle identifier: `com.ozavrahami.flowlink.local`.
 - iPhone; deployment target **iOS 17.0**; Swift 6 language mode; Apple frameworks only.
 - Targets: `FlowLink`, `FlowLinkTests`, `FlowLinkUITests`.
 - No nested Git repository, package dependencies or distribution assets. The owner selected an existing Personal Team for local development signing; that configuration is preserved.
 
-The [accepted contract](../../docs/FLOWLINK_NATIVE_INGESTION_CONTRACT.md), [enrollment implementation](../../docs/FLI_02_DEVICE_ENROLLMENT.md) and [binding implementation](../../docs/FLI_03_CARD_BINDINGS.md) remain authoritative.
+The [accepted contract](../../docs/architecture/FLOWLINK_NATIVE_INGESTION_CONTRACT.md), [enrollment implementation](../../docs/operations/FLI_02_DEVICE_ENROLLMENT.md) and [binding implementation](../../docs/operations/FLI_03_CARD_BINDINGS.md) remain authoritative.
 
 ## Architecture
 
@@ -162,7 +162,7 @@ The owner superseded the local mock and immediate-purchase gate on 2026-09-27. T
 
 The authoritative later workflow is **capture first, review before posting**: prepare production enrollment/bindings but leave both ingestion flags false; a natural event is stored durably and receives `flowlink_ingestion_disabled`; it remains held until the owner reviews it and explicitly retries that same receipt after separately authorizing native enablement. No pre-purchase enablement or helper Shortcut action is needed. Invalid runtime evidence/storage unavailability still fails safely; configuration compatibility is not a guarantee that a real event executes.
 
-See the [owner rollout runbook](../../docs/FLOWLINK_OWNER_ROLLOUT.md) for exact 037 → 038 preflight/postflight, SHA/deployment verification, authenticated owner UUID, pairing/bindings, production app configuration, deferred #91 checklist and legacy CAL duplicate protection. These are prepared instructions; no production action occurred and #91 was not started. The Mac mock/CA is optional historical evidence and no longer blocks completion. Cleanup is in that runbook; if the CA was never installed, no iPhone certificate cleanup is needed.
+See the [owner rollout runbook](../../docs/operations/FLOWLINK_OWNER_ROLLOUT.md) for exact 037 → 038 preflight/postflight, SHA/deployment verification, authenticated owner UUID, pairing/bindings, production app configuration, deferred #91 checklist and legacy CAL duplicate protection. These are prepared instructions; no production action occurred and #91 was not started. The Mac mock/CA is optional historical evidence and no longer blocks completion. Cleanup is in that runbook; if the CA was never installed, no iPhone certificate cleanup is needed.
 
 ### Historical post-inspection/local mock checkpoint (2026-09-26)
 

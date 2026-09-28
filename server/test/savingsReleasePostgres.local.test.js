@@ -228,10 +228,10 @@ SELECT setval(pg_get_serial_sequence('transactions','id'),101,true);`);
   const stages = [];
   for (const file of files) {
     const number = file.slice(0, 3);
-    const pre = json(db, read(`docs/MIGRATION_${number}_PRODUCTION_PREFLIGHT.sql`));
+    const pre = json(db, read(`docs/operations/sql/MIGRATION_${number}_PRODUCTION_PREFLIGHT.sql`));
     assert.equal(pre.result, `MIGRATION_${number}_PREFLIGHT_PASS`, JSON.stringify(pre));
     sql(db, read('server/migrations/' + file));
-    const post = json(db, read(`docs/MIGRATION_${number}_PRODUCTION_POSTFLIGHT.sql`));
+    const post = json(db, read(`docs/operations/sql/MIGRATION_${number}_PRODUCTION_POSTFLIGHT.sql`));
     assert.equal(post.result, `MIGRATION_${number}_POSTFLIGHT_PASS`, JSON.stringify(post));
     if (number === '030') {
       for (const field of ['financial_history', 'legacy_reserve', 'budget_state_fingerprint']) assert.deepEqual(post.evidence[field], pre.evidence[field]);
@@ -249,7 +249,7 @@ SELECT setval(pg_get_serial_sequence('transactions','id'),101,true);`);
   for (const [signature, definition] of Object.entries(oldCatalog.functions).filter(([n]) => n.includes('loan'))) assert.deepEqual(finalCatalog.functions[signature], definition);
   assert.equal(scalar(db, 'SELECT count(*) FROM savings_accounts;'), '0');
   assert.equal(scalar(db, 'SELECT count(*) FROM savings_entries;'), '0');
-  assert.equal(json(db, read('docs/SAVINGS_RELEASE_POSTFLIGHT.sql')).result, 'SAVINGS_RELEASE_POSTFLIGHT_PASS');
+  assert.equal(json(db, read('docs/operations/sql/SAVINGS_RELEASE_POSTFLIGHT.sql')).result, 'SAVINGS_RELEASE_POSTFLIGHT_PASS');
   assert.equal(scalar(db, 'SELECT balance_text FROM budget_savings_state;'), reserve ? '500.00' : '0.00');
   const cashBefore = rows(db).transactions;
   const a = call(db, 'create_savings_account', [key(20), { name: 'release rehearsal', opened_on: '2020-01-01', tracking_start_date: '2020-01-01', target_amount: '5000' }, '1200', reserve ? '300' : '0', reserve ? 'explicit synthetic overlap' : null]);
@@ -275,7 +275,7 @@ SELECT setval(pg_get_serial_sequence('transactions','id'),101,true);`);
   call(db, 'cancel_savings_event', [key(31), linked.savings.entry_id, linked.savings.revision, 'void', 'audited recovery fixture']);
   // Rehearse recovery AFTER new Savings writes with a fresh complete backup.
   const afterWriteRestore = `restored_035_${reserve}`; backupRestore(db, afterWriteRestore);
-  const finalAudit = json(afterWriteRestore, read('docs/SAVINGS_RELEASE_POSTFLIGHT.sql'));
+  const finalAudit = json(afterWriteRestore, read('docs/operations/sql/SAVINGS_RELEASE_POSTFLIGHT.sql'));
   assert.equal(finalAudit.result, 'SAVINGS_RELEASE_POSTFLIGHT_PASS', JSON.stringify(finalAudit)); save(db + '-final-audit', finalAudit);
   assert.equal(finalAudit.evidence.voided_transactions, 1);
   assert.equal(scalar(afterWriteRestore, "SET ROLE service_role; SELECT (get_savings_report('2020-01-01','2099-12-31')->>'current_balance');"), '1200.00');

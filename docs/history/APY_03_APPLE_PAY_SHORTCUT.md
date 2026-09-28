@@ -1,5 +1,7 @@
 # APY-03: Apple Wallet probe and Finance Tracker Shortcut
 
+> Historical record: dated statements, commands, acceptance and production claims below describe their original checkpoint. They are not current operating status. See the [documentation index](../README.md) and linked GitHub evidence before use.
+
 > **2026-09-26 direction/status update:** the owner superseded the complex
 > user-authored Shortcut client with the native FlowLink initiative
 > [#85](https://github.com/OzAvrahami/finance-tracker/issues/85). See the additive
@@ -24,8 +26,8 @@
 
 [#81](https://github.com/OzAvrahami/finance-tracker/issues/81), parent
 [#78](https://github.com/OzAvrahami/finance-tracker/issues/78). Implements the thin
-adapter over the accepted [APY contract](APPLE_PAY_TRANSACTION_RECONCILIATION.md)
-and [APY-02 foundation](APY_02_INGESTION_FOUNDATION.md), baseline
+adapter over the accepted [APY contract](../architecture/APPLE_PAY_TRANSACTION_RECONCILIATION.md)
+and [APY-02 foundation](../operations/APY_02_INGESTION_FOUNDATION.md), baseline
 `2b01db85f11a509dc7dc2a4a36b9961483ac52ca`.
 
 **Owner-device evidence:** iPhone 17 Pro Max, **iOS 27.0**, English Shortcuts UI.
@@ -313,7 +315,7 @@ No source or credential has been registered in production during this work.
 
 ## Server configuration and later authorized activation
 
-See [server/.env.example](../server/.env.example). All settings are opt-in, and no
+See [server/.env.example](../../server/.env.example). All settings are opt-in, and no
 real values were provisioned during APY-03:
 
 | Variable | Purpose |

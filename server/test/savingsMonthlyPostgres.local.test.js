@@ -125,8 +125,8 @@ test('pause and archive serialize with a waiting worker without stale cash',asyn
 });
 test('034 upgrade and clean snapshot preserve all history, privileges, Loan functions and relation counts',()=>{
  sql('postgres','CREATE DATABASE upgrade_034 TEMPLATE sav06_baseline;');const db='upgrade_034';sql(db,"INSERT INTO payment_sources(id,name,slug,method) VALUES(1,'local','local','bank_transfer');");open(db,'1200');
- const pre=json(db,read('docs/MIGRATION_034_PRODUCTION_PREFLIGHT.sql'));assert.equal(pre.result,'MIGRATION_034_PREFLIGHT_PASS',JSON.stringify(pre));const before=financial(db);sql(db,migration);
- const after=json(db,read('docs/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_034_POSTFLIGHT_PASS',JSON.stringify(after));assert.deepEqual(after.evidence,pre.evidence);assert.deepEqual(financial(db),before);assert.equal(after.evidence.public_tables,28);assert.equal(after.evidence.public_views,10);
+ const pre=json(db,read('docs/operations/sql/MIGRATION_034_PRODUCTION_PREFLIGHT.sql'));assert.equal(pre.result,'MIGRATION_034_PREFLIGHT_PASS',JSON.stringify(pre));const before=financial(db);sql(db,migration);
+ const after=json(db,read('docs/operations/sql/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_034_POSTFLIGHT_PASS',JSON.stringify(after));assert.deepEqual(after.evidence,pre.evidence);assert.deepEqual(financial(db),before);assert.equal(after.evidence.public_tables,28);assert.equal(after.evidence.public_views,10);
  sql('postgres','CREATE DATABASE clean_034;');sql('clean_034',read('server/full_schema.sql'));
  const defs="SELECT jsonb_object_agg(proname,md5(prosrc)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('savings_post_event_locked','savings_validate_account','savings_assert_links','update_savings_account','get_savings_account');";
  assert.deepEqual(json(db,defs),json('clean_034',defs));assert.equal(scalar('clean_034','SELECT count(*) FROM savings_accounts;'),'0');
