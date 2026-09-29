@@ -428,6 +428,71 @@ Keep both `FLOWLINK_INGESTION_ENABLED=false` and `APPLE_PAY_INGESTION_ENABLED=fa
 
 Expected financial effect: **zero transaction, zero financial APY observation/event**. Disabled guard code and existing backend regression evidence support that expectation; this Windows pass did not query production or independently verify new production row counts. The owner can inspect the normal transaction list; any formal financial/provenance readback remains a separately authorized read-only operation.
 
-This test establishes only **manual Shortcuts ? AppIntent ? local receipt ? disabled hold**. It does not prove real Wallet `Transaction.Amount`, natural purchase execution, locked/background execution or before-first-unlock behavior. Those acceptance items remain pending; no second real purchase is required for debugging. Keep #90 In Progress until Mac gate evidence is recorded, then Verify only with remaining device limitations explicit; do not close it or start #91.
+This test establishes only **manual Shortcuts ? AppIntent ? local receipt ? disabled hold**. It does not prove real Wallet `Transaction.Amount`, natural purchase execution, locked/background execution or before-first-unlock behavior. Those acceptance items remain pending; no second real purchase is required for debugging. Keep #90 Open / In Progress / P1 until both the Mac gate and owner synthetic test evidence are recorded. Do not move to Verify merely because native builds pass; do not close it or start #91.
 
 Release / Version gate for this correction: release impact **Yes**; SemVer **Patch** (repair existing experimental capture behavior, not completion of the original Minor initiative); candidate **TBD on #90 after published v1.4.0**; grouping **existing FlowLink #85/#90, future release membership TBD**; CHANGELOG **Updated under Unreleased**; version bump **Deferred to owner-coordinated release preparation**, all seven product fields **1.4.0**, native **0.1.0/build 1** unchanged; publication **Out of scope**; owner acceptance **Pending**. No production execution/configuration/migration/secret/flag change, financial operation, commit, push, notification/APNs or distribution work.
+
+
+### Mac native gate — 2026-09-29
+
+Clean starting checkout: `fix/flowlink-local-first-capture-90`, HEAD `52abba48ed0a0a6728557a100dbdc48b52adf1da`. Xcode **27.0 (27A266a)**, Swift **6.4**, developer directory `/Applications/Xcode.app/Contents/Developer`. iPhone 18 Pro / iOS 27 simulator `C016BBEB-E3EB-4D81-AC87-4B74571C74D1`; signed Release targets Oz’s physical iPhone 17 Pro Max, `00008150-00181C513E30C01C`.
+
+| Gate | Result |
+| --- | --- |
+| Unit tests | **84 passed, 0 failed, 1 explicitly skipped** (85 total) |
+| UI tests | **4 passed, 0 failed, 0 skipped**, including QR/paste recovery and local diagnostics |
+| Debug simulator build | Passed |
+| Release simulator build | Passed |
+| Signed Release physical-device build | Passed, signature verified; **not installed/launched** |
+| Physical-iOS test compilation | `build-for-testing CODE_SIGNING_ALLOWED=NO` passed; no test installation/execution |
+| Plists / project / scheme | 2 source plists + project passed `plutil`; shared-scheme XML parsed; `xcodebuild -list` and all targets built |
+| Version / scope | Seven Finance Tracker fields remain **1.4.0**; app **0.1.0/build 1**, existing team/bundle/Keychain namespace unchanged; no server or migration changes |
+
+**Mac-only corrections and intermediate failures:**
+
+- The original Data Protection test failed three assertions because Simulator's `attributesOfItem` omits `NSFileProtectionKey`. A raw-string cast also failed. A diagnostic probe showed URL resource readback, but new negative controls proved that Simulator returns the same class even for explicit unprotected/complete files. Consequently the exact class assertions **remain hardware-only**, now including negative controls; Simulator reports a named skip rather than false security evidence. An added always-running test checks the three real files, readable binding/diagnostic state and backup exclusion. Both tests compile for physical iOS. Actual device encryption/locked-file behavior is **not verified** by simulator success or the signed app build.
+- The diagnostics UI test exposed the refresh button falling below populated history. Move only **Refresh diagnostics** into the navigation toolbar; no capture/delivery/state behavior changed. All four UI tests pass after this correction.
+- No Swift actor/Sendable/compiler defect was found. No isolation was bypassed. `entities(for:)` remains local-only; configuration-time discovery refreshes the shared directory; receipt commit/readback precedes Keychain/HTTP; startup cached cards, stage-only diagnostics, QR pairing and `openAppWhenRun=false` remain covered.
+
+Exact final commands from repository root (all outputs under `/private/tmp/flowlink90-local-first*`):
+
+```sh
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-local-first-sim test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-local-first-sim build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-local-first-release-sim build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS,id=00008150-00181C513E30C01C' -derivedDataPath /private/tmp/flowlink90-local-first-device build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath /private/tmp/flowlink90-local-first-device-tests CODE_SIGNING_ALLOWED=NO build-for-testing
+plutil -lint ios/FlowLink/FlowLink/Info-Debug.plist ios/FlowLink/FlowLink/Info-Release.plist ios/FlowLink/FlowLink.xcodeproj/project.pbxproj
+xcodebuild -list -project ios/FlowLink/FlowLink.xcodeproj
+codesign --verify --deep --strict --verbose=2 /private/tmp/flowlink90-local-first-device/Build/Products/Release-iphoneos/FlowLink.app
+git diff --check
+```
+
+Owner install command — **prepared, not executed**:
+
+```sh
+xcrun devicectl device install app --device 00008150-00181C513E30C01C \
+  /private/tmp/flowlink90-local-first-device/Build/Products/Release-iphoneos/FlowLink.app \
+  --timeout 60 --json-output /private/tmp/flowlink90-local-first-install.json
+```
+
+The installed phone app was read back as `com.ozavrahami.flowlink.local`, **0.1.0/build 1**. The new app uses the same bundle and unchanged team `AVQU374YW5`; an in-place update retains its container/Keychain. Do **not** uninstall, forget/re-pair or change backend origin. Release uses the existing production HTTPS origin; confirm the current app is already connected to that origin before installing, otherwise stop because an origin change intentionally isolates pairing/storage. Post-install retention is pending owner observation, not claimed executed. No phone container/Keychain contents were inspected. Open once, check existing identity, refresh approved cards to populate the shared directory; stop if pairing or bindings disappear.
+
+Then perform the **separate synthetic Shortcut** checklist above: existing binding, **ILS 1.23**, Merchant and Name both **FLOWLINK TEST**, run **once**, with both ingestion flags remaining false. Expect one immutable held receipt and stage diagnostics through `receipt_persisted` before `delivery_started`, followed by `delivery_held_disabled` and `intent_completed`. Mark the acknowledged synthetic receipt **Mark as local test — never send…** after inspection so it cannot later post. This is not real Wallet or locked/background acceptance. Owner test is still pending; #90 remains **Open / In Progress / P1**.
+
+Release / Version gate: impact **Yes**, SemVer **Patch** for the existing local-first correction; candidate **TBD on #90 after v1.4.0**, grouping **FlowLink #85/#90** with future release membership pending; CHANGELOG **Updated under Unreleased**; version bump **Deferred** to owner release preparation, product **1.4.0**, native **0.1.0/build 1** unchanged; publication **Out of scope**; owner verification/acceptance **Pending**. No commit/push/merge, production operation, migration, config/flag change, pairing/device enrollment or #91 work performed.
+
+
+### Owner synthetic success and marker cleanup — 2026-09-29
+
+The owner ran the synthetic Shortcut successfully on the physical iPhone. Reported chronology, oldest first:
+
+`entity_resolved_local → intent_invoked → parameters_normalized → local_identity_resolved → receipt_persisted → delivery_started → delivery_held_disabled → intent_completed`
+
+The visible receipt has **ILS 1.23**, merchant **Flowlink test**, the correct existing binding, and **Held for review — ingestion disabled**. This is owner hardware evidence that local entity resolution and App Intent execution succeeded, durable receipt persistence preceded HTTP delivery, and the disabled backend produced a held receipt with **no financial posting**. It does not establish real Wallet runtime values or locked/background behavior.
+
+The mixed-case merchant exposed the cleanup guard's case-sensitive equality. UI availability and the transactional archive operation now share `CaptureReceipt.canArchiveSyntheticTest`: exact held state, exact disabled reason, exact `1.23`/`ILS`, and the explicit ASCII marker **FLOWLINK TEST** after outer whitespace trimming, canonical normalization and locale-stable case normalization. Prefixes/suffixes, internal whitespace changes, punctuation and Unicode lookalikes remain rejected. The comparison never changes merchant evidence, request bytes, binding, date or idempotency key. No automatic archive; the existing owner confirmation remains required.
+
+After installing the rebuilt app **over the existing installation**, open the existing held receipt → **Mark as local test — never send…** → confirm **Mark local test**. Check **Local test — permanently excluded from delivery** and absence of retry controls. **Do not rerun the Shortcut or tap Retry same capture.** Both ingestion flags stay false. #90 remains **Open / In Progress / P1** until the owner confirms this cleanup; owner acceptance remains Pending. The prior Mac gate's install command/path applies to the rebuilt artifact. No installation, production action or receipt mutation was performed by the agent.
+
+Cleanup validation: **86 unit tests passed, 0 failed, 1 existing hardware-only protection skip** (87 total); **4 UI tests passed, 0 failed**. Debug simulator `test`, Release simulator build and signed Release iPhone build passed using the same commands/DerivedData paths in the Mac gate above. Signature, 3 plist/project checks, UTF-8, versions and `git diff --check` passed. Added coverage exercises mixed-case/trimmed persisted markers, every eligibility guard, near-matches/lookalikes, immutable evidence, and terminal non-deliverability. No production request or physical Shortcut execution was performed by the agent.

@@ -118,6 +118,19 @@ struct CaptureReceipt: Identifiable, Sendable {
   let outcome: String?
   var id: String { capture.id }
   var retryable: Bool { [.queued, .retryWait, .paused, .heldForOwnerReview].contains(state) }
+  // Shared by the UI and the transactional archive guard. Normalize only a
+  // comparison copy: never rewrite the frozen merchant or request bytes.
+  var canArchiveSyntheticTest: Bool {
+    guard state == .heldForOwnerReview, outcome == "flowlink_ingestion_disabled",
+      let request = try? capture.request, request.amount == "1.23", request.currency == "ILS"
+    else { return false }
+    let marker = request.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+      .precomposedStringWithCanonicalMapping
+    // The explicit marker is ASCII; no confusable/compatibility folding,
+    // punctuation removal, substring matching or internal whitespace collapsing.
+    return marker.unicodeScalars.allSatisfy(\.isASCII)
+      && marker.uppercased(with: Locale(identifier: "en_US_POSIX")) == "FLOWLINK TEST"
+  }
   var title: String {
     switch state {
     case .delivered:

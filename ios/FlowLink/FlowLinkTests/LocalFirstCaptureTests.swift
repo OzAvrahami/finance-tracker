@@ -286,9 +286,11 @@ import XCTest
   func testSyntheticArchiveIsPermanentLocalOnlyAndPreservesEvidence() async throws {
     let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
     let (runtime, _, api) = try setup(folder)
-    _ = try await record(runtime)
+    _ = try await record(runtime, merchant: "Flowlink test")
     let store = try runtime.store()
     let original = try XCTUnwrap(store.list().first)
+    XCTAssertTrue(original.canArchiveSyntheticTest) // Same predicate used by the UI.
+    XCTAssertEqual(original.state, .heldForOwnerReview) // Merely recognizing never archives.
     try store.archiveSyntheticTest(original.id)
     api.decision = .init(state: .delivered, code: "created")
     try await runtime.service(store).send(original.id, manual: true)
@@ -298,7 +300,63 @@ import XCTest
     XCTAssertEqual(archived.state, .failed)
     XCTAssertEqual(archived.outcome, "synthetic_test_archived")
     XCTAssertEqual(archived.capture.bytes, original.capture.bytes)
+    XCTAssertEqual(try archived.capture.request.merchant, "Flowlink test")
+    XCTAssertEqual(archived.capture.sha256, original.capture.sha256)
+    XCTAssertEqual(archived.id, original.id)
+    XCTAssertFalse(archived.canArchiveSyntheticTest)
     XCTAssertFalse(archived.retryable)
+  }
+
+  func testSyntheticMarkerCaseAndOuterWhitespaceDoNotRewriteStoredEvidence() async throws {
+    let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
+    let (runtime, _, _) = try setup(folder)
+    let store = try runtime.store()
+    for merchant in ["FLOWLINK TEST", " flowlink TEST ", "\u{00a0}FlowLink Test\u{00a0}"] {
+      let id = UUID()
+      _ = try await record(runtime, id: id, merchant: merchant)
+      let original = try XCTUnwrap(store.list().first { $0.id == id.uuidString.lowercased() })
+      XCTAssertTrue(original.canArchiveSyntheticTest)
+      XCTAssertEqual(original.state, .heldForOwnerReview)
+      try store.archiveSyntheticTest(original.id)
+      let saved = try XCTUnwrap(store.list().first { $0.id == original.id })
+      XCTAssertEqual(saved.capture.bytes, original.capture.bytes)
+      XCTAssertEqual(saved.capture.sha256, original.capture.sha256)
+      XCTAssertEqual(try saved.capture.request.merchant, merchant)
+      XCTAssertFalse(saved.retryable)
+    }
+  }
+
+  func testSyntheticMarkerEligibilityRejectsEveryOtherGuardAndNearMatch() throws {
+    func receipt(merchant: String = "Flowlink test", amount: String = "1.23",
+      currency: String = "ILS", state: ReceiptState = .heldForOwnerReview,
+      outcome: String? = "flowlink_ingestion_disabled") throws -> CaptureReceipt {
+      let frozen = try FrozenCapture.make(binding: card.id, amount: amount, merchant: merchant,
+        installation: Fixture.credentialID, device: Fixture.deviceID,
+        origin: "https://test.invalid:443", now: Date(), zone: TimeZone(secondsFromGMT: 0)!, id: UUID())
+      let original = try frozen.request
+      let request = WalletRequest(binding_id: original.binding_id, amount: amount, currency: currency,
+        merchant: merchant, transaction_date: original.transaction_date, idempotency_key: original.idempotency_key)
+      let bytes = try JSONEncoder().encode(request)
+      let capture = FrozenCapture(id: frozen.id, installation: frozen.installation, device: frozen.device,
+        origin: frozen.origin, protocolVersion: frozen.protocolVersion, bytes: bytes,
+        sha256: FrozenCapture.hash(bytes), capturedAt: frozen.capturedAt, bindingLabel: frozen.bindingLabel)
+      return CaptureReceipt(capture: capture, state: state, attempts: 1, nextAttempt: Date(), lastAttempt: nil, outcome: outcome)
+    }
+    XCTAssertTrue(try receipt().canArchiveSyntheticTest)
+    for state: ReceiptState in [.queued, .inFlight, .retryWait, .delivered, .needsReview, .failed, .paused] {
+      XCTAssertFalse(try receipt(state: state).canArchiveSyntheticTest)
+    }
+    for outcome in [nil, "unknown_delivery", "created", "flowlink_unavailable"] as [String?] {
+      XCTAssertFalse(try receipt(outcome: outcome).canArchiveSyntheticTest)
+    }
+    for amount in ["1.230", "01.23", "1.24", "21.00"] {
+      XCTAssertFalse(try receipt(amount: amount).canArchiveSyntheticTest)
+    }
+    for currency in ["ils", "USD"] { XCTAssertFalse(try receipt(currency: currency).canArchiveSyntheticTest) }
+    for merchant in ["", "Actual merchant", "FLOWLINK TEST purchase", "MY FLOWLINK TEST", "FLOWLINK  TEST",
+      "FLOWLINK\nTEST", "FLOWLINK-TEST", "FLÖWLINK TEST", "ＦＬＯＷＬＩＮＫ ＴＥＳＴ", "FLOWLINK TEſT"] {
+      XCTAssertFalse(try receipt(merchant: merchant).canArchiveSyntheticTest, merchant)
+    }
   }
 
   func testCannotArchiveRealOrUncertainReceiptAsSynthetic() async throws {
@@ -368,7 +426,7 @@ import XCTest
     XCTAssertNotEqual(relaunched.installationID, runtime.metadata.installationID)
   }
 
-  func testDirectoryAndDiagnosticFilesUseAfterFirstUnlockProtection() throws {
+  func testDirectoryAndDiagnosticFilesRemainReadableAndExcludedFromBackup() throws {
     let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
     let (runtime, _, _) = try setup(folder)
     try runtime.bindingDirectory.replace([card], device: Fixture.deviceID)
@@ -376,11 +434,38 @@ import XCTest
     diagnostics.record(.intentInvoked)
     _ = try runtime.store()
     for filename in ["bindings.json", "diagnostics.sqlite", "captures.sqlite"] {
-      let attributes = try FileManager.default.attributesOfItem(atPath:
-        runtime.directory.appendingPathComponent(filename).path)
-      XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, .completeUntilFirstUserAuthentication)
+      XCTAssertFalse(try Data(contentsOf: runtime.directory.appendingPathComponent(filename)).isEmpty)
     }
+    XCTAssertEqual(try runtime.bindingDirectory.load(device: Fixture.deviceID), [card])
+    XCTAssertEqual(try diagnostics.list().first?.stage, .intentInvoked)
     XCTAssertEqual(try runtime.directory.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
+  }
+
+  func testDirectoryAndDiagnosticFilesUseAfterFirstUnlockProtection() throws {
+    #if targetEnvironment(simulator)
+    // Observed with iOS 27 Simulator: attributesOfItem omits protectionKey;
+    // URL resources return class C even for explicit .noFileProtection and
+    // .completeFileProtection controls. Do not manufacture a passing result.
+    throw XCTSkip("Physical iOS required: Simulator cannot distinguish Data Protection classes. All class assertions and negative controls remain enabled on device.")
+    #else
+    let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
+    let (runtime, _, _) = try setup(folder)
+    try runtime.bindingDirectory.replace([card], device: Fixture.deviceID)
+    let diagnostics = try CaptureDiagnostics(directory: runtime.directory)
+    diagnostics.record(.intentInvoked)
+    _ = try runtime.store()
+    for filename in ["bindings.json", "diagnostics.sqlite", "captures.sqlite"] {
+      let protection = try runtime.directory.appendingPathComponent(filename)
+        .resourceValues(forKeys: [.fileProtectionKey]).fileProtection
+      XCTAssertEqual(try XCTUnwrap(protection), .completeUntilFirstUserAuthentication)
+    }
+    let unprotected = folder.appendingPathComponent("unprotected-test-only")
+    let complete = folder.appendingPathComponent("complete-test-only")
+    try Data([1]).write(to: unprotected, options: .noFileProtection)
+    try Data([1]).write(to: complete, options: .completeFileProtection)
+    XCTAssertEqual(try XCTUnwrap(unprotected.resourceValues(forKeys: [.fileProtectionKey]).fileProtection), URLFileProtection.none)
+    XCTAssertEqual(try XCTUnwrap(complete.resourceValues(forKeys: [.fileProtectionKey]).fileProtection), .complete)
+    #endif
   }
 
   func testDeliveryStateWriteFailureDoesNotReportCommittedReceiptAsNotRecorded() async throws {

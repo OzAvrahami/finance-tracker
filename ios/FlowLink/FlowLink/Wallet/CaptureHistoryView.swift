@@ -41,9 +41,7 @@ struct CaptureHistoryView: View {
             if receipt.retryable {
               Button("Retry same capture…") { confirmation = receipt }.disabled(busy)
             }
-            if receipt.state == .heldForOwnerReview,
-              receipt.outcome == "flowlink_ingestion_disabled",
-              request.merchant == "FLOWLINK TEST", request.amount == "1.23", request.currency == "ILS" {
+            if receipt.canArchiveSyntheticTest {
               Button("Mark as local test — never send…") { archiveConfirmation = receipt }
                 .disabled(busy)
             }
@@ -146,8 +144,13 @@ struct CaptureDiagnosticsView: View {
           if let code = entry.code { Text(code).font(.caption) }
         }
       }
-      Button("Refresh diagnostics") { load() }
-    }.navigationTitle("Capture diagnostics").task { load() }
+    }.navigationTitle("Capture diagnostics")
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("Refresh diagnostics", systemImage: "arrow.clockwise") { load() }
+        }
+      }
+      .task { load() }
   }
   @MainActor private func load() {
     do {

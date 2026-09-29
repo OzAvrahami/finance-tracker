@@ -191,11 +191,7 @@ import SQLite3
   func archiveSyntheticTest(_ id: String) throws {
     try transaction {
       guard let receipt = try list().first(where: { $0.id == id }),
-        receipt.state == .heldForOwnerReview,
-        receipt.outcome == "flowlink_ingestion_disabled",
-        try receipt.capture.request.merchant == "FLOWLINK TEST",
-        try receipt.capture.request.amount == "1.23",
-        try receipt.capture.request.currency == "ILS"
+        receipt.canArchiveSyntheticTest
       else { throw CaptureError.storage }
       try update("UPDATE receipts SET state='failed',outcome='synthetic_test_archived',lease=NULL WHERE id=? AND state='heldForOwnerReview'", [id])
       guard sqlite3_changes(db) == 1 else { throw CaptureError.storage }
