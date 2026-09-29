@@ -61,7 +61,7 @@ struct RecordWalletTransaction: AppIntent {
   @Parameter(title: "Card binding") var card: FlowLinkCardBinding
   @Parameter(title: "Merchant") var merchant: String?
   @Parameter(title: "Name") var name: String?
-  @Parameter(title: "Amount", currencyCodes: ["ILS"]) var amount: IntentCurrencyAmount
+  @Parameter(title: "Amount") var amount: String
   static var parameterSummary: some ParameterSummary {
     Summary("Record \(\.$amount) with \(\.$card)") {
       \.$merchant
@@ -77,7 +77,7 @@ struct RecordWalletTransaction: AppIntent {
     let message: String
     do {
       message = try await WalletRuntime().record(
-        binding: card.id, bindingLabel: card.label, amount: amount.amount, currency: amount.currencyCode,
+        binding: card.id, bindingLabel: card.label, amountText: amount,
         merchant: merchant, name: name, now: date, zone: zone, id: key)
     } catch {
       CaptureDiagnostics.checkpoint(.intentFailed, code: .from(error))

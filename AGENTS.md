@@ -5,3 +5,5 @@ Read and follow [the GitHub Development Standard](docs/github-development-standa
 Use the existing Project item and workflow; preserve Priority and unrelated metadata. The owner performs Git commits. Preserve local work, and follow the standard's authorization boundaries for staging, pushes, tags, publication and production actions.
 
 For owner reviews, prefer the normal application running locally with its frontend and backend. Do not create another synthetic preview unless explicitly requested, or expand a release-preparation task into environment setup.
+
+For every new installable FlowLink owner-device build, follow the [owner-device build versioning rule](ios/FlowLink/README.md#owner-device-build-versioning). Increment the app build number; never reuse an already-installed number.

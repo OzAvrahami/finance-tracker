@@ -58,6 +58,90 @@ import XCTest
       now: Date(), zone: TimeZone(secondsFromGMT: 0)!, id: id)
   }
 
+  func testStringBoundaryPersistsCanonicalILSBeforeHTTPAndHolds() async throws {
+    let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
+    let (runtime, _, api) = try setup(folder)
+    let id = UUID()
+    let now = Date()
+    let zone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+    api.onSend = { bytes in
+      let stored = try XCTUnwrap(runtime.store().list().first)
+      XCTAssertEqual(stored.capture.bytes, bytes)
+      XCTAssertEqual(stored.id, id.uuidString.lowercased())
+      XCTAssertEqual(stored.capture.bindingLabel, self.card.label)
+      let request = try stored.capture.request
+      XCTAssertEqual(request.amount, "1.23")
+      XCTAssertEqual(request.currency, "ILS")
+      XCTAssertEqual(request.binding_id, self.card.id)
+      XCTAssertEqual(request.merchant, "FLOWLINK TEST")
+      XCTAssertEqual(request.transaction_date, try WalletNormalizer.localDate(now, zone: zone))
+    }
+    let result = try await runtime.record(binding: card.id, bindingLabel: card.label,
+      amountText: "₪1.23", merchant: "FLOWLINK TEST", name: "Ignored", now: now, zone: zone, id: id)
+    XCTAssertEqual(result, "Held for review — ingestion disabled")
+    XCTAssertEqual(api.requests, ["capture"])
+    XCTAssertTrue(try XCTUnwrap(runtime.store().list().first).canArchiveSyntheticTest)
+    let stages = try CaptureDiagnostics(directory: runtime.directory).list().reversed().map(\.stage)
+    XCTAssertEqual(stages, [.parametersNormalized, .localIdentityResolved, .receiptPersisted,
+      .deliveryStarted, .deliveryHeldDisabled])
+    let intent = RecordWalletTransaction()
+    let _: IntentParameter<String> = intent.$amount
+    XCTAssertFalse(RecordWalletTransaction.openAppWhenRun)
+  }
+  func testUnsupportedStringProducesLocalDescriptorWithoutReceiptOrHTTP() async throws {
+    let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
+    let (runtime, _, api) = try setup(folder)
+    do {
+      _ = try await runtime.record(binding: card.id, bindingLabel: card.label,
+        amountText: "₪987654.321", merchant: "PRIVATE MERCHANT", name: nil,
+        now: Date(), zone: XCTUnwrap(TimeZone(secondsFromGMT: 0)), id: UUID())
+      XCTFail("Unsupported representation must fail closed")
+    } catch { XCTAssertEqual(error as? CaptureError, .amount) }
+    XCTAssertTrue(api.requests.isEmpty)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: runtime.directory.appendingPathComponent("captures.sqlite").path))
+    let row = try XCTUnwrap(CaptureDiagnostics(directory: runtime.directory).list().first)
+    XCTAssertEqual(row.stage, .amountFormatUnsupported)
+    XCTAssertEqual(row.format?.fractionalDigits, 3)
+    let bytes = try Data(contentsOf: runtime.directory.appendingPathComponent("diagnostics.sqlite"))
+    XCTAssertNil(bytes.range(of: Data("987654".utf8)))
+    XCTAssertNil(bytes.range(of: Data("PRIVATE MERCHANT".utf8)))
+  }
+  func testStringBoundaryKeepsNameFallbackAndFailsClosedOnStorageFailure() async throws {
+    let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
+    let (runtime, _, api) = try setup(folder)
+    _ = try await runtime.record(binding: card.id, bindingLabel: card.label,
+      amountText: "21.00 ILS", merchant: " ", name: "Fallback", now: Date(),
+      zone: XCTUnwrap(TimeZone(secondsFromGMT: 0)), id: UUID())
+    XCTAssertEqual(try runtime.store().list().first?.capture.request.merchant, "Fallback")
+    try FileManager.default.removeItem(at: runtime.directory)
+    try Data("blocked".utf8).write(to: runtime.directory)
+    do {
+      _ = try await runtime.record(binding: card.id, bindingLabel: card.label,
+        amountText: "₪1.23", merchant: "FLOWLINK TEST", name: nil, now: Date(),
+        zone: XCTUnwrap(TimeZone(secondsFromGMT: 0)), id: UUID())
+      XCTFail("Storage failure must prevent HTTP")
+    } catch {}
+    XCTAssertEqual(api.requests, ["capture"])
+  }
+  func testDiagnosticUpgradeKeepsHistoryAndBoundsUnsupportedDescriptors() throws {
+    let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
+    let diagnostics = try CaptureDiagnostics(directory: folder)
+    diagnostics.record(.intentCompleted)
+    var db: OpaquePointer?
+    XCTAssertEqual(sqlite3_open(folder.appendingPathComponent("diagnostics.sqlite").path, &db), SQLITE_OK)
+    defer { sqlite3_close(db) }
+    XCTAssertEqual(sqlite3_exec(db, "INSERT INTO stages(at,stage,code) VALUES(0,'retired_diagnostic_stage',NULL)", nil, nil, nil), SQLITE_OK)
+    diagnostics.unsupportedAmount("₪654321.123")
+    let reopened = try CaptureDiagnostics(directory: folder)
+    XCTAssertEqual(try reopened.list().map(\.stage), [.amountFormatUnsupported, .intentCompleted])
+    XCTAssertEqual(try reopened.list().first?.format?.fractionalDigits, 3)
+    for _ in 0..<140 { diagnostics.unsupportedAmount("bare 654321") }
+    XCTAssertEqual(try reopened.list().count, 128)
+    XCTAssertTrue(try reopened.list().allSatisfy { $0.stage == .amountFormatUnsupported && $0.format != nil })
+    let bytes = try Data(contentsOf: folder.appendingPathComponent("diagnostics.sqlite"))
+    XCTAssertNil(bytes.range(of: Data("654321".utf8)))
+  }
+
   func testConfiguredEntityResolutionIsLocalOnlyEvenWhenDisabled() async throws {
     let folder = folder(); defer { try? FileManager.default.removeItem(at: folder) }
     let (runtime, vault, api) = try setup(folder)

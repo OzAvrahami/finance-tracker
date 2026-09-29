@@ -6,7 +6,7 @@ enum CaptureError: Error, LocalizedError {
   var errorDescription: String? {
     switch self {
     case .amount:
-      "Not recorded. Use a positive ILS amount with no fractions smaller than one agora."
+      "Not recorded. Unsupported ILS amount format. Open Capture diagnostics to review the local format description."
     case .merchant: "Not recorded. A usable Merchant or Name is required."
     case .binding: "Not recorded. Saved card metadata is missing or invalid. Open FlowLink, refresh cards, then check this automation's selected binding."
     case .storage: "Could not save safely. Unlock the device and open FlowLink."
@@ -32,13 +32,31 @@ enum WalletNormalizer {
       + (parts.count == 1
         ? "00" : String(parts[1]).padding(toLength: 2, withPad: "0", startingAt: 0))
   }
-  // Only the owner's observed textual representation. Not currently exposed as an Intent fallback.
-  static func shekelText(_ text: String) throws -> String {
-    guard text.range(of: "^₪[0-9]{1,28}\\.[0-9]{2}$", options: .regularExpression) != nil,
-      let value = Decimal(
-        string: String(text.dropFirst()), locale: Locale(identifier: "en_US_POSIX"))
+  // Explicit grammar: one ₪ or uppercase ILS prefix/suffix, optional Unicode Zs
+  // spacing at the outside/marker boundary, ASCII 1...28 digits + dot + 2 digits.
+  // No grouping, locale inference, controls, bare numbers, or binary floating point.
+  static func ilsText(_ text: String) throws -> Decimal {
+    guard text.utf8.prefix(129).count <= 128 else { throw CaptureError.amount }
+    var number = trimAmountSpaces(text)
+    if number.hasPrefix("₪") { number.removeFirst() }
+    else if number.hasPrefix("ILS") { number.removeFirst(3) }
+    else if number.hasSuffix("₪") { number.removeLast() }
+    else if number.hasSuffix("ILS") { number.removeLast(3) }
     else { throw CaptureError.amount }
-    return try amount(value, currency: "ILS")
+    number = trimAmountSpaces(number)
+    let parts = number.split(separator: ".", omittingEmptySubsequences: false)
+    guard parts.count == 2, (1...28).contains(parts[0].count), parts[1].count == 2,
+      parts.allSatisfy({ $0.utf8.allSatisfy { (48...57).contains($0) } }),
+      let value = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")), value > 0
+    else { throw CaptureError.amount }
+    _ = try amount(value, currency: "ILS")
+    return value
+  }
+  static func trimAmountSpaces(_ text: String) -> String {
+    let scalars = text.unicodeScalars
+    let start = scalars.drop(while: { $0.properties.generalCategory == .spaceSeparator })
+    let trimmed = start.reversed().drop(while: { $0.properties.generalCategory == .spaceSeparator }).reversed()
+    return String(String.UnicodeScalarView(trimmed))
   }
   static func merchant(_ merchant: String?, name: String?) throws -> String {
     let selected =

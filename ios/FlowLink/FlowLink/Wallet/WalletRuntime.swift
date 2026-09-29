@@ -63,6 +63,21 @@ import Foundation
         (try? CaptureDiagnostics(directory: directory))?.record(stage, code: code)
       })
   }
+  // String is only the App Intent boundary. Financial normalization and the
+  // existing persistence-before-Keychain/HTTP pipeline remain shared.
+  func record(
+    binding: String, bindingLabel: String, amountText: String, merchant: String?, name: String?,
+    now: Date, zone: TimeZone, id: UUID
+  ) async throws -> String {
+    let value: Decimal
+    do { value = try WalletNormalizer.ilsText(amountText) }
+    catch {
+      (try? CaptureDiagnostics(directory: directory))?.unsupportedAmount(amountText)
+      throw CaptureError.amount
+    }
+    return try await record(binding: binding, bindingLabel: bindingLabel, amount: value,
+      currency: "ILS", merchant: merchant, name: name, now: now, zone: zone, id: id)
+  }
   func record(
     binding: String, bindingLabel: String, amount: Decimal, currency: String, merchant: String?, name: String?, now: Date,
     zone: TimeZone, id: UUID

@@ -134,7 +134,7 @@ struct CaptureDiagnosticsView: View {
   @State private var unavailable = false
   var body: some View {
     List {
-      Text("Recent local stages only; no merchant, amount, card, credential or request payload. Missing stages do not prove that iOS invoked the action.")
+      Text("Local stages and unsupported-amount format descriptors only; no raw amount, merchant, card, credential or request payload. Missing stages do not prove that iOS invoked the action.")
       if unavailable { Text("Diagnostics unavailable. Unlock the phone and retry.") }
       if entries.isEmpty && !unavailable { Text("No capture diagnostics yet") }
       ForEach(entries) { entry in
@@ -142,6 +142,7 @@ struct CaptureDiagnosticsView: View {
           Text(entry.stage.rawValue)
           Text(entry.date, style: .time).font(.caption)
           if let code = entry.code { Text(code).font(.caption) }
+          if let format = entry.format { Text(format.summary).font(.caption) }
         }
       }
     }.navigationTitle("Capture diagnostics")

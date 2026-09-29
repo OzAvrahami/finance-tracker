@@ -1,17 +1,31 @@
 # FlowLink — native foundation and Wallet ingestion
 
-Current correction: [local-first capture and pending Mac gate](#local-first-correction--2026-09-29).
+Current correction: [String Amount boundary](#string-amount-boundary--2026-09-29). Earlier dated build/typed-parameter instructions below are historical; use the current section for installation and owner testing.
 
-FlowLink is a small iPhone companion for Finance Tracker. The FLI-04 foundation pairs a device and lists approved cards. [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/90) adds a native Wallet action and durable delivery receipts. **The owner verified direct Shortcuts parameter mapping on iPhone 17 Pro Max / iOS 27. A real Wallet invocation FAILED on 2026-09-29 with no local receipt. The local-first correction is In Progress; Mac builds, synthetic execution, real Wallet and locked-device acceptance remain pending. See the dated correction below.**
+FlowLink is a small iPhone companion for Finance Tracker. The FLI-04 foundation pairs a device and lists approved cards. [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/90) adds a native Wallet action and durable delivery receipts. **The local-first synthetic gate was accepted on hardware. A subsequent real Wallet event resolved its binding but did not record perform() entry. The owner now confirms direct Wallet Amount/Merchant/Name → String configuration mapping. The permanent String-based action is implemented; its new synthetic test and actual real Wallet String/locked-background runtime remain pending.**
 
 - Project: `ios/FlowLink/FlowLink.xcodeproj`, shared scheme **FlowLink**.
-- App version **0.1.0**, build **1**, independent of the Finance Tracker product version (see the [documentation index](../../docs/README.md)).
+- App version **0.1.0**, build **2**, independent of the Finance Tracker product version (see the [documentation index](../../docs/README.md)).
 - Temporary bundle identifier: `com.ozavrahami.flowlink.local`.
 - iPhone; deployment target **iOS 17.0**; Swift 6 language mode; Apple frameworks only.
 - Targets: `FlowLink`, `FlowLinkTests`, `FlowLinkUITests`.
 - No nested Git repository, package dependencies or distribution assets. The owner selected an existing Personal Team for local development signing; that configuration is preserved.
 
 The [accepted contract](../../docs/architecture/FLOWLINK_NATIVE_INGESTION_CONTRACT.md), [enrollment implementation](../../docs/operations/FLI_02_DEVICE_ENROLLMENT.md) and [binding implementation](../../docs/operations/FLI_03_CARD_BINDINGS.md) remain authoritative.
+
+## Owner-device build versioning
+
+Every **new installable FlowLink owner-device build** must increment the app target's
+`CURRENT_PROJECT_VERSION` in **both Debug and Release**. Never reuse a build number already
+installed on the owner's device. Keep `MARKETING_VERSION` independent; currently **0.1.0**.
+This rule applies to later owner-device builds even within the same Issue. Rebuilding/testing
+the same pending, not-yet-installed delivery artifact does not allocate another build number.
+Read back `CFBundleShortVersionString` and `CFBundleVersion` from the final signed `.app`
+before giving the owner its installation command. This does not change Finance Tracker's
+product SemVer fields. Test bundles are not separately installable owner app deliveries.
+
+Current owner delivery is **FlowLink 0.1.0 (2)**, replacing the installed build 1. Earlier
+build-1 commands/results below are historical; use the latest build-2 installation section.
 
 ## Architecture
 
@@ -140,7 +154,7 @@ xcrun devicectl device process launch --device 00008150-00181C513E30C01C --termi
 
 ## FLI-05 Wallet action, configuration evidence and deferred runtime
 
-`RecordWalletTransaction` exposes **FlowLink → Record Wallet Transaction** through public App Intents/App Shortcuts. Parameters are **Card binding** (`FlowLinkCardBinding` AppEntity), **Merchant** (optional String), **Name** (optional String), and **Amount** (`IntentCurrencyAmount`, restricted to ILS). The [Apple money type](https://developer.apple.com/documentation/appintents/intentcurrencyamount) provides Decimal and currencyCode; its availability does not prove the Wallet variable supplies compatible content.
+`RecordWalletTransaction` exposes **FlowLink → Record Wallet Transaction** through public App Intents/App Shortcuts. The original parameters were **Card binding** (`FlowLinkCardBinding` AppEntity), **Merchant** (optional String), **Name** (optional String), and **Amount** (`IntentCurrencyAmount`, restricted to ILS). The current Amount is String; see the current correction below. The [Apple money type](https://developer.apple.com/documentation/appintents/intentcurrencyamount) provides Decimal and currencyCode; its availability does not prove the Wallet variable supplies compatible content.
 
 The entity query uses only the paired device's approved safe binding API. New selection includes active/available bindings only; duplicate labels have a short opaque ID suffix. Missing/disabled identities are never replaced with another card. A bounded protected cache (32 bindings, at most 32 KiB) is used only on offline/timeout, scoped to device, installation and origin. Authorization remains the live server's responsibility.
 
@@ -156,7 +170,7 @@ The owner verified the following directly on **iPhone 17 Pro Max / iOS 27**, aft
 - Card binding is empty as expected: the development installation has no backend pairing or approved binding. No fake selectable binding is supplied.
 - The automation was **not run**, no purchase was made, and no production backend/device/binding was created or contacted.
 
-This is **configuration-time compatibility evidence supplied by the owner**. It does not reveal the raw Wallet Amount type or prove the runtime Decimal/currency value. The native typed parameter remains the chosen path; no text fallback is selected. The strict parser for the previously observed `₪4.00` text remains unit-tested and is not exposed as another Shortcut action.
+This is **configuration-time compatibility evidence supplied by the owner**. It does not reveal the raw Wallet Amount type or prove the runtime Decimal/currency value. This describes the earlier IntentCurrencyAmount experiment, now superseded by the String Amount boundary below. It was not proof of runtime materialization.
 
 ### Deferred runtime/device evidence — implementation may reach Verify
 
@@ -181,7 +195,7 @@ See the [owner rollout runbook](../../docs/operations/FLOWLINK_OWNER_ROLLOUT.md)
 
 ### Normalization and immutable receipt
 
-The typed path accepts only positive exact ILS Decimal, at most two fractional digits and 28 whole digits, without rounding, binary floating-point money or FX. The optional tested text parser accepts only `₪` + ASCII digits + dot + two digits; no grouping, whitespace, foreign currency, negative, zero or attachment forms. Nonempty invalid Merchant fails; Name is used only for missing/whitespace Merchant. Selected text is at most 512 Unicode scalars and must be usable; no concatenation or fabricated name.
+At the historical typed-parameter checkpoint (superseded by the String section below), the path accepted only positive exact ILS Decimal, at most two fractional digits and 28 whole digits, without rounding, binary floating-point money or FX. The optional tested text parser accepts only `₪` + ASCII digits + dot + two digits; no grouping, whitespace, foreign currency, negative, zero or attachment forms. Nonempty invalid Merchant fails; Name is used only for missing/whitespace Merchant. Selected text is at most 512 Unicode scalars and must be usable; no concatenation or fabricated name.
 
 Intent entry freezes one local Gregorian date/timezone and one UUIDv4, before asynchronous work. Delayed execution, crossing midnight or travel can change the capture date relative to purchase date: this is an accounting fallback, not a purchase timestamp. No `occurred_at`, provider reference or fuzzy dedupe is generated. Independent invocations get independent keys, even for identical purchases.
 
@@ -378,7 +392,7 @@ Windows checks are static source/project/reference/UTF-8/plist/version/whitespac
 
 The failed real event is recorded on [#90](https://github.com/OzAvrahami/finance-tracker/issues/90#issuecomment-5887822842). Existing local multi-user drafts and unrelated cache files are untouched. Historical native/QR passes elsewhere in this document are not new correction evidence.
 
-### Required Mac gate (owner-operated; not run on Windows)
+### Historical Windows-to-Mac gate (superseded by current String checkpoint)
 
 First transfer the reviewed working diff by the owner's chosen Git/file workflow without replacing current main or the Mac's local work. The agent has made no commit/push. Run from the Mac checkout containing this exact correction. Choose an available iPhone simulator UUID from the inventory; do not blindly reuse historical IDs.
 
@@ -496,3 +510,185 @@ The mixed-case merchant exposed the cleanup guard's case-sensitive equality. UI 
 After installing the rebuilt app **over the existing installation**, open the existing held receipt → **Mark as local test — never send…** → confirm **Mark local test**. Check **Local test — permanently excluded from delivery** and absence of retry controls. **Do not rerun the Shortcut or tap Retry same capture.** Both ingestion flags stay false. #90 remains **Open / In Progress / P1** until the owner confirms this cleanup; owner acceptance remains Pending. The prior Mac gate's install command/path applies to the rebuilt artifact. No installation, production action or receipt mutation was performed by the agent.
 
 Cleanup validation: **86 unit tests passed, 0 failed, 1 existing hardware-only protection skip** (87 total); **4 UI tests passed, 0 failed**. Debug simulator `test`, Release simulator build and signed Release iPhone build passed using the same commands/DerivedData paths in the Mac gate above. Signature, 3 plist/project checks, UTF-8, versions and `git diff --check` passed. Added coverage exercises mixed-case/trimmed persisted markers, every eligibility guard, near-matches/lookalikes, immutable evidence, and terminal non-deliverability. No production request or physical Shortcut execution was performed by the agent.
+
+
+## String Amount boundary — 2026-09-29
+
+### Evidence and permanent action
+
+Owner inspection on iPhone / iOS 27 confirms direct Transaction.Amount → String,
+Transaction.Merchant → optional String, Transaction.Name → optional String, and the existing
+binding entity. No helper actions were required; those configuration probes were not executed.
+The SDK rejected Decimal as a standalone AppIntent parameter. IntentFile is no longer needed.
+All temporary probe actions, stages and tests have been removed. Old unknown diagnostic rows
+remain stored but are skipped by the reader; diagnostics are not cleared during upgrade.
+
+**Record Wallet Transaction** now takes Card binding (`FlowLinkCardBinding`), Amount (`String`),
+Merchant (`String?`), Name (`String?`). It retains its type/action and parameter identifiers and
+`openAppWhenRun=false`. Currency is fixed internally to ILS, with no Currency input. Existing
+local entity resolution, frozen date/timezone/UUID, merchant precedence and receipt pipeline
+are unchanged. String normalization runs before the existing Decimal-based normalization,
+local identity and immutable receipt commit/readback. Only then may Keychain/HTTP delivery occur.
+The same server authority and disabled-ingestion hold rules apply.
+
+Configuration compatibility is not real runtime evidence. Historical Notes serialization
+`₪4.00` does not establish every real Wallet String representation. The permanent String action
+still needs the owner synthetic test and later natural-event evidence.
+
+### Exact grammar
+
+Maximum **128 UTF-8 bytes including outer spacing**. Accept exactly one `₪` or uppercase `ILS`,
+as prefix or suffix, with zero or more Unicode **Zs (space separator)** characters outside and
+between marker and number. ASCII digits only: **1–28 whole digits, one dot, exactly 2 fractional
+digits**. Leading zeros are accepted and canonicalized. The amount must be greater than zero.
+
+Examples: `₪1.23`, `₪21.00`, `₪ 21.00`, `21.00 ₪`, `ILS 21.00`, `21.00 ILS`, `ILS21.00`.
+Ordinary spaces, non-breaking spaces, narrow non-breaking spaces and thin spaces are accepted
+only at the described boundaries. Tabs/newlines, control/format characters (including bidi
+marks), grouping, commas, signs, scientific notation, non-ASCII digits, bare numbers, repeated
+markers, foreign/lowercase currency codes, arbitrary words, filenames and excess length/precision
+are rejected. No punctuation guessing, NumberFormatter, locale inference, rounding or FX.
+
+Validated text is parsed using Foundation.Decimal with en_US_POSIX and normalized by the existing
+exact-money function to two-decimal canonical text. At most 30 significant digits are below
+Decimal's precision limit; no Float/Double financial conversion occurs. The server receives the
+same six-field request with `currency: "ILS"`.
+
+### Unsupported format diagnostics
+
+No guessed receipt is created. `amount_format_unsupported` stores only a closed structural
+descriptor in the existing diagnostics code column, with no schema migration: marker class,
+ASCII digit presence, separator class, fractional-digit count, outer Zs spacing, controls, and
+UTF-8 length capped at **129+**. Inspection is bounded to 129 UTF-8 bytes for length and the first
+128 Unicode scalars for shape; overlength descriptions are explicitly a bounded sample.
+No raw input, monetary digits, filename, merchant, binding or credential is retained/transmitted.
+FlowLink → Diagnostics → Capture diagnostics displays the descriptor locally. Existing protected,
+backup-excluded SQLite, 128-record/64-page limits and best-effort behavior remain. The descriptor
+helps identify unsupported shapes; it is not runtime amount evidence or an accounting record.
+
+### Minimal existing-automation migration (owner only)
+
+Automatic migration of a saved IntentCurrencyAmount parameter to String cannot be established
+from compilation or metadata. The action identifier remains stable, but a saved literal or
+variable coercion may be stale. Use this minimal explicit reconfiguration rather than assuming
+that an old saved action updates safely:
+
+1. After installing over the existing app, open Shortcuts → Automation → the existing Wallet
+   selected-card trigger. Keep that trigger/card.
+2. Remove **only the old FlowLink Record Wallet Transaction action**, plus any temporary probes
+   still present. Add the current **FlowLink → Record Wallet Transaction**.
+3. Select the same approved FlowLink binding. Set Amount = Transaction.Amount,
+   Merchant = Transaction.Merchant, Name = Transaction.Name directly.
+4. Set Show When Run OFF; retain Automation ON. Save without executing. Do not add conversions,
+   a Currency parameter, Card or Pass, HTTP, credentials or technical helpers.
+
+No QR/pairing/binding changes or complete Wallet-trigger recreation are required by this change.
+Report if the current editor rejects a direct assignment; do not compensate with helper actions.
+
+### Owner synthetic String test — execute once, separately from Wallet automation
+
+Both production ingestion flags remain false; no flag changes are part of this test.
+
+1. Create a **separate temporary manual Shortcut** with one current Record Wallet Transaction action.
+2. Select the existing approved binding. Enter literal Amount **₪1.23** (include the shekel symbol),
+   Merchant **FLOWLINK TEST**, Name **FLOWLINK TEST**.
+3. Run that manual Shortcut **once**. The agent has not run it. Do not make a purchase or execute
+   the real Wallet automation for this test.
+4. Inspect FlowLink: receipt is ILS 1.23 / FLOWLINK TEST / correct binding / Held for review.
+   Expected stages: entity_resolved_local → intent_invoked → parameters_normalized →
+   local_identity_resolved → receipt_persisted → delivery_started → delivery_held_disabled →
+   intent_completed. Confirm persistence precedes delivery.
+5. Explicitly choose **Mark as local test — never send…**, then confirm **Mark local test**.
+   Verify “Local test — permanently excluded from delivery” and no retry controls.
+6. Do not rerun. Remove the temporary manual Shortcut. If any expected step fails, retain evidence
+   and report it; do not retry by creating another invocation/key.
+
+This does not verify real Wallet String values or locked/background execution. #90 remains
+Open / In Progress / P1, with owner acceptance Pending for the current correction. #91/#82
+are not started.
+
+### Release / Version gate
+
+- Release impact: Yes — compatibility correction to the existing Wallet action.
+- SemVer impact: Patch; exact runtime compatibility is not yet proven.
+- Candidate release: TBD after v1.4.0, tracked by #90.
+- Grouping / included release candidate: FlowLink #85/#90; final membership TBD.
+- CHANGELOG status: Updated under Unreleased for the permanent String boundary.
+- Version-bump status: Deferred to owner-coordinated preparation; Finance Tracker remains 1.4.0; FlowLink app version remains 0.1.0 and owner-device build is incremented to 2.
+- Publication status: Out of scope; none.
+- Owner verification / acceptance: Pending new synthetic String test and real Wallet/locked-runtime evidence; earlier local-first synthetic acceptance retained.
+
+### String correction native verification
+
+Xcode 27.0 (27A266a), Swift 6.4; iPhone 18 Pro / iOS 27 Simulator.
+Final unit suite: **93 passed, 0 failed, 1 skipped** (94 total). The skip is the existing
+hardware-only Data Protection assertion, retained for real-device execution. UI suite:
+**4 passed, 0 failed**. Initial combined run passed (92 unit passes, 1 skip, 4 UI passes);
+a subsequently added diagnostic-history compatibility/retention test passed in the final
+unit run. No build/test failure occurred in this correction pass.
+
+Debug Simulator, Release Simulator and signed Release physical-device builds passed.
+AppIntents metadata contains only RecordWalletTransaction: required String Amount, optional
+String Merchant/Name, original binding entity, same identifiers, openAppWhenRun=false. Temporary
+actions are absent. Signature verification and owner-device development provisioning passed;
+profile expires 2026-10-03 19:47 UTC. Actual installation remains owner-operated. Both plists,
+project, UTF-8, local Markdown links, seven product-version fields and git diff --check passed.
+
+```sh
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-string-sim -resultBundlePath /private/tmp/flowlink90-string-tests.xcresult -collect-test-diagnostics never test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-string-sim -resultBundlePath /private/tmp/flowlink90-string-unit-final.xcresult -only-testing:FlowLinkTests -collect-test-diagnostics never test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-string-debug build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/flowlink90-string-release build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS,id=00008150-00181C513E30C01C' -derivedDataPath /private/tmp/flowlink90-string-device build
+plutil -lint ios/FlowLink/FlowLink/Info-Debug.plist ios/FlowLink/FlowLink/Info-Release.plist ios/FlowLink/FlowLink.xcodeproj/project.pbxproj
+codesign --verify --deep --strict --verbose=2 /private/tmp/flowlink90-string-device/Build/Products/Release-iphoneos/FlowLink.app
+git diff --check
+```
+
+In-place owner installation, not executed by the agent:
+
+```sh
+xcrun devicectl device install app --device 00008150-00181C513E30C01C /private/tmp/flowlink90-string-device/Build/Products/Release-iphoneos/FlowLink.app --timeout 60
+```
+
+Keep the existing installed app: do not uninstall/reset/re-pair. Bundle ID, development team,
+Keychain namespace and storage paths remain unchanged. No production/backend/migration/flag
+changes, real receipts/transactions, commits, pushes or staging were performed. Regression
+receipts use isolated test storage/transport only. Follow the owner migration and one-run
+synthetic test above; stop for review before a real purchase or ingestion enablement.
+
+### Current owner-device delivery: FlowLink 0.1.0 (2)
+
+Build 2 supersedes the earlier build-1 String implementation artifact before owner installation.
+Only the app Debug/Release CURRENT_PROJECT_VERSION changed; MARKETING_VERSION remains 0.1.0.
+The String capture/diagnostic implementation and all existing #90 work are preserved. Root
+AGENTS.md now references the permanent owner-device build versioning rule above.
+
+Revalidation: **93 unit tests passed, 0 failed, 1 existing hardware-only Data Protection skip**.
+UI tests were not repeated for this version-only change; the unchanged UI previously passed
+4/4 tests in the String implementation checkpoint. Release Simulator and signed physical
+Release builds passed. AppIntents extraction exposes only the permanent String action;
+no probes and openAppWhenRun=false. Signature/provisioning, both plists/project, UTF-8 and
+whitespace checks passed. The signed app itself reports CFBundleShortVersionString=0.1.0,
+CFBundleVersion=2, CFBundleIdentifier=com.ozavrahami.flowlink.local. Development provisioning
+includes the owner's iPhone and expires 2026-10-03 19:47 UTC. No installation performed.
+
+```sh
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink90-build2-sim -resultBundlePath /private/tmp/flowlink90-build2-tests.xcresult -only-testing:FlowLinkTests -collect-test-diagnostics never test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'generic/platform=iOS Simulator' -derivedDataPath /private/tmp/flowlink90-build2-release build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS,id=00008150-00181C513E30C01C' -derivedDataPath /private/tmp/flowlink90-build2-device build
+codesign --verify --deep --strict --verbose=2 /private/tmp/flowlink90-build2-device/Build/Products/Release-iphoneos/FlowLink.app
+```
+
+Use this current **owner-operated, in-place** install command; do not uninstall/reset/re-pair:
+
+```sh
+xcrun devicectl device install app --device 00008150-00181C513E30C01C /private/tmp/flowlink90-build2-device/Build/Products/Release-iphoneos/FlowLink.app --timeout 60
+```
+
+Release / Version gate remains: Release impact Yes; Patch correction; candidate TBD after
+v1.4.0; grouping FlowLink #85/#90, membership TBD; CHANGELOG already updated under Unreleased;
+Finance Tracker SemVer bump deferred (all seven fields remain 1.4.0), independent FlowLink build
+increment synchronized to 2; publication out of scope; owner acceptance Pending. #90 remains
+Open / In Progress / P1. No staging/commit/push, deployment, backend/database or ingestion-flag
+change; no production test or automatic installation.

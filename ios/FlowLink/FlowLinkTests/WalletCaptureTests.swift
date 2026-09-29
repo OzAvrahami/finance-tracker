@@ -44,21 +44,58 @@ import XCTest
     ] {
       XCTAssertEqual(try WalletNormalizer.amount(decimal(input), currency: "ILS"), expected)
     }
-    XCTAssertEqual(try WalletNormalizer.shekelText("₪0004.00"), "4.00")
-    XCTAssertEqual(try WalletNormalizer.shekelText("₪4.00"), "4.00")
+    XCTAssertEqual(try WalletNormalizer.amount(WalletNormalizer.ilsText("₪0004.00"), currency: "ILS"), "4.00")
+    XCTAssertEqual(try WalletNormalizer.amount(WalletNormalizer.ilsText("₪4.00"), currency: "ILS"), "4.00")
   }
   func testMoneyRejectsUnsupportedRepresentations() throws {
     for input in [
-      "4.00", "₪0.00", "₪-4.00", "₪4.001", "₪1,000.00", " ₪4.00", "₪4.00 ", "$4.00",
+      "4.00", "₪0.00", "₪-4.00", "₪4.001", "₪1,000.00", "$4.00",
       "Attachment.txt", "₪4,00", "₪٤.٠٠",
     ] {
-      XCTAssertThrowsError(try WalletNormalizer.shekelText(input), input)
+      XCTAssertThrowsError(try WalletNormalizer.ilsText(input), input)
     }
     for input in ["0", "-1", "4.001", "10000000000000000000000000000"] {
       XCTAssertThrowsError(try WalletNormalizer.amount(decimal(input), currency: "ILS"))
     }
     XCTAssertThrowsError(try WalletNormalizer.amount(decimal("4"), currency: "USD"))
     XCTAssertThrowsError(try WalletNormalizer.amount(.nan, currency: "ILS"))
+  }
+  func testStrictILSStringAcceptedGrammarIsExact() throws {
+    for input in ["₪1.23", "₪ 1.23", "1.23 ₪", "ILS 1.23", "1.23 ILS", "ILS1.23",
+      "1.23ILS", "  ₪1.23  ", "\u{00a0}₪\u{202f}1.23\u{2009}", "₪0001.23"] {
+      XCTAssertEqual(try WalletNormalizer.amount(WalletNormalizer.ilsText(input), currency: "ILS"), "1.23", input)
+    }
+    for input in ["₪21.00", "ILS 9007199254740993.23", "9999999999999999999999999999.99 ILS"] {
+      let expected = input.replacingOccurrences(of: "₪", with: "").replacingOccurrences(of: "ILS", with: "").trimmingCharacters(in: .whitespaces)
+      XCTAssertEqual(try WalletNormalizer.amount(WalletNormalizer.ilsText(input), currency: "ILS"), expected)
+    }
+  }
+  func testStrictILSStringRejectsAmbiguityControlsAndUnboundedInput() {
+    for input in ["1.23", "$1.23", "€1.23", "USD 1.23", "-₪1.23", "₪-1.23", "₪0.00",
+      "₪1", "₪1.2", "₪1.234", "₪.23", "₪1.23.00", "₪1,23", "₪1,000.00", "₪1 000.00",
+      "₪1e2", "₪NaN", "₪Infinity", "₪₪1.23", "ILS ₪1.23", "₪1.23 ILS", "ils 1.23",
+      "₪+1.23", "attachment.txt", "unrelated text", "₪1.23 extra", "₪١.٢٣",
+      "\t₪1.23", "₪1.23\n", "₪1.\0" + "23", "\u{200f}₪1.23", "₪1.23\u{200b}",
+      String(repeating: " ", count: 129) + "₪1.23", "₪" + String(repeating: "9", count: 29) + ".00"] {
+      XCTAssertThrowsError(try WalletNormalizer.ilsText(input), input)
+    }
+  }
+  func testAmountDescriptorIsStructuralBoundedAndNeverRetainsMonetaryDigits() throws {
+    let shape = AmountFormatDescriptor(" ₪987654.321 ")
+    XCTAssertEqual(shape.marker, "ILS_SYMBOL")
+    XCTAssertTrue(shape.digits)
+    XCTAssertEqual(shape.separator, "DOT")
+    XCTAssertEqual(shape.fractionalDigits, 3)
+    XCTAssertTrue(shape.outerSpaces)
+    XCTAssertFalse(shape.encoded.contains("987654"))
+    XCTAssertEqual(AmountFormatDescriptor(encoded: shape.encoded), shape)
+    XCTAssertEqual(AmountFormatDescriptor("USD 1,23").marker, "OTHER")
+    XCTAssertEqual(AmountFormatDescriptor("ILS ₪1.23").marker, "MULTIPLE")
+    XCTAssertTrue(AmountFormatDescriptor("₪1.23\n").controls)
+    XCTAssertEqual(AmountFormatDescriptor("1.23").marker, "NONE")
+    XCTAssertEqual(AmountFormatDescriptor(String(repeating: "x", count: 10000)).byteLength, 129)
+    XCTAssertNil(AmountFormatDescriptor(encoded: "fmt1|SECRET|1|DOT|2|0|7|0"))
+    XCTAssertNil(AmountFormatDescriptor(encoded: "fmt1|NONE|1|DOT|999|0|7|0"))
   }
   func testMerchantPreferenceAndStrictFallback() throws {
     XCTAssertEqual(try WalletNormalizer.merchant("Israel Post", name: "Other"), "Israel Post")

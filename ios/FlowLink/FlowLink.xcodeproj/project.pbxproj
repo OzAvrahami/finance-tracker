@@ -458,7 +458,7 @@ CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = AVQU374YW5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "FlowLink/Info-Release.plist";
@@ -497,7 +497,7 @@ CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = AVQU374YW5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "FlowLink/Info-Debug.plist";
