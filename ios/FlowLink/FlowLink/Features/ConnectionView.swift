@@ -67,10 +67,12 @@ struct ConnectionView: View {
         }
         if model.session != nil {
           Section {
-            if model.state != .paired {
-              Text("Refresh the connection to check current card availability.").foregroundStyle(
+            if model.cardsAreCached || model.state != .paired {
+              Text("Saved cards — availability not verified. Refresh to check the connection.").foregroundStyle(
                 .secondary)
-            } else if model.cards.isEmpty {
+                .accessibilityIdentifier("cachedBindingsNotice")
+            }
+            if model.cards.isEmpty && model.state == .paired {
               ContentUnavailableView(
                 "No approved cards", systemImage: "creditcard",
                 description: Text(
@@ -82,11 +84,11 @@ struct ConnectionView: View {
                 VStack(alignment: .leading, spacing: 6) {
                   Text(card.label).font(.headline)
                   Label(
-                    card.isAvailable
+                    model.cardsAreCached ? "Saved — availability not verified" : card.isAvailable
                       ? "Available" : card.status == .disabled ? "Disabled" : "Unavailable",
-                    systemImage: card.isAvailable ? "checkmark.circle" : "minus.circle"
+                    systemImage: !model.cardsAreCached && card.isAvailable ? "checkmark.circle" : "minus.circle"
                   )
-                  .foregroundStyle(card.isAvailable ? .green : .secondary)
+                  .foregroundStyle(!model.cardsAreCached && card.isAvailable ? .green : .secondary)
                   Text("Revision \(card.revision)").font(.caption)
                     .foregroundStyle(.secondary)
                 }.accessibilityElement(children: .combine)
@@ -123,6 +125,7 @@ struct ConnectionView: View {
           ).font(.caption).foregroundStyle(.secondary)
         }
         Section("Diagnostics") {
+          NavigationLink("Capture diagnostics") { CaptureDiagnosticsView() }
           Button("Refresh") { Task { await model.restore() } }.disabled(model.busy)
           Button("Test Connection") { Task { await model.refresh() } }.disabled(
             model.busy || model.session == nil || model.hasDraft)

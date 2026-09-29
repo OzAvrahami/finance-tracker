@@ -8,7 +8,7 @@ enum CaptureError: Error, LocalizedError {
     case .amount:
       "Not recorded. Use a positive ILS amount with no fractions smaller than one agora."
     case .merchant: "Not recorded. A usable Merchant or Name is required."
-    case .binding: "Not recorded. Select an available owner-approved FlowLink card."
+    case .binding: "Not recorded. Saved card metadata is missing or invalid. Open FlowLink, refresh cards, then check this automation's selected binding."
     case .storage: "Could not save safely. Unlock the device and open FlowLink."
     case .capacity: "Not recorded. Capture storage is full; review existing receipts in FlowLink."
     case .connection: "Not recorded. Pair this installation in FlowLink first."
@@ -127,7 +127,9 @@ struct CaptureReceipt: Identifiable, Sendable {
     case .queued, .retryWait: "Pending retry"
     case .inFlight: "Sending"
     case .needsReview: "Needs review"
-    case .failed: "Could not send safely"
+    case .failed:
+      outcome == "synthetic_test_archived"
+        ? "Local test — permanently excluded from delivery" : "Could not send safely"
     case .paused: "Paused — review before retrying"
     case .heldForOwnerReview: "Held for review — ingestion disabled"
     }

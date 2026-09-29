@@ -65,22 +65,35 @@ enum WalletDelivery {
   private let connection: () throws -> ProtectedConnection?
   private let now: () -> Date
   private let jitter: () -> Double
+  private let checkpoint: (CaptureStage, CaptureDiagnosticCode?) -> Void
   init(
     store: ReceiptStore, transport: any WalletTransport,
     connection: @escaping () throws -> ProtectedConnection?,
     now: @escaping () -> Date = Date.init,
-    jitter: @escaping () -> Double = { Double.random(in: 0.8...1.2) }
+    jitter: @escaping () -> Double = { Double.random(in: 0.8...1.2) },
+    checkpoint: @escaping (CaptureStage, CaptureDiagnosticCode?) -> Void = { _, _ in }
   ) {
     self.store = store
     self.transport = transport
     self.connection = connection
     self.now = now
     self.jitter = jitter
+    self.checkpoint = checkpoint
   }
   func capture(_ frozen: FrozenCapture) async throws -> String {
     try store.insert(frozen, now: now())  // Durable commit BEFORE HTTP or credential read.
-    try await send(frozen.id)
-    return try store.list().first(where: { $0.id == frozen.id })?.title ?? "Pending retry"
+    guard try store.list().contains(where: { $0.id == frozen.id && $0.capture.bytes == frozen.bytes })
+    else { throw CaptureError.storage }
+    checkpoint(.receiptPersisted, nil)
+    do {
+      try await send(frozen.id)
+      return try store.list().first(where: { $0.id == frozen.id })?.title ?? "Pending retry"
+    } catch {
+      // A failed response/state write cannot make an already committed capture
+      // "not recorded" or encourage a new invocation/key.
+      checkpoint(.deliveryFailed, .storage)
+      return "Saved locally. Delivery may be uncertain; review the original receipt in FlowLink."
+    }
   }
   func send(_ id: String, manual: Bool = false) async throws {
     guard let (receipt, lease) = try store.claim(id, now: now(), manual: manual) else { return }
@@ -88,6 +101,7 @@ enum WalletDelivery {
     do {
       guard let current = try connection(), current.session.deviceID == receipt.capture.device
       else { throw CaptureError.connection }
+      checkpoint(.deliveryStarted, nil)
       decision = await transport.sendCapture(receipt.capture.bytes, credential: current.credential)
     } catch { decision = .init(state: .paused, code: "credential_unavailable") }
     let schedule: [TimeInterval] = [30, 120, 600, 3600, 21600]
@@ -98,5 +112,15 @@ enum WalletDelivery {
       id, lease: lease, decision: decision,
       next: decision.state == .heldForOwnerReview ? now() : now().addingTimeInterval(delay),
       acknowledgedAt: now())
+    switch decision.state {
+    case .heldForOwnerReview: checkpoint(.deliveryHeldDisabled, .disabled)
+    case .delivered: checkpoint(.deliveryCompleted, nil)
+    case .needsReview: checkpoint(.deliveryFailed, .review)
+    case .retryWait: checkpoint(.deliveryFailed, .retry)
+    default:
+      checkpoint(.deliveryFailed,
+        decision.code == "authorization" || decision.code == "credential_unavailable"
+          ? .authorization : decision.code == "configuration" ? .configuration : .rejected)
+    }
   }
 }

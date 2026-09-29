@@ -143,11 +143,12 @@ struct CardBinding: Codable, Identifiable, Equatable {
 struct BindingResponse: Codable { let bindings: [CardBinding] }
 
 enum DeviceState: Equatable {
-  case unpaired, pairing, paired, credentialUnavailable, revoked, offline, configurationError
+  case unpaired, pairing, checking, paired, credentialUnavailable, revoked, offline, configurationError
   var title: String {
     switch self {
     case .unpaired: "Not connected"
     case .pairing: "Connecting"
+    case .checking: "Checking connection"
     case .paired: "Connected"
     case .credentialUnavailable: "Unlock to continue"
     case .revoked: "Connection needs recovery"

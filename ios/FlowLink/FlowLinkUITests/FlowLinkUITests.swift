@@ -55,4 +55,14 @@ final class FlowLinkUITests: XCTestCase {
     XCTAssertTrue(app.secureTextFields["pairingCode"].exists)
     XCTAssertTrue(app.buttons["connect"].exists)
   }
+  @MainActor func testLocalCaptureDiagnosticsAccessibleWithoutPairing() {
+    let app = launch()
+    XCTAssertTrue(app.navigationBars["FlowLink"].waitForExistence(timeout: 10))
+    let diagnostics = app.buttons["Capture diagnostics"]
+    for _ in 0..<12 where !diagnostics.isHittable { app.swipeUp() }
+    XCTAssertTrue(diagnostics.exists)
+    diagnostics.tap()
+    XCTAssertTrue(app.navigationBars["Capture diagnostics"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["Refresh diagnostics"].exists)
+  }
 }

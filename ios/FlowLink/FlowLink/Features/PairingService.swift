@@ -37,6 +37,9 @@ import Foundation
     }
     return connection
   }
+  func localSession() throws -> DeviceSession? {
+    try WalletLocalIdentity.resolve(metadata: { try metadata.load() })
+  }
   func draft() throws -> PairingDraft? {
     var draft: PairingDraft? = try read("pairing-draft")
     if var value = draft {

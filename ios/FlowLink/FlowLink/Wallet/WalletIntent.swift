@@ -11,22 +11,47 @@ struct FlowLinkCardBinding: AppEntity {
   }
 }
 struct FlowLinkBindingQuery: EntityQuery {
-  let load: @MainActor @Sendable () async throws -> [CardBinding]
-  init() { load = { try await WalletRuntime().bindings() } }
-  init(load: @escaping @MainActor @Sendable () async throws -> [CardBinding]) { self.load = load }
+  let local: @MainActor @Sendable () throws -> [CardBinding]
+  let refresh: @MainActor @Sendable () async throws -> [CardBinding]
+  init() {
+    local = { try WalletRuntime().localBindings() }
+    refresh = { try await WalletRuntime().bindings() }
+  }
+  init(local: @escaping @MainActor @Sendable () throws -> [CardBinding],
+    refresh: @escaping @MainActor @Sendable () async throws -> [CardBinding]) {
+    self.local = local
+    self.refresh = refresh
+  }
 
   @MainActor func entities(for identifiers: [String]) async throws -> [FlowLinkCardBinding] {
-    try await approved().filter { identifiers.contains($0.id) }
-  }
-  @MainActor func suggestedEntities() async throws -> [FlowLinkCardBinding] { try await approved() }
-  @MainActor private func approved() async throws -> [FlowLinkCardBinding] {
     do {
-      return try await load().filter(\.isAvailable).map {
-        FlowLinkCardBinding(id: $0.id, label: $0.label)
+      guard identifiers.count <= 32, identifiers.allSatisfy(Validation.uuid) else {
+        throw CaptureError.binding
       }
+      let cards = try local()
+      try cards.forEach { try $0.validate() }
+      // Keep disabled/retired metadata resolvable: capture evidence first, then
+      // the server rejects unauthorized delivery. Never substitute another ID.
+      let result = try identifiers.map { id in
+        guard let card = cards.first(where: { $0.id == id }) else { throw CaptureError.binding }
+        return FlowLinkCardBinding(id: card.id, label: card.label)
+      }
+      CaptureDiagnostics.checkpoint(.entityResolvedLocal)
+      return result
+    } catch {
+      CaptureDiagnostics.checkpoint(.entityResolutionFailed, code: .binding)
+      throw CaptureError.binding
+    }
+  }
+  @MainActor func suggestedEntities() async throws -> [FlowLinkCardBinding] {
+    do {
+      let cards = try await refresh()
+      try cards.forEach { try $0.validate() }
+      return cards.filter(\.isAvailable).map { FlowLinkCardBinding(id: $0.id, label: $0.label) }
     } catch { throw CaptureError.connection }
   }
 }
+
 struct RecordWalletTransaction: AppIntent {
   static var title: LocalizedStringResource { "Record Wallet Transaction" }
   static var description: IntentDescription {
@@ -48,16 +73,19 @@ struct RecordWalletTransaction: AppIntent {
     let date = Date()
     let zone = TimeZone.current
     let key = UUID()
+    CaptureDiagnostics.checkpoint(.intentInvoked)
     let message: String
     do {
       message = try await WalletRuntime().record(
-        binding: card.id, amount: amount.amount, currency: amount.currencyCode,
+        binding: card.id, bindingLabel: card.label, amount: amount.amount, currency: amount.currencyCode,
         merchant: merchant, name: name, now: date, zone: zone, id: key)
     } catch {
+      CaptureDiagnostics.checkpoint(.intentFailed, code: .from(error))
       message =
         (error as? CaptureError)?.localizedDescription
         ?? "Could not send safely. Open FlowLink to review."
     }
+    CaptureDiagnostics.checkpoint(.intentCompleted)
     return .result(dialog: IntentDialog(stringLiteral: message))
   }
 }

@@ -6,6 +6,7 @@ struct CaptureHistoryView: View {
   @State private var message: String?
   @State private var busy = false
   @State private var confirmation: CaptureReceipt?
+  @State private var archiveConfirmation: CaptureReceipt?
 
   var body: some View {
     List {
@@ -40,7 +41,13 @@ struct CaptureHistoryView: View {
             if receipt.retryable {
               Button("Retry same capture…") { confirmation = receipt }.disabled(busy)
             }
-            if receipt.state == .needsReview || receipt.state == .failed {
+            if receipt.state == .heldForOwnerReview,
+              receipt.outcome == "flowlink_ingestion_disabled",
+              request.merchant == "FLOWLINK TEST", request.amount == "1.23", request.currency == "ILS" {
+              Button("Mark as local test — never send…") { archiveConfirmation = receipt }
+                .disabled(busy)
+            }
+            if receipt.state == .needsReview || (receipt.state == .failed && receipt.outcome != "synthetic_test_archived") {
               Text(
                 "Review in Finance Tracker. This app cannot resolve or cancel financial records."
               ).font(.caption)
@@ -50,6 +57,18 @@ struct CaptureHistoryView: View {
       }
     }
     .navigationTitle("Capture receipts")
+    .alert("Permanently exclude this synthetic test?", isPresented: Binding(
+      get: { archiveConfirmation != nil }, set: { if !$0 { archiveConfirmation = nil } })
+    ) {
+      Button("Cancel", role: .cancel) { archiveConfirmation = nil }
+      Button("Mark local test", role: .destructive) {
+        let id = archiveConfirmation?.id
+        archiveConfirmation = nil
+        if let id { Task { await archive(id) } }
+      }
+    } message: {
+      Text("Only confirm for your temporary ILS 1.23 FLOWLINK TEST Shortcut. The original local evidence stays unchanged and will never send. This does not cancel a financial transaction.")
+    }
     .task { await refresh(sendDue: true) }
     .onChange(of: phase) { _, value in
       if value == .active {
@@ -80,6 +99,7 @@ struct CaptureHistoryView: View {
     do {
       let runtime = try WalletRuntime()
       let store = try runtime.store()
+      receipts = try store.list() // Show durable evidence before any due delivery waits.
       if sendDue { await ForegroundCaptures.resume() }
       receipts = try store.list()
       message = nil
@@ -102,5 +122,37 @@ struct CaptureHistoryView: View {
       message =
         "Delivery may be uncertain. The original receipt is retained; do not recreate this capture."
     }
+  }
+  @MainActor private func archive(_ id: String) async {
+    do {
+      try WalletRuntime().store().archiveSyntheticTest(id)
+      await refresh(sendDue: false)
+    } catch { message = "Could not mark this test. The receipt has been retained unchanged." }
+  }
+}
+
+struct CaptureDiagnosticsView: View {
+  @State private var entries: [CaptureDiagnostic] = []
+  @State private var unavailable = false
+  var body: some View {
+    List {
+      Text("Recent local stages only; no merchant, amount, card, credential or request payload. Missing stages do not prove that iOS invoked the action.")
+      if unavailable { Text("Diagnostics unavailable. Unlock the phone and retry.") }
+      if entries.isEmpty && !unavailable { Text("No capture diagnostics yet") }
+      ForEach(entries) { entry in
+        VStack(alignment: .leading) {
+          Text(entry.stage.rawValue)
+          Text(entry.date, style: .time).font(.caption)
+          if let code = entry.code { Text(code).font(.caption) }
+        }
+      }
+      Button("Refresh diagnostics") { load() }
+    }.navigationTitle("Capture diagnostics").task { load() }
+  }
+  @MainActor private func load() {
+    do {
+      entries = try CaptureDiagnostics(directory: BindingDirectory.walletDirectory()).list()
+      unavailable = false
+    } catch { unavailable = true }
   }
 }

@@ -31,6 +31,9 @@
 		7EC3D2DDB3669141B37A84A0 = {isa = PBXBuildFile; fileRef = 5A20A167A0455054FF2B5F0D; };
 4E451D5A05896AA238D7D18C = {isa = PBXBuildFile; fileRef = 304573270C81F7B73E1549B7; };
 CDEF00000000000000000002 = {isa = PBXBuildFile; fileRef = CDEF00000000000000000001; };
+		CF9000000000000000000002 /* Persistence/BindingDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9000000000000000000001; };
+		CF9000000000000000000004 /* Wallet/CaptureDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9000000000000000000003; };
+		CF9000000000000000000006 /* LocalFirstCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF9000000000000000000005; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +83,9 @@ CDEF00000000000000000002 = {isa = PBXBuildFile; fileRef = CDEF000000000000000000
 		5A20A167A0455054FF2B5F0D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Wallet/WalletRuntime.swift"; sourceTree = "<group>"; };
 304573270C81F7B73E1549B7 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WalletCaptureTests.swift"; sourceTree = "<group>"; };
 CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/PairingScanner.swift"; sourceTree = "<group>"; };
+		CF9000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Persistence/BindingDirectory.swift"; sourceTree = "<group>"; };
+		CF9000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Wallet/CaptureDiagnostics.swift"; sourceTree = "<group>"; };
+		CF9000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalFirstCaptureTests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +116,7 @@ CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		083BA1F243BFB82DB28A893F /* FlowLinkTests */ = {
 			isa = PBXGroup;
 			children = (
+				CF9000000000000000000005,
 				304573270C81F7B73E1549B7,
 
 				61271B29CD340BA66D2E5A3D /* APIClientTests.swift */,
@@ -152,6 +159,8 @@ CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourceco
 		67B528FAA2B09D22E13F6BA1 /* FlowLink */ = {
 			isa = PBXGroup;
 			children = (
+				CF9000000000000000000003,
+				CF9000000000000000000001,
 				5A20A167A0455054FF2B5F0D,
 				50805DE04F3B13B22932D053,
 				E9FECA885676C907E7A2311F,
@@ -300,6 +309,8 @@ CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CF9000000000000000000004,
+				CF9000000000000000000002,
 				7EC3D2DDB3669141B37A84A0,
 				4AD73711D72CBF871C653BE7,
 				69C403B844FA3189D40759E2,
@@ -324,6 +335,7 @@ CDEF00000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourceco
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CF9000000000000000000006,
 				4E451D5A05896AA238D7D18C,
 				D416E268D5DA4E4AD40983A3 /* APIClientTests.swift in Sources */,
 				96CA5CD0A96116DE4DEE32A4 /* DomainTests.swift in Sources */,

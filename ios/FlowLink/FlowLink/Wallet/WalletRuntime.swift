@@ -4,7 +4,7 @@ import Foundation
   let configuration: FlowLinkConfiguration
   let metadata: InstallationStore
   let pairing: PairingService
-  let api: FlowLinkAPIClient
+  let api: any FlowLinkAPI & WalletTransport
   let directory: URL
   init() throws {
     configuration = try .installed()
@@ -13,47 +13,42 @@ import Foundation
     pairing = PairingService(
       api: api, vault: KeychainCredentialStore(namespace: metadata.namespace), metadata: metadata,
       configuration: configuration)
-    directory = try FileManager.default.url(
-      for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-    )
-    .appendingPathComponent("FlowLink/Wallet", isDirectory: true)
+    directory = try BindingDirectory.walletDirectory()
   }
-  private struct BindingCache: Codable {
-    let device: String
-    let installation: String
-    let origin: String
-    let bindings: [CardBinding]
+  // Uses the production orchestration with isolated persistence/transport in tests.
+  init(configuration: FlowLinkConfiguration, metadata: InstallationStore,
+    pairing: PairingService, api: any FlowLinkAPI & WalletTransport, directory: URL) {
+    self.configuration = configuration
+    self.metadata = metadata
+    self.pairing = pairing
+    self.api = api
+    self.directory = directory
   }
+  // Capture identity is non-secret local metadata. Credential availability is a
+  // DELIVERY concern, not a condition for preserving Wallet evidence.
   func localIdentity() throws -> DeviceSession? {
-    try WalletLocalIdentity.resolve(
-      credential: { try pairing.current() }, metadata: { try metadata.load() })
+    try WalletLocalIdentity.resolve(metadata: { try metadata.load() })
   }
+  var bindingDirectory: BindingDirectory {
+    BindingDirectory(installation: metadata.installationID, origin: configuration.origin, directory: directory)
+  }
+  func localBindings() throws -> [CardBinding] {
+    guard let identity = try localIdentity() else { throw CaptureError.connection }
+    return try bindingDirectory.load(device: identity.deviceID)
+  }
+  // Configuration-time discovery only; configured entity resolution never calls this.
   func bindings() async throws -> [CardBinding] {
-    guard let identity = try localIdentity() else { return [] }
-    let url = directory.appendingPathComponent("bindings.json")
+    guard let identity = try localIdentity() else { throw CaptureError.connection }
     do {
       guard let current = try pairing.current(), current.session.deviceID == identity.deviceID
       else { throw CaptureError.connection }
       let cards = try await api.bindings(current.credential)
-      try FileManager.default.createDirectory(
-        at: directory, withIntermediateDirectories: true,
-        attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
-      try JSONEncoder().encode(
-        BindingCache(
-          device: current.session.deviceID, installation: metadata.installationID,
-          origin: configuration.origin, bindings: cards)
-      ).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      try bindingDirectory.replace(cards, device: identity.deviceID)
       return cards
     } catch let error as FlowLinkError
       where error == .offline || error == .timeout || error == .credentialUnavailable
     {
-      guard let data = try? Data(contentsOf: url), data.count <= 32768,
-        let cache = try? JSONDecoder().decode(BindingCache.self, from: data),
-        cache.device == identity.deviceID, cache.installation == metadata.installationID,
-        cache.origin == configuration.origin, cache.bindings.count <= 32
-      else { throw error }
-      try cache.bindings.forEach { try $0.validate() }
-      return cache.bindings
+      return try localBindings()
     }
   }
   func store() throws -> ReceiptStore {
@@ -63,24 +58,29 @@ import Foundation
       origin: configuration.origin)
   }
   func service(_ store: ReceiptStore) -> CaptureService {
-    CaptureService(store: store, transport: api, connection: { [pairing] in try pairing.current() })
+    CaptureService(store: store, transport: api, connection: { [pairing] in try pairing.current() },
+      checkpoint: { [directory] stage, code in
+        (try? CaptureDiagnostics(directory: directory))?.record(stage, code: code)
+      })
   }
   func record(
-    binding: String, amount: Decimal, currency: String, merchant: String?, name: String?, now: Date,
+    binding: String, bindingLabel: String, amount: Decimal, currency: String, merchant: String?, name: String?, now: Date,
     zone: TimeZone, id: UUID
   ) async throws -> String {
     let normalized = try WalletNormalizer.amount(amount, currency: currency)
     let selected = try WalletNormalizer.merchant(merchant, name: name)
+    checkpoint(.parametersNormalized)
+    guard Validation.uuid(binding), Validation.label(bindingLabel) else { throw CaptureError.binding }
     guard let identity = try localIdentity() else { throw CaptureError.connection }
-    guard let approved = try await bindings().first(where: { $0.id == binding && $0.isAvailable })
-    else {
-      throw CaptureError.binding
-    }
+    checkpoint(.localIdentityResolved)
     let capture = try FrozenCapture.make(
       binding: binding, amount: normalized, merchant: selected,
       installation: metadata.installationID, device: identity.deviceID,
-      origin: configuration.origin, now: now, zone: zone, id: id, bindingLabel: approved.label)
+      origin: configuration.origin, now: now, zone: zone, id: id, bindingLabel: bindingLabel)
     return try await service(store()).capture(capture)
+  }
+  private func checkpoint(_ stage: CaptureStage) {
+    (try? CaptureDiagnostics(directory: directory))?.record(stage)
   }
 }
 
@@ -110,18 +110,14 @@ import Foundation
   }
 }
 
-// Metadata is a local recovery hint, never transmission authority. A missing
-// credential (reset/deletion) must not resurrect a session from metadata.
+// Metadata is only evidence scope; reset clears it. Missing/revoked Keychain
+// credentials cannot prevent capture, but can never authorize delivery.
 @MainActor enum WalletLocalIdentity {
-  static func resolve(
-    credential: () throws -> ProtectedConnection?, metadata: () throws -> DeviceSession?
-  ) throws -> DeviceSession? {
-    do { return try credential()?.session } catch FlowLinkError.credentialUnavailable {
-      guard let value = try metadata(), Validation.uuid(value.deviceID),
-        Validation.uuid(value.credentialID),
-        Validation.revision(value.credentialRevision), Validation.label(value.label)
-      else { throw CaptureError.connection }
-      return value
-    }
+  static func resolve(metadata: () throws -> DeviceSession?) throws -> DeviceSession? {
+    guard let value = try metadata() else { return nil }
+    guard Validation.uuid(value.deviceID), Validation.uuid(value.credentialID),
+      Validation.revision(value.credentialRevision), Validation.label(value.label)
+    else { throw CaptureError.connection }
+    return value
   }
 }

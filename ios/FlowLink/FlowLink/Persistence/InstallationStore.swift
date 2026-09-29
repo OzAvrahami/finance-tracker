@@ -10,6 +10,7 @@ import Foundation
   let installationID: String
   let namespace: String
   private let backend: String
+  private let acceptsLegacyMetadata: Bool
   private struct Installation: Codable {
     let id: String
     let origin: String
@@ -17,6 +18,7 @@ import Foundation
   private struct Metadata: Codable {
     let backend: String
     let session: DeviceSession
+    let installation: String?
   }
   init(configuration: FlowLinkConfiguration, directory: URL? = nil) throws {
     do {
@@ -40,8 +42,10 @@ import Foundation
         // when switching back to a previously used origin. Never resurrect an old session.
         installationID =
           stored.origin == configuration.origin ? stored.id : UUID().uuidString.lowercased()
+        acceptsLegacyMetadata = stored.origin == configuration.origin
       } else {
         installationID = UUID().uuidString.lowercased()
+        acceptsLegacyMetadata = false
       }
       try JSONEncoder().encode(Installation(id: installationID, origin: configuration.origin))
         .write(
@@ -49,6 +53,15 @@ import Foundation
       namespace = configuration.originHash + ":" + installationID
       backend = configuration.baseURL.absoluteString
       metadataURL = folder.appendingPathComponent(configuration.originHash + "-device.json")
+      // If the marker was replaced/origin changed, quarantine only the scope of
+      // legacy metadata. Keep the file/evidence but never adopt it on a later launch.
+      if !acceptsLegacyMetadata, manager.fileExists(atPath: metadataURL.path),
+        let legacy = try? JSONDecoder().decode(Metadata.self, from: Data(contentsOf: metadataURL)),
+        legacy.installation == nil {
+        try JSONEncoder().encode(Metadata(backend: legacy.backend, session: legacy.session,
+          installation: "legacy-unscoped")).write(to: metadataURL,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+      }
     } catch { throw FlowLinkError.storageUnavailable }
   }
   func load() throws -> DeviceSession? {
@@ -56,12 +69,19 @@ import Foundation
     do {
       let value = try JSONDecoder().decode(Metadata.self, from: Data(contentsOf: metadataURL))
       guard value.backend == backend else { throw FlowLinkError.storageUnavailable }
+      if let installation = value.installation {
+        guard installation == installationID else { return nil }
+      } else {
+        // Upgrade existing paired installs in place, without reading Keychain.
+        guard acceptsLegacyMetadata else { return nil }
+        try save(value.session)
+      }
       return value.session
     } catch { throw FlowLinkError.storageUnavailable }
   }
   func save(_ session: DeviceSession) throws {
     do {
-      try JSONEncoder().encode(Metadata(backend: backend, session: session)).write(
+      try JSONEncoder().encode(Metadata(backend: backend, session: session, installation: installationID)).write(
         to: metadataURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     } catch { throw FlowLinkError.storageUnavailable }
   }

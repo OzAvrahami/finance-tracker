@@ -10,6 +10,10 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Fixed
+
+- #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Windows source checks only; native builds, synthetic execution and real Wallet/locked-device acceptance remain pending.
+
 ## [1.4.0] - Prepared (unpublished)
 
 Prepared on 2026-09-28 from main `0bd74dc35d8d91440059acd1a460229c121fd4bd`, compared with published v1.3.1 (`c600dc036b03f5ae3f9266eb1b9de935b8683d38`). This is one Minor release of the actual repository tree, coordinated on #50; it is not completion of APY or FlowLink. All seven product-version fields are prepared at 1.4.0; FlowLink remains independently 0.1.0 / build 1. The final preparation commit, owner integration/push, deployment verification, annotated tag and publication remain pending. See [release notes and scope/evidence](docs/history/RELEASE_1_4_0.md). Older preparation records below remain historical; GitHub Releases is authoritative for publication.

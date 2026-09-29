@@ -186,6 +186,21 @@ import SQLite3
       return (receipt, lease)
     }
   }
+  // Explicit owner action only, on an acknowledged disabled-path synthetic test.
+  // Preserve immutable bytes/UUID and retain evidence; cannot archive real/uncertain cash.
+  func archiveSyntheticTest(_ id: String) throws {
+    try transaction {
+      guard let receipt = try list().first(where: { $0.id == id }),
+        receipt.state == .heldForOwnerReview,
+        receipt.outcome == "flowlink_ingestion_disabled",
+        try receipt.capture.request.merchant == "FLOWLINK TEST",
+        try receipt.capture.request.amount == "1.23",
+        try receipt.capture.request.currency == "ILS"
+      else { throw CaptureError.storage }
+      try update("UPDATE receipts SET state='failed',outcome='synthetic_test_archived',lease=NULL WHERE id=? AND state='heldForOwnerReview'", [id])
+      guard sqlite3_changes(db) == 1 else { throw CaptureError.storage }
+    }
+  }
   func finish(
     _ id: String, lease: String, decision: DeliveryDecision, next: Date,
     acknowledgedAt: Date = Date()

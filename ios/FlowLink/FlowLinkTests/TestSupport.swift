@@ -5,7 +5,9 @@ import Foundation
 @MainActor final class MemoryVault: CredentialStore {
   var values: [String: Data] = [:]
   var failure: FlowLinkError?
+  var beforeRead: ((String) throws -> Void)?
   func read(_ slot: String) throws -> Data? {
+    try beforeRead?(slot)
     if let failure { throw failure }
     return values[slot]
   }

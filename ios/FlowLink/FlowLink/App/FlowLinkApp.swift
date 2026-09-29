@@ -29,7 +29,10 @@ import SwiftUI
           let api = FlowLinkAPIClient(configuration: configuration)
           let pairing = PairingService(
             api: api, vault: vault, metadata: metadata, configuration: configuration)
-          model = ConnectionModel(api: api, pairing: pairing, configuration: configuration)
+          let directory = BindingDirectory(installation: metadata.installationID,
+            origin: configuration.origin, directory: try BindingDirectory.walletDirectory())
+          model = ConnectionModel(api: api, pairing: pairing, configuration: configuration,
+            directory: directory)
           await ForegroundCaptures.resume()
         } catch {
           setupError = (error as? FlowLinkError ?? .storageUnavailable).localizedDescription

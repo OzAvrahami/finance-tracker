@@ -1,6 +1,8 @@
 # FlowLink — native foundation and Wallet ingestion
 
-FlowLink is a small iPhone companion for Finance Tracker. The FLI-04 foundation pairs a device and lists approved cards. [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/90) adds a native Wallet action and durable delivery receipts. **The owner verified direct Shortcuts parameter mapping on iPhone 17 Pro Max / iOS 27. Runtime Wallet-event values and locked-device behavior remain unverified; this is not production E2E acceptance.**
+Current correction: [local-first capture and pending Mac gate](#local-first-correction--2026-09-29).
+
+FlowLink is a small iPhone companion for Finance Tracker. The FLI-04 foundation pairs a device and lists approved cards. [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/90) adds a native Wallet action and durable delivery receipts. **The owner verified direct Shortcuts parameter mapping on iPhone 17 Pro Max / iOS 27. A real Wallet invocation FAILED on 2026-09-29 with no local receipt. The local-first correction is In Progress; Mac builds, synthetic execution, real Wallet and locked-device acceptance remain pending. See the dated correction below.**
 
 - Project: `ios/FlowLink/FlowLink.xcodeproj`, shared scheme **FlowLink**.
 - App version **0.1.0**, build **1**, independent of the Finance Tracker product version (see the [documentation index](../../docs/README.md)).
@@ -24,7 +26,7 @@ The [accepted contract](../../docs/architecture/FLOWLINK_NATIVE_INGESTION_CONTRA
 | `FlowLinkTests` | Fake credential store/API, mocked URLProtocol and disposable metadata directories |
 | `FlowLinkUITests` | Real app launch, invalid pairing and large-text Hebrew-locale navigation |
 
-The app has one compact screen: Connection, Cards and Diagnostics. Cards are read-only. “Manage cards in Finance Tracker” opens the existing web `/settings` page in Safari; FlowLink has no owner JWT login or administration capability. An empty list explains the owner approval step. Failed refreshes clear displayed availability without deleting credentials. Available/disabled/unavailable use text and symbols, not color alone. Native controls support Dynamic Type, VoiceOver, system light/dark appearance and RTL layout.
+The app has one compact screen: Connection, Cards and Diagnostics. Cards are read-only. “Manage cards in Finance Tracker” opens the existing web `/settings` page in Safari; FlowLink has no owner JWT login or administration capability. An empty list explains the owner approval step. Cached safe cards appear before refresh, explicitly labelled as unverified availability; failed refreshes retain display metadata without granting authority or deleting credentials. Available/disabled/unavailable use text and symbols, not color alone. Native controls support Dynamic Type, VoiceOver, system light/dark appearance and RTL layout.
 
 ## Backend configuration
 
@@ -71,7 +73,7 @@ Generic-password service: `FlowLink.credentials.v1`. Accounts: `<SHA256 canonica
 
 [Apple documents this accessibility class](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly) as device-only storage available after the first unlock following a restart. Real lock/restart/reinstall behavior remains a physical-device verification item. Unit tests use a fake credential-store protocol, never the developer's actual Keychain.
 
-Application Support contains only a random installation marker and origin-specific non-secret device metadata. The directory is excluded from backup and files use complete-until-first-user-authentication protection. A missing marker creates a new namespace; an invalid marker fails closed. Reinstallation therefore never silently adopts leftover Keychain credentials. Credentials never enter UserDefaults, ordinary metadata files, logs or observable UI models. Pairing text lives briefly in the secure input/scanner confirmation memory, then only in the protected Keychain draft for recovery; it is never ordinary persisted state.
+Application Support contains a random installation marker, scoped non-secret device/binding metadata, immutable capture receipts and bounded stage-only diagnostics. The directory is excluded from backup and files use complete-until-first-user-authentication protection. A missing marker creates a new namespace; an invalid marker fails closed. Reinstallation therefore never silently adopts leftover Keychain credentials. Credentials never enter UserDefaults, ordinary metadata files, logs or observable UI models. Pairing text lives briefly in the secure input/scanner confirmation memory, then only in the protected Keychain draft for recovery; it is never ordinary persisted state.
 
 ## Build and test
 
@@ -158,7 +160,7 @@ This is **configuration-time compatibility evidence supplied by the owner**. It 
 
 ### Deferred runtime/device evidence — implementation may reach Verify
 
-The owner superseded the local mock and immediate-purchase gate on 2026-09-27. The implementation is **Open / Verify / P1**, with owner acceptance **Pending**, after automated checks and builds passed. Real runtime Amount, original Merchant/Name values and Wallet-event locked/background execution remain explicitly deferred; no purchase is required now. Earlier checkpoint notes below are historical, not current completion gates.
+The owner superseded the local mock and immediate-purchase gate on 2026-09-27. At that checkpoint the implementation was **Open / Verify / P1**, with owner acceptance **Pending**, after automated checks and builds passed. The 2026-09-29 failed event and Windows correction below supersede that workflow checkpoint. Real runtime Amount, original Merchant/Name values and Wallet-event locked/background execution remain explicitly deferred; no purchase is required now. Earlier checkpoint notes below are historical, not current completion gates.
 
 The authoritative later workflow is **capture first, review before posting**: prepare production enrollment/bindings but leave both ingestion flags false; a natural event is stored durably and receives `flowlink_ingestion_disabled`; it remains held until the owner reviews it and explicitly retries that same receipt after separately authorizing native enablement. No pre-purchase enablement or helper Shortcut action is needed. Invalid runtime evidence/storage unavailability still fails safely; configuration compatibility is not a guarantee that a real event executes.
 
@@ -185,9 +187,9 @@ Intent entry freezes one local Gregorian date/timezone and one UUIDv4, before as
 
 `Wallet/ReceiptStore.swift` uses native SQLite, DELETE rollback journal, FULL synchronous commits, fullfsync, busy timeout and BEGIN IMMEDIATE transactions. The database and its directory use complete-until-first-user-authentication protection, with the parent excluded from backup. No shared app group or external dependency. Physical lock/side-file behavior remains a hardware verification item.
 
-The immutable record contains the approved binding display-label snapshot, installation/device/origin, protocol version, the exact six-field UTF-8 request bytes and SHA-256, one key, and diagnostic capture time. Credentials are absent; Keychain is read at transmission. If Keychain is temporarily unavailable but protected metadata and a matching cached binding are readable, capture can still persist locally and pause without HTTP. Missing/deleted credentials do not resurrect identity from metadata. SQLite guards frozen fields; mutable state includes attempts, next/last attempt, safe outcome/error and claim lease. Responses store safe outcome state rather than full server payloads or competing candidate IDs.
+The immutable record contains the approved binding display-label snapshot, installation/device/origin, protocol version, the exact six-field UTF-8 request bytes and SHA-256, one key, and diagnostic capture time. Credentials are absent; Keychain is read at transmission. Protected local installation/device metadata and the selected entity ID/label are sufficient to preserve evidence, even if Keychain is unavailable or empty. Credentials are first read after commit. A missing credential pauses delivery; it never becomes authorization. Explicit connection reset still clears metadata and prevents new capture; metadata is installation/origin scoped, including an in-place legacy metadata upgrade. SQLite guards frozen fields; mutable state includes attempts, next/last attempt, safe outcome/error and claim lease. Responses store safe outcome state rather than full server payloads or competing candidate IDs.
 
-A receipt commits before POST. A second connection/process cannot claim an active receipt. A 60-second lease exceeds the 25-second HTTP timeout; expired claims recover with identical bytes/key, and a stale worker cannot overwrite a newer claim. Credential rotation changes only the header, never receipt identity. Device/origin mismatch cannot replay another installation's receipts. Local storage failure or capacity failure means no POST.
+A receipt commits before any capture-path HTTP request or credential read, including binding/status requests. A second connection/process cannot claim an active receipt. A 60-second lease exceeds the 25-second HTTP timeout; expired claims recover with identical bytes/key, and a stale worker cannot overwrite a newer claim. Credential rotation changes only the header, never receipt identity. Device/origin mismatch cannot replay another installation's receipts. Local storage failure or capacity failure means no POST.
 
 ### Delivery and retry
 
@@ -293,3 +295,139 @@ The new QR dependency is pinned `react-qr-code@2.2.0`, a local SVG renderer. No 
 - Version-bump status: **Deferred** to owner-coordinated #84 preparation; seven product fields 1.3.1 and native 0.1.0/build 1 unchanged.
 - Publication status: **Out of scope**; no tag or GitHub Release.
 - Owner acceptance / verification: **Pending**, #90 remains open for Verify. Real Wallet runtime/locked-event evidence remains deferred; #91 was not started.
+
+
+## Local-first correction ? 2026-09-29
+
+Status: **#90 Open / In Progress / P1; owner acceptance Pending**. Windows source work does not pass the Mac gate. Base `71faa5ce0fe356361fd4b5063ded603558d4dd7d`; branch `fix/flowlink-local-first-capture-90`. Preserve Finance Tracker **1.4.0** and FlowLink **0.1.0/build 1**, QR onboarding and later repository cleanup. No #91/#82 work.
+
+### Failed hardware evidence, not a successful capture
+
+Owner report: iPhone 17 Pro Max / iOS 27, 2026-09-29 about 10:46 local, real **ILS 21.00**, selected Discount card ending 2755. The payment succeeded according to the Wallet/card notification. The personal automation triggered, then Record Wallet Transaction reported **?Couldn't communicate with a helper application.?** FlowLink ? Capture receipts was empty. **Runtime capture acceptance failed; no local receipt and no FlowLink financial transaction were reported.** This was not the intended disabled-ingestion hold. The raw runtime Amount/merchant inputs, actual stage reached and locked/background execution are not established by that notification.
+
+Owner also observed cards appearing only after a delay on normal launch. Code establishes why that UI waited; it does not establish that the same delay caused the generic iOS helper failure.
+
+### Audited causes and execution boundary
+
+Before this correction:
+
+1. Shortcuts could call `FlowLinkBindingQuery.entities(for:)` before `perform()`. It called `approved()` ? `WalletRuntime.bindings()` ? configuration/installation initialization ? Keychain identity ? another credential read ? live GET bindings. Cache fallback existed only for selected errors and only if that separate cache had previously been populated.
+2. `perform()` froze date/timezone/UUID, then created a runtime. Initialization parsed the backend selection, loaded/rewrote the protected installation marker, created a URLSession and pairing service, and located Application Support. No initializer performed HTTP.
+3. `record()` normalized Decimal/currency and selected Merchant/Name, read local identity through Keychain, awaited another binding lookup, required live/cached availability, and then constructed `FrozenCapture` with a rediscovered label.
+4. Opening `ReceiptStore` read identity again, opened/upgraded SQLite, then `CaptureService.capture()` finally inserted the receipt. Its own insert-before-credential/POST order was correct, but earlier dependencies could prevent reaching it.
+5. `ConnectionModel.restore()` read pairing state, awaited `/device` and `/device/bindings`, then assigned cards. Errors cleared cards. It never populated the runtime's separate cache.
+
+The confirmed defects are pre-persistence networking/credential dependence and separate cache population paths. **The specific cause of the owner's OS helper error remains unproven.** If no diagnostics appear after the corrected manual test, investigate system parameter/helper invocation and device logs; do not claim the transport was reached.
+
+Now:
+
+```text
+configured entity ID -> local protected directory -> ID + label
+perform freezes Date / TimeZone / UUID once
+  -> exact normalization -> Merchant/Name -> validate ID/label
+  -> local installation/device metadata -> FrozenCapture
+  -> SQLite insert COMMIT -> readback
+  -> current Keychain credential -> HTTP -> persisted delivery outcome
+```
+
+No `ConnectionModel`, foreground view, owner session, QR workflow, interactive login, live device/binding status or network participates before receipt commit. `@MainActor` serializes the existing service/storage code; it does not require a SwiftUI view or foreground app. `openAppWhenRun=false` and the direct `IntentCurrencyAmount`/Merchant/Name mappings stay unchanged. URLSession construction is not a request. Invalid parameters, missing local identity, missing/corrupt configured entity metadata, unavailable protected storage and capacity exhaustion can still prevent capture; each fails safely rather than inventing evidence.
+
+[Apple documents entity lookup during parameter resolution](https://developer.apple.com/documentation/appintents/entity-queries). `entities(for:)` reconstructs the selected UUID's display representation locally, including disabled/retired metadata. Missing IDs fail clearly, never fall back to another card. `suggestedEntities()` alone may refresh remotely and offers only available active bindings. This does not assert undocumented Shortcuts serialization details or promise background execution.
+
+### Shared directory, protection and diagnostics
+
+`BindingDirectory` uses the existing `FlowLink/Wallet/bindings.json` shape/path, preserving existing cache compatibility. It stores only installation UUID, device UUID, canonical origin and `{id,label,status,revision,available}`. No credentials, payment/source IDs or headers. Validated maximum: 32 live response rows, 256 total including removed IDs retained as disabled tombstones, 128 KiB file cap. At capacity fail visibly rather than silently evicting configured IDs. Atomic replacement prevents partial JSON; concurrent refreshes remain advisory snapshots, never financial authorization. Binding rename updates display but cannot change an existing receipt's frozen label/bytes.
+
+App composition injects the same directory into `ConnectionModel`. `restore()` assigns local metadata/cards before the first network suspension, displays **Saved ? availability not verified**, then refreshes. Successful responses update directory and UI; offline, slow and authority failures retain safe display with explicit connection state. Normal success shows current server availability. An upgrade with no existing cache needs one successful normal card refresh, not re-pairing; subsequent configured runtime resolution is local-only.
+
+Installation metadata now includes its installation scope. Existing same-origin installations upgrade in place without reading Keychain; a changed/missing marker must not resurrect an old metadata identity. Explicit reset still clears metadata. No reset is part of this correction.
+
+SQLite receipts, directory and diagnostics use complete-until-first-user-authentication and backup exclusion. SQLite DELETE journal inherits the protected directory; FULL commit and receipt leases remain. Keychain stays `AfterFirstUnlockThisDeviceOnly`, non-synchronizing. Apple documents [file access after first unlock](https://developer.apple.com/documentation/foundation/fileprotectiontype/completeuntilfirstuserauthentication) and [device-only Keychain access](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly). Actual locked files/journal/helper access must be checked on hardware. **No before-first-unlock support is claimed.** All intent code is in the app target with the same container; no new extension, App Group, entitlement or signing change.
+
+FlowLink ? Diagnostics ? **Capture diagnostics** shows at most 128 local records (separate protected SQLite, 64-page cap). Only system time, allowlisted stage and allowlisted error code are stored: `entity_resolved_local`, `entity_resolution_failed`, `intent_invoked`, `parameters_normalized`, `local_identity_resolved`, `receipt_persisted`, `delivery_started`, `delivery_held_disabled`, `delivery_failed`, `delivery_completed`, `intent_failed`, `intent_completed`. No merchant, amount, binding/device ID, raw error, payload or credential. Diagnostics are best-effort and never gate capture. Times are operational evidence, not purchase timestamps. Concurrent invocations can interleave stages; this is not a complete per-event trace.
+
+| Delivery result after commit | Local evidence / retry |
+| --- | --- |
+| `503 flowlink_ingestion_disabled` | Held for owner review; never automatic retry, including after server enablement. |
+| Timeout/offline/429/transient service failure | Immutable receipt retained; bounded original-key retry with backoff/Retry-After. |
+| Unreadable/missing credential, 401 or 403 (including binding unavailable) | Paused; no automatic retry or remapping. |
+| Invalid configuration/source or unknown result | Paused; retain evidence for review. |
+| 400/413/415/422 | Failed terminal delivery, evidence retained. |
+| Ambiguous/conflict | Needs review; no new capture/key/cash. |
+
+Capture history reads receipts before awaiting due delivery. If a delivery-state write fails after the verified receipt commit, the intent reports saved locally / uncertain delivery, never encourages a new key.
+
+The backend's unchanged disabled-route guard returns before auth/ingest; the synthetic hold therefore creates no financial observation/event. A stale directory never bypasses server credential/device/binding/source/payment/flag checks. Existing held receipts remain excluded from foreground work. No migration or backend change is required.
+
+### Regression sources and Windows verification boundary
+
+`LocalFirstCaptureTests.swift` exercises the real runtime orchestration with temporary protected files/SQLite and fake transport: local-only entity lookup, remote discovery/shared cache, missing/corrupt metadata, namespace isolation, retired IDs, slow/offline startup, persisted-before-first-HTTP and before-first-Keychain-read, suspended delivery/reopen, post-commit delivery-state write failure, credential failure, server rejection, immutable rename/retry, synthetic-test terminal archive, bounded diagnostics and metadata upgrade. Existing Wallet SQLite/retry/hold tests remain; their old credential-dependent identity and disabled-entity expectations are deliberately corrected. QR/manual pairing/recovery tests are retained. UI test source adds unpaired local diagnostics navigation.
+
+Windows checks are static source/project/reference/UTF-8/plist/version/whitespace checks, not native compilation. Tree-sitter syntax inspection requires two known grammar-only normalizations in memory: `isolated deinit` and `try?` on the throwing property inside a SwiftUI optional binding; the accepted baseline also uses these constructs. Xcode must validate types, actor isolation, AppIntents metadata extraction, SwiftUI presentation and iOS file protection. No client/server runtime changed, so application suites need no repeat for this native-only correction. No physical-process crash, lock, app-install or synthetic invocation has occurred in this Windows pass.
+
+### Windows results for this correction
+
+| Check / command | Result |
+| --- | --- |
+| `node --test server/test/flowlink.test.js server/test/flowlinkBindings.test.js` | **33 passed, 0 failed, 0 skipped**. Existing isolated HTTP/service harness and fake RPC; no production requests or DB. Relevant because stale native metadata must never bypass disabled/current-authority server checks. |
+| `python "$env:TEMP\flowlink90_windows_check.py"` (temporary read-only validator) | **22 changed/new UTF-8 files**, **27 Swift grammar scans**, **93 OpenStep objects / all source memberships**, **2 XML plists**, **31 local Markdown file links** passed. Grammar accommodations described above; not Swift type-checking or Xcode project validation. Temporary tools: tree-sitter 0.26.0, tree-sitter-swift 0.7.3, openstep-parser 2.0.3, installed only under the OS temp directory. |
+| `git diff --check` | Passed. No staged changes. |
+| Version / scope checks | Seven product fields **1.4.0**; app **0.1.0/build 1**, bundle ID/team unchanged. No changed migrations/schema, nested iOS Git, matched secret literals or notification/APNs implementation. |
+| Native tests/builds | **Not run on Windows**. Source inventory: **84 unit tests + 4 UI tests**, including **22 new local-first unit tests + 1 new UI test**. Existing QR/manual-pairing/recovery source retained. No claim that these sources compile/pass yet. |
+| Client / full application suites | Not rerun: no client/server implementation changed. The focused server authority suite above is the only application test run. |
+
+The failed real event is recorded on [#90](https://github.com/OzAvrahami/finance-tracker/issues/90#issuecomment-5887822842). Existing local multi-user drafts and unrelated cache files are untouched. Historical native/QR passes elsewhere in this document are not new correction evidence.
+
+### Required Mac gate (owner-operated; not run on Windows)
+
+First transfer the reviewed working diff by the owner's chosen Git/file workflow without replacing current main or the Mac's local work. The agent has made no commit/push. Run from the Mac checkout containing this exact correction. Choose an available iPhone simulator UUID from the inventory; do not blindly reuse historical IDs.
+
+```sh
+cd /Users/ozavrahami/code/finance-tracker
+git status --short
+xcodebuild -version
+xcrun simctl list devices available
+xcrun devicectl list devices
+export FLOWLINK_SIMULATOR_ID='<available iPhone simulator UUID>'
+export FLOWLINK_GATE_DIR="$(mktemp -d /private/tmp/flowlink90-local-first.XXXXXX)"
+plutil -lint ios/FlowLink/FlowLink/Info-Debug.plist ios/FlowLink/FlowLink/Info-Release.plist ios/FlowLink/FlowLink.xcodeproj/project.pbxproj
+xcodebuild -list -project ios/FlowLink/FlowLink.xcodeproj
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug \
+  -destination "platform=iOS Simulator,id=$FLOWLINK_SIMULATOR_ID" \
+  -derivedDataPath "$FLOWLINK_GATE_DIR/debug" -resultBundlePath "$FLOWLINK_GATE_DIR/tests.xcresult" \
+  -collect-test-diagnostics never test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath "$FLOWLINK_GATE_DIR/release-sim" build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release \
+  -destination 'generic/platform=iOS' -derivedDataPath "$FLOWLINK_GATE_DIR/device" build
+```
+
+The Debug `test` builds and runs both unit/UI targets; record exact passed/failed/skipped counts. Keep normal simulator signing. Signed Release uses the **existing** team/bundle ID; no `-allowProvisioningUpdates`, new signing setup, uninstall or pairing reset. If signing fails, stop and report rather than changing owner assets. Check bundle/team/backend match the installed app before install.
+
+Only after the gate passes, the **owner** installs Release over the existing app (historical owner device identifier below; first confirm it in `devicectl list devices`):
+
+```sh
+xcrun devicectl device install app --device 00008150-00181C513E30C01C \
+  "$FLOWLINK_GATE_DIR/device/Build/Products/Release-iphoneos/FlowLink.app" \
+  --timeout 60 --json-output "$FLOWLINK_GATE_DIR/install.json"
+```
+
+Same bundle/team/container and unchanged Keychain namespace preserve pairing and local data. Installation is pending, not evidence of success. **Do not uninstall, forget the connection, change backend origin or recreate pairing/binding.** Open FlowLink once, check the existing identity, refresh cards to populate the shared directory, then confirm cached labels appear on reopening before network refresh finishes. If pairing/card disappears, stop; do not reset it.
+
+### Separate synthetic Shortcut ? no new purchase
+
+Keep both `FLOWLINK_INGESTION_ENABLED=false` and `APPLE_PAY_INGESTION_ENABLED=false`. Never enable them for this test. Leave the real Wallet automation unchanged.
+
+1. On the owner iPhone create a **separate temporary manual Shortcut**, e.g. ?FlowLink local capture test?. Add **FlowLink ? Record Wallet Transaction** (same existing discoverable action).
+2. Choose the already-approved binding. Set Amount to **ILS 1.23**, Merchant **FLOWLINK TEST**, Name **FLOWLINK TEST**. Use the currency amount parameter's constant editor; if its exact UI differs, inspect the on-device picker rather than adding Text/regex/HTTP helpers. No real Wallet input, Card or Pass, credential, JSON or URL is needed.
+3. Run once. Expect no helper communication error and a **Held for review ? ingestion disabled** result. Do not repeatedly rerun the Shortcut to retry: each invocation creates a different UUID.
+4. Open Capture receipts: exactly one new `FLOWLINK TEST` / `1.23 ILS` receipt, original capture-local date and selected binding label, held status. Diagnostics should show local resolution (when Shortcuts resolves it), invoked ? normalized ? identity ? persisted ? delivery started ? disabled hold ? completed. Screenshot only these safe stages/status if reporting a failure.
+5. If no receipt exists, inspect diagnostics and stop; do not buy another item to debug. If paused/retry-wait instead of held, retain it and diagnose the connection while flags stay false; never enable ingestion to force a result.
+6. For the acknowledged disabled synthetic receipt only, choose **Mark as local test ? never send?**, confirm. This keeps immutable bytes/UUID/date/evidence, records a terminal non-retryable marker, and removes delivery controls. Existing terminal `failed` storage state is reused so older builds also cannot retry it. The operation is restricted to held `flowlink_ingestion_disabled`, exact merchant `FLOWLINK TEST`, amount `1.23`, currency `ILS`; it cannot mark real/uncertain/delivered receipts. Never mutate or reuse a real capture UUID.
+7. Delete only the temporary Shortcut afterward, not any real receipt or automation. Confirm the marked test remains visible and cannot retry. Do not uninstall FlowLink.
+
+Expected financial effect: **zero transaction, zero financial APY observation/event**. Disabled guard code and existing backend regression evidence support that expectation; this Windows pass did not query production or independently verify new production row counts. The owner can inspect the normal transaction list; any formal financial/provenance readback remains a separately authorized read-only operation.
+
+This test establishes only **manual Shortcuts ? AppIntent ? local receipt ? disabled hold**. It does not prove real Wallet `Transaction.Amount`, natural purchase execution, locked/background execution or before-first-unlock behavior. Those acceptance items remain pending; no second real purchase is required for debugging. Keep #90 In Progress until Mac gate evidence is recorded, then Verify only with remaining device limitations explicit; do not close it or start #91.
+
+Release / Version gate for this correction: release impact **Yes**; SemVer **Patch** (repair existing experimental capture behavior, not completion of the original Minor initiative); candidate **TBD on #90 after published v1.4.0**; grouping **existing FlowLink #85/#90, future release membership TBD**; CHANGELOG **Updated under Unreleased**; version bump **Deferred to owner-coordinated release preparation**, all seven product fields **1.4.0**, native **0.1.0/build 1** unchanged; publication **Out of scope**; owner acceptance **Pending**. No production execution/configuration/migration/secret/flag change, financial operation, commit, push, notification/APNs or distribution work.

@@ -236,11 +236,15 @@ import XCTest
     let disabled = CardBinding(
       id: Fixture.credentialID, label: "Disabled", status: .disabled, revision: "2",
       available: false)
-    let query = FlowLinkBindingQuery(load: { [allowed, disabled] })
+    let query = FlowLinkBindingQuery(local: { [allowed, disabled] }, refresh: { [allowed, disabled] })
     let suggested = try await query.suggestedEntities()
     XCTAssertEqual(suggested.map(\.id), [allowed.id])
-    let missing = try await query.entities(for: [UUID().uuidString.lowercased(), disabled.id])
-    XCTAssertTrue(missing.isEmpty)
+    do {
+      _ = try await query.entities(for: [UUID().uuidString.lowercased()])
+      XCTFail("Missing local metadata must fail clearly without substituting a binding")
+    } catch { XCTAssertTrue(error is CaptureError) }
+    let retired = try await query.entities(for: [disabled.id])
+    XCTAssertEqual(retired.map(\.id), [disabled.id]) // Capture evidence; server authorizes later.
     let resolved = try await query.entities(for: [allowed.id])
     XCTAssertEqual(resolved.first?.label, "Approved")
     XCTAssertEqual(
@@ -339,19 +343,14 @@ import XCTest
     XCTAssertEqual(
       try folder.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
   }
-  func testLockedCredentialCanUseMetadataButDeletedCredentialCannotResurrectIdentity() throws {
-    XCTAssertEqual(
-      try WalletLocalIdentity.resolve(
-        credential: { throw FlowLinkError.credentialUnavailable },
-        metadata: { Fixture.device.session }), Fixture.device.session)
-    XCTAssertNil(
-      try WalletLocalIdentity.resolve(credential: { nil }, metadata: { Fixture.device.session }))
-    XCTAssertThrowsError(
-      try WalletLocalIdentity.resolve(
-        credential: { throw FlowLinkError.unauthorized }, metadata: { Fixture.device.session }))
-    XCTAssertThrowsError(
-      try WalletLocalIdentity.resolve(
-        credential: { throw FlowLinkError.credentialUnavailable }, metadata: { nil }))
+  func testLocalCaptureIdentityUsesMetadataOnlyAndResetCannotResurrectIt() throws {
+    XCTAssertEqual(try WalletLocalIdentity.resolve(metadata: { Fixture.device.session }),
+      Fixture.device.session)
+    XCTAssertNil(try WalletLocalIdentity.resolve(metadata: { nil }))
+    XCTAssertThrowsError(try WalletLocalIdentity.resolve(metadata: {
+      DeviceSession(deviceID: "invalid", label: "Phone", credentialID: Fixture.credentialID,
+        credentialRevision: "1")
+    }))
   }
   func testDisabledHoldSurvivesRelaunchAndEnablementUntilExactManualRetry() async throws {
     let folder = temporary()

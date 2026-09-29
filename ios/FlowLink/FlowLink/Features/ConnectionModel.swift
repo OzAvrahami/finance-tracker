@@ -6,6 +6,7 @@ import Observation
   private(set) var session: DeviceSession?
   private(set) var status: DeviceResponse?
   private(set) var cards: [CardBinding] = []
+  private(set) var cardsAreCached = false
   private(set) var message: String?
   private(set) var hasDraft = false
   private(set) var busy = false
@@ -14,17 +15,29 @@ import Observation
   private let api: any FlowLinkAPI
   private let pairing: PairingService
   private let bindings: BindingService
-  init(api: any FlowLinkAPI, pairing: PairingService, configuration: FlowLinkConfiguration) {
+  private let directory: BindingDirectory?
+  init(api: any FlowLinkAPI, pairing: PairingService, configuration: FlowLinkConfiguration,
+    directory: BindingDirectory? = nil) {
     self.api = api
     self.pairing = pairing
     bindings = BindingService(api: api)
+    self.directory = directory
     backend = configuration.baseURL.absoluteString
   }
   func restore() async {
     guard !busy else { return }
     do {
+      // Display local identity/cards before Keychain or the first suspension/HTTP.
+      session = try pairing.localSession()
+      if let session {
+        cards = try directory?.load(device: session.deviceID) ?? []
+        cardsAreCached = true
+        state = .checking
+      } else {
+        cards = []
+        cardsAreCached = false
+      }
       hasDraft = try pairing.draft() != nil
-      session = try pairing.current()?.session
       if hasDraft {
         state = .unpaired
         message = "An unfinished pairing is saved securely. Retry it before starting another."
@@ -68,14 +81,17 @@ import Observation
         session = nil
         status = nil
         cards = []
+        cardsAreCached = false
         return
       }
       let live = try await api.device(connection.credential)
       try pairing.refreshIdentity(live.session)
       let latestCards = try await bindings.list(using: connection.credential)
+      try directory?.replace(latestCards, device: live.session.deviceID)
       session = live.session
       status = live
       cards = latestCards
+      cardsAreCached = false
       state = .paired
     } catch { present(error) }
   }
@@ -88,6 +104,7 @@ import Observation
       session = nil
       status = nil
       cards = []
+      cardsAreCached = false
       hasDraft = false
       state = .unpaired
       message = nil
@@ -98,7 +115,8 @@ import Observation
     let safe = error as? FlowLinkError ?? .storageUnavailable
     message = safe.localizedDescription
     status = nil
-    cards = []  // Never offer stale availability as current authority.
+    // Retain display/evidence metadata, explicitly NOT current authority.
+    cardsAreCached = true
     switch safe {
     case .unauthorized: state = .revoked
     case .credentialUnavailable, .storageUnavailable: state = .credentialUnavailable

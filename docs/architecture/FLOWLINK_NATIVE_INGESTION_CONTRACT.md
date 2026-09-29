@@ -466,7 +466,7 @@ User-facing action **FlowLink: Record Wallet Transaction**, four parameters:
 
 | Parameter | Contract |
 | --- | --- |
-| Card | Required `FlowLinkCardBinding` AppEntity: opaque binding UUID, safe owner-defined label. EntityQuery resolves only this installation's approved bindings. Refresh from server when possible, bounded protected cache for offline resolution. Missing/stale selection never defaults to another binding. |
+| Card | Required `FlowLinkCardBinding` AppEntity: opaque binding UUID, safe owner-defined label. Configuration discovery may refresh this installation's approved bindings. Runtime `entities(for:)` resolves IDs from protected local metadata only, including disabled/retired tombstones for evidence capture. Missing metadata fails clearly; stale selection never defaults to another binding. Delivery alone checks current server authority. |
 | Merchant | Optional text from Transaction → Merchant. Prefer when nonempty and usable. |
 | Name | Optional text from Transaction → Name, fallback only when Merchant is absent/whitespace. Nonempty malformed Merchant fails instead of hiding corruption through fallback. Never concatenate. |
 | Amount | Required; preferred experiment is `IntentCurrencyAmount` with Decimal + currencyCode, subject to installed SDK/Wallet interoperability verification below. |
@@ -518,10 +518,12 @@ and localized Hebrew/RTL status presentation require later device tests.
 
 ## 10. Frozen capture receipt and retry
 
+Owner correction, 2026-09-29 (#90): local evidence preservation is independent of current server authority. Normal startup, configuration discovery and runtime entity resolution share one protected binding directory scoped by installation/device/backend. Cached display never grants financial permission. Receipt/Keychain formats and server authorization remain distinct. See [local-first implementation and pending Mac gate](../../ios/FlowLink/README.md#local-first-correction--2026-09-29).
+
 At entry capture Gregorian local calendar DATE once with the device's current timezone
 and locale-independent YYYY-MM-DD formatting; generate UUIDv4 once. Never use a retry's
 clock or server receipt date. After native normalization, **durably commit a receipt
-before any ingestion POST** (binding/status reads do not post money). Unsupported values fail locally with no submission. A failed
+before any network request or Keychain credential read**. No live binding/status request may precede commit, including during configured AppEntity resolution. Pass the entity ID and safe label directly to capture, use installation-scoped non-secret device metadata, then authorize delivery on the server. Unsupported values fail locally with no submission. A failed
 durable write means Not recorded; do not send and then attempt to persist the key.
 
 Use a small SQLite store in Application Support, excluded from backup, with
