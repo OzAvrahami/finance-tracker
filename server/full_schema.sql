@@ -23218,3 +23218,797 @@ DO $$ DECLARE f RECORD; BEGIN
  END LOOP;
 END $$;
 COMMIT;
+
+-- Migration 039: Shopping habits, immutable plans, reviewed receipts and atomic checkout (#92).
+-- Additive; no historical checkbox backfill. Run as one transaction, never edit prior migrations.
+BEGIN;
+CREATE TABLE public.shopping_regular_products (
+ catalog_item_id bigint PRIMARY KEY REFERENCES public.shopping_catalog_items(id),
+ quantity numeric NOT NULL CHECK(quantity > 0 AND quantity <= 10000),
+ unit text NOT NULL CHECK(length(unit) BETWEEN 1 AND 30),
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.shopping_purchase_plans (
+ list_id bigint PRIMARY KEY REFERENCES public.shopping_lists(id),
+ items jsonb NOT NULL CHECK(jsonb_typeof(items)='array'),
+ captured_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.shopping_receipts (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ list_id bigint NOT NULL UNIQUE REFERENCES public.shopping_lists(id),
+ image_hash text NOT NULL UNIQUE CHECK(image_hash ~ '^[a-f0-9]{64}$'),
+ state text NOT NULL CHECK(state IN ('extracting','failed','review','confirmed')),
+ extracted jsonb, confirmed jsonb,
+ attempts integer NOT NULL DEFAULT 1 CHECK(attempts BETWEEN 1 AND 5),
+ error_code text,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ CHECK(confirmed IS NULL OR state='confirmed')
+);
+CREATE TABLE public.shopping_confirmed_purchases (
+ list_id bigint PRIMARY KEY REFERENCES public.shopping_lists(id),
+ purchase_date date NOT NULL,
+ items jsonb NOT NULL CHECK(jsonb_typeof(items)='array'),
+ basis text NOT NULL CHECK(basis IN ('checkout','receipt')),
+ receipt_id uuid UNIQUE REFERENCES public.shopping_receipts(id),
+ confirmed_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX shopping_purchase_date ON public.shopping_confirmed_purchases(purchase_date DESC);
+
+-- Item writes and checkout serialize on the SAME parent. A checkbox is not purchase history.
+CREATE FUNCTION public.shopping_lock_item() RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$
+DECLARE s text;
+BEGIN
+ SELECT status INTO s FROM public.shopping_lists WHERE id=COALESCE(NEW.list_id,OLD.list_id) FOR UPDATE;
+ IF s IN ('checked_out','archived') OR EXISTS(SELECT 1 FROM public.shopping_checkouts WHERE list_id=COALESCE(NEW.list_id,OLD.list_id)) THEN
+  RAISE EXCEPTION 'shopping_list_closed' USING ERRCODE='P0001';
+ END IF;
+ RETURN COALESCE(NEW,OLD);
+END $$;
+CREATE TRIGGER shopping_item_write_lock BEFORE INSERT OR UPDATE OR DELETE ON public.shopping_list_items
+ FOR EACH ROW EXECUTE FUNCTION public.shopping_lock_item();
+
+CREATE FUNCTION public.shopping_snapshot(p_list bigint) RETURNS jsonb LANGUAGE sql STABLE SET search_path=public AS $$
+ SELECT COALESCE(jsonb_agg(jsonb_build_object('catalog_item_id',i.catalog_item_id::text,
+ 'name',COALESCE(c.name,i.custom_name),'quantity',COALESCE(i.quantity,1)::text,
+ 'unit',COALESCE(i.unit,'יח׳'),'price',i.price::text,'is_purchased',i.is_purchased) ORDER BY i.id),'[]')
+ FROM public.shopping_list_items i LEFT JOIN public.shopping_catalog_items c ON c.id=i.catalog_item_id WHERE i.list_id=p_list;
+$$;
+
+-- Receipt identifiers are review evidence, never unique purchase identity. No amount-only matching.
+CREATE FUNCTION public.shopping_receipt_duplicates(p_list bigint,p_identity jsonb DEFAULT NULL) RETURNS jsonb
+ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ WITH input AS (SELECT COALESCE(p_identity,(SELECT COALESCE(confirmed->'identity',extracted->'identity') FROM shopping_receipts WHERE list_id=p_list)) AS i),
+ candidates AS (SELECT r.*,COALESCE(r.confirmed->'identity',r.extracted->'identity') AS i FROM shopping_receipts r WHERE r.list_id<>p_list AND r.state IN ('review','confirmed'))
+ SELECT COALESCE(jsonb_agg(jsonb_build_object('receipt_id',r.id,'list_id',r.list_id::text,'list_title',l.title,
+ 'identity',r.i,'state',r.state,'history_confirmed',h.list_id IS NOT NULL,'transaction_id',c.transaction_id::text,'checkout_total',c.total_amount) ORDER BY r.created_at),'[]'::jsonb)
+ FROM candidates r CROSS JOIN input x JOIN shopping_lists l ON l.id=r.list_id
+ LEFT JOIN shopping_checkouts c ON c.list_id=r.list_id LEFT JOIN shopping_confirmed_purchases h ON h.list_id=r.list_id
+ WHERE nullif(btrim(x.i->>'receipt_number'),'') IS NOT NULL AND nullif(btrim(x.i->>'merchant'),'') IS NOT NULL AND nullif(x.i->>'purchase_date','') IS NOT NULL
+ AND lower(btrim(r.i->>'receipt_number'))=lower(btrim(x.i->>'receipt_number'))
+ AND lower(regexp_replace(btrim(r.i->>'merchant'),'\s+',' ','g'))=lower(regexp_replace(btrim(x.i->>'merchant'),'\s+',' ','g'))
+ AND r.i->>'purchase_date'=x.i->>'purchase_date';
+$$;
+CREATE FUNCTION public.shopping_require_duplicate_review(p_list bigint,p_identity jsonb,p_reviewed jsonb) RETURNS void
+ LANGUAGE plpgsql SET search_path=public AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM jsonb_array_elements(public.shopping_receipt_duplicates(p_list,p_identity)) d
+ WHERE NOT COALESCE(p_reviewed,'[]'::jsonb) @> jsonb_build_array(d->>'receipt_id')) THEN
+  RAISE EXCEPTION 'receipt_duplicate_review_required';
+ END IF;
+END $$;
+REVOKE ALL ON FUNCTION public.shopping_receipt_duplicates(bigint,jsonb),public.shopping_require_duplicate_review(bigint,jsonb,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.shopping_receipt_duplicates(bigint,jsonb) TO service_role;
+
+CREATE FUNCTION public.shopping_receipt_command(p_list bigint,p_action text,p_data jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE r public.shopping_receipts; v_items jsonb; v_item jsonb; v_date date;
+BEGIN
+ -- Cross-list receipt decisions serialize before parent locks; no network inside this transaction.
+ PERFORM pg_advisory_xact_lock(390092);
+ PERFORM 1 FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_missing'; END IF;
+ SELECT * INTO r FROM public.shopping_receipts WHERE list_id=p_list FOR UPDATE;
+ IF p_action='begin' THEN
+  IF r.id IS NOT NULL THEN
+   IF r.image_hash<>p_data->>'image_hash' AND r.state<>'failed' THEN RAISE EXCEPTION 'receipt_already_exists'; END IF;
+   IF r.state IN ('review','confirmed') THEN RETURN to_jsonb(r); END IF;
+   IF r.state='extracting' AND r.updated_at>now()-interval '2 minutes' THEN RAISE EXCEPTION 'receipt_processing'; END IF;
+   IF r.attempts>=5 THEN RAISE EXCEPTION 'receipt_attempt_limit'; END IF;
+   UPDATE public.shopping_receipts SET image_hash=p_data->>'image_hash',state='extracting',attempts=attempts+1,updated_at=now(),error_code=NULL WHERE id=r.id RETURNING * INTO r;
+  ELSE
+   INSERT INTO public.shopping_purchase_plans(list_id,items) VALUES(p_list,public.shopping_snapshot(p_list)) ON CONFLICT DO NOTHING;
+   INSERT INTO public.shopping_receipts(list_id,image_hash,state) VALUES(p_list,p_data->>'image_hash','extracting') RETURNING * INTO r;
+  END IF;
+ ELSIF p_action IN ('extracted','failed') THEN
+  IF r.id IS NULL OR r.state<>'extracting' OR r.attempts<>(p_data->>'attempt')::int THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  UPDATE public.shopping_receipts SET state=CASE WHEN p_action='extracted' THEN 'review' ELSE 'failed' END,
+   extracted=CASE WHEN p_action='extracted' THEN p_data->'extracted' ELSE NULL END,
+   error_code=CASE WHEN p_action='failed' THEN 'extraction_failed' ELSE NULL END,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+ ELSIF p_action='confirm' THEN
+  IF p_data->>'reviewed' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'receipt_review_required'; END IF;
+  IF r.state='confirmed' THEN
+   IF r.confirmed<>p_data THEN RAISE EXCEPTION 'receipt_confirmation_conflict'; END IF;
+   RETURN to_jsonb(r);
+  END IF;
+  IF r.id IS NULL OR r.state<>'review' THEN RAISE EXCEPTION 'receipt_not_reviewable'; END IF;
+  PERFORM public.shopping_require_duplicate_review(p_list,COALESCE(p_data->'identity',r.extracted->'identity'),p_data->'duplicate_reviewed_ids');
+  v_items=p_data->'items'; v_date=(p_data->>'purchase_date')::date;
+  IF v_date IS NULL OR jsonb_typeof(v_items)<>'array' OR jsonb_array_length(v_items) NOT BETWEEN 1 AND 200 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  FOR v_item IN SELECT value FROM jsonb_array_elements(v_items) LOOP
+   IF v_item->>'price' IS NULL OR v_item->>'quantity' IS NULL OR COALESCE(v_item->>'name','')='' OR (v_item->>'quantity')::numeric<=0 OR (v_item->>'price')::numeric<0 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+   IF v_item->>'catalog_item_id' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.shopping_catalog_items WHERE id=(v_item->>'catalog_item_id')::bigint AND is_active) THEN RAISE EXCEPTION 'receipt_product_invalid'; END IF;
+  END LOOP;
+  UPDATE public.shopping_receipts SET state='confirmed',confirmed=p_data,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+  -- Replace a checkout snapshot, never append a second shopping event or change financial cash.
+  INSERT INTO public.shopping_confirmed_purchases(list_id,purchase_date,items,basis,receipt_id)
+   VALUES(p_list,v_date,v_items,'receipt',r.id)
+   ON CONFLICT(list_id) DO UPDATE SET purchase_date=excluded.purchase_date,items=excluded.items,basis='receipt',receipt_id=excluded.receipt_id,confirmed_at=now();
+ ELSE RAISE EXCEPTION 'receipt_action_invalid'; END IF;
+ RETURN to_jsonb(r);
+END $$;
+
+CREATE FUNCTION public.shopping_checkout(p_list bigint,p_category bigint DEFAULT NULL,p_source bigint DEFAULT NULL,p_duplicate_reviewed_ids jsonb DEFAULT '[]') RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE l public.shopping_lists; c public.shopping_checkouts; v_items jsonb; v_total numeric; v_transaction bigint; v_date date=(now() AT TIME ZONE 'Asia/Jerusalem')::date;
+BEGIN
+ PERFORM pg_advisory_xact_lock(390092);
+ SELECT * INTO l FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_missing'; END IF;
+ SELECT * INTO c FROM public.shopping_checkouts WHERE list_id=p_list;
+ IF FOUND THEN
+  IF c.category_id IS DISTINCT FROM p_category OR c.payment_source_id IS DISTINCT FROM p_source THEN RAISE EXCEPTION 'checkout_conflict'; END IF;
+  RETURN jsonb_build_object('checkout',to_jsonb(c),'transaction_id',c.transaction_id,'total_amount',c.total_amount,'replay',true);
+ END IF;
+ IF EXISTS(SELECT 1 FROM public.shopping_receipts WHERE list_id=p_list AND state='extracting') THEN RAISE EXCEPTION 'receipt_processing'; END IF;
+ PERFORM public.shopping_require_duplicate_review(p_list,NULL,p_duplicate_reviewed_ids);
+ IF l.status IN ('checked_out','archived') THEN RAISE EXCEPTION 'shopping_list_closed'; END IF;
+ IF p_category IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.categories WHERE id=p_category AND is_active AND type='expense' AND savings_role IS NULL) THEN RAISE EXCEPTION 'checkout_category_invalid'; END IF;
+ IF p_source IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.payment_sources WHERE id=p_source AND is_active) THEN RAISE EXCEPTION 'checkout_source_invalid'; END IF;
+ INSERT INTO public.shopping_purchase_plans(list_id,items) VALUES(p_list,public.shopping_snapshot(p_list)) ON CONFLICT DO NOTHING;
+ SELECT items,purchase_date INTO v_items,v_date FROM public.shopping_confirmed_purchases WHERE list_id=p_list;
+ IF FOUND AND EXISTS(SELECT 1 FROM jsonb_array_elements(v_items) WHERE value->>'price' IS NULL) THEN RAISE EXCEPTION 'checkout_receipt_price_required'; END IF;
+ IF v_items IS NULL THEN
+  v_date=(now() AT TIME ZONE 'Asia/Jerusalem')::date;
+  SELECT COALESCE(jsonb_agg(value),'[]') INTO v_items FROM jsonb_array_elements(public.shopping_snapshot(p_list)) WHERE (value->>'is_purchased')::boolean;
+ END IF;
+ IF jsonb_array_length(v_items)=0 THEN RAISE EXCEPTION 'checkout_empty'; END IF;
+ SELECT round(sum((value->>'quantity')::numeric * COALESCE((value->>'price')::numeric,0)),2) INTO v_total FROM jsonb_array_elements(v_items);
+ IF v_total<0 THEN RAISE EXCEPTION 'checkout_total_invalid'; END IF;
+ INSERT INTO public.transactions(description,movement_type,category_id,payment_source_id,total_amount,transaction_date,charge_date)
+ VALUES(l.title,'expense',p_category,p_source,v_total,v_date,v_date) RETURNING id INTO v_transaction;
+ INSERT INTO public.shopping_checkouts(list_id,checkout_date,total_amount,payment_source_id,category_id,transaction_id)
+ VALUES(p_list,v_date,v_total,p_source,p_category,v_transaction) RETURNING * INTO c;
+ INSERT INTO public.shopping_confirmed_purchases(list_id,purchase_date,items,basis) VALUES(p_list,v_date,v_items,'checkout') ON CONFLICT DO NOTHING;
+ UPDATE public.shopping_lists SET status='checked_out',updated_at=now() WHERE id=p_list;
+ RETURN jsonb_build_object('checkout',to_jsonb(c),'transaction_id',v_transaction,'total_amount',v_total,'replay',false);
+END $$;
+
+CREATE FUNCTION public.shopping_accept_suggestion(p_list bigint,p_product bigint,p_quantity numeric,p_unit text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE c public.shopping_catalog_items; v_id bigint;
+BEGIN
+ PERFORM 1 FROM public.shopping_lists WHERE id=p_list AND status IN ('draft','active') FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_closed'; END IF;
+ SELECT * INTO c FROM public.shopping_catalog_items WHERE id=p_product AND is_active;
+ IF NOT FOUND OR p_quantity IS NULL OR p_quantity<=0 OR p_quantity>10000 OR length(p_unit) NOT BETWEEN 1 AND 30 THEN RAISE EXCEPTION 'suggestion_invalid'; END IF;
+ SELECT id INTO v_id FROM public.shopping_list_items WHERE list_id=p_list AND catalog_item_id=p_product ORDER BY id LIMIT 1;
+ IF v_id IS NULL THEN
+  INSERT INTO public.shopping_list_items(list_id,catalog_item_id,category_id,quantity,unit,price)
+  VALUES(p_list,p_product,c.category_id,p_quantity,p_unit,c.default_price) RETURNING id INTO v_id;
+ END IF;
+ RETURN jsonb_build_object('item_id',v_id);
+END $$;
+
+CREATE FUNCTION public.shopping_delete_draft(p_list bigint) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ PERFORM 1 FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF EXISTS(SELECT 1 FROM public.shopping_checkouts WHERE list_id=p_list)
+ OR EXISTS(SELECT 1 FROM public.shopping_purchase_plans WHERE list_id=p_list) THEN RAISE EXCEPTION 'shopping_history_archive_instead'; END IF;
+ DELETE FROM public.shopping_list_items WHERE list_id=p_list;
+ DELETE FROM public.shopping_lists WHERE id=p_list;
+END $$;
+REVOKE ALL ON FUNCTION public.shopping_delete_draft(bigint) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.shopping_delete_draft(bigint) TO service_role;
+
+-- Prevent plan/history deletion. Archive lists once evidence exists; never partially delete checkout history.
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['shopping_regular_products','shopping_purchase_plans','shopping_receipts','shopping_confirmed_purchases'] LOOP
+  EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC,anon,authenticated',t);
+  EXECUTE format('GRANT SELECT,INSERT,UPDATE ON public.%I TO service_role',t);
+ END LOOP;
+END $$;
+REVOKE ALL ON FUNCTION public.shopping_lock_item(),public.shopping_snapshot(bigint),public.shopping_receipt_command(bigint,text,jsonb),public.shopping_checkout(bigint,bigint,bigint,jsonb),public.shopping_accept_suggestion(bigint,bigint,numeric,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.shopping_receipt_command(bigint,text,jsonb),public.shopping_checkout(bigint,bigint,bigint,jsonb),public.shopping_accept_suggestion(bigint,bigint,numeric,text) TO service_role;
+GRANT DELETE ON public.shopping_regular_products TO service_role;
+COMMIT;
+
+-- 040: ordered multi-photo receipt sets and stale-review protection (#92).
+-- Forward-only extension of applied 039. Does not change canonical cash or purchase history.
+BEGIN;
+ALTER TABLE public.shopping_receipts ADD COLUMN image_hashes text[];
+UPDATE public.shopping_receipts SET image_hashes=ARRAY[image_hash];
+ALTER TABLE public.shopping_receipts ALTER COLUMN image_hashes SET NOT NULL;
+ALTER TABLE public.shopping_receipts ADD CONSTRAINT shopping_receipt_photo_count CHECK(cardinality(image_hashes) BETWEEN 1 AND 6);
+CREATE INDEX shopping_receipt_image_hashes ON public.shopping_receipts USING gin(image_hashes);
+CREATE OR REPLACE FUNCTION public.shopping_receipt_command(p_list bigint,p_action text,p_data jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE r public.shopping_receipts; v_items jsonb; v_item jsonb; v_date date; v_hashes text[];
+BEGIN
+ -- Cross-list receipt decisions serialize before parent locks; no network inside this transaction.
+ PERFORM pg_advisory_xact_lock(390092);
+ PERFORM 1 FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_missing'; END IF;
+ SELECT * INTO r FROM public.shopping_receipts WHERE list_id=p_list FOR UPDATE;
+ IF p_action='begin' THEN
+  SELECT array_agg(value) INTO v_hashes FROM jsonb_array_elements_text(p_data->'image_hashes');
+  IF v_hashes IS NULL THEN v_hashes=ARRAY[p_data->>'image_hash']; END IF;
+  IF cardinality(v_hashes) NOT BETWEEN 1 AND 6 OR EXISTS(SELECT 1 FROM unnest(v_hashes) h WHERE h IS NULL OR h !~ '^[a-f0-9]{64}$')
+   OR (SELECT count(DISTINCT h) FROM unnest(v_hashes) h)<>cardinality(v_hashes) THEN RAISE EXCEPTION 'receipt_images_invalid'; END IF;
+  IF EXISTS(SELECT 1 FROM shopping_receipts WHERE list_id<>p_list AND image_hashes && v_hashes) THEN RAISE EXCEPTION 'receipt_duplicate'; END IF;
+  IF r.id IS NOT NULL THEN
+   IF r.image_hash=p_data->>'image_hash' AND r.state IN ('review','confirmed') THEN RETURN to_jsonb(r); END IF;
+   IF r.state='confirmed' THEN RAISE EXCEPTION 'receipt_already_exists'; END IF;
+   IF r.state='extracting' AND r.updated_at>now()-interval '2 minutes' THEN RAISE EXCEPTION 'receipt_processing'; END IF;
+   IF r.image_hash<>p_data->>'image_hash' AND (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   IF r.attempts>=5 THEN RAISE EXCEPTION 'receipt_attempt_limit'; END IF;
+   UPDATE public.shopping_receipts SET image_hash=p_data->>'image_hash',image_hashes=v_hashes,state='extracting',extracted=NULL,
+    attempts=attempts+1,updated_at=now(),error_code=NULL WHERE id=r.id RETURNING * INTO r;
+  ELSE
+   IF COALESCE((p_data->>'expected_attempt')::int,0)<>0 THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   INSERT INTO public.shopping_purchase_plans(list_id,items) VALUES(p_list,public.shopping_snapshot(p_list)) ON CONFLICT DO NOTHING;
+   INSERT INTO public.shopping_receipts(list_id,image_hash,image_hashes,state) VALUES(p_list,p_data->>'image_hash',v_hashes,'extracting') RETURNING * INTO r;
+  END IF;
+ ELSIF p_action IN ('extracted','failed') THEN
+  IF r.id IS NULL OR r.state<>'extracting' OR r.attempts<>(p_data->>'attempt')::int THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  UPDATE public.shopping_receipts SET state=CASE WHEN p_action='extracted' THEN 'review' ELSE 'failed' END,
+   extracted=CASE WHEN p_action='extracted' THEN p_data->'extracted' ELSE NULL END,
+   error_code=CASE WHEN p_action='failed' THEN 'extraction_failed' ELSE NULL END,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+ ELSIF p_action='confirm' THEN
+  IF p_data->>'reviewed' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'receipt_review_required'; END IF;
+  IF r.state='confirmed' THEN
+   IF r.confirmed<>p_data THEN RAISE EXCEPTION 'receipt_confirmation_conflict'; END IF;
+   RETURN to_jsonb(r);
+  END IF;
+  IF r.id IS NULL OR r.state<>'review' THEN RAISE EXCEPTION 'receipt_not_reviewable'; END IF;
+  PERFORM public.shopping_require_duplicate_review(p_list,COALESCE(p_data->'identity',r.extracted->'identity'),p_data->'duplicate_reviewed_ids');
+  IF (p_data->>'extraction_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  v_items=p_data->'items'; v_date=(p_data->>'purchase_date')::date;
+  IF v_date IS NULL OR jsonb_typeof(v_items)<>'array' OR jsonb_array_length(v_items) NOT BETWEEN 1 AND 200 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  FOR v_item IN SELECT value FROM jsonb_array_elements(v_items) LOOP
+   IF v_item->>'price' IS NULL OR v_item->>'quantity' IS NULL OR COALESCE(v_item->>'name','')='' OR (v_item->>'quantity')::numeric<=0 OR (v_item->>'price')::numeric<0 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+   IF v_item->>'catalog_item_id' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.shopping_catalog_items WHERE id=(v_item->>'catalog_item_id')::bigint AND is_active) THEN RAISE EXCEPTION 'receipt_product_invalid'; END IF;
+  END LOOP;
+  UPDATE public.shopping_receipts SET state='confirmed',confirmed=p_data,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+  -- Replace a checkout snapshot, never append a second shopping event or change financial cash.
+  INSERT INTO public.shopping_confirmed_purchases(list_id,purchase_date,items,basis,receipt_id)
+   VALUES(p_list,v_date,v_items,'receipt',r.id)
+   ON CONFLICT(list_id) DO UPDATE SET purchase_date=excluded.purchase_date,items=excluded.items,basis='receipt',receipt_id=excluded.receipt_id,confirmed_at=now();
+ ELSE RAISE EXCEPTION 'receipt_action_invalid'; END IF;
+ RETURN to_jsonb(r);
+END $$;
+-- CREATE OR REPLACE retains the service-only grants from 039.
+COMMIT;
+
+-- 041: explicit idempotent reprocessing and recoverable drafts (#92).
+-- No history/financial writes or attempt-limit reset. Apply after 040.
+BEGIN;
+ALTER TABLE public.shopping_receipts ADD COLUMN reprocess_key uuid;
+ALTER TABLE public.shopping_receipts ADD COLUMN previous_drafts jsonb NOT NULL DEFAULT '[]'::jsonb
+ CHECK(jsonb_typeof(previous_drafts)='array' AND jsonb_array_length(previous_drafts)<=4);
+CREATE OR REPLACE FUNCTION public.shopping_receipt_command(p_list bigint,p_action text,p_data jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE r public.shopping_receipts; v_items jsonb; v_item jsonb; v_date date; v_hashes text[];
+BEGIN
+ -- Cross-list receipt decisions serialize before parent locks; no network inside this transaction.
+ PERFORM pg_advisory_xact_lock(390092);
+ PERFORM 1 FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_missing'; END IF;
+ SELECT * INTO r FROM public.shopping_receipts WHERE list_id=p_list FOR UPDATE;
+ IF p_action='begin' THEN
+  IF p_data ? 'reprocess_key' AND r.id IS NOT NULL AND r.reprocess_key=(p_data->>'reprocess_key')::uuid THEN
+   IF r.image_hash IS DISTINCT FROM p_data->>'image_hash' OR (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts-1 THEN RAISE EXCEPTION 'receipt_reprocess_conflict'; END IF;
+   RETURN to_jsonb(r)||jsonb_build_object('processing_replay',true);
+  END IF;
+  IF p_data->>'reprocess'='true' AND (r.id IS NULL OR p_data->>'reprocess_key' IS NULL OR (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts) THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  IF p_data ? 'review_draft' AND (jsonb_typeof(p_data->'review_draft')<>'object' OR octet_length((p_data->'review_draft')::text)>131072) THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  SELECT array_agg(value) INTO v_hashes FROM jsonb_array_elements_text(p_data->'image_hashes');
+  IF v_hashes IS NULL THEN v_hashes=ARRAY[p_data->>'image_hash']; END IF;
+  IF cardinality(v_hashes) NOT BETWEEN 1 AND 6 OR EXISTS(SELECT 1 FROM unnest(v_hashes) h WHERE h IS NULL OR h !~ '^[a-f0-9]{64}$')
+   OR (SELECT count(DISTINCT h) FROM unnest(v_hashes) h)<>cardinality(v_hashes) THEN RAISE EXCEPTION 'receipt_images_invalid'; END IF;
+  IF EXISTS(SELECT 1 FROM shopping_receipts WHERE list_id<>p_list AND image_hashes && v_hashes) THEN RAISE EXCEPTION 'receipt_duplicate'; END IF;
+  IF r.id IS NOT NULL THEN
+   IF r.image_hash=p_data->>'image_hash' AND r.state IN ('review','confirmed') AND p_data->>'reprocess' IS DISTINCT FROM 'true' THEN RETURN to_jsonb(r); END IF;
+   IF r.state='confirmed' THEN RAISE EXCEPTION 'receipt_already_exists'; END IF;
+   IF r.state='extracting' AND r.updated_at>now()-interval '2 minutes' THEN RAISE EXCEPTION 'receipt_processing'; END IF;
+   IF r.image_hash<>p_data->>'image_hash' AND (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   IF r.attempts>=5 THEN RAISE EXCEPTION 'receipt_attempt_limit'; END IF;
+   UPDATE public.shopping_receipts SET
+    previous_drafts=previous_drafts||jsonb_build_array(jsonb_build_object('attempt',r.attempts,'extracted',r.extracted,'review_draft',p_data->'review_draft','image_hashes',r.image_hashes,'saved_at',now())),
+    reprocess_key=(p_data->>'reprocess_key')::uuid,
+    image_hash=p_data->>'image_hash',image_hashes=v_hashes,state='extracting',extracted=NULL,
+    attempts=attempts+1,updated_at=now(),error_code=NULL WHERE id=r.id RETURNING * INTO r;
+  ELSE
+   IF COALESCE((p_data->>'expected_attempt')::int,0)<>0 THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   INSERT INTO public.shopping_purchase_plans(list_id,items) VALUES(p_list,public.shopping_snapshot(p_list)) ON CONFLICT DO NOTHING;
+   INSERT INTO public.shopping_receipts(list_id,image_hash,image_hashes,state) VALUES(p_list,p_data->>'image_hash',v_hashes,'extracting') RETURNING * INTO r;
+  END IF;
+ ELSIF p_action IN ('extracted','failed') THEN
+  IF r.id IS NULL OR r.state<>'extracting' OR r.attempts<>(p_data->>'attempt')::int THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  UPDATE public.shopping_receipts SET state=CASE WHEN p_action='extracted' THEN 'review' ELSE 'failed' END,
+   extracted=CASE WHEN p_action='extracted' THEN p_data->'extracted' ELSE NULL END,
+   error_code=CASE WHEN p_action='failed' THEN 'extraction_failed' ELSE NULL END,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+ ELSIF p_action='confirm' THEN
+  IF p_data->>'reviewed' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'receipt_review_required'; END IF;
+  IF r.state='confirmed' THEN
+   IF r.confirmed<>p_data THEN RAISE EXCEPTION 'receipt_confirmation_conflict'; END IF;
+   RETURN to_jsonb(r);
+  END IF;
+  IF r.id IS NULL OR r.state<>'review' THEN RAISE EXCEPTION 'receipt_not_reviewable'; END IF;
+  PERFORM public.shopping_require_duplicate_review(p_list,COALESCE(p_data->'identity',r.extracted->'identity'),p_data->'duplicate_reviewed_ids');
+  IF (p_data->>'extraction_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  v_items=p_data->'items'; v_date=(p_data->>'purchase_date')::date;
+  IF v_date IS NULL OR jsonb_typeof(v_items)<>'array' OR jsonb_array_length(v_items) NOT BETWEEN 1 AND 200 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  FOR v_item IN SELECT value FROM jsonb_array_elements(v_items) LOOP
+   IF v_item->>'price' IS NULL OR v_item->>'quantity' IS NULL OR COALESCE(v_item->>'name','')='' OR (v_item->>'quantity')::numeric<=0 OR (v_item->>'price')::numeric<0 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+   IF v_item->>'catalog_item_id' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.shopping_catalog_items WHERE id=(v_item->>'catalog_item_id')::bigint AND is_active) THEN RAISE EXCEPTION 'receipt_product_invalid'; END IF;
+  END LOOP;
+  UPDATE public.shopping_receipts SET state='confirmed',confirmed=p_data,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+  -- Replace a checkout snapshot, never append a second shopping event or change financial cash.
+  INSERT INTO public.shopping_confirmed_purchases(list_id,purchase_date,items,basis,receipt_id)
+   VALUES(p_list,v_date,v_items,'receipt',r.id)
+   ON CONFLICT(list_id) DO UPDATE SET purchase_date=excluded.purchase_date,items=excluded.items,basis='receipt',receipt_id=excluded.receipt_id,confirmed_at=now();
+ ELSE RAISE EXCEPTION 'receipt_action_invalid'; END IF;
+ RETURN to_jsonb(r);
+END $$;
+-- Existing service-only command grants and table RLS remain unchanged.
+COMMIT;
+
+-- 042: Shopping product identifiers, lookup cache and durable review drafts (#92).
+-- Forward-only. No backfill, OCR, attempt reset, purchase confirmation or cash write.
+BEGIN;
+CREATE FUNCTION public.shopping_gtin_valid(code text) RETURNS boolean LANGUAGE sql IMMUTABLE STRICT SET search_path=public AS $$
+ SELECT code ~ '^(?:[0-9]{8}|[0-9]{12}|[0-9]{13}|[0-9]{14})$' AND
+  (SELECT mod(10-mod(sum(substring(code,length(code)-n,1)::int * CASE WHEN n%2=1 THEN 3 ELSE 1 END),10),10)
+   FROM generate_series(1,length(code)-1) n) = right(code,1)::int;
+$$;
+CREATE TABLE public.shopping_product_identifiers (
+ kind text NOT NULL CHECK(kind IN ('gtin','retailer')),
+ retailer_scope text NOT NULL DEFAULT '',
+ code text NOT NULL CHECK(code ~ '^[0-9]{3,20}$'),
+ catalog_item_id bigint NOT NULL REFERENCES public.shopping_catalog_items(id),
+ approved_name text NOT NULL CHECK(length(approved_name) BETWEEN 1 AND 200),
+ lookup_source text NOT NULL CHECK(lookup_source IN ('owner','open_food_facts','local_catalog')),
+ approved_by uuid NOT NULL, approved_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(kind,retailer_scope,code),
+ CHECK((kind='gtin' AND retailer_scope='' AND public.shopping_gtin_valid(code)) OR
+       (kind='retailer' AND length(retailer_scope) BETWEEN 1 AND 120))
+);
+CREATE INDEX shopping_identifier_catalog ON public.shopping_product_identifiers(catalog_item_id);
+-- External licensed data is a separate cache, not automatically copied into the owner's catalog.
+CREATE TABLE public.shopping_product_lookup_cache (
+ code text NOT NULL CHECK(code ~ '^[0-9]{8,14}$'),
+ environment text NOT NULL CHECK(environment IN ('staging','production')),
+ result jsonb NOT NULL CHECK(jsonb_typeof(result)='object'),
+ requested_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL,
+ PRIMARY KEY(code,environment)
+);
+CREATE INDEX shopping_lookup_request_time ON public.shopping_product_lookup_cache(requested_at);
+ALTER TABLE public.shopping_receipts ADD COLUMN review_draft jsonb,
+ ADD COLUMN draft_revision integer NOT NULL DEFAULT 0 CHECK(draft_revision>=0),
+ ADD CONSTRAINT shopping_review_draft_bounded CHECK(review_draft IS NULL OR
+  (jsonb_typeof(review_draft)='object' AND octet_length(review_draft::text)<=262144));
+CREATE FUNCTION public.shopping_claim_product_lookup(p_code text,p_environment text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE c public.shopping_product_lookup_cache;
+BEGIN
+ IF p_code !~ '^[0-9]{8,14}$' OR p_environment NOT IN ('staging','production') THEN RAISE EXCEPTION 'shopping_input_invalid'; END IF;
+ PERFORM pg_advisory_xact_lock(420092);
+ SELECT * INTO c FROM shopping_product_lookup_cache WHERE code=p_code AND environment=p_environment;
+ IF FOUND AND c.expires_at>now() THEN RETURN jsonb_build_object('claimed',false,'result',c.result); END IF;
+ IF (SELECT count(*) FROM shopping_product_lookup_cache WHERE requested_at>now()-interval '1 minute')>=12 THEN
+  RETURN jsonb_build_object('claimed',false,'result',jsonb_build_object('status','rate_limited')); END IF;
+ INSERT INTO shopping_product_lookup_cache(code,environment,result,expires_at) VALUES(p_code,p_environment,'{"status":"pending"}',now()+interval '5 minutes')
+ ON CONFLICT(code,environment) DO UPDATE SET result=excluded.result,expires_at=excluded.expires_at,requested_at=now();
+ RETURN jsonb_build_object('claimed',true);
+END $$;
+CREATE FUNCTION public.shopping_save_receipt_draft(p_list bigint,p_attempt integer,p_revision integer,p_draft jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE r public.shopping_receipts;
+BEGIN
+ PERFORM pg_advisory_xact_lock(390092);
+ PERFORM 1 FROM shopping_lists WHERE id=p_list FOR UPDATE;
+ SELECT * INTO r FROM shopping_receipts WHERE list_id=p_list FOR UPDATE;
+ IF r.id IS NULL OR r.state<>'review' OR r.attempts<>p_attempt THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+ IF r.review_draft=p_draft THEN RETURN jsonb_build_object('revision',r.draft_revision); END IF;
+ IF r.draft_revision<>p_revision THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+ IF jsonb_typeof(p_draft)<>'object' OR jsonb_typeof(p_draft->'items')<>'array' OR jsonb_array_length(p_draft->'items')>200 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+ UPDATE shopping_receipts SET review_draft=p_draft,draft_revision=draft_revision+1 WHERE id=r.id RETURNING * INTO r;
+ RETURN jsonb_build_object('revision',r.draft_revision);
+END $$;
+CREATE FUNCTION public.shopping_approve_product_identifier(p_data jsonb,p_owner uuid) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE v_id bigint; k text=p_data->>'kind'; scope text=p_data->>'retailer_scope'; c text=p_data->>'code';
+BEGIN
+ IF p_owner IS NULL THEN RAISE EXCEPTION 'shopping_input_invalid'; END IF;
+ PERFORM pg_advisory_xact_lock(420093);
+ SELECT catalog_item_id INTO v_id FROM shopping_product_identifiers WHERE kind=k AND retailer_scope=scope AND code=c;
+ IF p_data->>'catalog_item_id' IS NOT NULL THEN
+  IF v_id IS NOT NULL AND v_id<>(p_data->>'catalog_item_id')::bigint THEN RAISE EXCEPTION 'shopping_identifier_conflict'; END IF;
+  v_id=(p_data->>'catalog_item_id')::bigint;
+ END IF;
+ IF v_id IS NULL THEN
+  IF NOT EXISTS(SELECT 1 FROM shopping_catalog_categories WHERE id=(p_data->>'category_id')::bigint AND is_active) THEN RAISE EXCEPTION 'shopping_category_invalid'; END IF;
+  INSERT INTO shopping_catalog_items(category_id,name,default_unit,is_active)
+   VALUES((p_data->>'category_id')::bigint,p_data->>'name',p_data->>'unit',true) RETURNING id INTO v_id;
+ ELSE
+  PERFORM 1 FROM shopping_catalog_items WHERE id=v_id AND is_active FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'shopping_product_invalid'; END IF;
+  -- Do not rename a catalog product already bound to a different code/variant.
+  IF EXISTS(SELECT 1 FROM shopping_product_identifiers WHERE catalog_item_id=v_id AND (kind,retailer_scope,code)<>(k,scope,c)) THEN RAISE EXCEPTION 'shopping_identifier_conflict'; END IF;
+  UPDATE shopping_catalog_items SET name=p_data->>'name' WHERE id=v_id;
+ END IF;
+ INSERT INTO shopping_product_identifiers(kind,retailer_scope,code,catalog_item_id,approved_name,lookup_source,approved_by)
+ VALUES(k,scope,c,v_id,p_data->>'name',p_data->>'lookup_source',p_owner)
+ ON CONFLICT(kind,retailer_scope,code) DO UPDATE SET approved_name=excluded.approved_name,lookup_source=excluded.lookup_source,approved_by=excluded.approved_by,approved_at=now();
+ RETURN jsonb_build_object('catalog_item_id',v_id::text,'full_name',p_data->>'name','source','owner_catalog','owner_approved',true,'kind',k,'code',c,'retailer_scope',scope);
+END $$;
+CREATE OR REPLACE FUNCTION public.shopping_receipt_command(p_list bigint,p_action text,p_data jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE r public.shopping_receipts; v_items jsonb; v_item jsonb; v_date date; v_hashes text[];
+BEGIN
+ -- Cross-list receipt decisions serialize before parent locks; no network inside this transaction.
+ PERFORM pg_advisory_xact_lock(390092);
+ PERFORM 1 FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_missing'; END IF;
+ SELECT * INTO r FROM public.shopping_receipts WHERE list_id=p_list FOR UPDATE;
+ IF p_action='begin' THEN
+  IF r.review_draft IS NOT NULL AND p_data->>'reprocess'='true' THEN
+   IF (p_data->>'draft_revision')::int IS DISTINCT FROM r.draft_revision THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   p_data=jsonb_set(p_data,'{review_draft}',r.review_draft);
+  END IF;
+  IF p_data ? 'reprocess_key' AND r.id IS NOT NULL AND r.reprocess_key=(p_data->>'reprocess_key')::uuid THEN
+   IF r.image_hash IS DISTINCT FROM p_data->>'image_hash' OR (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts-1 THEN RAISE EXCEPTION 'receipt_reprocess_conflict'; END IF;
+   RETURN to_jsonb(r)||jsonb_build_object('processing_replay',true);
+  END IF;
+  IF p_data->>'reprocess'='true' AND (r.id IS NULL OR p_data->>'reprocess_key' IS NULL OR (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts) THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  IF p_data ? 'review_draft' AND (jsonb_typeof(p_data->'review_draft')<>'object' OR octet_length((p_data->'review_draft')::text)>131072) THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  SELECT array_agg(value) INTO v_hashes FROM jsonb_array_elements_text(p_data->'image_hashes');
+  IF v_hashes IS NULL THEN v_hashes=ARRAY[p_data->>'image_hash']; END IF;
+  IF cardinality(v_hashes) NOT BETWEEN 1 AND 6 OR EXISTS(SELECT 1 FROM unnest(v_hashes) h WHERE h IS NULL OR h !~ '^[a-f0-9]{64}$')
+   OR (SELECT count(DISTINCT h) FROM unnest(v_hashes) h)<>cardinality(v_hashes) THEN RAISE EXCEPTION 'receipt_images_invalid'; END IF;
+  IF EXISTS(SELECT 1 FROM shopping_receipts WHERE list_id<>p_list AND image_hashes && v_hashes) THEN RAISE EXCEPTION 'receipt_duplicate'; END IF;
+  IF r.id IS NOT NULL THEN
+   IF r.image_hash=p_data->>'image_hash' AND r.state IN ('review','confirmed') AND p_data->>'reprocess' IS DISTINCT FROM 'true' THEN RETURN to_jsonb(r); END IF;
+   IF r.state='confirmed' THEN RAISE EXCEPTION 'receipt_already_exists'; END IF;
+   IF r.state='extracting' AND r.updated_at>now()-interval '2 minutes' THEN RAISE EXCEPTION 'receipt_processing'; END IF;
+   IF r.image_hash<>p_data->>'image_hash' AND (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   IF r.attempts>=5 THEN RAISE EXCEPTION 'receipt_attempt_limit'; END IF;
+   UPDATE public.shopping_receipts SET
+    previous_drafts=previous_drafts||jsonb_build_array(jsonb_build_object('attempt',r.attempts,'extracted',r.extracted,'review_draft',p_data->'review_draft','image_hashes',r.image_hashes,'saved_at',now())),
+    review_draft=NULL,draft_revision=draft_revision+1,reprocess_key=(p_data->>'reprocess_key')::uuid,
+    image_hash=p_data->>'image_hash',image_hashes=v_hashes,state='extracting',extracted=NULL,
+    attempts=attempts+1,updated_at=now(),error_code=NULL WHERE id=r.id RETURNING * INTO r;
+  ELSE
+   IF COALESCE((p_data->>'expected_attempt')::int,0)<>0 THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   INSERT INTO public.shopping_purchase_plans(list_id,items) VALUES(p_list,public.shopping_snapshot(p_list)) ON CONFLICT DO NOTHING;
+   INSERT INTO public.shopping_receipts(list_id,image_hash,image_hashes,state) VALUES(p_list,p_data->>'image_hash',v_hashes,'extracting') RETURNING * INTO r;
+  END IF;
+ ELSIF p_action IN ('extracted','failed') THEN
+  IF r.id IS NULL OR r.state<>'extracting' OR r.attempts<>(p_data->>'attempt')::int THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  UPDATE public.shopping_receipts SET state=CASE WHEN p_action='extracted' THEN 'review' ELSE 'failed' END,
+   extracted=CASE WHEN p_action='extracted' THEN p_data->'extracted' ELSE NULL END,
+   error_code=CASE WHEN p_action='failed' THEN 'extraction_failed' ELSE NULL END,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+ ELSIF p_action='confirm' THEN
+  IF r.state<>'confirmed' AND r.review_draft IS NOT NULL AND (p_data->>'draft_revision')::int IS DISTINCT FROM r.draft_revision THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  IF p_data->>'reviewed' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'receipt_review_required'; END IF;
+  IF r.state='confirmed' THEN
+   IF r.confirmed<>p_data THEN RAISE EXCEPTION 'receipt_confirmation_conflict'; END IF;
+   RETURN to_jsonb(r);
+  END IF;
+  IF r.id IS NULL OR r.state<>'review' THEN RAISE EXCEPTION 'receipt_not_reviewable'; END IF;
+  PERFORM public.shopping_require_duplicate_review(p_list,COALESCE(p_data->'identity',r.extracted->'identity'),p_data->'duplicate_reviewed_ids');
+  IF (p_data->>'extraction_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  v_items=p_data->'items'; v_date=(p_data->>'purchase_date')::date;
+  IF v_date IS NULL OR jsonb_typeof(v_items)<>'array' OR jsonb_array_length(v_items) NOT BETWEEN 1 AND 200 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  FOR v_item IN SELECT value FROM jsonb_array_elements(v_items) LOOP
+   IF (v_item->>'price' IS NULL AND NOT (v_item->>'price_basis'='line_discount' AND v_item->>'final_total' IS NOT NULL)) OR v_item->>'quantity' IS NULL OR COALESCE(v_item->>'name','')='' OR (v_item->>'quantity')::numeric<=0 OR (v_item->>'price')::numeric<0 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+   IF v_item->>'price_basis'='line_discount' THEN
+    IF v_item->>'row_discount' IS NULL OR v_item->>'final_total' IS NULL OR
+      (v_item->>'final_total')::numeric<0 OR
+      (v_item->>'final_total')::numeric IS DISTINCT FROM round((v_item->>'calculated_gross_total')::numeric,2)-(v_item->>'row_discount')::numeric THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+   END IF;
+   IF v_item->>'catalog_item_id' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.shopping_catalog_items WHERE id=(v_item->>'catalog_item_id')::bigint AND is_active) THEN RAISE EXCEPTION 'receipt_product_invalid'; END IF;
+  END LOOP;
+  UPDATE public.shopping_receipts SET state='confirmed',confirmed=p_data,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+  -- Replace a checkout snapshot, never append a second shopping event or change financial cash.
+  INSERT INTO public.shopping_confirmed_purchases(list_id,purchase_date,items,basis,receipt_id)
+   VALUES(p_list,v_date,v_items,'receipt',r.id)
+   ON CONFLICT(list_id) DO UPDATE SET purchase_date=excluded.purchase_date,items=excluded.items,basis='receipt',receipt_id=excluded.receipt_id,confirmed_at=now();
+ ELSE RAISE EXCEPTION 'receipt_action_invalid'; END IF;
+ RETURN to_jsonb(r);
+END $$;
+CREATE OR REPLACE FUNCTION public.shopping_checkout(p_list bigint,p_category bigint DEFAULT NULL,p_source bigint DEFAULT NULL,p_duplicate_reviewed_ids jsonb DEFAULT '[]') RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE l public.shopping_lists; c public.shopping_checkouts; v_items jsonb; v_total numeric; v_transaction bigint; v_date date=(now() AT TIME ZONE 'Asia/Jerusalem')::date;
+BEGIN
+ PERFORM pg_advisory_xact_lock(390092);
+ SELECT * INTO l FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_missing'; END IF;
+ SELECT * INTO c FROM public.shopping_checkouts WHERE list_id=p_list;
+ IF FOUND THEN
+  IF c.category_id IS DISTINCT FROM p_category OR c.payment_source_id IS DISTINCT FROM p_source THEN RAISE EXCEPTION 'checkout_conflict'; END IF;
+  RETURN jsonb_build_object('checkout',to_jsonb(c),'transaction_id',c.transaction_id,'total_amount',c.total_amount,'replay',true);
+ END IF;
+ IF EXISTS(SELECT 1 FROM public.shopping_receipts WHERE list_id=p_list AND state='extracting') THEN RAISE EXCEPTION 'receipt_processing'; END IF;
+ PERFORM public.shopping_require_duplicate_review(p_list,NULL,p_duplicate_reviewed_ids);
+ IF l.status IN ('checked_out','archived') THEN RAISE EXCEPTION 'shopping_list_closed'; END IF;
+ IF p_category IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.categories WHERE id=p_category AND is_active AND type='expense' AND savings_role IS NULL) THEN RAISE EXCEPTION 'checkout_category_invalid'; END IF;
+ IF p_source IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.payment_sources WHERE id=p_source AND is_active) THEN RAISE EXCEPTION 'checkout_source_invalid'; END IF;
+ INSERT INTO public.shopping_purchase_plans(list_id,items) VALUES(p_list,public.shopping_snapshot(p_list)) ON CONFLICT DO NOTHING;
+ SELECT items,purchase_date INTO v_items,v_date FROM public.shopping_confirmed_purchases WHERE list_id=p_list;
+ IF FOUND AND EXISTS(SELECT 1 FROM jsonb_array_elements(v_items) WHERE value->>'price' IS NULL AND value->>'final_total' IS NULL) THEN RAISE EXCEPTION 'checkout_receipt_price_required'; END IF;
+ IF v_items IS NULL THEN
+  v_date=(now() AT TIME ZONE 'Asia/Jerusalem')::date;
+  SELECT COALESCE(jsonb_agg(value),'[]') INTO v_items FROM jsonb_array_elements(public.shopping_snapshot(p_list)) WHERE (value->>'is_purchased')::boolean;
+ END IF;
+ IF jsonb_array_length(v_items)=0 THEN RAISE EXCEPTION 'checkout_empty'; END IF;
+ SELECT round(sum(CASE WHEN value->>'price_basis'='line_discount' THEN (value->>'final_total')::numeric ELSE (value->>'quantity')::numeric * COALESCE((value->>'price')::numeric,0) END),2) INTO v_total FROM jsonb_array_elements(v_items);
+ IF v_total<0 THEN RAISE EXCEPTION 'checkout_total_invalid'; END IF;
+ INSERT INTO public.transactions(description,movement_type,category_id,payment_source_id,total_amount,transaction_date,charge_date)
+ VALUES(l.title,'expense',p_category,p_source,v_total,v_date,v_date) RETURNING id INTO v_transaction;
+ INSERT INTO public.shopping_checkouts(list_id,checkout_date,total_amount,payment_source_id,category_id,transaction_id)
+ VALUES(p_list,v_date,v_total,p_source,p_category,v_transaction) RETURNING * INTO c;
+ INSERT INTO public.shopping_confirmed_purchases(list_id,purchase_date,items,basis) VALUES(p_list,v_date,v_items,'checkout') ON CONFLICT DO NOTHING;
+ UPDATE public.shopping_lists SET status='checked_out',updated_at=now() WHERE id=p_list;
+ RETURN jsonb_build_object('checkout',to_jsonb(c),'transaction_id',v_transaction,'total_amount',v_total,'replay',false);
+END $$;
+
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['shopping_product_identifiers','shopping_product_lookup_cache'] LOOP
+  EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
+  EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC,anon,authenticated',t);
+  EXECUTE format('GRANT SELECT,INSERT,UPDATE ON public.%I TO service_role',t);
+ END LOOP;
+END $$;
+REVOKE ALL ON FUNCTION public.shopping_claim_product_lookup(text,text),public.shopping_save_receipt_draft(bigint,integer,integer,jsonb),public.shopping_approve_product_identifier(jsonb,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.shopping_claim_product_lookup(text,text),public.shopping_save_receipt_draft(bigint,integer,integer,jsonb),public.shopping_approve_product_identifier(jsonb,uuid) TO service_role;
+COMMIT;
+
+-- 043: Preserve current corrections when archiving a durable receipt draft.
+-- Same-key replay precedes revision checks; no rows/attempts/financial state changed.
+BEGIN;
+CREATE OR REPLACE FUNCTION public.shopping_receipt_command(p_list bigint,p_action text,p_data jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE r public.shopping_receipts; v_items jsonb; v_item jsonb; v_date date; v_hashes text[];
+BEGIN
+ -- Cross-list receipt decisions serialize before parent locks; no network inside this transaction.
+ PERFORM pg_advisory_xact_lock(390092);
+ PERFORM 1 FROM public.shopping_lists WHERE id=p_list FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_list_missing'; END IF;
+ SELECT * INTO r FROM public.shopping_receipts WHERE list_id=p_list FOR UPDATE;
+ IF p_action='begin' THEN
+  IF p_data ? 'reprocess_key' AND r.id IS NOT NULL AND r.reprocess_key=(p_data->>'reprocess_key')::uuid THEN
+   IF r.image_hash IS DISTINCT FROM p_data->>'image_hash' OR (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts-1 THEN RAISE EXCEPTION 'receipt_reprocess_conflict'; END IF;
+   RETURN to_jsonb(r)||jsonb_build_object('processing_replay',true);
+  END IF;
+  IF p_data->>'reprocess'='true' AND (r.id IS NULL OR p_data->>'reprocess_key' IS NULL OR (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts) THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  IF p_data ? 'review_draft' AND (jsonb_typeof(p_data->'review_draft')<>'object' OR octet_length((p_data->'review_draft')::text)>131072) THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  SELECT array_agg(value) INTO v_hashes FROM jsonb_array_elements_text(p_data->'image_hashes');
+  IF v_hashes IS NULL THEN v_hashes=ARRAY[p_data->>'image_hash']; END IF;
+  IF cardinality(v_hashes) NOT BETWEEN 1 AND 6 OR EXISTS(SELECT 1 FROM unnest(v_hashes) h WHERE h IS NULL OR h !~ '^[a-f0-9]{64}$')
+   OR (SELECT count(DISTINCT h) FROM unnest(v_hashes) h)<>cardinality(v_hashes) THEN RAISE EXCEPTION 'receipt_images_invalid'; END IF;
+  IF EXISTS(SELECT 1 FROM shopping_receipts WHERE list_id<>p_list AND image_hashes && v_hashes) THEN RAISE EXCEPTION 'receipt_duplicate'; END IF;
+  IF r.id IS NOT NULL THEN
+   IF r.image_hash=p_data->>'image_hash' AND r.state IN ('review','confirmed') AND p_data->>'reprocess' IS DISTINCT FROM 'true' THEN RETURN to_jsonb(r); END IF;
+   IF r.state='confirmed' THEN RAISE EXCEPTION 'receipt_already_exists'; END IF;
+   IF r.state='extracting' AND r.updated_at>now()-interval '2 minutes' THEN RAISE EXCEPTION 'receipt_processing'; END IF;
+   IF r.image_hash<>p_data->>'image_hash' AND (p_data->>'expected_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   IF r.attempts>=5 THEN RAISE EXCEPTION 'receipt_attempt_limit'; END IF;
+   IF r.review_draft IS NOT NULL THEN
+    IF (p_data->>'draft_revision')::int IS DISTINCT FROM r.draft_revision THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+    -- The submitted live draft may contain newer edits than the last saved draft.
+    -- Fall back to durable state only when no current draft was submitted.
+    IF NOT (p_data ? 'review_draft') THEN p_data=jsonb_set(p_data,'{review_draft}',r.review_draft); END IF;
+   END IF;
+   UPDATE public.shopping_receipts SET
+    previous_drafts=previous_drafts||jsonb_build_array(jsonb_build_object('attempt',r.attempts,'extracted',r.extracted,'review_draft',p_data->'review_draft','image_hashes',r.image_hashes,'saved_at',now())),
+    review_draft=NULL,draft_revision=draft_revision+1,reprocess_key=(p_data->>'reprocess_key')::uuid,
+    image_hash=p_data->>'image_hash',image_hashes=v_hashes,state='extracting',extracted=NULL,
+    attempts=attempts+1,updated_at=now(),error_code=NULL WHERE id=r.id RETURNING * INTO r;
+  ELSE
+   IF COALESCE((p_data->>'expected_attempt')::int,0)<>0 THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+   INSERT INTO public.shopping_purchase_plans(list_id,items) VALUES(p_list,public.shopping_snapshot(p_list)) ON CONFLICT DO NOTHING;
+   INSERT INTO public.shopping_receipts(list_id,image_hash,image_hashes,state) VALUES(p_list,p_data->>'image_hash',v_hashes,'extracting') RETURNING * INTO r;
+  END IF;
+ ELSIF p_action IN ('extracted','failed') THEN
+  IF r.id IS NULL OR r.state<>'extracting' OR r.attempts<>(p_data->>'attempt')::int THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  UPDATE public.shopping_receipts SET state=CASE WHEN p_action='extracted' THEN 'review' ELSE 'failed' END,
+   extracted=CASE WHEN p_action='extracted' THEN p_data->'extracted' ELSE NULL END,
+   error_code=CASE WHEN p_action='failed' THEN 'extraction_failed' ELSE NULL END,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+ ELSIF p_action='confirm' THEN
+  IF r.state<>'confirmed' AND r.review_draft IS NOT NULL AND (p_data->>'draft_revision')::int IS DISTINCT FROM r.draft_revision THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  IF p_data->>'reviewed' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'receipt_review_required'; END IF;
+  IF r.state='confirmed' THEN
+   IF r.confirmed<>p_data THEN RAISE EXCEPTION 'receipt_confirmation_conflict'; END IF;
+   RETURN to_jsonb(r);
+  END IF;
+  IF r.id IS NULL OR r.state<>'review' THEN RAISE EXCEPTION 'receipt_not_reviewable'; END IF;
+  PERFORM public.shopping_require_duplicate_review(p_list,COALESCE(p_data->'identity',r.extracted->'identity'),p_data->'duplicate_reviewed_ids');
+  IF (p_data->>'extraction_attempt')::int IS DISTINCT FROM r.attempts THEN RAISE EXCEPTION 'receipt_stale'; END IF;
+  v_items=p_data->'items'; v_date=(p_data->>'purchase_date')::date;
+  IF v_date IS NULL OR jsonb_typeof(v_items)<>'array' OR jsonb_array_length(v_items) NOT BETWEEN 1 AND 200 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+  FOR v_item IN SELECT value FROM jsonb_array_elements(v_items) LOOP
+   IF (v_item->>'price' IS NULL AND NOT (v_item->>'price_basis'='line_discount' AND v_item->>'final_total' IS NOT NULL)) OR v_item->>'quantity' IS NULL OR COALESCE(v_item->>'name','')='' OR (v_item->>'quantity')::numeric<=0 OR (v_item->>'price')::numeric<0 THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+   IF v_item->>'price_basis'='line_discount' THEN
+    IF v_item->>'row_discount' IS NULL OR v_item->>'final_total' IS NULL OR
+      (v_item->>'final_total')::numeric<0 OR
+      (v_item->>'final_total')::numeric IS DISTINCT FROM round((v_item->>'calculated_gross_total')::numeric,2)-(v_item->>'row_discount')::numeric THEN RAISE EXCEPTION 'receipt_invalid'; END IF;
+   END IF;
+   IF v_item->>'catalog_item_id' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.shopping_catalog_items WHERE id=(v_item->>'catalog_item_id')::bigint AND is_active) THEN RAISE EXCEPTION 'receipt_product_invalid'; END IF;
+  END LOOP;
+  UPDATE public.shopping_receipts SET state='confirmed',confirmed=p_data,updated_at=now() WHERE id=r.id RETURNING * INTO r;
+  -- Replace a checkout snapshot, never append a second shopping event or change financial cash.
+  INSERT INTO public.shopping_confirmed_purchases(list_id,purchase_date,items,basis,receipt_id)
+   VALUES(p_list,v_date,v_items,'receipt',r.id)
+   ON CONFLICT(list_id) DO UPDATE SET purchase_date=excluded.purchase_date,items=excluded.items,basis='receipt',receipt_id=excluded.receipt_id,confirmed_at=now();
+ ELSE RAISE EXCEPTION 'receipt_action_invalid'; END IF;
+ RETURN to_jsonb(r);
+END $$;
+COMMIT;
+
+-- 044: Separate personal planning items from exact commercial products (#92).
+-- Existing catalog IDs, receipt JSON, confirmed history and financial records stay intact.
+BEGIN;
+CREATE TABLE public.shopping_commercial_products (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ receipt_name text NOT NULL CHECK(length(receipt_name) BETWEEN 1 AND 200),
+ approved_name text CHECK(length(approved_name) BETWEEN 1 AND 200),
+ brand text CHECK(length(brand)<=200),
+ package_quantity numeric(12,3) CHECK(package_quantity>0),
+ package_unit text CHECK(package_unit IN ('unit','package','pack','g','kg','ml','l')),
+ provenance jsonb NOT NULL DEFAULT '{}' CHECK(jsonb_typeof(provenance)='object' AND octet_length(provenance::text)<=4096),
+ mapping_revision integer NOT NULL DEFAULT 0 CHECK(mapping_revision>=0),
+ approved_by uuid, approved_at timestamptz,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ CHECK((package_quantity IS NULL)=(package_unit IS NULL))
+);
+CREATE TABLE public.shopping_product_mappings (
+ commercial_product_id uuid NOT NULL REFERENCES public.shopping_commercial_products(id) ON DELETE RESTRICT,
+ revision integer NOT NULL CHECK(revision>0),
+ personal_item_id bigint REFERENCES public.shopping_catalog_items(id) ON DELETE RESTRICT,
+ personal_name text, planning_unit text CHECK(length(planning_unit)<=30),
+ receipt_unit text CHECK(receipt_unit IN ('unit','package','pack','g','kg','ml','l')),
+ factor numeric(15,6) CHECK(factor>0 AND factor<=100000),
+ request_key uuid UNIQUE, request_payload jsonb,
+ approved_by uuid NOT NULL, approved_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(commercial_product_id,revision),
+ CHECK(personal_item_id IS NOT NULL OR (factor IS NULL AND planning_unit IS NULL))
+);
+CREATE INDEX shopping_mapping_personal ON public.shopping_product_mappings(personal_item_id);
+ALTER TABLE public.shopping_product_identifiers ADD COLUMN commercial_product_id uuid REFERENCES public.shopping_commercial_products(id) ON DELETE RESTRICT;
+-- 042's approval columns are retained as legacy evidence only. New authority lives
+-- in commercial products and versioned mappings, not these historical fields.
+ALTER TABLE public.shopping_product_identifiers ALTER COLUMN catalog_item_id DROP NOT NULL,
+ ALTER COLUMN approved_name DROP NOT NULL, ALTER COLUMN lookup_source DROP NOT NULL,
+ ALTER COLUMN approved_by DROP NOT NULL, ALTER COLUMN approved_at DROP NOT NULL,
+ ALTER COLUMN approved_at DROP DEFAULT;
+DO $$ DECLARE i public.shopping_product_identifiers; p uuid; c public.shopping_catalog_items;
+BEGIN
+ FOR i IN SELECT * FROM shopping_product_identifiers LOOP
+  SELECT * INTO c FROM shopping_catalog_items WHERE id=i.catalog_item_id;
+  INSERT INTO shopping_commercial_products(receipt_name,approved_name,approved_by,approved_at,mapping_revision,provenance)
+   VALUES(i.approved_name,i.approved_name,i.approved_by,i.approved_at,1,jsonb_build_object('source','legacy_042')) RETURNING id INTO p;
+  INSERT INTO shopping_product_mappings(commercial_product_id,revision,personal_item_id,personal_name,planning_unit,receipt_unit,factor,approved_by,approved_at)
+   VALUES(p,1,c.id,c.name,c.default_unit,NULL,NULL,i.approved_by,i.approved_at);
+  UPDATE shopping_product_identifiers SET commercial_product_id=p WHERE (kind,retailer_scope,code)=(i.kind,i.retailer_scope,i.code);
+ END LOOP;
+END $$;
+ALTER TABLE public.shopping_product_identifiers ALTER COLUMN commercial_product_id SET NOT NULL;
+CREATE INDEX shopping_identifier_commercial ON public.shopping_product_identifiers(commercial_product_id);
+
+ALTER TABLE public.shopping_product_lookup_cache ADD COLUMN provider text NOT NULL DEFAULT 'open_food_facts' CHECK(provider IN ('open_food_facts','open_products_facts'));
+ALTER TABLE public.shopping_product_lookup_cache DROP CONSTRAINT shopping_product_lookup_cache_pkey;
+ALTER TABLE public.shopping_product_lookup_cache ADD PRIMARY KEY(provider,environment,code);
+DROP FUNCTION public.shopping_claim_product_lookup(text,text);
+CREATE FUNCTION public.shopping_claim_product_lookup(p_code text,p_environment text,p_provider text DEFAULT 'open_food_facts') RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE c public.shopping_product_lookup_cache;
+BEGIN
+ IF NOT shopping_gtin_valid(p_code) OR p_environment NOT IN ('staging','production') OR p_provider NOT IN ('open_food_facts','open_products_facts') THEN RAISE EXCEPTION 'shopping_input_invalid'; END IF;
+ PERFORM pg_advisory_xact_lock(420092);
+ SELECT * INTO c FROM shopping_product_lookup_cache WHERE code=p_code AND environment=p_environment AND provider=p_provider;
+ IF FOUND AND c.expires_at>now() THEN RETURN jsonb_build_object('claimed',false,'result',c.result); END IF;
+ IF (SELECT count(*) FROM shopping_product_lookup_cache WHERE requested_at>now()-interval '1 minute')>=12 THEN RETURN jsonb_build_object('claimed',false,'result',jsonb_build_object('status','rate_limited')); END IF;
+ INSERT INTO shopping_product_lookup_cache(code,environment,provider,result,expires_at) VALUES(p_code,p_environment,p_provider,'{"status":"pending"}',now()+interval '5 minutes')
+ ON CONFLICT(provider,environment,code) DO UPDATE SET result=excluded.result,expires_at=excluded.expires_at,requested_at=now();
+ RETURN jsonb_build_object('claimed',true);
+END $$;
+
+CREATE FUNCTION public.shopping_commercial_detail(p_id uuid) RETURNS jsonb
+ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+ SELECT to_jsonb(p)-'approved_by' || jsonb_build_object(
+  'identifiers',COALESCE((SELECT jsonb_agg(jsonb_build_object('kind',i.kind,'code',i.code,'retailer_scope',i.retailer_scope)) FROM shopping_product_identifiers i WHERE i.commercial_product_id=p.id),'[]'),
+  'mapping',(SELECT to_jsonb(m)-'approved_by' FROM shopping_product_mappings m WHERE m.commercial_product_id=p.id AND m.revision=p.mapping_revision))
+ FROM shopping_commercial_products p WHERE p.id=p_id;
+$$;
+CREATE FUNCTION public.shopping_unit_factor(p_from text,p_to text) RETURNS numeric
+ LANGUAGE sql IMMUTABLE SET search_path=public AS $$
+ SELECT CASE WHEN p_from=p_to AND p_from IN ('unit','package','pack','g','kg','ml','l') THEN 1::numeric
+  WHEN (p_from,p_to) IN (('kg','g'),('l','ml')) THEN 1000::numeric
+  WHEN (p_from,p_to) IN (('g','kg'),('ml','l')) THEN 0.001::numeric ELSE NULL END;
+$$;
+CREATE FUNCTION public.shopping_commercial_command(p_data jsonb,p_owner uuid) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE p public.shopping_commercial_products; c public.shopping_catalog_items; m public.shopping_product_mappings;
+ v_id uuid; v_personal bigint; v_factor numeric; a text=p_data->>'action'; k text=p_data->>'kind'; s text=COALESCE(p_data->>'retailer_scope',''); v_code text=p_data->>'code';
+BEGIN
+ IF p_owner IS NULL OR a NOT IN ('register','approve_name','map') THEN RAISE EXCEPTION 'shopping_input_invalid'; END IF;
+ -- Same lock as receipt confirmation: mapping and financial snapshot commands serialize.
+ PERFORM pg_advisory_xact_lock(390092);
+ IF p_data->>'commercial_product_id' IS NOT NULL THEN v_id=(p_data->>'commercial_product_id')::uuid;
+ ELSE
+  IF v_code IS NULL OR k NOT IN ('gtin','retailer') OR (k='gtin' AND NOT shopping_gtin_valid(v_code)) OR (k='retailer' AND (s='' OR v_code!~'^[0-9]{3,20}$')) THEN RAISE EXCEPTION 'shopping_identifier_invalid'; END IF;
+  SELECT commercial_product_id INTO v_id FROM shopping_product_identifiers WHERE (kind,retailer_scope,shopping_product_identifiers.code)=(k,s,v_code);
+  IF v_id IS NULL THEN
+   INSERT INTO shopping_commercial_products(receipt_name,brand,package_quantity,package_unit,provenance)
+    VALUES(p_data->>'name',p_data->>'brand',(p_data->>'package_quantity')::numeric,p_data->>'package_unit',COALESCE(p_data->'provenance','{}')) RETURNING id INTO v_id;
+   INSERT INTO shopping_product_identifiers(kind,retailer_scope,code,commercial_product_id) VALUES(k,s,v_code,v_id);
+  END IF;
+ END IF;
+ SELECT * INTO p FROM shopping_commercial_products WHERE id=v_id FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'shopping_product_invalid'; END IF;
+ IF a='approve_name' THEN
+  UPDATE shopping_commercial_products SET approved_name=p_data->>'name',approved_by=p_owner,approved_at=now(),
+   brand=CASE WHEN p_data ? 'brand' THEN p_data->>'brand' ELSE brand END,
+   package_quantity=CASE WHEN p_data ? 'package_quantity' THEN (p_data->>'package_quantity')::numeric ELSE package_quantity END,
+   package_unit=CASE WHEN p_data ? 'package_unit' THEN p_data->>'package_unit' ELSE package_unit END,
+   provenance=COALESCE(p_data->'provenance',provenance),updated_at=now() WHERE id=v_id;
+ ELSIF a='map' THEN
+  IF p_data->>'request_key' IS NOT NULL THEN
+   SELECT * INTO m FROM shopping_product_mappings WHERE request_key=(p_data->>'request_key')::uuid;
+   IF FOUND THEN
+    IF m.commercial_product_id<>v_id OR m.request_payload IS DISTINCT FROM p_data THEN RAISE EXCEPTION 'shopping_mapping_conflict'; END IF;
+    RETURN shopping_commercial_detail(v_id);
+   END IF;
+  END IF;
+  IF (p_data->>'expected_revision')::int IS DISTINCT FROM p.mapping_revision THEN RAISE EXCEPTION 'shopping_mapping_stale'; END IF;
+  v_personal=(p_data->>'personal_item_id')::bigint;
+  IF p_data->'new_personal' IS NOT NULL AND p_data->'new_personal'<>'null' THEN
+   IF v_personal IS NOT NULL THEN RAISE EXCEPTION 'shopping_input_invalid'; END IF;
+   IF NOT EXISTS(SELECT 1 FROM shopping_catalog_categories WHERE id=(p_data->'new_personal'->>'category_id')::bigint AND is_active) THEN RAISE EXCEPTION 'shopping_category_invalid'; END IF;
+   INSERT INTO shopping_catalog_items(category_id,name,default_unit,is_active) VALUES((p_data->'new_personal'->>'category_id')::bigint,p_data->'new_personal'->>'name',p_data->'new_personal'->>'unit',true) RETURNING id INTO v_personal;
+  END IF;
+  IF v_personal IS NOT NULL THEN
+   SELECT * INTO c FROM shopping_catalog_items WHERE id=v_personal AND is_active FOR SHARE;
+   IF NOT FOUND THEN RAISE EXCEPTION 'shopping_product_invalid'; END IF;
+   IF p_data->>'factor' IS NOT NULL THEN v_factor=(p_data->>'factor')::numeric;
+   ELSE
+    v_factor=shopping_unit_factor(p_data->>'receipt_unit',p_data->>'planning_unit_code');
+    IF v_factor IS NULL AND p_data->>'receipt_unit' IN ('unit','package') AND p.package_quantity IS NOT NULL THEN
+     v_factor=p.package_quantity*shopping_unit_factor(p.package_unit,p_data->>'planning_unit_code');
+    END IF;
+   END IF;
+  END IF;
+  SELECT * INTO m FROM shopping_product_mappings WHERE commercial_product_id=v_id AND revision=p.mapping_revision;
+  IF (p_data->>'expected_revision')::int IS DISTINCT FROM p.mapping_revision THEN RAISE EXCEPTION 'shopping_mapping_stale'; END IF;
+  INSERT INTO shopping_product_mappings(commercial_product_id,revision,personal_item_id,personal_name,planning_unit,receipt_unit,factor,approved_by,request_key,request_payload)
+   VALUES(v_id,p.mapping_revision+1,v_personal,c.name,CASE WHEN v_personal IS NULL THEN NULL ELSE p_data->>'planning_unit' END,p_data->>'receipt_unit',v_factor,p_owner,(p_data->>'request_key')::uuid,p_data);
+  UPDATE shopping_commercial_products SET mapping_revision=mapping_revision+1,updated_at=now() WHERE id=v_id;
+ END IF;
+ RETURN shopping_commercial_detail(v_id);
+END $$;
+-- Keep the old private signature as name approval only. It must never rename/create a personal item.
+CREATE OR REPLACE FUNCTION public.shopping_approve_product_identifier(p_data jsonb,p_owner uuid) RETURNS jsonb
+ LANGUAGE sql SECURITY DEFINER SET search_path=public AS $$
+ SELECT shopping_commercial_command(p_data||'{"action":"approve_name"}',p_owner);
+$$;
+ALTER TABLE public.shopping_commercial_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shopping_product_mappings ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.shopping_commercial_products,public.shopping_product_mappings FROM PUBLIC,anon,authenticated;
+GRANT ALL ON public.shopping_commercial_products TO service_role;
+GRANT SELECT,INSERT ON public.shopping_product_mappings TO service_role;
+REVOKE ALL ON FUNCTION public.shopping_claim_product_lookup(text,text,text),public.shopping_commercial_detail(uuid),public.shopping_unit_factor(text,text),public.shopping_commercial_command(jsonb,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.shopping_claim_product_lookup(text,text,text),public.shopping_commercial_detail(uuid),public.shopping_unit_factor(text,text),public.shopping_commercial_command(jsonb,uuid) TO service_role;
+COMMIT;

@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { supabase } from '../config/supabase';
 
+export const mapShoppingProduct = data => api.post('/shopping/products/map',data);
+export const getPersonalItemProducts = id => api.get(`/shopping/personal-items/${id}/products`);
+
 // Site URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5050/api';
 
@@ -256,3 +259,17 @@ export const updateFlowlinkBinding = (id, body) => api.patch(`/flowlink/v1/owner
 
 export const createFlowlinkPairing = body => api.post('/flowlink/v1/owner/pairings', body, { timeout: 15000 });
 export const cancelFlowlinkPairing = id => api.post(`/flowlink/v1/owner/pairings/${id}/cancel`, {}, { timeout: 15000 });
+
+// Shopping planning / receipt review (#92). Upload never posts financial cash.
+export const getShoppingIntelligence = id => api.get(`/shopping/lists/${id}/intelligence`);
+export const saveShoppingRegular = (id,data) => api.put(`/shopping/regular-products/${id}`,data);
+export const removeShoppingRegular = id => api.delete(`/shopping/regular-products/${id}`);
+export const acceptShoppingSuggestion = (id,data) => api.post(`/shopping/lists/${id}/suggestions`,data);
+export const uploadShoppingReceipt = (id,files,attempt = 0, options = {}) => { const form=new FormData(); for(const file of (Array.isArray(files) ? files : [files])) form.append('receipt',file); form.append('expected_attempt',String(attempt)); if(options.reprocess_key){form.append('reprocess','true');form.append('reprocess_key',options.reprocess_key);} if(options.draft_revision != null) form.append('draft_revision',String(options.draft_revision)); if(options.review_draft) form.append('review_draft',JSON.stringify(options.review_draft)); return api.post(`/shopping/lists/${id}/receipt`,form); };
+export const confirmShoppingReceipt = (id,data) => api.post(`/shopping/lists/${id}/receipt/confirm`,data);
+
+export const getShoppingReceiptDuplicates = (id, data = {}) => api.post(`/shopping/lists/${id}/receipt/duplicates`, data);
+
+export const saveShoppingReceiptDraft = (id,data) => api.put(`/shopping/lists/${id}/receipt/draft`,data);
+export const lookupShoppingProduct = data => api.post('/shopping/products/lookup',data,{timeout:12000});
+export const approveShoppingProduct = data => api.post('/shopping/products/approve',data);

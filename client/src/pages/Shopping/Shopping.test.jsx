@@ -6,6 +6,8 @@ import { ToastProvider } from '../../components/ui';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   addShoppingListItem,
+  getShoppingReceiptDuplicates,
+  getShoppingIntelligence,
   checkoutShoppingList,
   createShoppingCatalogCategory,
   createShoppingList,
@@ -25,6 +27,8 @@ import ShoppingLists from './ShoppingLists';
 
 vi.mock('../../services/api', () => ({
   addShoppingListItem: vi.fn(),
+  getShoppingReceiptDuplicates: vi.fn(),
+  getShoppingIntelligence: vi.fn(),
   checkoutShoppingList: vi.fn(),
   createShoppingCatalogCategory: vi.fn(),
   createShoppingList: vi.fn(),
@@ -180,12 +184,14 @@ const openList = async (title = 'קניות שבועיות') => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  getShoppingIntelligence.mockResolvedValue({data:{receipt:null,catalog:[],regulars:[],suggestions:[],plan:null}});
   getShoppingLists.mockResolvedValue({ data: overviewLists });
   getShoppingListTypes.mockResolvedValue({ data: listTypes });
   getShoppingListById.mockResolvedValue({ data: detailList() });
   getShoppingCatalogCategories.mockResolvedValue({ data: catalogCategories });
   getShoppingCatalogItems.mockResolvedValue({ data: catalogItems });
-  getPaymentSources.mockResolvedValue({ data: paymentSources });
+  getShoppingReceiptDuplicates.mockResolvedValue({data: []});
+    getPaymentSources.mockResolvedValue({ data: paymentSources });
   getCategories.mockResolvedValue({ data: financialCategories });
   createShoppingList.mockResolvedValue({ data: {} });
   deleteShoppingList.mockResolvedValue({ data: { success: true } });
@@ -389,6 +395,17 @@ describe('Shopping in-page detail and item lifecycle', () => {
 });
 
 describe('Shopping checkout safety', () => {
+  it('previews confirmed receipt actuals instead of checkbox totals without posting on review', async () => {
+    getShoppingListById.mockResolvedValue({data:detailList({shopping_confirmed_purchases:{basis:'receipt',items:[{quantity:'3',price:'5.00'}]}})});
+    await openList();
+    expect(checkoutShoppingList).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button',{name:'סגירת קנייה'}));
+    const dialog=await screen.findByRole('dialog',{name:'סגירת קנייה'});
+    expect(within(dialog).getByText('₪15.00')).toBeInTheDocument();
+    expect(within(dialog).queryByText('₪9.70')).not.toBeInTheDocument();
+    expect(checkoutShoppingList).not.toHaveBeenCalled();
+  });
+
   it('uses purchased-only total, optional financial links, unchanged payload, and blocks duplicate checkout', async () => {
     const request = deferred();
     checkoutShoppingList.mockReturnValueOnce(request.promise);
@@ -527,4 +544,17 @@ describe('optional shopping-list header fields', () => {
     expect(within(dialog).getByLabelText('חנות (רשות)')).toHaveValue('');
     expect(within(dialog).getByLabelText('תאריך יעד (רשות)')).toHaveValue('');
   });
+});
+
+it('checkout duplicate warning blocks financial confirmation until candidate comparison is acknowledged', async()=>{
+ const candidate={receipt_id:'123e4567-e89b-42d3-a456-426614174000',list_id:'2',list_title:'קבלה קודמת',identity:{merchant:'סופר',receipt_number:'123',purchase_date:'2026-09-29'},history_confirmed:true,transaction_id:'45',checkout_total:10};
+ getShoppingReceiptDuplicates.mockResolvedValue({data:[candidate]});
+ await openList();await userEvent.click(screen.getByRole('button',{name:'סגירת קנייה'}));
+ const dialog=await screen.findByRole('dialog',{name:'סגירת קנייה'});
+ const confirm=within(dialog).getByRole('button',{name:'סגירת הקנייה ויצירת תנועה'});
+ expect(within(dialog).getByText('קבלה קודמת')).toBeInTheDocument();expect(confirm).toBeDisabled();
+ expect(checkoutShoppingList).not.toHaveBeenCalled();
+ await userEvent.click(within(dialog).getByLabelText(/אלו רכישות נפרדות/));
+ await userEvent.click(confirm);
+ await waitFor(()=>expect(checkoutShoppingList).toHaveBeenCalledWith(1,expect.objectContaining({duplicate_reviewed_ids:[candidate.receipt_id]})));
 });

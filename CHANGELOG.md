@@ -10,7 +10,23 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- #92: Separate personal shopping needs from exact commercial products. Explicit, revisioned mappings let compatible quantities from several brands fulfill one personal item while preserving every receipt occurrence and historical mapping. Name approval, personal-item linking and purchase confirmation are separate actions. Add compact bulk name proposals and linked-product management; confirmed trips drive personal-item suggestions. Forward migration 044 retains existing catalog IDs, drafts, prices and history.
+
+- #92: Preserve receipt product codes and raw price evidence, resolve exact barcodes through the approved local catalog or cached Open Food Facts lookup, and explicitly approve full names for future lists. The compact review table now separates original unit price, whole-row discount, net unit price and final total. Durable revision-checked drafts preserve corrections and removed rows across reloads and reprocessing archives (forward migrations 042–043); lookup and draft saving do not confirm purchases or create expenses.
+
+- #92: Shopping regular products/usual quantities and explained suggestions based only on confirmed purchases. Added optional receipt-image extraction and editable reconciliation against a preserved plan; confirmation updates purchase history without posting cash. Checkout now atomically records one expense per list under retries. Extraction requires server-side provider configuration and owner validation on real receipts. Printed receipt references now surface cross-list duplicate warnings before history confirmation and checkout, with transactional rechecks; missing identifiers remain an explicit detection limitation. Added an ordered multi-photo receipt dialog with previews, overlap review and extraction-revision safeguards (forward migration 040).
+
 ### Fixed
+
+- #92: Normalize equivalent receipt-unit spellings without converting weight/volume/package units. Recompute unit-only conflicts for saved unconfirmed reviews without rescanning, retain raw evidence/owner corrections, and restore only exactly supported net prices.
+
+- #92: Add explicit same-photo reprocessing with atomic request replay, preserved correction/extraction backups and unchanged five-attempt/financial safeguards (forward migration 041). Record complete provider usage metadata and expose draft recovery in receipt details.
+
+- #92: Make receipt review a compact RTL editable table with on-demand plan/matching details and explicit total discrepancies. Transcribe photos separately and resolve confident adjacent printed-code overlaps while preserving repeated purchases, conflicting readings and uncertain clipped lines for review.
+
+- #92: Keep missing receipt quantities/units reviewable instead of rejecting the whole scan; require completion before confirmation. Distinguish provider/format/validation failures, clarify RTL photo ordering and selected count, and label retained draft totals after failed scans.
 
 - #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
 

@@ -4,14 +4,14 @@
 
 | Location | Meaning | Not evidence of |
 | --- | --- | --- |
-| [server/migrations](../../server/migrations) | Ordered incremental history, **001–038**; preserve filenames/order/content | A live database's applied state or a from-empty bootstrap |
+| [server/migrations](../../server/migrations) | Ordered incremental history, **001–044**; preserve filenames/order/content | A live database's applied state or a from-empty bootstrap |
 | [server/full_schema.sql](../../server/full_schema.sql) | Consolidated reference used by disposable harnesses, including later replacements | A deployment ledger or approved production reset script |
 | [operations/sql](sql) | Target/stage-specific read-only catalog, totals and invariant checks | Migrations, automatic repairs or universal current-schema checks |
 
 Migrations begin by altering existing domain objects. There is **no canonical
 repository migration runner or authoritative applied-migration ledger**, and no
 verified general procedure that creates a new installation by simply applying
-001–038 to an empty database. `supabase/.temp` CLI state is not that ledger.
+001–044 to an empty database. `supabase/.temp` CLI state is not that ledger.
 
 The consolidated schema is executable in the controlled disposable harnesses with
 their role/prerequisite setup. Those specific tests do not establish a production
@@ -30,6 +30,12 @@ marker or apply a subset; read the test before choosing a baseline.
 | 030–035 | Named Savings foundation, cash/interest/surplus/monthly/reporting |
 | 036 | APY source observations, idempotency/reconciliation and legacy mirror |
 | 037–038 | FlowLink enrollment/credentials, bindings and authorized ingestion |
+| 039 | [Shopping confirmed purchases, receipt review and atomic checkout](SHOPPING_RECEIPTS.md); not applied to production by #92 implementation |
+| 040 | [Multi-photo receipt sets and stale-review protection](SHOPPING_RECEIPTS.md); forward upgrade of test-applied 039, no production application |
+| 041 | [Explicit receipt reprocessing and correction archives](SHOPPING_RECEIPTS.md); isolated/disposable verification only |
+| 042 | [Product identifiers, lookup cache, durable drafts and exact price breakdown](SHOPPING_RECEIPTS.md); forward upgrade after 041, isolated/disposable verification only |
+| 043 | [Preserve newer submitted corrections in reprocessing archives](SHOPPING_RECEIPTS.md); forward function correction after test-applied 042, no data rewrite |
+| 044 | [Personal/commercial product separation and immutable mapping revisions](SHOPPING_RECEIPTS.md); forward upgrade after 043, isolated/disposable verification only |
 
 Historical migrations contain superseded intermediate objects. Do not remove or
 rename them because later migrations replace them. #46 preserves every migration

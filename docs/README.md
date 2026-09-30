@@ -48,6 +48,7 @@ owns live Issue state; dated handoffs below must not be interpreted as current s
 
 ## Operator and implementation guides
 
+- [Shopping habits, receipt review and OCR setup](operations/SHOPPING_RECEIPTS.md)
 - [Database files and operational SQL checks](operations/DATABASE.md)
 - [Funded Budget migration boundaries](operations/FUNDED_BUDGET_MIGRATION_RUNBOOK.md)
 - [APY foundation, compatibility and recovery](operations/APY_02_INGESTION_FOUNDATION.md)

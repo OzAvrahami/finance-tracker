@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const shoppingController = require('../controllers/shoppingController');
 
+// Shared authenticated Shopping scope; no public OCR endpoint.
+router.use(require('./shoppingIntelligenceRoutes').createShoppingIntelligenceRouter({db:require('../config/supabase')}));
+
 // Reference data
 router.get('/list-types', shoppingController.getListTypes);
 router.get('/catalog-categories', shoppingController.getCatalogCategories);

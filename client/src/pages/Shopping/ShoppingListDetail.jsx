@@ -1,3 +1,4 @@
+import ReceiptDuplicateWarning from "./ReceiptDuplicateWarning";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
@@ -35,6 +36,7 @@ import {
 import {
   addShoppingListItem,
   checkoutShoppingList,
+  getShoppingReceiptDuplicates,
   createShoppingCatalogCategory,
   getCategories,
   getPaymentSources,
@@ -44,9 +46,11 @@ import {
   removeShoppingListItem,
   toggleShoppingItemPurchased,
   updateShoppingList,
+  updateShoppingListItem,
 } from '../../services/api';
 import { SHOPPING_STATUS } from './shoppingConstants';
 import ShoppingListDialog from './ShoppingListDialog';
+import ShoppingIntelligence from './ShoppingIntelligence';
 import { safeShoppingLink } from './shoppingListFields';
 import { formatCalendarDate } from '../../utils/calendarDate';
 
@@ -67,7 +71,7 @@ const initialItemForm = {
 
 const calculateStats = (items = []) => {
   const purchasedItems = items.filter((item) => item.is_purchased);
-  const itemTotal = (item) => ((Number(item.quantity) || 1) * (Number(item.price) || 0));
+  const itemTotal = (item) => item.price_basis === 'line_discount' && item.final_total != null ? Number(item.final_total) : ((Number(item.quantity) || 1) * (Number(item.price) || 0));
   return {
     total: items.length,
     purchased: purchasedItems.length,
@@ -100,7 +104,13 @@ const ShoppingDetailSkeleton = ({ onBack }) => (
   </div>
 );
 
-const ShoppingItem = ({ item, editable, pending, onToggle, onRemove }) => {
+const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) => {
+  const [editing,setEditing] = useState(false);
+  const [editQuantity,setEditQuantity] = useState(String(item.quantity || 1));
+  const [editUnit,setEditUnit] = useState(item.unit || 'יח׳');
+  const [editPrice,setEditPrice] = useState(item.price ?? '');
+  const [saving,setSaving] = useState(false);
+  const [editError,setEditError] = useState('');
   const name = getItemName(item);
   const quantity = item.quantity || 1;
   const unit = item.unit || 'יח׳';
@@ -108,7 +118,7 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove }) => {
   const total = (Number(item.quantity) || 1) * (Number(item.price) || 0);
 
   return (
-    <article className={`shopping-item${item.is_purchased ? ' is-purchased' : ''}`} aria-label={name}>
+    <article className={`shopping-item${item.is_purchased ? ' is-purchased' : ''}${editing ? ' is-editing' : ''}`} aria-label={name}>
       <div className="shopping-item__main">
         {editable ? (
           <button
@@ -132,6 +142,15 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove }) => {
         </div>
       </div>
 
+      {editable && <SecondaryButton disabled={pending} onClick={()=>setEditing(!editing)}>עריכת {name}</SecondaryButton>}
+      {editing && <form className="shopping-smart-grid" onSubmit={async e=>{e.preventDefault();setSaving(true);setEditError('');try{await onEdit(item,{quantity:editQuantity,unit:editUnit,price:editPrice===''?null:editPrice});setEditing(false);}catch{setEditError('השינוי לא נשמר. נסו שוב.');}finally{setSaving(false);}}}>
+       <NumberField label={`כמות: ${name}`} required min="0.001" step="0.001" value={editQuantity} onValueChange={setEditQuantity}/>
+       <TextField label={`יחידה: ${name}`} required value={editUnit} onValueChange={setEditUnit}/>
+       <NumberField label={`מחיר: ${name}`} min="0" step="0.01" value={editPrice} onValueChange={setEditPrice}/>
+       {editError && <Alert variant="error">{editError}</Alert>}
+       <PrimaryButton type="submit" disabled={saving}>שמירת פריט</PrimaryButton>
+       <SecondaryButton disabled={saving} onClick={()=>setEditing(false)}>ביטול עריכת פריט</SecondaryButton>
+      </form>}
       <div className="shopping-item__figures">
         <span className="shopping-item__quantity">
           <TechnicalValue>{quantity}</TechnicalValue>
@@ -171,7 +190,7 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove }) => {
   );
 };
 
-const ShoppingItemGroup = ({ group, editable, pendingItemId, onToggle, onRemove }) => {
+const ShoppingItemGroup = ({ group, editable, pendingItemId, onToggle, onRemove, onEdit }) => {
   const pendingItems = group.items.filter((item) => !item.is_purchased);
   const purchasedItems = group.items.filter((item) => item.is_purchased);
 
@@ -183,6 +202,7 @@ const ShoppingItemGroup = ({ group, editable, pendingItemId, onToggle, onRemove 
       pending={pendingItemId === item.id}
       onToggle={onToggle}
       onRemove={onRemove}
+      onEdit={onEdit}
     />
   ));
 
@@ -381,6 +401,7 @@ const AddShoppingItem = ({
 };
 
 const CheckoutDialog = ({
+  duplicates, duplicateReviewed, onDuplicateReview,
   open,
   list,
   stats,
@@ -408,7 +429,7 @@ const CheckoutDialog = ({
     footer={(
       <>
         <SecondaryButton type="button" disabled={pending} onClick={() => onClose('cancelled')}>ביטול</SecondaryButton>
-        <PrimaryButton type="button" loading={pending} loadingText="סוגר קנייה…" onClick={onConfirm}>
+        <PrimaryButton type="button" disabled={duplicates.length > 0 && !duplicateReviewed} loading={pending} loadingText="סוגר קנייה…" onClick={onConfirm}>
           <Receipt size={16} aria-hidden="true" />
           סגירת הקנייה ויצירת תנועה
         </PrimaryButton>
@@ -416,9 +437,10 @@ const CheckoutDialog = ({
     )}
   >
     <div className="shopping-checkout-content">
+      <ReceiptDuplicateWarning candidates={duplicates} checked={duplicateReviewed} onChange={onDuplicateReview} />
       {error && (
         <Alert variant="error" urgent title="סגירת הקנייה לא הושלמה">
-          הרשימה לא הוצגה כקנייה סגורה. סימוני הפריטים נשמרו ואפשר לנסות שוב.
+          הרשימה לא הוצגה כקנייה סגורה. סימוני הפריטים נשמרו. אם קבלה עדיין נסרקת, המתינו לסיום; בדקו גם את אזהרת הכפילויות לפני ניסיון נוסף.
         </Alert>
       )}
 
@@ -498,6 +520,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   const [categoryError, setCategoryError] = useState('');
   const [showActivateConfirm, setShowActivateConfirm] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [checkoutDuplicates, setCheckoutDuplicates] = useState([]), [checkoutDuplicateReviewed, setCheckoutDuplicateReviewed] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutPending, setCheckoutPending] = useState(false);
@@ -603,6 +626,8 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
 
   const items = useMemo(() => list?.shopping_list_items || [], [list]);
   const stats = useMemo(() => calculateStats(items), [items]);
+  const confirmedPurchase = Array.isArray(list?.shopping_confirmed_purchases) ? list.shopping_confirmed_purchases[0] : list?.shopping_confirmed_purchases;
+  const checkoutStats = confirmedPurchase ? calculateStats(confirmedPurchase.items.map(i=>({...i,is_purchased:true}))) : stats;
   const completionPercentage = stats.total > 0 ? Math.round((stats.purchased / stats.total) * 100) : 0;
 
   const groupedItems = useMemo(() => {
@@ -719,14 +744,17 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     setMutationError('');
     setCheckoutError(false);
     try {
-      const [sourcesResponse, categoriesResponse] = await Promise.all([
+      const [sourcesResponse, categoriesResponse, duplicatesResponse] = await Promise.all([
         getPaymentSources(),
         getCategories(),
+        getShoppingReceiptDuplicates(listId),
       ]);
       const sources = Array.isArray(sourcesResponse.data) ? sourcesResponse.data : [];
       setPaymentSources(sources);
       setExpenseCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : []);
       setCheckoutPaymentSourceId(sources[0]?.id ? String(sources[0].id) : '');
+      setCheckoutDuplicates(duplicatesResponse.data);
+      setCheckoutDuplicateReviewed(false);
       setShowCheckout(true);
     } catch {
       setMutationError('טעינת נתוני הסגירה נכשלה. הרשימה נשארה פעילה.');
@@ -736,13 +764,14 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   };
 
   const handleCheckout = async () => {
-    if (checkoutPending) return;
+    if (checkoutPending || (checkoutDuplicates.length && !checkoutDuplicateReviewed)) return;
     setCheckoutPending(true);
     setCheckoutError(false);
     try {
       await checkoutShoppingList(listId, {
         payment_source_id: checkoutPaymentSourceId || null,
         category_id: checkoutCategoryId || null,
+        ...(checkoutDuplicates.length ? {duplicate_reviewed_ids: checkoutDuplicates.map(c=>c.receipt_id)} : {}),
       });
       const refreshedList = await fetchList({ showLoading: false });
       if (refreshedList?.status !== 'checked_out') {
@@ -754,7 +783,11 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
         title: 'הקנייה נסגרה',
         message: 'הרשימה נסגרה ותנועת ההוצאה נוצרה בהצלחה.',
       });
-    } catch {
+    } catch (error) {
+      if (error.response?.data?.error === 'receipt_duplicate_review_required') {
+        setCheckoutDuplicateReviewed(false);
+        try {setCheckoutDuplicates((await getShoppingReceiptDuplicates(listId)).data);} catch {setShowCheckout(false);setMutationError('בדיקת הכפילויות נכשלה. פתחו שוב את סגירת הקנייה כדי לבדוק.');}
+      }
       setCheckoutError(true);
     } finally {
       setCheckoutPending(false);
@@ -846,7 +879,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
               <div className="shopping-mobile-action-total">
                 <span>{list.status === 'active' ? 'סך שנקנה' : 'עלות משוערת'}</span>
                 <MoneyAmount
-                  value={list.status === 'active' ? stats.purchasedCost : stats.estimatedCost}
+                  value={confirmedPurchase ? checkoutStats.purchasedCost : list.status === 'active' ? stats.purchasedCost : stats.estimatedCost}
                   minimumFractionDigits={2}
                   maximumFractionDigits={2}
                 />
@@ -906,6 +939,9 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
         )}
       </GlassCard>
 
+      {confirmedPurchase && <Alert>הסכום לסגירת הקנייה מבוסס על פריטי הקבלה שאושרו, בנפרד מסימוני הרשימה. לאחר סגירה, אישור קבלה אינו משנה הוצאה קיימת.</Alert>}
+      <ShoppingIntelligence key={list.id} list={list} onChanged={() => fetchList({ showLoading: false })} />
+
       {mutationError && (
         <Alert variant="error" urgent onDismiss={() => setMutationError('')}>
           {mutationError}
@@ -956,6 +992,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
               pendingItemId={pendingItemId}
               onToggle={handleToggle}
               onRemove={requestRemoveItem}
+              onEdit={async (item,values)=>{await updateShoppingListItem(listId,item.id,values);await fetchList({showLoading:false});}}
             />
           ))}
         </div>
@@ -1025,9 +1062,12 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
       />
 
       <CheckoutDialog
+        duplicates={checkoutDuplicates}
+        duplicateReviewed={checkoutDuplicateReviewed}
+        onDuplicateReview={setCheckoutDuplicateReviewed}
         open={showCheckout}
         list={list}
-        stats={stats}
+        stats={checkoutStats}
         paymentSources={paymentSources}
         expenseCategories={expenseCategories}
         paymentSourceId={checkoutPaymentSourceId}

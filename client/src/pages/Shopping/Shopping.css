@@ -858,3 +858,111 @@
 .shopping-list-metadata a { color: var(--ft-primary); display: inline-block; max-width: 100%; }
 .shopping-list-metadata a:focus-visible { outline: 2px solid var(--ft-primary); outline-offset: 3px; }
 .shopping-edit-details { margin-block-end: var(--ft-space-5); }
+
+/* Shopping planning and receipt review use the existing responsive/RTL surfaces. */
+.shopping-item.is-editing { flex-wrap: wrap; }
+.shopping-item > .shopping-smart-grid { flex: 1 0 100%; order: 3; inline-size: 100%; }
+.shopping-intelligence section { display: grid; gap: var(--ft-space-4); margin-block-start: var(--ft-space-4); }
+.shopping-smart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--ft-space-4); align-items: end; }
+.shopping-smart-row, .shopping-receipt-row { border: 1px solid var(--ft-border); border-radius: var(--ft-radius-md); padding: var(--ft-space-4); display: flex; flex-wrap: wrap; gap: var(--ft-space-3); align-items: center; }
+.shopping-smart-row > div:first-child { flex: 1 1 220px; }
+.shopping-receipt-row { display: block; min-inline-size: 0; }
+.shopping-review-check { display: flex; gap: var(--ft-space-3); align-items: start; padding-block: var(--ft-space-4); }
+.shopping-intelligence input[type=file] { display: block; max-inline-size: 100%; margin-block: var(--ft-space-3); }
+
+/* One logical receipt; desktop workspace and full-screen mobile review. */
+.shopping-intelligence .shopping-receipt-summary { margin-block-start: 1.25rem; padding-block-start: 1rem; border-top: 1px solid var(--ft-border); display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.shopping-receipt-dialog.ui-dialog { max-width:1100px; width:100%; height:min(90dvh,960px); }
+.shopping-receipt-dialog .ui-dialog-body { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.shopping-receipt-dialog .ui-dialog-footer { flex-wrap:wrap; gap:.75rem; }
+.shopping-receipt-dialog .ui-dialog-footer > div { margin-inline-end:auto; font-weight:600; }
+.shopping-receipt-tabs { display:flex; gap:.75rem; margin-block-end:1rem; }
+.shopping-receipt-fields { border:0; padding:0; margin:0; min-width:0; }
+.shopping-receipt-photos { padding:0; list-style:none; display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:1rem; }
+.shopping-receipt-photo { min-width:0; display:flex; flex-direction:column; gap:.5rem; border:1px solid var(--ft-border); border-radius:12px; padding:.75rem; overflow-wrap:anywhere; }
+.shopping-receipt-photo img { width:100%; height:220px; object-fit:contain; }
+.shopping-receipt-photo > div { display:flex; flex-wrap:wrap; gap:.5rem; }
+.shopping-receipt-photo > div[hidden] { display:none; }
+.shopping-receipt-dialog .shopping-receipt-row { margin-block:1rem; padding:1rem; min-width:0; border-radius:12px; }
+@media (max-width:640px) {
+ .ui-overlay-layer:has(> .shopping-receipt-dialog) { padding:0; }
+ .shopping-receipt-dialog.ui-dialog { width:100vw; max-width:none; height:100dvh; max-height:100dvh; border-radius:0; }
+ .shopping-receipt-dialog .shopping-smart-grid { grid-template-columns:1fr; }
+ .shopping-receipt-dialog .ui-dialog-footer { padding-bottom:max(1rem,env(safe-area-inset-bottom)); }
+ .shopping-receipt-dialog .ui-dialog-footer > div { flex-basis:100%; }
+ .shopping-receipt-dialog .shopping-receipt-row { padding:.75rem; }
+}
+
+.shopping-receipt-upload { display:flex; align-items:center; flex-wrap:wrap; gap:1rem; margin-block:1rem; }
+.shopping-receipt-upload input[hidden] { display:none; }
+.shopping-receipt-order-guide { padding:.8rem; background:var(--ft-bg-secondary); border-inline-start:4px solid var(--ft-primary); border-radius:6px; }
+.shopping-receipt-photo-number { order:-1; font-size:1.1rem; color:var(--ft-text); }
+.shopping-receipt-filename { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-inline-size:100%; }
+/* Compact receipt workspace: rows first, details on demand, one table on all widths. */
+.shopping-receipt-dialog .ui-dialog-body { display:flex; flex-direction:column; padding-block:12px; }
+.shopping-receipt-dialog .ui-dialog-body > div { min-height:0; display:flex; flex-direction:column; flex:1; }
+.shopping-receipt-dialog .shopping-receipt-fields { min-height:0; display:flex; flex-direction:column; flex:1; }
+.receipt-review-workspace { min-height:0; display:flex; flex-direction:column; flex:1; gap:8px; }
+.shopping-receipt-dialog .shopping-receipt-tabs { margin-block-end:8px; gap:6px; }
+.shopping-receipt-dialog .shopping-receipt-tabs button { min-height:32px; padding:4px 10px; }
+.receipt-review-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.receipt-review-toolbar > input { background:var(--ft-bg-input,var(--ft-bg-secondary)); color:var(--ft-text); border:1px solid var(--ft-border); border-radius:6px; padding:5px 8px; min-width:0; width:170px; height:34px; }
+.receipt-review-toolbar > input:first-child { flex:1; }
+.receipt-review-toolbar > button { min-height:32px; padding:4px 10px; }
+.receipt-table-scroll { min-height:150px; overflow:auto; flex:1; border:1px solid var(--ft-border); border-radius:8px; overscroll-behavior:contain; }
+.receipt-edit-table { width:100%; min-width:1040px; border-collapse:separate; border-spacing:0; table-layout:fixed; color:var(--ft-text); font-size:13px; }
+.receipt-edit-table th { position:sticky; top:0; z-index:3; text-align:right; background:var(--ft-bg-secondary); height:34px; padding:6px 8px; border-bottom:1px solid var(--ft-border); }
+.receipt-edit-table th:first-child { width:250px; right:0; z-index:5; }
+.receipt-edit-table th:nth-child(2) { width:80px; } .receipt-edit-table th:nth-child(3) { width:70px; }
+.receipt-edit-table th:nth-child(4), .receipt-edit-table th:nth-child(6) { width:145px; }
+.receipt-edit-table th:nth-child(5), .receipt-edit-table th:nth-child(7) { width:100px; }
+.receipt-edit-table th:nth-child(8) { width:85px; }
+.receipt-edit-table td { height:38px; padding:2px 5px; border-bottom:1px solid var(--ft-border); background:var(--ft-bg); }
+.receipt-edit-table td.receipt-product-cell { position:sticky; right:0; z-index:2; background:var(--ft-bg-secondary); padding-inline-end:44px; }
+.receipt-edit-table input { width:100%; min-width:0; height:32px; padding:3px 5px; border:1px solid transparent; border-radius:4px; background:transparent; color:inherit; font:inherit; }
+.receipt-edit-table input[aria-invalid=true] { border-color:var(--ft-warning,#bd8424); background:color-mix(in srgb,var(--ft-warning,#bd8424) 8%,transparent); }
+.receipt-edit-table input:focus-visible, .receipt-edit-table button:focus-visible, .receipt-table-scroll:focus-visible, .receipt-review-toolbar input:focus-visible { outline:2px solid var(--ft-primary); outline-offset:-2px; background:var(--ft-bg-secondary); }
+.receipt-edit-table .receipt-number { direction:ltr; text-align:right; font-variant-numeric:tabular-nums; }
+.receipt-edit-table .receipt-line-total { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.receipt-row-actions { white-space:nowrap; } .receipt-edit-table button { background:transparent; color:var(--ft-text-muted); border:0; cursor:pointer; border-radius:4px; min-height:30px; min-width:28px; }
+.receipt-edit-table .receipt-row-marker { position:absolute; inset-inline-end:2px; top:5px; font-size:10px; padding:2px; color:var(--ft-text-muted); }
+.receipt-row-details td { padding:10px; } .receipt-row-details span, .receipt-row-details label { display:inline-block; margin-inline-end:14px; margin-block:4px; }
+.receipt-row-details select { max-width:220px; background:var(--ft-bg-secondary); color:var(--ft-text); border:1px solid var(--ft-border); padding:5px; }
+.receipt-add-row { align-self:start; padding:4px 8px; border:0; background:transparent; color:var(--ft-primary); cursor:pointer; }
+.receipt-confirm-check { display:flex; align-items:center; gap:6px; font-size:12px; }
+.receipt-secondary-details { flex-shrink:0; max-height:180px; overflow:auto; padding:8px; border:1px solid var(--ft-border); border-radius:6px; font-size:12px; }
+.receipt-context-action, .receipt-duplicate-details { font-size:12px; }
+.receipt-discrepancy { display:block; font-size:11px; font-weight:400; color:var(--ft-text-muted); }
+.receipt-table-empty { padding:12px; }
+.shopping-receipt-dialog .ui-dialog-footer { padding-block:10px; font-size:13px; }
+@media(max-width:640px) {
+ .shopping-receipt-dialog .ui-dialog-header { padding:12px 16px; }
+ .shopping-receipt-dialog .ui-dialog-body { padding:8px; }
+ .receipt-review-toolbar { gap:4px; }
+ .receipt-review-toolbar > input { width:132px; font-size:12px; }
+ .receipt-review-toolbar > button { padding:4px; font-size:12px; }
+ .receipt-edit-table { min-width:970px; }
+ .receipt-edit-table th:first-child { width:180px; }
+ .receipt-edit-table td.receipt-product-cell { padding-inline-end:36px; }
+ .receipt-confirm-check { font-size:11px; }
+ .shopping-receipt-dialog .ui-dialog-footer { padding:8px 12px; gap:6px; }
+ .shopping-receipt-dialog .ui-dialog-footer > div { flex-basis:auto; flex:1; }
+}
+
+.receipt-product-details { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; }
+.receipt-product-details label { display:flex; align-items:center; gap:6px; }
+.receipt-product-details input { max-width:200px; }
+.receipt-lookup-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; margin-block:4px; }
+.receipt-name-proposal { display:flex; align-items:center; gap:4px; font-size:10px; }
+.receipt-name-proposal > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.receipt-name-proposal button { flex-shrink:0; font-size:10px; padding:2px 3px; }
+.receipt-personal-link { width:100%; }
+.receipt-row-detail-content { position:sticky; right:0; max-width:100%; }
+@media(max-width:640px) {
+ .receipt-row-detail-content { width:calc(100vw - 44px); }
+ .receipt-product-details { gap:6px; }
+ .receipt-product-details label { flex-wrap:wrap; max-width:100%; }
+ .receipt-product-details input, .receipt-product-details select { max-width:100%; }
+}
+.receipt-personal-link summary, .shopping-personal-products summary { cursor:pointer; }
+.shopping-personal-products { margin-block:8px; }

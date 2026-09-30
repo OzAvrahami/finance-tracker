@@ -148,6 +148,7 @@ exports.getShoppingListById = async (req, res) => {
       .from('shopping_lists')
       .select(`
         *,
+        shopping_confirmed_purchases(items,basis,purchase_date),
         shopping_list_items(
           *,
           shopping_catalog_items(name, default_unit, default_price),
@@ -221,10 +222,7 @@ exports.deleteShoppingList = async (req, res) => {
   try {
     const { id } = req.params;
 
-    await supabase.from('shopping_checkouts').delete().eq('list_id', id);
-    await supabase.from('shopping_list_items').delete().eq('list_id', id);
-
-    const { error } = await supabase.from('shopping_lists').delete().eq('id', id);
+    const { error } = await supabase.rpc('shopping_delete_draft', { p_list: id });
     if (error) throw error;
 
     res.json({ success: true });
@@ -413,68 +411,12 @@ exports.toggleItemPurchased = async (req, res) => {
 exports.checkoutList = async (req, res) => {
   try {
     await require('../services/savingsTransactionService').rejectUnsupported(supabase, req.body, [req.body.category_id]);
-    const { id } = req.params;
-    const { payment_source_id, category_id } = req.body;
-
-    // Fetch list with items
-    const { data: list, error: listErr } = await supabase
-      .from('shopping_lists')
-      .select('*, shopping_list_items(*)')
-      .eq('id', id)
-      .single();
-
-    if (listErr) throw listErr;
-    if (list.status === 'checked_out') {
-      return res.status(400).json({ error: 'List is already checked out' });
-    }
-
-    // Calculate total from purchased items
-    const purchasedItems = (list.shopping_list_items || []).filter(i => i.is_purchased);
-    const totalAmount = purchasedItems.reduce((sum, item) => {
-      return sum + ((Number(item.quantity) || 1) * (Number(item.price) || 0));
-    }, 0);
-
-    // Create transaction
-    const { data: transaction, error: transErr } = await supabase
-      .from('transactions')
-      .insert([{
-        description: list.title,
-        movement_type: 'expense',
-        category_id: category_id || null,
-        payment_source_id: payment_source_id || null,
-        total_amount: totalAmount,
-        transaction_date: new Date().toISOString().split('T')[0],
-        charge_date: new Date().toISOString().split('T')[0],
-        created_at: new Date(),
-      }])
-      .select();
-
-    if (transErr) throw transErr;
-
-    // Create checkout record
-    const { data: checkout, error: checkoutErr } = await supabase
-      .from('shopping_checkouts')
-      .insert([{
-        list_id: parseInt(id),
-        checkout_date: new Date().toISOString().split('T')[0],
-        total_amount: totalAmount,
-        payment_source_id: payment_source_id || null,
-        category_id: category_id || null,
-        transaction_id: transaction[0].id,
-      }])
-      .select();
-
-    if (checkoutErr) throw checkoutErr;
-
-    // Update list status
-    await supabase
-      .from('shopping_lists')
-      .update({ status: 'checked_out', updated_at: new Date().toISOString() })
-      .eq('id', id);
-
-    res.json({ checkout: checkout[0], transaction_id: transaction[0].id, total_amount: totalAmount });
-  } catch (error) {
-    console.error('checkoutList Error:', error);
-    res.status(500).json({ error: error.message });
-  }
+    const { id, duplicateReviewSchema } = require('../services/shoppingHabitsService');
+    const list = id.parse(req.params.id);
+    const category = req.body.category_id ? id.parse(req.body.category_id) : null;
+    const source = req.body.payment_source_id ? id.parse(req.body.payment_source_id) : null;
+    const {data,error}=await supabase.rpc('shopping_checkout',{p_list:list,p_category:category,p_source:source,...(req.body.duplicate_reviewed_ids !== undefined ? {p_duplicate_reviewed_ids: duplicateReviewSchema.parse(req.body.duplicate_reviewed_ids)} : {})});
+    if(error)throw error;
+    res.json(data);
+  } catch(error) { require('../routes/shoppingIntelligenceRoutes').errorResponse(res,error); }
 };
