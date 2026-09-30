@@ -1,6 +1,58 @@
 # Shopping habits and receipt reconciliation (#92)
 
-Implementation guide; owner acceptance is pending. The owner reports an initial successful live single-receipt extraction; this is not full acceptance. The compact table has been inspected at desktop/mobile widths in both themes. Four-photo boundary evidence is recorded below; broader OCR quality and owner acceptance remain pending. No production migration or configuration is performed by this change.
+Implementation guide. Release-preparation checkpoint (2026-09-30): the owner accepted the name-approval, personal-item mapping and draft-persistence workflow. Earlier pending-acceptance statements below record their dated implementation checkpoints. The initial successful owner extraction and isolated desktop/mobile review are not full OCR or production acceptance. No production migration, configuration or deployment has been performed by this release preparation.
+
+## v1.5.0 deployment preparation
+
+The [prepared release record](../history/RELEASE_1_5_0.md) identifies the exact feature commit and reused tests. The following is an **owner-operated future runbook**, not an executed production procedure. Migrations 039–044 passed isolated/disposable verification only. Repository SQL presence is not an applied-state ledger; see the [database guide](DATABASE.md).
+
+### Prerequisites and cutover order
+
+1. Verify the intended production project and recorded schema through 038 using existing operational evidence and the live catalog. Confirm existing Shopping tables (`shopping_catalog_items`, `shopping_lists`, `shopping_list_items`, `shopping_checkouts`), canonical transactions/categories/payment sources, Savings guards, UUID support and Supabase roles. If any 039–044 objects already exist, reconcile the actual partial state before proceeding; do not blindly rerun files. There is no generic from-empty migration procedure or authoritative repository migration ledger.
+2. Obtain a restorable backup/PITR checkpoint and record a rollback decision boundary. Capture read-only before counts/totals and relevant row fingerprints for canonical transactions, Savings, Loans, Budget, Shopping lists/items/checkouts and existing APY provenance. Record any pre-existing receipt/identifier data if upgrading a partial installation. Counts alone are not a backup.
+3. Coordinate the owner-managed merge/push and deployment trigger **before** cutover. Automatic Railway/Vercel behavior must be checked in their current settings; this run does not inspect/change them. Pause Shopping mutations and keep old clients from writing throughout migration/backend/frontend cutover, using an owner-controlled maintenance/access window. No Shopping maintenance environment flag is implemented. The old checkout performs multiple writes and must not remain available as a fallback against the upgraded schema.
+4. Apply each complete, unchanged SQL file below in ascending order as the database owner through the approved SQL execution path. Submit one full file per transaction. Stop on any error. Earlier successful files remain committed; a failing file rolls back its own transaction. Do not run `full_schema.sql` against production.
+5. Perform the postflight below after **all six** migrations. Reload PostgREST's schema cache after successful verification (owner-operated `NOTIFY pgrst, 'reload schema';`). Keep writes paused until the new runtime and schema are both ready.
+6. Configure only the documented server variables below through a separately authorized operation. Deploy the backend including the repository-root `shared/` modules it imports, then the matching frontend from the same integrated release commit. Verify `/health`, exact deployment SHA, authenticated read-only Shopping/catalog/list/review routes and existing draft readability. Force old clients to reload before lifting the write pause. Do not use checkout or history confirmation as a casual smoke test.
+7. Reopen normal Shopping access only after these checks. Any live OCR, purchase-history confirmation or financial checkout test requires a separate deliberate owner action. Keep both existing Apple/FlowLink ingestion flags unchanged and disabled. Record actual migration/deployment outcomes separately from this preparation.
+
+### Exact migration sequence and effects
+
+Every file explicitly wraps its commands in `BEGIN` / `COMMIT`. Except 043, these are single-run schema upgrades, not idempotent deployment scripts.
+
+| File | Effect and compatibility boundary |
+| --- | --- |
+| [039](../../server/migrations/039_shopping_purchase_receipts.sql) | Adds regular items, frozen purchase plans, receipts and confirmed purchases; item-write lock trigger and private atomic receipt/checkout/suggestion/deletion commands. Existing checkboxes are not backfilled as confirmed history. |
+| [040](../../server/migrations/040_shopping_receipt_photos.sql) | Adds ordered image-hash arrays, constraints/index and updated receipt command. Existing one-image receipts become one-element sets. |
+| [041](../../server/migrations/041_shopping_receipt_reprocessing.sql) | Adds reprocessing request identity and bounded previous-draft archive; replaces receipt command, preserving five-attempt and financial safeguards. |
+| [042](../../server/migrations/042_shopping_product_identity_prices.sql) | Adds string identifiers, lookup cache, durable draft/revision fields and private lookup/draft/name commands; receipt/checkout replacements retain exact discount handling. |
+| [043](../../server/migrations/043_shopping_draft_archive.sql) | Replaces receipt command so live submitted edits take precedence in archives and identical request replay precedes stale-revision rejection. Function-only/repeatable SQL; no reason to rerun routinely. |
+| [044](../../server/migrations/044_shopping_personal_commercial.sql) | Adds commercial products and immutable mapping revisions; links existing identifiers, preserving legacy approved names and personal IDs without guessing conversion factors. Extends cache key to provider/environment/code; replaces lookup signature and makes old name-approval signature delegate to name-only approval. Does not rewrite confirmed snapshots or financial rows. |
+
+### Postflight before lifting the write pause
+
+- Verify all eight new relations: `shopping_regular_products`, `shopping_purchase_plans`, `shopping_receipts`, `shopping_confirmed_purchases`, `shopping_product_identifiers`, `shopping_product_lookup_cache`, `shopping_commercial_products`, `shopping_product_mappings`.
+- Compare columns, constraints and indexes with the six files: receipt per-list/image identities, 1–6 image hashes, five-attempt bound, draft revision/archive, exact string identifier key, provider/environment/code cache key, immutable commercial/revision primary key and unique mapping request key. Verify `shopping_item_write_lock` on `shopping_list_items` and the **latest** function bodies, not just their names.
+- Verify final private RPC signatures, including `shopping_receipt_command(bigint,text,jsonb)`, `shopping_checkout(bigint,bigint,bigint,jsonb)`, `shopping_save_receipt_draft(bigint,integer,integer,jsonb)`, `shopping_claim_product_lookup(text,text,text)` and `shopping_commercial_command(jsonb,uuid)`. The superseded two-argument lookup signature must be absent. Verify the remaining snapshot/duplicate/suggestion/deletion/name helpers against the SQL.
+- Verify RLS and no PUBLIC/anon/authenticated access to new tables or private commands; service-role access only through the trusted backend. Mappings permit service-role SELECT/INSERT, not UPDATE/DELETE. Do not mistake the intentionally pure `shopping_gtin_valid(text)` helper for a privileged command. RLS does not constrain service-role authority.
+- Compare before/after financial, APY and existing Shopping data snapshots: migration itself creates no cash, confirmed purchases or new Shopping checkouts. Existing receipt photo arrays must preserve image identity; existing drafts/history must remain intact. For an installation with 042-approved identifiers, verify 044's linked commercial records/revision-1 legacy mappings; conversion factors remain unknown, and original catalog IDs/approved names are preserved.
+- Stop for unexpected differences, missing privileges/objects, stale PostgREST schema or partial upgrade. Record pass/fail and target identity in an owner-controlled operational record; do not infer success from a deployment health response alone.
+
+### Server configuration
+
+| Variable | Requirement and safe handling |
+| --- | --- |
+| `SHOPPING_RECEIPT_OPENAI_KEY` | Required for extraction only. Server secret in the owner's deployment secret store; never frontend, repository, URL or logs. No value is generated/changed here. |
+| `SHOPPING_RECEIPT_MODEL` | Required for extraction; image input and strict structured JSON support on Chat Completions. Isolated `gpt-5.2` succeeded for tested receipts; verify model access/project budget before enabling production use. |
+| `SHOPPING_PRODUCT_LOOKUP_ENV` | Explicitly choose `staging` (default Food Facts `.net`) or `production` (public Food Facts `.org`). Provider/environment caches remain separate. The explicitly selected Open Products Facts adapter uses its public `.org` catalog regardless of Food Facts staging selection. No private catalog key required. |
+
+Existing server Supabase/auth configuration remains unchanged. Complete catalog provider API-use declaration and retain attribution/licensing before public rollout. Extraction sends receipt images to the configured provider; configure project spending limits. One scan can make up to six per-photo provider calls, not one call for the complete receipt. JPEG/PNG limits are 8 MiB each, 24 MiB total, six images; retry/reprocess has five persisted attempts. `store:false` is implemented but is not a promise about all provider retention policies. Missing OCR configuration leaves extraction unavailable with an actionable configuration error; it does not require disabling ordinary lists or draft/catalog workflows.
+
+### Recovery
+
+Before first new feature writes, retain the upgraded schema and keep Shopping unavailable while correcting migration/deployment failures. A backup restore is a separately reviewed owner operation, not an automatic script. Never retry a single-run migration without first establishing whether it committed.
+
+After any receipt, confirmation, mapping or atomic checkout data exists, retain schema, drafts, occurrence identities, archives and history and forward-fix the runtime. Do not drop the new relations, reset attempts, clear owner corrections, replay confirmation with a new key, or revert to old non-atomic checkout/deletion behavior. A financial discrepancy requires stopping further Shopping writes and reconciling the existing identifiers/transaction, not creating a replacement expense blindly.
 
 ## Personal items and commercial products — current model
 

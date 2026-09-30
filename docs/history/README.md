@@ -11,6 +11,7 @@ for publication and the existing Issue/Project for live acceptance and workflow.
 | [v1.3.0 Savings](RELEASE_1_3_0.md) | Integrated verification, migration and recovery handoff |
 | [v1.3.1](RELEASE_1_3_1.md), [patch review](PATCH_1_3_1_REVIEW.md) | #49/#51/#47 notes and explicit synthetic-preview/DB evidence limits |
 | [v1.4.0 preparation](RELEASE_1_4_0.md) | Actual-tree scope, reused evidence and experimental Wallet limitations |
+| [v1.5.0 preparation](RELEASE_1_5_0.md) | Shopping #92 scope, scoped owner acceptance, migration cutover and unpublished release notes |
 | [Savings implementation handoffs](SAVINGS_FOUNDATION.md) | Dated per-stage object inventory and accounting verification |
 | [APY-03 Shortcut probe](APY_03_APPLE_PAY_SHORTCUT.md) | Real-device evidence and superseded complex Shortcut setup; do not activate from this guide |
 | [FlowLink planning](FLOWLINK_NATIVE_INGESTION_PLAN.md) | Direction before the accepted native contract |

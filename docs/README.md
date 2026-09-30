@@ -17,10 +17,11 @@ This is the documentation entry point. Choose by purpose rather than by issue nu
 
 ## Current baseline and boundaries
 
-Verified for #46 on 2026-09-28 against `9b84a3cd112f28886d96cea249947371de6f5ac9`:
-[v1.4.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0) is stable,
-published and Latest. Seven product-version fields are 1.4.0; FlowLink retains its
-independent 0.1.0 / build 1 version. Repository migrations run through **038**.
+Release-preparation checkpoint 2026-09-30: [v1.4.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0)
+is the published stable release. [v1.5.0 Shopping preparation](history/RELEASE_1_5_0.md)
+synchronizes seven product-version fields to 1.5.0 locally; publication remains pending.
+FlowLink retains its independent native version/build unchanged. Repository migrations
+run through **044**; 039–044 were verified only in isolated/disposable databases.
 File presence is not proof of an applied production migration.
 
 - Budget-origin review and the APY/FlowLink backend foundations are in the release.

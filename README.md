@@ -13,6 +13,8 @@ Its APY/FlowLink foundations include experimental Wallet work: #81/#90 remain
 unaccepted, and publication does not authorize ingestion enablement. This is not
 a tenant-isolated SaaS product; multi-user work is deferred to v2.0.0.
 
+[Shopping v1.5.0 is prepared locally, not published](docs/history/RELEASE_1_5_0.md).
+
 ## Local development
 
 Use Node satisfying `^20.19.0 || >=22.12.0` and npm. Configure an isolated development

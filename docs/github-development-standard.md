@@ -115,7 +115,7 @@ For Release impact: Yes, CHANGELOG must already be Updated under Unreleased at i
 
 Update [CHANGELOG.md](../CHANGELOG.md) under Unreleased during release-relevant implementation, with Issue references and user/operational impact. Keep unreleased content there until candidate finalization. Move only the finalized candidate's entries to its release section; leave unrelated entries under Unreleased. A preparation date must be labelled as preparation, not claimed as publication. Preserve historical release evidence.
 
-Version changes are a later, deliberate release-preparation action after candidate scope/version is finalized. The current authoritative application-version inventory is **seven fields across five tracked files**, reconfirmed at `1.4.0` for the published [v1.4.0 release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0) on 2026-09-28. Metadata synchronization alone is not evidence of publication. FlowLink app version/build numbers are independent and are not part of these seven fields:
+Version changes are a later, deliberate release-preparation action after candidate scope/version is finalized. The current authoritative application-version inventory is **seven fields across five tracked files**, synchronized locally to `1.5.0` for the [prepared v1.5.0 candidate](history/RELEASE_1_5_0.md) on 2026-09-30; [v1.4.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0) remains the published release. Metadata synchronization alone is not evidence of publication. FlowLink app version/build numbers are independent and are not part of these seven fields:
 
 | File | Synchronized fields |
 | --- | --- |

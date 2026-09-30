@@ -10,6 +10,16 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Fixed
+
+- #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
+
+- #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
+
+## [1.5.0] - Prepared (unpublished)
+
+Prepared on 2026-09-30 from #92 feature commit `13c425baec91684974ab2893407159a0b5633400`, relative to published v1.4.0. The coordinated scope is #92; unrelated experimental #90 entries remain tracked under Unreleased even though that code is present in the candidate tree. All seven product-version fields are prepared at 1.5.0. Owner acceptance covers name approval, personal-item mapping and draft persistence; it does not establish complete OCR or production verification. Integration, production migration/deployment, final release commit, tag and publication remain pending. See [release scope, notes and evidence](docs/history/RELEASE_1_5_0.md).
+
 ### Added
 
 - #92: Separate personal shopping needs from exact commercial products. Explicit, revisioned mappings let compatible quantities from several brands fulfill one personal item while preserving every receipt occurrence and historical mapping. Name approval, personal-item linking and purchase confirmation are separate actions. Add compact bulk name proposals and linked-product management; confirmed trips drive personal-item suggestions. Forward migration 044 retains existing catalog IDs, drafts, prices and history.
@@ -27,11 +37,6 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - #92: Make receipt review a compact RTL editable table with on-demand plan/matching details and explicit total discrepancies. Transcribe photos separately and resolve confident adjacent printed-code overlaps while preserving repeated purchases, conflicting readings and uncertain clipped lines for review.
 
 - #92: Keep missing receipt quantities/units reviewable instead of rejecting the whole scan; require completion before confirmation. Distinguish provider/format/validation failures, clarify RTL photo ordering and selected count, and label retained draft totals after failed scans.
-
-- #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
-
-
-- #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
 
 ## [1.4.0] - Prepared (unpublished)
 
