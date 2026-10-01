@@ -1,5 +1,21 @@
 # APY integrated readiness (#84)
 
+## Current candidate preparation - 2026-10-01
+
+The owner committed/pushed the consumer correction at
+`7933ebc3e42586ec7c16f48e6aa5506f42bbc248` and Bridge at
+`3f9ebcbe33fcd6243569d23338b551e934b5b77b`. Candidate metadata is now prepared
+locally as **Finance Tracker 1.6.0 / Bridge 3.1.0**, with unchanged dependencies.
+See [current release notes and deployment sequence](../history/RELEASE_1_6_0.md);
+the earlier deferred-version and activation-blocker checkpoints below remain history.
+
+The previously blocked actual-exporter/disposable-PostgreSQL persistence/replay test
+now passes **1/1**. Focused mixed-stream/rejection/frozen-retry/export checks pass
+**4/4**. Interactive Bridge settings selection/save/reload remains unverified because
+automatic approval review blocked the isolated Electron launch. No normal settings,
+ledger, owner fixture or production state was changed. Deployment and CAL/phone
+activation remain distinct; preparation does not claim full installment support.
+
 ## Coordinated local correction — 2026-10-01
 
 **The demonstrated FX wire-contract gap is corrected locally. Commit readiness and

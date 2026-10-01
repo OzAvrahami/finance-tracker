@@ -8,12 +8,10 @@ SwiftUI FlowLink companion in the same repository.
 **Start with the [documentation index](docs/README.md)** for setup, architecture,
 database guidance, operator instructions and historical evidence.
 
-[v1.4.0 is published](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0).
-Its APY/FlowLink foundations include experimental Wallet work: #81/#90 remain
-unaccepted, and publication does not authorize ingestion enablement. This is not
-a tenant-isolated SaaS product; multi-user work is deferred to v2.0.0.
-
-[Shopping v1.5.0 is prepared locally, not published](docs/history/RELEASE_1_5_0.md).
+[v1.5.0 is published](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.5.0).
+[v1.6.0 reconciliation is prepared locally, unpublished](docs/history/RELEASE_1_6_0.md).
+Deployment does not authorize CAL/phone activation or imply complete device acceptance.
+This is not a tenant-isolated SaaS product; multi-user work is deferred to v2.0.0.
 
 ## Local development
 

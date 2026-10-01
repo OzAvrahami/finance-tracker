@@ -10,7 +10,18 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Fixed
+
+- #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
+
+- #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
+
+## [1.6.0] - Prepared (unpublished)
+
+Prepared on 2026-10-01 for #82/#83 and the #84 billing-contract correction. Deployment and CAL/phone activation remain separate. See [release notes and cutover prerequisites](docs/history/RELEASE_1_6_0.md).
+
 ### Added
+
 - #84 compatibility: opt-in CAL v2 carries exact billed ILS and original FX evidence through the shared atomic ingestion path, with old/new retry compatibility and immutable provenance (Migration 047 after 045/046). Coordinated Bridge selection is scoped to exact producer/account/payment-source streams, preserving other streams' legacy delivery and frozen retries. Activation still requires matching consumer registration and explicit unsupported-event handling; real installment coverage remains unverified.
 - Transactions now show compact Apple Pay/CAL source status and an owner-only pending-evidence review dialog. Explicit linking adds provenance without another expense; separate-purchase decisions reuse atomic APY commands with revision checks and durable retry identity. Safe source details preserve provider merchant text and owner descriptions (#83). Requires additive Migration 046 after 045 and the existing owner allowlist; ingestion activation remains separate.
 - Opt-in CAL/Card-site ingestion on the existing external API now shares FlowLink's atomic APY reconciliation, with durable external-ID retries, conservative review of differing merchant names, preserved owner fields, and duplicate-expense protection across arrival orders (#82). Requires Migration 045 and explicit server-side account registration; unsupported accounting cases fail safely and production activation remains separate.
@@ -18,10 +29,6 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Fixed
 
 - #83: Format Transactions amounts consistently to two decimal places in desktop/mobile rows without leaking PostgreSQL numeric scale or treating missing amounts as zero. Refine reconciliation into a compact Hebrew queue and structured purchase comparison with localized metadata and explicit financial-effect actions; preserve existing review decisions and retry safeguards.
-
-- #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
-
-- #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
 
 ## [1.5.0] - Prepared (unpublished)
 

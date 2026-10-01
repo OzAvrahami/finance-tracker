@@ -17,7 +17,8 @@ This is the documentation entry point. Choose by purpose rather than by issue nu
 
 ## Current baseline and boundaries
 
-For the 2026-10-01 v1.5.0 publication and proposed v1.6.0 #82/#83 checkpoint, see
+For published v1.5.0 and the 2026-10-01 prepared v1.6.0 #82/#83 candidate, see
+[release preparation](history/RELEASE_1_6_0.md) and
 [integrated readiness](operations/APY_06_RELEASE_READINESS.md). The release-preparation
 and device-acceptance statements below describe the earlier checkpoint, not later acceptance.
 
