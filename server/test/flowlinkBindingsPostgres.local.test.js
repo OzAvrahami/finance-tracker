@@ -112,6 +112,7 @@ test('037 upgrade, rerun, failed migration rollback and full schema definitions 
   assert.notEqual(sql(db, migration.replace('COMMIT;', 'SELECT 1/0; COMMIT;'), true).status, 0);
   assert.equal(scalar(db, "SELECT to_regclass('flowlink_card_bindings') IS NULL;"), 't');
   sql(db, migration);sql(db, migration);assert.deepEqual(financialSnapshot(db), snap);
+  for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).filter(f => /^\d{3}_.*\.sql$/.test(f) && Number(f.slice(0,3)) > 38).sort()) sql(db, fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
   const defs = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace;");
   assert.deepEqual(defs(db), defs('flowlink_clean'));
 });

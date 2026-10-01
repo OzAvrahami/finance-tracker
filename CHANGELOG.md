@@ -10,6 +10,9 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+- Opt-in CAL/Card-site ingestion on the existing external API now shares FlowLink's atomic APY reconciliation, with durable external-ID retries, conservative review of differing merchant names, preserved owner fields, and duplicate-expense protection across arrival orders (#82). Requires Migration 045 and explicit server-side account registration; unsupported accounting cases fail safely and production activation remains separate.
+
 ### Fixed
 
 - #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.

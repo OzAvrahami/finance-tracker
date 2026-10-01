@@ -71,6 +71,7 @@ const command = (name) => (db, requestKey, payload) => {
 // outside this wrapper. Dry-run never calls this adapter; no source matching occurs.
 const insertLegacyTransaction = (db, row) => db.from('transactions').insert(row).select('id, external_id, created_at').single();
 module.exports = { ingestObservation,
+  ingestCalV1: (db, key, source, observation, request) => rpc(db, 'ingest_cal_v1', { p_request_key: key, p_source: source, p_observation: observation, p_request: request }),
   ingestFlowlinkObservation: (db, digest, request) => rpc(db, 'ingest_flowlink_observation', { p_credential_sha256: digest, p_request: request }), amendObservation: command('amend_observation'),
   resolveObservation: command('resolve_observation'), cancelIngestedTransaction: command('cancel_ingested_transaction'),
   configureSource: command('configure_ingestion_source'), insertLegacyTransaction,

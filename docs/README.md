@@ -52,6 +52,7 @@ owns live Issue state; dated handoffs below must not be interpreted as current s
 - [Shopping habits, receipt review and OCR setup](operations/SHOPPING_RECEIPTS.md)
 - [Database files and operational SQL checks](operations/DATABASE.md)
 - [Funded Budget migration boundaries](operations/FUNDED_BUDGET_MIGRATION_RUNBOOK.md)
+- [CAL / FlowLink reconciliation and producer transition](operations/APY_04_CAL_RECONCILIATION.md)
 - [APY foundation, compatibility and recovery](operations/APY_02_INGESTION_FOUNDATION.md)
 - [FlowLink device enrollment](operations/FLI_02_DEVICE_ENROLLMENT.md)
 - [FlowLink card bindings and authorized writes](operations/FLI_03_CARD_BINDINGS.md)

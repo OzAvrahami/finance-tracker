@@ -88,12 +88,13 @@ test('036 upgrade, clean installation, rerun and rollback preserve financial sch
   const broken = migration.replace('COMMIT;', "SELECT 1/0; COMMIT;");
   assert.notEqual(sql(db, broken, true).status, 0);assert.equal(scalar(db, "SELECT to_regclass('public.flowlink_devices') IS NULL;"), 't');
   sql(db, migration);sql(db, migration);
+  const existing = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'apy_%' OR proname LIKE 'savings_%' OR proname='ingest_observation');");
+  assert.deepEqual(existing(db), existing('flowlink_baseline'));
   for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).filter(f => /^\d{3}_.*\.sql$/.test(f) && Number(f.slice(0, 3)) > 37).sort()) sql(db, fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
   assert.deepEqual(financialSnapshot(db), snapshot);
   const definitions = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE '%flowlink%';");
   assert.deepEqual(definitions(db), definitions('flowlink_clean'));
-  const existing = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'apy_%' OR proname LIKE 'savings_%' OR proname='ingest_observation');");
-  assert.deepEqual(existing(db), existing('flowlink_baseline'));
+
 });
 test('HTTP creates 10-minute digest-only capability and one enrolled device/credential', async t => {
   const c = await make(t), e = await enroll(c);

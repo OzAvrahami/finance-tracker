@@ -62,6 +62,8 @@ test('035 upgrade and clean 036 install agree; backfill/rerun preserve historica
   sql(db,migration);sql(db,migration);
   assert.equal(scalar(db,'SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM transactions t;'),cash);
   assert.deepEqual(json(db,"SELECT jsonb_build_object('count',count(*),'origin',min(evidence_origin),'occurred',count(occurred_at),'minor',count(amount_minor)) FROM transaction_source_observations;"),{count:1,origin:'legacy_backfill',occurred:0,minor:0});
+  // Compare the same current schema boundary after proving 036 backfill/rerun above.
+  for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>36).sort())sql(db,read('server/migrations/'+f));
   const definitions = d => json(d,"SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'apy_%' OR proname IN ('ingest_observation','savings_guard_transaction'));");
   assert.deepEqual(definitions(db),definitions('apy_clean'));
 });

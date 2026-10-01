@@ -359,6 +359,15 @@ excuse to create a new purchase. Distinct compatible records already carrying a
 different observation from this source are saturated; no-time overlap with these
 is review, not automatically a fresh CAL purchase.
 
+**APY-04 implementation clarification (2026-10-01):** merchant compatibility is
+required for the automatic date-only/time tiers, but incompatible merchant text is
+not proof of a distinct purchase. Retrieve same-card/exact-money/direction/date-window
+cross-source records as weak review candidates too. Never attach them merely by that
+coarse tuple or create avoidable cash because the two providers use different names.
+Historical/manual cash is also weak review evidence, not inferred CAL enrollment.
+Independent same-source keys still represent separate occurrences; no global tuple
+uniqueness is introduced. See the [implemented CAL adapter and explicit transition](../operations/APY_04_CAL_RECONCILIATION.md).
+
 ### Stage B: lexicographic evidence, no invented numeric score
 
 Apply in order; never break a tie by transaction ID, arrival order or newest row:

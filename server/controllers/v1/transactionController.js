@@ -3,6 +3,8 @@ const supabase = require('../../config/supabase');
 const { rejectUnsupported } = require('../../services/savingsTransactionService');
 const { insertLegacyTransaction } = require('../../services/transactionIngestionService');
 
+const cal = require('../../services/calIngestionService');
+
 const schema = z.object({
   type: z.enum(['expense', 'income']),
   amount: z.number().positive(),
@@ -27,6 +29,16 @@ const schema = z.object({
 });
 
 async function createTransaction(req, res) {
+  // Explicit server registration selects this producer; hashes/names alone never infer CAL.
+  try {
+    const profile = cal.selectProfile(req.body);
+    if (profile) {
+      const result = await cal.handleCal(supabase, profile, req.body);
+      return res.status(result.status).json(result.body);
+    }
+  } catch (error) {
+    return res.status(error.status || 503).json({ error: error.calCode || 'cal_unavailable' });
+  }
   try { await rejectUnsupported(supabase, req.body, [req.body.category_id]); }
   catch (error) { return res.status(422).json({ error: error.code || 'SAVINGS_UNSUPPORTED_PATH', message: error.message }); }
   const parsed = schema.safeParse(req.body);
@@ -183,6 +195,7 @@ async function createTransaction(req, res) {
     }
 
     // FK violation: category_id or payment_source_id doesn't exist
+    if (error.code === 'PCAL1') return res.status(503).json({ error: 'cal_adapter_required' });
     if (error.code === '23503') {
       const field = error.detail?.includes('category_id') ? 'category_id'
         : error.detail?.includes('payment_source_id') ? 'payment_source_id'
