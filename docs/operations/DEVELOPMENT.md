@@ -86,6 +86,14 @@ Root `npm start` / server `index.js` are backend entry points. Provider deployme
 triggers are externally configured; a main push may deploy. This repository does not
 prove Railway/Vercel trigger settings or current environment values.
 
+For the prepared v1.5.0 candidate, root [railway.json](../../railway.json) selects
+[Dockerfile.backend](../../Dockerfile.backend): repository-root context, locked
+server-only installation and the shared calculation modules. Changing the existing
+provider source root requires a controlled owner cutover. Follow the
+[Shopping packaging/settings and hold runbook](SHOPPING_RECEIPTS.md#packaging-correction-and-provider-settings),
+including unresolved Vercel preview isolation, before pushing or merging. Use
+`python docs/operations/verify_deployment_package.py` for clean local artifact checks.
+
 Express trusts the first proxy; its explicit general CORS list includes localhost:5173
 and one Vercel origin. Dedicated Apple/FlowLink routers apply their own narrow
 authentication and request controls before the general middleware. Do not broaden

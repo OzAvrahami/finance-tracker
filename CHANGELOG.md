@@ -32,6 +32,8 @@ Prepared on 2026-09-30 from #92 feature commit `13c425baec91684974ab2893407159a0
 
 - #92: Normalize equivalent receipt-unit spellings without converting weight/volume/package units. Recompute unit-only conflicts for saved unconfirmed reviews without rescanning, retain raw evidence/owner corrections, and restore only exactly supported net prices.
 
+- #92 / v1.5.0 preparation: Package the backend from repository-root context with locked server dependencies and shared calculations; make frontend installation/build settings explicit. Add clean Linux artifact validation and a controlled provider/migration cutover runbook. Live provider settings and deployment remain owner-operated prerequisites.
+
 - #92: Add explicit same-photo reprocessing with atomic request replay, preserved correction/extraction backups and unchanged five-attempt/financial safeguards (forward migration 041). Record complete provider usage metadata and expose draft recovery in receipt details.
 
 - #92: Make receipt review a compact RTL editable table with on-demand plan/matching details and explicit total discrepancies. Transcribe photos separately and resolve confident adjacent printed-code overlaps while preserving repeated purchases, conflicting readings and uncertain clipped lines for review.

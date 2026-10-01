@@ -14,7 +14,60 @@ The [prepared release record](../history/RELEASE_1_5_0.md) identifies the exact 
 4. Apply each complete, unchanged SQL file below in ascending order as the database owner through the approved SQL execution path. Submit one full file per transaction. Stop on any error. Earlier successful files remain committed; a failing file rolls back its own transaction. Do not run `full_schema.sql` against production.
 5. Perform the postflight below after **all six** migrations. Reload PostgREST's schema cache after successful verification (owner-operated `NOTIFY pgrst, 'reload schema';`). Keep writes paused until the new runtime and schema are both ready.
 6. Configure only the documented server variables below through a separately authorized operation. Deploy the backend including the repository-root `shared/` modules it imports, then the matching frontend from the same integrated release commit. Verify `/health`, exact deployment SHA, authenticated read-only Shopping/catalog/list/review routes and existing draft readability. Force old clients to reload before lifting the write pause. Do not use checkout or history confirmation as a casual smoke test.
-7. Reopen normal Shopping access only after these checks. Any live OCR, purchase-history confirmation or financial checkout test requires a separate deliberate owner action. Keep both existing Apple/FlowLink ingestion flags unchanged and disabled. Record actual migration/deployment outcomes separately from this preparation.
+7. Reopen normal Shopping access only after these checks. Any live OCR, purchase-history confirmation or financial checkout test requires a separate deliberate owner action. Preserve the existing Apple/FlowLink ingestion configuration and flag values; do not enable or disable them for this Shopping release. Record actual migration/deployment outcomes separately from this preparation.
+
+### Packaging correction and provider settings
+
+Read-only provider inspection on 2026-09-30 found Railway production at main `2e25f38089d87ad91e68c6ac06feef3b1b735a09`, root `/server`, Railpack autodetection, no custom install/build/start/predeploy command, automatic main deployment enabled without waiting for check suites, and PR environments disabled. That source root excludes #92's new `shared/` imports and must change **before deploying #92**. Settings below are proposed, not applied.
+
+The repository uses Railway's supported repository-root/shared-monorepo context with an explicit [Dockerfile.backend](../../Dockerfile.backend), selected by [railway.json](../../railway.json). This deliberately replaces Railpack's automatic installation for this service so the real install phase is locked to `server/package-lock.json`. A build-command override alone would not replace an earlier autodetected install. No workspace migration, root lockfile or duplicate calculations are introduced.
+
+| Railway setting | Required effective value |
+| --- | --- |
+| Source Root Directory | Repository root `/` (clear the existing `/server` override in the dashboard) |
+| Config File | `/railway.json` at repository root; confirm the deployment details show it was consumed |
+| Builder / Dockerfile | `DOCKERFILE` / `Dockerfile.backend`, from repository configuration |
+| Install | Dockerfile: `npm ci --prefix server --omit=dev --no-audit --no-fund` |
+| Runtime | Official `node:22-bookworm-slim`; Node 22 satisfies the existing `^20.19.0 || >=22.12.0` contract. Tested resolution: Node 22.23.3. No engine/version field changes. |
+| Start | `npm --prefix server start`, from config and Docker CMD; `server/package.json` resolves this to `node index.js` with server working directory |
+| Health | `/health`, 60-second timeout, from repository config; database readiness still needs separate postflight |
+| Watch paths | `/server/**`, `/shared/**`, `/Dockerfile.backend`, `/.dockerignore`, `/railway.json`, `/package.json` |
+| Predeploy | None; migrations remain explicit owner operations, not startup/install hooks |
+
+The root `npm start` currently delegates to the same server command, but is not the artifact entry point. Root `postinstall` runs `npm install --prefix server`; this packaging never invokes root installation. The Docker context allowlist excludes local environments, client assets, tests, SQL, owner exports, drafts and node_modules; dependencies are installed inside the image. The non-root runtime contains `/app/server` and `/app/shared` with their original relative paths. Future runtime directories/assets must be explicitly included and revalidated.
+
+| Vercel setting | Required effective value / outstanding readback |
+| --- | --- |
+| Root Directory | `client` |
+| Include source files outside Root Directory in Build Step | Enabled, so `../shared/` is available; this is a dashboard setting, not established by `client/vercel.json` |
+| Node.js Version | 22.x (supported by existing engines; Linux validation used 22.23.3) |
+| Install / Build / Output | `npm ci --include=dev --no-audit --no-fund` / `npm run build` / `dist`, now explicit in [client/vercel.json](../../client/vercel.json); SPA rewrite preserved |
+| Production Branch | Confirm `main` before cutover |
+| Preview triggers and Git integration | Read back branch-push/PR rules before pushing. GitHub shows previous Vercel previews, but does not establish current rules. |
+| Skip unaffected projects / Ignored Build Step | Do not skip changes to root `shared/` or relevant client/config files. With no workspace dependency graph, disable skipping until shared-only changes are proven to trigger builds. |
+| Preview API/Auth targeting | Preview `VITE_API_URL`, `VITE_SUPABASE_URL` and public anon key must refer to the intended isolated backend/Auth project; confirm target identities without exposing key values. No fallback to production or inherited production targets. |
+
+No authenticated Vercel CLI/connector/browser session was available for current settings. **Pushing remains on hold** until the owner provides non-secret readbacks/screenshots of Build and Deployment (root, inclusion, Node, skipping), Git (production/preview rules), and Preview environment scopes/target identities. Never share tokens, service-role keys or unmasked key values. A preview URL is not proof of data isolation. The current server CORS list permits the existing production origin and localhost, not arbitrary preview URLs: an interactive isolated preview also needs an explicitly approved isolated-backend origin; do not broaden production CORS to make it work. A build-only preview must not be used as an interactive financial test.
+
+Sources: [Railway shared monorepos](https://docs.railway.com/deployments/monorepo), [Railway repository configuration](https://docs.railway.com/config-as-code/reference), [Vercel build settings](https://vercel.com/docs/builds/configure-a-build), [Vercel outside-root source inclusion](https://vercel.com/docs/monorepos/monorepo-faq).
+
+### Controlled hold and local artifact evidence
+
+Owner authorization update (2026-10-01): production hosting configuration, pending 039–044 migrations, push/integration and ordered deployment are authorized. First finish staging and **pause for the owner's manual packaging commit before holding deployments or modifying production**. Then inspect/control unwanted preview triggers directly; no new preview environment is required. If authenticated access is missing, request only the concrete access action needed. The owner also reports successful #90 phone execution with the transaction saved in the app; preserve that working configuration and do not treat it as a Shopping blocker.
+
+Before **any branch push/PR**, resolve or suppress Vercel preview execution/targeting through owner-operated settings. Before **main merge**, the owner must hold Railway main autodeployment and Vercel production deployment in their respective Git/deployment settings (record existing settings for restoration). Do not assume a draft PR, GitHub checks, or Railway's disabled PR environments prevent Vercel builds. Do not apply provider setting changes if they would immediately deploy before the hold is effective.
+
+Under that hold: prepare the root/config settings above; verify backup and baseline; pause Shopping writes; apply and verify 039–044 as ordered below; set server-only OCR/catalog configuration; integrate the reviewed commit; deploy **backend first** from the final SHA; verify package/shared imports, health and authenticated read-only schema access; deploy matching frontend; verify API/Auth targets, Shopping rendering and saved drafts before lifting the write pause. Restore automatic triggers only after both artifacts and postflight pass. Retain schema/history and forward-fix after new feature data exists. No migration, flag change or deployment is performed by this preparation.
+
+Reproducible packaging check, from the repository:
+
+```powershell
+python docs/operations/verify_deployment_package.py
+```
+
+This exports committed `HEAD` to an owned temporary directory and overlays only the four reviewed packaging configurations. It reads no local environment files or untracked owner data. Docker installs dependencies from the committed lockfiles; backend startup uses dummy configuration and `--network none`, exposes no host port, and contacts no database. No scheduler is launched and no jobs or financial endpoints are called. Frontend compilation uses only loopback/public fixture targets; three synthetic server-secret sentinels must be absent from `dist`. Temporary containers/images/export are cleaned up; Docker build caches may remain. This is a packaging health check, not database or provider-deployment acceptance.
+
+Final local result: **7/7 checks passed**; Node 22.23.3; backend installed 142 packages, started with the proposed command, resolved both shared modules and returned HTTP 200 `OK`; frontend installed 334 packages and built 2,621 modules. Existing Vite large-chunk advisory remains. Docker's secret-named-ENV warnings occur only in the temporary frontend test Dockerfile containing fake sentinel values, not in `Dockerfile.backend` or real credentials. An intermediate allowlist assertion caught excluded test files being included; the pattern was corrected and the final artifact rerun passed. Feature suites/OCR were not repeated. Actual Railway/Vercel deployment and preview-target verification remain pending.
 
 ### Exact migration sequence and effects
 

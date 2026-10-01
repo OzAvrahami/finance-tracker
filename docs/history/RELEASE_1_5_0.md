@@ -4,11 +4,11 @@ Prepared 2026-09-30. This is not a publication or production verification record
 
 ## Candidate and acceptance
 
-- Feature: `13c425baec91684974ab2893407159a0b5633400` (`feat(shopping): add purchase habits and receipt reconciliation (#92)`). Preparation remains uncommitted on `feat/shopping-habits-receipts-92`; the final integrated release SHA must be verified later.
+- Feature: `13c425baec91684974ab2893407159a0b5633400` (`feat(shopping): add purchase habits and receipt reconciliation (#92)`). The owner committed release preparation as `fab1ad84e86a00d758921aea9f46699783a77f59`. The packaging correction still requires the owner's commit on `feat/shopping-habits-receipts-92`; the final integrated release SHA must be verified later.
 - Baseline: published v1.4.0, `9b84a3cd112f28886d96cea249947371de6f5ac9`.
 - Coordinated scope: [#92](https://github.com/OzAvrahami/finance-tracker/issues/92). The owner accepted the name-approval, personal-item mapping and draft-persistence workflow. This does not imply every receipt, financial scenario or production installation has been verified. Keep the issue open pending integration/release completion; Project fields remain automation-owned.
-- Actual intervening tree also contains #46 documentation/database-check organization (`71faa5c`) and #90 native corrections (`52abba4`, `97556f8`, `2e25f38`). #46 has no product SemVer impact. #90 remains experimental/unaccepted: its unrelated CHANGELOG entries remain under Unreleased, not claimed as accepted #92 scope. This is a release of the complete integrated tree, not a selective exclusion of those commits.
-- #81/#90 acceptance and real Wallet-charge/locked-device verification remain outstanding. APY CAL/review/E2E work and FlowLink #91 are not completed by this candidate. Neither ingestion flag is enabled. Multi-user drafts and work remain outside this release, deferred to v2.0.0.
+- Actual intervening tree also contains #46 documentation/database-check organization (`71faa5c`) and #90 native corrections (`52abba4`, `97556f8`, `2e25f38`), already on main. #46 has no product SemVer impact. On 2026-10-01 the owner reports that #90 was successfully tested on the phone and the transaction was saved in the app. Record that specific successful evidence without inferring a particular backend financial state or every device scenario. #90 is not a blocker for #92; preserve its working configuration. Its separately tracked CHANGELOG entries remain under Unreleased. This is a release of the complete integrated tree, not a selective exclusion of those commits.
+- #81 and unfinished APY CAL/review/E2E work and FlowLink #91 are not completed by this candidate. Preserve the existing ingestion settings rather than changing them for Shopping. Multi-user drafts and work remain outside this release, deferred to v2.0.0.
 
 ## Release notes
 
@@ -23,7 +23,7 @@ Finance Tracker adds Shopping purchase habits and receipt reconciliation in the 
 
 External catalog coverage is incomplete, including household products and retailer-specific codes. Exact-code results can still require owner review; absent matches retain receipt names. OCR, overlap resolution and quantity conversions are not perfect: uncertain values and total discrepancies need review. Isolated testing and the owner's accepted review workflows do not establish universal extraction quality or production readiness.
 
-The tree retains experimental Apple/FlowLink infrastructure. #81/#90 remain unaccepted; real Wallet-charge verification and unfinished APY work are not claimed complete. No ingestion enablement, native distribution or multi-user capability is included in this release decision.
+The tree retains existing Apple/FlowLink infrastructure. The owner reports successful #90 phone execution with the transaction saved in the app; its working configuration is preserved. This does not complete the separate unfinished APY initiative. No native distribution or multi-user capability is included in this release decision.
 
 ## Evidence reused and release-only verification
 
@@ -39,7 +39,9 @@ Follow the [039–044 deployment runbook](../operations/SHOPPING_RECEIPTS.md#v15
 2. Authorize and perform the documented backup, write pause, preflight, ordered migration, postflight, configuration and deployment sequence. Verify the exact integrated SHA and deployment statuses separately.
 3. Reconfirm all seven fields at that final SHA and that v1.5.0 is still available. Only then separately authorize annotated tag/push and stable GitHub Release publication using **Release notes** above, excluding this preparation record.
 
-No actual release-preparation blocker was found. Production cutover, provider configuration/usage declaration, integration and final-commit verification are outstanding prerequisites, not completed operations.
+The later read-only integration review found a concrete deployment blocker: Railway's `/server` source root omits the new root `shared/` modules. The packaging correction adds repository-root Docker packaging with a locked server-only install, explicit startup/health/watch configuration, and explicit Vercel install/build/output commands. Local clean-export Linux validation passed **7/7** checks (backend startup/shared imports, frontend build and server-secret sentinel exclusion); see the [exact provider settings and controlled hold](../operations/SHOPPING_RECEIPTS.md#packaging-correction-and-provider-settings).
+
+The local correction does not change live settings. On 2026-10-01 the owner authorized hosting configuration, pending migrations, integration/push and ordered deployment, with **a mandatory pause for the owner's packaging commit before deployment holds or production modifications**. After that commit, control unwanted preview/production triggers rather than creating a new preview environment, apply the root/context correction and Vercel source inclusion, and execute the existing cutover. Migrations 039–044, production deployment and final integrated SHA verification remain outstanding. The recorded workflow acceptance is unchanged; no additional OCR or financial test is implied.
 
 ## Release / Version gate
 
@@ -53,4 +55,4 @@ No actual release-preparation blocker was found. Production cutover, provider co
 | Version bump | Synchronized locally: seven fields at 1.5.0; dependencies/native versions unchanged |
 | Publication | Pending owner integration, final SHA verification, tag and release authorization |
 | Owner acceptance | Accepted for name approval, personal-item mapping and draft persistence; broader production verification outstanding |
-| Migration/deployment | Pending separately authorized owner operations; none performed here |
+| Migration/deployment | Authorized 2026-10-01; pending owner packaging commit, then controlled cutover; none performed here |
