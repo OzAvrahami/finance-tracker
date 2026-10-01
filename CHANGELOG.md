@@ -11,6 +11,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ## [Unreleased]
 
 ### Added
+- #84 compatibility: opt-in CAL v2 carries exact billed ILS and original FX evidence through the shared atomic ingestion path, with old/new retry compatibility and immutable provenance (Migration 047 after 045/046). Coordinated Bridge selection is scoped to exact producer/account/payment-source streams, preserving other streams' legacy delivery and frozen retries. Activation still requires matching consumer registration and explicit unsupported-event handling; real installment coverage remains unverified.
 - Transactions now show compact Apple Pay/CAL source status and an owner-only pending-evidence review dialog. Explicit linking adds provenance without another expense; separate-purchase decisions reuse atomic APY commands with revision checks and durable retry identity. Safe source details preserve provider merchant text and owner descriptions (#83). Requires additive Migration 046 after 045 and the existing owner allowlist; ingestion activation remains separate.
 - Opt-in CAL/Card-site ingestion on the existing external API now shares FlowLink's atomic APY reconciliation, with durable external-ID retries, conservative review of differing merchant names, preserved owner fields, and duplicate-expense protection across arrival orders (#82). Requires Migration 045 and explicit server-side account registration; unsupported accounting cases fail safely and production activation remains separate.
 

@@ -5,7 +5,7 @@ const { safeResult } = require('./applePayIngestionService');
 const { id, UUID, safeIdentity, keys } = require('../config/applePay');
 const fail = (code, status = 422) => { throw Object.assign(new Error(code), { calCode: code, status }); };
 const fields = ['type', 'amount', 'date', 'description', 'charge_date', 'category_id', 'payment_source_id',
-  'payment_source_name', 'currency', 'original_amount', 'exchange_rate', 'notes', 'tags', 'external_id', 'dry_run'];
+  'payment_source_name', 'currency', 'original_amount', 'exchange_rate', 'notes', 'tags', 'external_id', 'dry_run', 'cal_contract'];
 
 function profiles(env = process.env) {
   if (!env.CAL_INGESTION_SOURCES) return [];
@@ -36,9 +36,30 @@ function exactNumber(value) {
   if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER / 100) fail('invalid_accounting_amount');
   try { return ingestion.money(String(value)).amount; } catch { fail('invalid_accounting_amount'); }
 }
+function billingEvidence(value) {
+  if (!keys(value, ['version', 'billed', 'original', 'event']) || value.version !== 2) fail('cal_contract_invalid');
+  const m = value.billed, e = value.event;
+  if (!keys(m, ['amount', 'currency', 'scale']) || m.currency !== 'ILS') fail('cal_billed_ils_required');
+  let amount; try { amount = ingestion.money(m.amount).amount; } catch { fail('invalid_accounting_amount'); }
+  if (!Number.isInteger(m.scale) || m.scale < 0 || m.scale > 2 || m.scale !== (m.amount.split('.')[1] || '').length) fail('cal_contract_invalid');
+  if (!keys(e, ['kind', 'basis', 'provider_type', 'installment']) || typeof e.provider_type !== 'string' || e.provider_type.length > 100 || /[\p{Cc}]/u.test(e.provider_type)) fail('cal_contract_invalid');
+  if (e.kind === 'refund') fail('cal_refund_policy_required');
+  if (e.basis === 'installment_part') fail('cal_installment_identity_required');
+  if (e.kind !== 'purchase' || !e.provider_type.trim() || e.basis !== 'full_purchase' || e.installment !== undefined) fail('cal_event_semantics_required');
+  const original = value.original;
+  if (original !== null) {
+    if (!keys(original, ['amount','currency','scale']) || !/^[A-Z]{3}$/.test(original.currency || '')
+      || typeof original.amount !== 'string' || !/^\d{1,28}(?:\.\d{1,6})?$/.test(original.amount)
+      || !/[1-9]/.test(original.amount) || !Number.isInteger(original.scale) || original.scale < 0 || original.scale > 6
+      || original.scale !== (original.amount.split('.')[1] || '').length) fail('cal_original_evidence_invalid');
+  }
+  return { billed: { ...m, amount }, original };
+}
 function request(profile, body) {
   if (!keys(body, fields) || (body.dry_run !== undefined && typeof body.dry_run !== 'boolean')) fail('unsupported_field');
-  if (body.type !== 'expense' || (body.currency || 'ILS') !== 'ILS') fail('cal_supported_ils_purchase_required');
+  const explicit = body.cal_contract !== undefined ? billingEvidence(body.cal_contract) : null;
+  if (explicit && (typeof body.amount !== 'number' || !Number.isFinite(body.amount) || body.amount <= 0)) fail('cal_contract_invalid');
+  if (body.type !== 'expense' || (!explicit && (body.currency || 'ILS') !== 'ILS')) fail('cal_supported_ils_purchase_required');
   if (typeof body.external_id !== 'string' || !body.external_id.length || body.external_id.length > 255
     || body.external_id !== body.external_id.trim()) fail('cal_external_id_required');
   if (body.payment_source_name !== profile.payment_source_name
@@ -49,14 +70,15 @@ function request(profile, body) {
       || body.tags.some(t => typeof t !== 'string' || !t.trim() || t.includes(',') || t.length > 100)))) fail('invalid_input');
   if (body.exchange_rate !== undefined) fail('cal_supported_ils_purchase_required');
   if (body.category_id !== undefined && (!Number.isSafeInteger(body.category_id) || body.category_id <= 0)) fail('invalid_category');
-  if (body.original_amount !== undefined && exactNumber(body.original_amount) !== exactNumber(body.amount)) fail('cal_unsupported_amount_basis');
+  if (!explicit && body.original_amount !== undefined && exactNumber(body.original_amount) !== exactNumber(body.amount)) fail('cal_unsupported_amount_basis');
   const observation = {
-    idempotency_key: body.external_id, merchant: body.description, accounting_amount: exactNumber(body.amount),
+    idempotency_key: body.external_id, merchant: body.description, accounting_amount: explicit ? explicit.billed.amount : exactNumber(body.amount),
     currency: 'ILS', movement_type: 'expense', transaction_date: body.date, payment_source_id: profile.payment_source_id,
-    source_metadata: { channel: 'financial_data_bridge_v1' },
+    source_metadata: explicit ? { channel: 'financial_data_bridge_v2', provider_status: body.cal_contract.event.provider_type } : { channel: 'financial_data_bridge_v1' },
     ...(body.charge_date !== undefined ? { charge_date: body.charge_date } : {}),
     ...(body.category_id !== undefined ? { category_id: String(body.category_id) } : {}),
-    ...(body.original_amount !== undefined ? { original_amount: exactNumber(body.original_amount), original_currency: 'ILS', original_scale: 2 } : {}),
+    ...(explicit ? (explicit.original ? { original_amount: explicit.original.amount, original_currency: explicit.original.currency, original_scale: explicit.original.scale } : {})
+      : (body.original_amount !== undefined ? { original_amount: exactNumber(body.original_amount), original_currency: 'ILS', original_scale: 2 } : {})),
   };
   try { ingestion.normalizeObservation(observation); if (!body.date) fail('invalid_date'); } catch (e) { fail(e.reason || e.calCode || 'invalid_input'); }
   // No source occurrence timestamp or common reference is present in this producer's payload.

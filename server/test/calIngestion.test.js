@@ -64,3 +64,30 @@ test('CAL transport failure is sanitized and retries the same RPC after a serial
  assert.equal((await handleCal(db,profile,body)).status,201);assert.equal(seen.length,2);assert.deepEqual(seen[0],seen[1]);
  db.rpc=async()=>{throw Error('secret diagnostic');};await assert.rejects(handleCal(db,profile,body),e=>e.calCode==='cal_unavailable'&&!e.message.includes('secret'));
 });
+
+const v2 = () => ({...body,currency:'USD',amount:370,original_amount:100,cal_contract:{version:2,
+ billed:{amount:'370.00',currency:'ILS',scale:2},original:{amount:'100.00',currency:'USD',scale:2},
+ event:{kind:'purchase',basis:'full_purchase',provider_type:'רגילה'}}});
+test('v2 exact billing and original scales are preserved without deriving FX',()=>{
+ const input=v2();input.cal_contract.original={amount:'12.345',currency:'KWD',scale:3};
+ const o=request(profile,input).observation;assert.equal(o.accounting_amount,'370.00');
+ assert.equal(o.original_amount,'12.345');assert.equal(o.original_currency,'KWD');assert.equal(o.original_scale,3);
+ assert.equal(o.exchange_rate,undefined);input.cal_contract.original=null;
+ assert.equal(request(profile,input).observation.original_amount,undefined);
+});
+test('v2 validates nested evidence, unknown versions and economic basis before persistence',()=>{
+ for(const mutate of [x=>x.version=3,x=>x.billed=null,x=>x.billed.amount=370,x=>x.billed.amount='370.001',
+  x=>x.billed.currency='USD',x=>x.billed.scale=0,x=>x.original.amount='0',x=>x.original.scale=1,
+  x=>x.extra='ignored?',x=>x.event.kind='refund',x=>x.event.basis='installment_part',x=>x.event.provider_type='',x=>x.event.kind='unknown']){
+  const b=v2();mutate(b.cal_contract);assert.throws(()=>request(profile,b));
+ }
+});
+test('v2 cannot silently fall back to unregistered legacy financial insertion',async()=>{
+ const prior=process.env.CAL_INGESTION_SOURCES;delete process.env.CAL_INGESTION_SOURCES;
+ try{
+  const db={from(){throw Error('no legacy write');},rpc(){throw Error('no RPC');}};
+  const controller=loadControllerWithFake('../../controllers/v1/transactionController',db);
+  let status,body;const res={status(s){status=s;return this;},json(b){body=b;return this;}};
+  await controller.createTransaction({body:v2()},res);assert.equal(status,422);assert.equal(body.error,'cal_registration_required');
+ }finally{if(prior===undefined)delete process.env.CAL_INGESTION_SOURCES;else process.env.CAL_INGESTION_SOURCES=prior;}
+});

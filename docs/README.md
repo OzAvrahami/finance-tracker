@@ -17,6 +17,10 @@ This is the documentation entry point. Choose by purpose rather than by issue nu
 
 ## Current baseline and boundaries
 
+For the 2026-10-01 v1.5.0 publication and proposed v1.6.0 #82/#83 checkpoint, see
+[integrated readiness](operations/APY_06_RELEASE_READINESS.md). The release-preparation
+and device-acceptance statements below describe the earlier checkpoint, not later acceptance.
+
 Release-preparation checkpoint 2026-09-30: [v1.4.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0)
 is the published stable release. [v1.5.0 Shopping preparation](history/RELEASE_1_5_0.md)
 synchronizes seven product-version fields to 1.5.0 locally; publication remains pending.
@@ -49,6 +53,7 @@ owns live Issue state; dated handoffs below must not be interpreted as current s
 
 ## Operator and implementation guides
 
+- [APY integrated readiness and CAL activation gate](operations/APY_06_RELEASE_READINESS.md)
 - [Transaction source status and owner review](operations/APY_05_RECONCILIATION_REVIEW.md)
 - [Shopping habits, receipt review and OCR setup](operations/SHOPPING_RECEIPTS.md)
 - [Database files and operational SQL checks](operations/DATABASE.md)

@@ -59,7 +59,7 @@ const financialSnapshot = db => json(db, `SELECT jsonb_build_object(
  'loans',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id),'[]') FROM loan_payments t),
  'budget',(SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id),'[]') FROM budget_operations t));`);
 async function make(t, options = {}) {
-  const db = `case_${++sequence}`;sql('postgres', `CREATE DATABASE ${db} TEMPLATE flowlink_clean;`);
+  const db = `case_${++sequence}`;sql('postgres', `CREATE DATABASE ${db} TEMPLATE ${options.schemaBefore047 ? 'flowlink_pre047' : 'flowlink_clean'};`);
   sql(db, "INSERT INTO payment_sources(id,name,slug,method,is_active) VALUES(1,'Card A','a','credit_card',true),(2,'Card B','b','debit_card',true),(3,'Old','old','credit_card',false);");
   options.env ||= { FLOWLINK_OWNER_USER_IDS: JSON.stringify([ownerId]), FLOWLINK_INGESTION_ENABLED: 'true' };
   const h = await harness(t, { db: client(db), ...options });
@@ -85,8 +85,8 @@ before(async () => {
   const info = JSON.parse(run(['inspect', container]).stdout)[0];assert.equal(info.Config.Labels['finance.disposable'], 'cal04');
   assert.equal(info.Config.Image, 'postgres:16-alpine');assert.deepEqual(info.HostConfig.PortBindings || {}, {});
   for (let i = 0; i < 60; i++) { if (run(['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status === 0) break; await new Promise(r => setTimeout(r, 200)); }
-  sql('postgres', 'CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role BYPASSRLS;CREATE DATABASE flowlink_clean;CREATE DATABASE flowlink_baseline;');
-  sql('flowlink_baseline', baseline);sql('flowlink_clean', full);
+  sql('postgres', 'CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role BYPASSRLS;CREATE DATABASE flowlink_clean;CREATE DATABASE flowlink_baseline;CREATE DATABASE flowlink_pre047;');
+  sql('flowlink_baseline', baseline);sql('flowlink_clean', full);sql('flowlink_pre047',full.split('-- Migration 047:')[0]);
 });
 after(() => { if (started) run(['rm', '-f', container]); });
 
@@ -220,7 +220,8 @@ test('045 upgrade/rerun is additive; RLS/private grants/immutable registry and r
  sql(db,migration);sql(db,migration);assert.deepEqual(financialSnapshot(db),before);
  for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>45).sort())sql(db,fs.readFileSync(path.join(__dirname,'../migrations',f),'utf8'));
  const defs=d=>json(d,"SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace;");
- assert.deepEqual(defs(db),defs('flowlink_clean'));
+ const canonicalDefs=d=>Object.fromEntries(Object.entries(defs(d)).map(([name,definition])=>[name,definition.replace(/\r\n/g,'\n')]));
+ assert.deepEqual(canonicalDefs(db),canonicalDefs('flowlink_clean'));
  for(const role of ['anon','authenticated']) assert.equal(scalar(db,`SELECT has_function_privilege('${role}','ingest_cal_v1(uuid,jsonb,jsonb,jsonb)','execute');`),'f');
  assert.equal(scalar(db,"SELECT has_table_privilege('service_role','cal_ingestion_receipts','INSERT');"),'f');
  assert.equal(scalar(db,"SELECT relrowsecurity FROM pg_class WHERE oid='cal_ingestion_receipts'::regclass;"),'t');
@@ -308,4 +309,122 @@ test('historical identity edits and installment linkage hold evidence instead of
  const a=await send(c,e,purchase(b));assert.equal(a.body.reason_code,'identity_edited');assert.equal(cash(c).count,1);
  sql(c.db,"UPDATE transactions SET total_amount=4,installment_count=2 WHERE external_id='edited-old';");
  const r=await calSend(c,profile(),calBody());assert.equal(r.status,422);assert.equal(r.body.reason_code,'protected_transaction');assert.equal(cash(c).count,1);
+});
+
+test('registered stream coverage gate: online ILS persists, unsupported FX/partial billing remains unposted',async t=>{
+ const c=await make(t),p=profile();
+ const ordinary=calBody({amount:10,original_amount:10,description:'Synthetic online purchase'});
+ const posted=await calSend(c,p,ordinary);assert.equal(posted.status,201);
+ const before=financialSnapshot(c.db);
+ for(const patch of [{amount:370,original_amount:100,currency:'USD'},{amount:80,original_amount:240,currency:'ILS'}]){
+  const unsupported=calBody(patch);
+  for(let retry=0;retry<2;retry++)await assert.rejects(calSend(c,p,unsupported),e=>['cal_supported_ils_purchase_required','cal_unsupported_amount_basis'].includes(e.calCode));
+  assert.deepEqual(financialSnapshot(c.db),before);
+  assert.equal(Number(scalar(c.db,`SELECT count(*) FROM cal_ingestion_receipts WHERE external_id=${quote(unsupported.external_id)}`)),0);
+ }
+ assert.equal(cash(c).count,1);assert.equal(Number(cash(c).amount),10);
+ assert.equal((await calSend(c,p,ordinary)).status,409);assert.equal(cash(c).count,1);
+ // Safe rejection is not preserved whole-account import coverage: no saved receipt or cash exists for those requests.
+});
+
+const explicitCal = (extra={}) => calBody({amount:370,original_amount:100,currency:'USD',...extra,
+ cal_contract:{version:2,billed:{amount:String(extra.amount ?? '370.00'),currency:'ILS',scale:(String(extra.amount ?? '370.00').split('.')[1]||'').length},
+ original:{amount:String(extra.original_amount ?? '100.00'),currency:extra.currency||'USD',scale:(String(extra.original_amount ?? '100.00').split('.')[1]||'').length},
+ event:{kind:'purchase',basis:'full_purchase',provider_type:'רגילה'}}});
+
+test('v2 FX exact original/billed pair persists, frozen replays and cancellation never create extra cash',async t=>{
+ const c=await make(t),p=profile(),body=explicitCal();
+ const a=await calSend(c,p,body);assert.equal(a.status,201);assert.equal(Number(cash(c).amount),370);
+ const o=json(c.db,`SELECT accepted_payload FROM transaction_source_observations WHERE id=${a.body.observation_id}`);
+ assert.equal(o.original_currency,'USD');assert.equal(o.original_amount,'100.00');assert.equal(o.accounting_amount,'370.00');
+ const receipt=json(c.db,'SELECT to_jsonb(r) FROM cal_ingestion_receipts r');assert.deepEqual(receipt.billing_evidence,body.cal_contract);
+ assert.equal(receipt.contract_version,2);assert.equal((await calSend(c,p,body)).status,409);
+ sql(c.db,`UPDATE transactions SET description='Owner description',notes='Owner note' WHERE id=${a.body.id}`);
+ assert.equal((await calSend(c,p,body)).status,409);assert.equal(cashRow(c,a.body.id).description,'Owner description');
+ const d=call(c.db,'get_ingestion_observation',{p_observation_id:a.body.observation_id});
+ const cancelled=call(c.db,'cancel_ingested_transaction',{p_request_key:randomUUID(),p_command:{transaction_id:String(a.body.id),expected_revision:d.decision_revision,expected_transaction_fingerprint:d.expected_transaction_fingerprint,reason:'synthetic cancellation',actor:'owner'}});
+ assert.equal(cancelled.disposition,'cancelled');
+ assert.equal((await calSend(c,p,body)).status,409);assert.equal(cash(c).count,0);
+});
+
+test('v2 and frozen legacy requests replay in either format without rewriting observations',async t=>{
+ for(const newFirst of [false,true]){
+  const c=await make(t),p=profile(),v2=explicitCal({amount:10,original_amount:10,currency:'ILS'}),{cal_contract,...v1}=v2;
+  const a=await calSend(c,p,newFirst?v2:v1);assert.equal(a.status,201);
+  const before=financialSnapshot(c.db);
+  assert.equal((await calSend(c,p,newFirst?v1:v2)).status,409);assert.deepEqual(financialSnapshot(c.db),before);
+  assert.equal((await calSend(c,p,{...v2,description:'Changed'})).status,422);assert.deepEqual(financialSnapshot(c.db),before);
+ }
+});
+
+test('v2 concurrent old/new delivery and same-key replay create one cash effect',async t=>{
+ const c=await make(t),p=profile(),v2=explicitCal({amount:10,original_amount:10,currency:'ILS'}),{cal_contract,...v1}=v2;
+ const results=await Promise.all([calSend(c,p,v2),calSend(c,p,v1),calSend(c,p,v2)]);
+ assert.deepEqual(results.map(r=>r.status).sort(),[201,409,409]);
+ assert.equal(cash(c).count,1);assert.equal(Number(cash(c).amount),10);assert.equal(sourceCount(c),1);
+ assert.equal(count(c.db,'cal_ingestion_receipts'),1);
+});
+
+test('v2 native/CAL arrival orders reconcile full billed ILS once; independent occurrence keys remain distinct',async t=>{
+ for(const calFirst of [false,true]){
+  const {c,e,b}=await setup(t),p=profile(),body=explicitCal({amount:10,original_amount:3,currency:'USD'});
+  const capture={...purchase(b),amount:'10.00'};
+  if(calFirst){assert.equal((await calSend(c,p,body)).status,201);assert.equal((await send(c,e,capture)).body.outcome,'reconciled');}
+  else {assert.equal((await send(c,e,capture)).status,201);assert.equal((await calSend(c,p,body)).body.outcome,'reconciled');}
+  assert.equal(cash(c).count,1);assert.equal(Number(cash(c).amount),10);
+ }
+ const c=await make(t),p=profile();
+ for(const key of ['two-occurrences','two-occurrences|#2'])assert.equal((await calSend(c,p,explicitCal({amount:6,original_amount:2,currency:'USD',external_id:key}))).status,201);
+ assert.equal(cash(c).count,2);assert.equal(Number(cash(c).amount),12);
+});
+
+test('v2 unknown/refund/part semantics and foreign billed currency cannot post or bypass the private command',async t=>{
+ const c=await make(t),p=profile(),before=financialSnapshot(c.db);
+ for(const event of [{kind:'unknown',basis:'unknown',provider_type:''},{kind:'refund',basis:'unknown',provider_type:'זיכוי'},
+  {kind:'purchase',basis:'installment_part',provider_type:'תשלומים',installment:{number:1,count:3,purchase_id:null}}]){
+  const body=explicitCal();body.cal_contract.event=event;
+  await assert.rejects(calSend(c,p,body),e=>['cal_event_semantics_required','cal_refund_policy_required','cal_installment_identity_required'].includes(e.calCode));
+ }
+ const body=explicitCal();body.cal_contract.billed.currency='USD';await assert.rejects(calSend(c,p,body),e=>e.calCode==='cal_billed_ils_required');
+ const valid=explicitCal(),req=calService.request(p,valid);valid.cal_contract.event.basis='installment_part';
+ const denied=call(c.db,'ingest_cal_v1',{p_request_key:p.request_key,p_source:req.source,p_observation:req.observation,p_request:valid});
+ assert.equal(denied.outcome,'rejected');assert.deepEqual(financialSnapshot(c.db),before);
+});
+
+test('047 upgrade/rerun/rollback preserves existing cash/provenance and immutable private receipts',async t=>{
+ const c=await make(t,{schemaBefore047:true}),p=profile();await calSend(c,p,calBody());const before=financialSnapshot(c.db);
+ const upgrade=fs.readFileSync(path.join(__dirname,'../migrations/047_cal_billing_contract.sql'),'utf8');
+ sql(c.db,upgrade);sql(c.db,upgrade);assert.deepEqual(financialSnapshot(c.db),before);
+ assert.notEqual(sql(c.db,upgrade.replace('COMMIT;','SELECT 1/0;COMMIT;'),true).status,0);assert.deepEqual(financialSnapshot(c.db),before);
+ assert.equal(scalar(c.db,"SELECT has_table_privilege('authenticated','cal_ingestion_receipts','SELECT')"),'f');
+ assert.equal(scalar(c.db,"SELECT has_function_privilege('anon','ingest_cal_v1(uuid,jsonb,jsonb,jsonb)','EXECUTE')"),'f');
+ assert.notEqual(sql(c.db,"UPDATE cal_ingestion_receipts SET contract_version=2",true).status,0);
+});
+
+test('v2 real exporter reaches consumer persistence with saved FX evidence and lost-response identity',
+ {skip:!process.env.CAL_BRIDGE_AUDIT_ROOT},async t=>{
+ const root=process.env.CAL_BRIDGE_AUDIT_ROOT;
+ const {pathToFileURL}=require('node:url');
+ const {sendTransactionToFinance}=await import(pathToFileURL(path.join(root,'packages/bridge-core/src/application/exportToFinanceSystem.js')));
+ const saved=JSON.parse(fs.readFileSync(path.join(root,'runtime/exports/cal_2026-07-25.json'),'utf8'));
+ const row=(Array.isArray(saved)?saved:saved.transactions).find(r=>r.currency==='USD'&&r.status==='completed'&&r.chargeAmount>0);
+ assert.ok(row,'expected read-only saved FX sample');
+ const c=await make(t),p=profile(),id=randomUUID();let firstPayload;
+ const tx={...row,accountId:p.payment_source_name,merchantName:'Synthetic saved FX transport',dedupKey:id};
+ const config={apiUrl:'https://never-called.invalid',apiKey:'synthetic',
+  v2Streams:[{provider:'cal',providerAccountId:tx.providerAccountId||'default',paymentSourceName:tx.accountId}]};
+ const transport=async(u,i)=>{
+  const body=JSON.parse(i.body);const response=await calSend(c,p,body);
+  return{ok:response.status<300,status:response.status,json:async()=>response.body,text:async()=>JSON.stringify(response.body)};
+ };
+ const lost=await sendTransactionToFinance(tx,config,{fetch:async(u,i)=>{firstPayload=JSON.parse(i.body);await transport(u,i);throw Error('lost response');}});
+ assert.equal(lost.ok,false);assert.equal(cash(c).count,1);
+ const retry=await sendTransactionToFinance(tx,config,{fetch:transport,frozenPayload:firstPayload});
+ assert.equal(retry.classification,'remote_already_exists');assert.equal(cash(c).count,1);
+ assert.equal(Number(cash(c).amount),Number(firstPayload.cal_contract.billed.amount));
+ const receipt=json(c.db,'SELECT billing_evidence FROM cal_ingestion_receipts');assert.deepEqual(receipt,firstPayload.cal_contract);
+ const before=financialSnapshot(c.db);
+ const invalid=structuredClone(firstPayload);invalid.cal_contract.event.basis='installment_part';
+ await assert.rejects(calSend(c,p,invalid),e=>e.calCode==='cal_installment_identity_required');
+ assert.deepEqual(financialSnapshot(c.db),before);
 });

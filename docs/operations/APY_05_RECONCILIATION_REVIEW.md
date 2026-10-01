@@ -4,6 +4,12 @@ Local implementation on top of #82 commit `e4dbf0118987d1ecee105a74f724e9e1074eb
 Owner acceptance and deployment remain pending. This UI does not enable ingestion,
 retry phone captures, register CAL accounts or change the producer contract.
 
+Owner acceptance update (2026-10-01): the refined interface was accepted as clearer
+and better; the synthetic ILS 10 link succeeded without increasing the ILS 22 total.
+This limited acceptance does not establish all mobile/concurrency/production-phone
+checks. See [#84 integrated readiness](APY_06_RELEASE_READINESS.md) for the remaining
+CAL coverage gate and deferred proposed v1.6.0 preparation.
+
 ## What the owner sees
 
 Transactions remain the canonical expense list. Compact source buttons appear only

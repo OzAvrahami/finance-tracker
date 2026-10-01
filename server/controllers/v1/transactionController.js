@@ -32,6 +32,7 @@ async function createTransaction(req, res) {
   // Explicit server registration selects this producer; hashes/names alone never infer CAL.
   try {
     const profile = cal.selectProfile(req.body);
+    if (req.body?.cal_contract !== undefined && !profile) return res.status(422).json({ error: 'cal_registration_required' });
     if (profile) {
       const result = await cal.handleCal(supabase, profile, req.body);
       return res.status(result.status).json(result.body);

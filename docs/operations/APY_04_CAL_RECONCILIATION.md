@@ -191,6 +191,14 @@ Owner acceptance remains Pending. Version stays 1.5.0; a later coordinated Minor
 
 ### Subsequent #83 local implementation
 
+#84's initial [registered-stream audit](APY_06_RELEASE_READINESS.md) confirms a concrete
+coverage blocker in saved Bridge exports: legitimate FX requests are rejected after
+registration, and billing currency/event classification are missing on the wire.
+Safe rejection and unregistered compatibility are not preserved account coverage.
+The subsequent local v2 correction resolves the demonstrated FX wire gap; unknown
+event and installment semantics still block whole-account activation/v1.6.0 preparation.
+See the linked current contract and consumer-first 045 → 046 → 047 rollout.
+
 The statements above about the absent review UI describe the #82 checkpoint.
 [APY-05](APY_05_RECONCILIATION_REVIEW.md) now adds authenticated owner review, safe
 source projections and Migration 046. It reuses these commands and matching rules;
