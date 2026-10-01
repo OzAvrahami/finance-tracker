@@ -27,15 +27,17 @@ const MoneyAmount = ({
   ...props
 }) => {
   let comparison = 0;
-  let formatted = '0';
+  let formatted;
   try {
-    comparison = decimalSign(value ?? '0');
-    formatted = formatDecimalMoney(value ?? '0', {
+    formatted = formatDecimalMoney(value, {
       minimumFractionDigits,
       maximumFractionDigits,
-    }).replace(/^-/, '');
+    });
+    comparison = decimalSign(formatted.replaceAll(',', ''));
+    formatted = formatted.replace(/^-/, '');
   } catch {
-    // Presentation components remain fail-safe for legacy non-budget callers.
+    // Missing/invalid presentation data is not a zero financial amount.
+    return <TechnicalValue {...props} className={`num ${className}`.trim()} style={{ fontSize: size, ...style }} aria-label="סכום לא זמין">—</TechnicalValue>;
   }
   const isNegative = comparison < 0;
   const isPositive = comparison > 0;

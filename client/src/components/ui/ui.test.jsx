@@ -49,6 +49,17 @@ describe('MoneyAmount', () => {
     render(<MoneyAmount value="42.25" currency="USD" />);
     expect(screen.getByText('$42.25')).toBeInTheDocument();
   });
+
+  it.each([null, undefined, '', 'invalid', NaN, Infinity])('does not present missing/invalid %s as zero', value => {
+    render(<MoneyAmount value={value} />);
+    expect(screen.getByLabelText('סכום לא זמין')).toHaveTextContent('—');
+    expect(screen.queryByText('₪0')).not.toBeInTheDocument();
+  });
+
+  it('retains explicit foreign-currency precision conventions', () => {
+    render(<MoneyAmount value="1.2300" currency="USD" />);
+    expect(screen.getByText('$1.2300')).toBeInTheDocument();
+  });
 });
 
 describe('Button primitives', () => {

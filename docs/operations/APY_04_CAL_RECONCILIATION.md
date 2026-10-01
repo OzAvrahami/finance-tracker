@@ -188,3 +188,10 @@ ordinary spending on day 2 while its report ends on day 1. Neither is counted as
 no assertions or unrelated runtime behavior were changed to hide them.
 No new phone test, provider call, production DB operation or CAL run is implied.
 Owner acceptance remains Pending. Version stays 1.5.0; a later coordinated Minor is TBD.
+
+### Subsequent #83 local implementation
+
+The statements above about the absent review UI describe the #82 checkpoint.
+[APY-05](APY_05_RECONCILIATION_REVIEW.md) now adds authenticated owner review, safe
+source projections and Migration 046. It reuses these commands and matching rules;
+it does not change CAL coverage or authorize production activation.

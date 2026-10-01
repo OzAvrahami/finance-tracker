@@ -119,6 +119,7 @@ app.use('/api', requireAuth);
 app.use('/api/import', importRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/reconciliation', require('./routes/reconciliationRoutes').createReconciliationRouter({ db: require('./config/supabase') }));
 app.use('/api/lego', legoRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/savings', require('./routes/savingsRoutes'));

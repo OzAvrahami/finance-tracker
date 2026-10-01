@@ -1,0 +1,40 @@
+﻿.reconciliation-toolbar { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-block:.5rem; }
+.reconciliation-caption { color:var(--ft-text-muted); font-size:.85rem; margin:0 0 .75rem; }
+.reconciliation-badge { display:block; padding:.2rem .4rem; margin-block-start:.25rem; background:var(--ft-surface-solid); color:var(--ft-text); border:1px solid var(--ft-border); border-radius:6px; font-size:.75rem; cursor:pointer; text-align:start; }
+.reconciliation-dialog .ui-dialog-body { overflow-y:auto; }
+.reconciliation-dialog small { display:block; color:var(--ft-text-muted); font-size:.8rem; line-height:1.5; }
+.reconciliation-dialog .num { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.reconciliation-line { display:flex; align-items:baseline; justify-content:space-between; gap:.75rem; }
+.reconciliation-line strong { min-width:0; overflow-wrap:anywhere; }
+.reconciliation-line > .num { flex:none; }
+.reconciliation-queue { list-style:none; margin:0; padding:0; }
+.reconciliation-queue > li { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:1rem; align-items:center; padding:.65rem 0; border-block-end:1px solid var(--ft-border); }
+.reconciliation-queue-main { min-width:0; overflow-wrap:anywhere; }
+.reconciliation-queue-money { text-align:end; display:grid; gap:.2rem; }
+.reconciliation-comparison { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); align-items:start; gap:1rem; }
+.reconciliation-panel { padding:.85rem; border:1px solid var(--ft-border); border-radius:10px; background:var(--ft-surface-solid); min-width:0; }
+.reconciliation-panel h3,.reconciliation-options legend { font-size:.95rem; font-weight:600; margin:0 0 .65rem; }
+.reconciliation-dialog fieldset { border:0; padding:0; margin:0; min-width:0; }
+.reconciliation-evidence { display:grid; gap:.35rem; overflow-wrap:anywhere; }
+.reconciliation-option { border:1px solid var(--ft-border); border-radius:10px; margin-block-end:.6rem; overflow:hidden; }
+.reconciliation-option label,.reconciliation-separate { display:flex; align-items:flex-start; gap:.65rem; padding:.75rem; cursor:pointer; }
+.reconciliation-option-content { display:grid; flex:1; min-width:0; gap:.25rem; }
+.reconciliation-dialog input[type="radio"] { flex:0 0 1rem; width:1rem; height:1rem; min-height:0; margin:.2rem 0 0; padding:0; accent-color:var(--ft-primary); }
+.reconciliation-option:has(input:disabled) label { cursor:default; }
+.reconciliation-option.is-selected,.reconciliation-separate.is-selected { border-color:var(--ft-primary); background:color-mix(in srgb,var(--ft-primary) 8%,var(--ft-surface-solid)); }
+.reconciliation-separate { border:1px dashed var(--ft-border); border-radius:10px; }
+.reconciliation-separate span { min-width:0; }
+.reconciliation-details { font-size:.8rem; margin-block-start:.4rem; }
+.reconciliation-option > .reconciliation-details { margin:0 .75rem .6rem; }
+.reconciliation-dialog summary { cursor:pointer; color:var(--ft-text-muted); }
+.reconciliation-dialog dl { display:grid; grid-template-columns:minmax(6rem,1fr) 1.5fr; gap:.4rem; }
+.reconciliation-dialog dd { margin:0; overflow-wrap:anywhere; }
+.reconciliation-dialog .ui-dialog-footer { flex-wrap:wrap; }
+.reconciliation-effect { flex-basis:100%; margin:0 0 .3rem; font-size:.85rem; text-align:start; }
+.reconciliation-dialog button:focus-visible,.reconciliation-badge:focus-visible,.reconciliation-dialog input:focus-visible,.reconciliation-dialog summary:focus-visible { outline:2px solid var(--ft-primary); outline-offset:3px; }
+@media(max-width:600px) {
+ .reconciliation-comparison { grid-template-columns:minmax(0,1fr); gap:.75rem; }
+ .reconciliation-queue > li { gap:.5rem; }
+ .reconciliation-queue-main strong { font-size:.9rem; }
+ .reconciliation-dialog dl { grid-template-columns:1fr; }
+}

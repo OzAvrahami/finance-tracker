@@ -218,6 +218,7 @@ test('045 upgrade/rerun is additive; RLS/private grants/immutable registry and r
  const before=financialSnapshot(db);assert.notEqual(sql(db,migration.replace('COMMIT;','SELECT 1/0;COMMIT;'),true).status,0);
  assert.equal(scalar(db,"SELECT to_regclass('cal_ingestion_receipts') IS NULL;"),'t');
  sql(db,migration);sql(db,migration);assert.deepEqual(financialSnapshot(db),before);
+ for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>45).sort())sql(db,fs.readFileSync(path.join(__dirname,'../migrations',f),'utf8'));
  const defs=d=>json(d,"SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace;");
  assert.deepEqual(defs(db),defs('flowlink_clean'));
  for(const role of ['anon','authenticated']) assert.equal(scalar(db,`SELECT has_function_privilege('${role}','ingest_cal_v1(uuid,jsonb,jsonb,jsonb)','execute');`),'f');

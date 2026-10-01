@@ -5,9 +5,10 @@ import { MemoryRouter } from 'react-router-dom';
 
 import Transactions from './Transactions';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
-import { getTransactions, getCategories, getPaymentSources, deleteTransaction, getSavingsAccounts } from '../../services/api';
+import { getTransactions, getCategories, getPaymentSources, deleteTransaction, getSavingsAccounts, getReconciliationSummary } from '../../services/api';
 
 vi.mock('../../services/api', () => ({
+  getReconciliationSummary: vi.fn().mockResolvedValue({data:{transactions:{},pending_count:0}}),
   getSavingsAccounts: vi.fn().mockResolvedValue({ data: [] }),
   getTransactions: vi.fn(),
   getCategories: vi.fn(),
@@ -108,6 +109,7 @@ function bodyRowIds() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  getReconciliationSummary.mockResolvedValue({data:{transactions:{},pending_count:0}});
   getSavingsAccounts.mockResolvedValue({ data: [] });
   getCategories.mockResolvedValue({ data: [{ id: 1, name: 'מזון', icon: '🍎' }] });
   getPaymentSources.mockResolvedValue({ data: [{ id: 10, name: 'ויזה' }] });

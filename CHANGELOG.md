@@ -11,9 +11,12 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ## [Unreleased]
 
 ### Added
+- Transactions now show compact Apple Pay/CAL source status and an owner-only pending-evidence review dialog. Explicit linking adds provenance without another expense; separate-purchase decisions reuse atomic APY commands with revision checks and durable retry identity. Safe source details preserve provider merchant text and owner descriptions (#83). Requires additive Migration 046 after 045 and the existing owner allowlist; ingestion activation remains separate.
 - Opt-in CAL/Card-site ingestion on the existing external API now shares FlowLink's atomic APY reconciliation, with durable external-ID retries, conservative review of differing merchant names, preserved owner fields, and duplicate-expense protection across arrival orders (#82). Requires Migration 045 and explicit server-side account registration; unsupported accounting cases fail safely and production activation remains separate.
 
 ### Fixed
+
+- #83: Format Transactions amounts consistently to two decimal places in desktop/mobile rows without leaking PostgreSQL numeric scale or treating missing amounts as zero. Refine reconciliation into a compact Hebrew queue and structured purchase comparison with localized metadata and explicit financial-effect actions; preserve existing review decisions and retry safeguards.
 
 - #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
 

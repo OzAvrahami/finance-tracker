@@ -8,7 +8,7 @@ import { PageHeaderContext } from '../../context/PageHeaderContext';
 import * as api from '../../services/api';
 
 vi.mock('../../services/api', () => Object.fromEntries([
-  'getTransactions', 'getCategories', 'getPaymentSources', 'getSavingsAccounts', 'deleteTransaction',
+  'getReconciliationSummary', 'getTransactions', 'getCategories', 'getPaymentSources', 'getSavingsAccounts', 'deleteTransaction',
   'getTransactionById', 'getTags', 'getLegoThemes', 'getAllLoans', 'updateTransaction',
   'createTransaction', 'createCategory', 'getLegoSetDetails',
 ].map(name => [name, vi.fn()])));
@@ -34,6 +34,7 @@ const editLink = () => screen.getAllByRole('link', { name: /עריכת התנו�
 
 beforeEach(() => {
   vi.resetAllMocks();
+  api.getReconciliationSummary.mockResolvedValue({data:{transactions:{},pending_count:0}});
   const RealDate = Date;
   vi.stubGlobal('Date', class extends RealDate {
     constructor(...args) { super(...(args.length ? args : ['2026-09-18T12:00:00+03:00'])); }

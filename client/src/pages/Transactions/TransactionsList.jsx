@@ -1,3 +1,4 @@
+import { ReconciliationBadge } from './Reconciliation';
 import { cashFlowLabels } from '../../utils/savingsReporting';
 import { Link } from 'react-router-dom';
 import {
@@ -37,9 +38,14 @@ const formatDate = (value) => {
 };
 
 const signedAmount = (transaction) => {
-  const raw = String(transaction.total_amount ?? '0').trim().replace(/^[+-]/, '') || '0';
+  const value = transaction.total_amount;
+  if (value == null || !['string', 'number', 'bigint'].includes(typeof value)) return null;
+  const raw = String(value).trim().replace(/^[+-]/, '');
   return transaction.movement_type === 'income' ? raw : `-${raw}`;
 };
+
+// Both list presentations share the ILS display policy; stored/transport money is untouched.
+const TransactionAmount = ({ transaction }) => <MoneyAmount value={signedAmount(transaction)} signed minimumFractionDigits={2} maximumFractionDigits={2} />;
 
 const transactionContext = (transaction) => transaction.description || `מספר ${transaction.id}`;
 const SavingsLink = ({ transaction }) => transaction.savings ? <small className="transactions-savings-link"><Link to={`/savings`}>{transaction.savings.name}</Link>{transaction.savings.active && ` · ${cashFlowLabels[transaction.cash_flow] || "תנועת חיסכון"}`}{!transaction.savings.active && ' · קישור היסטורי'}</small> : null;
@@ -166,7 +172,7 @@ export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete, e
             <tr key={transaction.id} className={isUncategorized ? 'is-uncategorized' : ''}>
               <td className="transactions-table__date"><TechnicalValue>{formatDate(transaction.transaction_date)}</TechnicalValue></td>
               <td className="transactions-table__category"><CategoryBadge transaction={transaction} /></td>
-              <td className="transactions-table__description"><strong>{transaction.description || 'ללא תיאור'}</strong><SavingsLink transaction={transaction} /></td>
+              <td className="transactions-table__description"><strong>{transaction.description || 'ללא תיאור'}</strong><SavingsLink transaction={transaction} /><ReconciliationBadge id={transaction.id} /></td>
               <td className="transactions-table__source">
                 <span className="transactions-table__source-value">
                   {transaction.payment_sources?.name || <span aria-label="לא צוין">—</span>}
@@ -175,7 +181,7 @@ export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete, e
               <td className={`transactions-table__amount ${isIncome ? 'is-income' : 'is-expense'}`} dir="ltr">
                 <span className="transactions-table__amount-content">
                   <span className="transactions-amount-kind">{isIncome ? <TrendingUp size={14} /> : <TrendingDown size={14} />}<span className="transactions-visually-hidden">{isIncome ? 'הכנסה' : 'הוצאה'}</span></span>
-                  <MoneyAmount value={signedAmount(transaction)} signed />
+                  <TransactionAmount transaction={transaction} />
                 </span>
               </td>
               <td className="transactions-table__notes">
@@ -234,11 +240,11 @@ export const TransactionsMobileList = ({ rows, onRequestDelete, editReturnTo }) 
                   <CategoryBadge transaction={transaction} />
                   <div className={`transactions-mobile-card__amount ${isIncome ? 'is-income' : 'is-expense'}`}>
                     <span>{isIncome ? <TrendingUp size={15} /> : <TrendingDown size={15} />}{isIncome ? 'הכנסה' : 'הוצאה'}</span>
-                    <MoneyAmount value={signedAmount(transaction)} signed />
+                    <TransactionAmount transaction={transaction} />
                   </div>
                 </div>
                 <h3>{transaction.description || 'ללא תיאור'}</h3>
-                <SavingsLink transaction={transaction} />
+                <SavingsLink transaction={transaction} /><ReconciliationBadge id={transaction.id} />
                 <dl className="transactions-mobile-card__metadata">
                   <div><dt>תאריך</dt><dd><TechnicalValue>{formatDate(transaction.transaction_date)}</TechnicalValue></dd></div>
                   <div><dt>אמצעי תשלום</dt><dd>{transaction.payment_sources?.name || 'לא צוין'}</dd></div>

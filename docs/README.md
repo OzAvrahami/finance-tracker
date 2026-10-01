@@ -49,6 +49,7 @@ owns live Issue state; dated handoffs below must not be interpreted as current s
 
 ## Operator and implementation guides
 
+- [Transaction source status and owner review](operations/APY_05_RECONCILIATION_REVIEW.md)
 - [Shopping habits, receipt review and OCR setup](operations/SHOPPING_RECEIPTS.md)
 - [Database files and operational SQL checks](operations/DATABASE.md)
 - [Funded Budget migration boundaries](operations/FUNDED_BUDGET_MIGRATION_RUNBOOK.md)

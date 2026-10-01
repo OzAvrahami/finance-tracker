@@ -273,3 +273,9 @@ export const getShoppingReceiptDuplicates = (id, data = {}) => api.post(`/shoppi
 export const saveShoppingReceiptDraft = (id,data) => api.put(`/shopping/lists/${id}/receipt/draft`,data);
 export const lookupShoppingProduct = data => api.post('/shopping/products/lookup',data,{timeout:12000});
 export const approveShoppingProduct = data => api.post('/shopping/products/approve',data);
+
+// Owner-only safe reconciliation projections and atomic review commands.
+export const getReconciliationSummary = ids => api.get("/reconciliation/summary", { params: { ids: ids.join(",") } });
+export const getReconciliationPending = before => api.get("/reconciliation/pending", { params: { before } });
+export const getReconciliationDetail = (kind, id) => api.get(`/reconciliation/${kind}/${id}`);
+export const resolveReconciliation = (id, command) => api.post(`/reconciliation/observation/${id}/resolve`, command);

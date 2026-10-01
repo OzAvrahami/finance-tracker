@@ -1,3 +1,4 @@
+import { ReconciliationProvider, ReconciliationToolbar } from './Reconciliation';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getCategories, getPaymentSources, getTransactions, deleteTransaction } from '../../services/api';
@@ -399,8 +400,9 @@ const Transactions = () => {
       && !showUncategorizedOnly;
 
   return (
-    <div className="transactions-page" dir="rtl">
+    <ReconciliationProvider rows={list.rows}><div className="transactions-page" dir="rtl">
       <BudgetOriginNotice origin={budgetOrigin} />
+      <ReconciliationToolbar />
       <TransactionsFilters
         savingsFlow={savingsFlow}
         onSavingsFlowChange={setSavingsFlow}
@@ -457,7 +459,7 @@ const Transactions = () => {
         onClose={() => setTransactionToDelete(null)}
         onConfirm={confirmDelete}
       />
-    </div>
+    </div></ReconciliationProvider>
   );
 };
 
