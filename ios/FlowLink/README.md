@@ -24,8 +24,37 @@ Read back `CFBundleShortVersionString` and `CFBundleVersion` from the final sign
 before giving the owner its installation command. This does not change Finance Tracker's
 product SemVer fields. Test bundles are not separately installable owner app deliveries.
 
-Current owner delivery is **FlowLink 0.1.0 (2)**, replacing the installed build 1. Earlier
-build-1 commands/results below are historical; use the latest build-2 installation section.
+Current owner delivery is **FlowLink 0.1.0 (3)**, a Release signing-renewal build for #91.
+Builds 1 and 2 and their commands/results below are historical. The build-3 recovery
+checkpoint below records its installation and remaining device-trust gate.
+
+### Build 3 signing recovery — 2026-10-04
+
+The documented build-2 provisioning expiration was 2026-10-03 19:47 UTC; the retained
+development profile confirms that expiry. Release build 3 renews the existing Personal
+Team provisioning without runtime changes. Its profile expires **2026-10-11 06:54 UTC**.
+The bundle/application identifier and signed entitlements match the prior app; production
+Release configuration continues to ignore the stale Debug-only endpoint override.
+
+The owner confirmed both ingestion flags false before installation. The signed Release
+build passed signature and plist/project validation and was installed over the existing
+app without uninstalling or replacing its data container. Private before/after exports
+confirmed byte-identical installation/device metadata, bindings, captures and diagnostics.
+The five receipts remained three held purchases and two excluded synthetic tests, with
+no queued/retryWait/inFlight entries. No receipt was retried.
+
+The first ordinary launch was denied by iOS with a signing/entitlement/user-trust error.
+After the owner approved the existing Developer App trust, normal launch succeeded. The
+owner confirmed Connected, ingestion Disabled and the existing card available, verifying
+retained credential access without re-pairing. A post-launch private export confirmed the
+receipt database and diagnostics byte-identical to the original evidence; all five receipt
+rows, frozen payloads, attempts and retry times were unchanged. Installation/device/binding
+JSON content also remained unchanged. Recovery is complete; no receipt was retried, and
+financial posting remains a separately controlled verification step with ingestion disabled.
+
+Only app build metadata changed; Finance Tracker remains 1.6.0 and FlowLink remains 0.1.0.
+No runtime test suite was repeated for this metadata-only recovery. No product SemVer
+change or release publication is required by this local signing renewal.
 
 ## Architecture
 
