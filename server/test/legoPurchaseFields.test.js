@@ -121,3 +121,42 @@ test('edit keeps the bounded LEGO payload and enforces GWP zero cost', async () 
     purchase_price: 0,
   });
 });
+
+test('create preserves the parent theme and trimmed subtheme', async () => {
+  const { fake, res } = await addSet('purchase', {
+    theme: 'Collectible Minifigures',
+    subtheme: ' Shrek ',
+  });
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(fake.inserts[0].theme, 'Collectible Minifigures');
+  assert.equal(fake.inserts[0].subtheme, 'Shrek');
+});
+
+test('edit can explicitly clear the subtheme', async () => {
+  const fake = createLegoFake();
+  const controller = loadControllerWithFake('../../controllers/legoController', fake);
+  const res = createMockResponse();
+
+  await controller.updateSet({
+    params: { id: 'set-id' },
+    body: { subtheme: null },
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(fake.updates[0], { subtheme: null });
+});
+
+test('changing status sends no changes to other set fields', async () => {
+  const fake = createLegoFake();
+  const controller = loadControllerWithFake('../../controllers/legoController', fake);
+  const res = createMockResponse();
+
+  await controller.updateSet({
+    params: { id: 'set-id' },
+    body: { status: 'Disassembled' },
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(fake.updates[0], { status: 'Disassembled' });
+});

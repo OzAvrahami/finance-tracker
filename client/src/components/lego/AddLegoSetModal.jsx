@@ -31,6 +31,7 @@ const DEFAULT_FORM = {
   set_number: '',
   name: '',
   theme: '',
+  subtheme: null,
   brand: 'LEGO',
   status: 'New',
   pieces: '',
@@ -50,6 +51,7 @@ const formFromSet = (set) => {
     set_number: set?.set_number || '',
     name: set?.name || '',
     theme: set?.theme || '',
+    subtheme: set?.subtheme || null,
     brand: set?.brand || 'LEGO',
     status: set?.status || 'New',
     pieces: set?.pieces ?? '',
@@ -77,6 +79,7 @@ const AddLegoSetModal = ({
   const [lookupState, setLookupState] = useState('idle');
   const [lookupMessage, setLookupMessage] = useState('');
   const lookupInFlightRef = useRef(false);
+  const lookupRequestIdRef = useRef(0);
   const setNumberRef = useRef(null);
   const isEditMode = Boolean(initialData);
 
@@ -88,6 +91,12 @@ const AddLegoSetModal = ({
     setLookupState('idle');
     setLookupMessage('');
     lookupInFlightRef.current = false;
+
+    return () => {
+      lookupRequestIdRef.current += 1;
+      lookupInFlightRef.current = false;
+    };
+
   }, [initialData, show]);
 
   const isDuplicateSetNumber = (trimmed) => existingSets.some(
@@ -104,52 +113,75 @@ const AddLegoSetModal = ({
     }));
     if (errors[name]) setErrors((previous) => ({ ...previous, [name]: null }));
     if (name === 'set_number') {
+      lookupRequestIdRef.current += 1;
+      lookupInFlightRef.current = false;
       setLookupState('idle');
       setLookupMessage('');
     }
     if (saveError) setSaveError('');
   };
 
-  const runLookup = async ({ force = false } = {}) => {
-    const trimmed = form.set_number.trim();
-    if (!trimmed || lookupInFlightRef.current) return;
+const runLookup = async ({ force = false } = {}) => {
+  const trimmed = form.set_number.trim();
+  if (!trimmed || lookupInFlightRef.current) return;
 
-    if (isDuplicateSetNumber(trimmed)) {
-      const duplicateMessage = 'הסט כבר קיים באוסף';
-      setErrors((previous) => ({ ...previous, set_number: duplicateMessage }));
-      setLookupState('duplicate');
-      setLookupMessage(duplicateMessage);
-      return;
-    }
+  if (isDuplicateSetNumber(trimmed)) {
+    const duplicateMessage = 'הסט כבר קיים באוסף';
+    setErrors((previous) => ({ ...previous, set_number: duplicateMessage }));
+    setLookupState('duplicate');
+    setLookupMessage(duplicateMessage);
+    return;
+  }
 
-    if (isEditMode && trimmed === initialData.set_number && !force) return;
+  if (isEditMode && trimmed === initialData.set_number && !force) return;
 
-    lookupInFlightRef.current = true;
-    setLookupState('loading');
-    setLookupMessage('מחפש את פרטי הסט ב-Rebrickable…');
-    try {
-      const response = await getLegoSetDetails(trimmed);
-      setForm((previous) => ({
-        ...previous,
-        name: !previous.name ? (response.data.name ?? previous.name) : previous.name,
-        theme: !previous.theme ? (response.data.theme ?? previous.theme) : previous.theme,
-        pieces: response.data.parts ?? previous.pieces,
-        image_url: response.data.img ?? previous.image_url,
-      }));
-      setLookupState('success');
-      setLookupMessage('פרטי הסט נמצאו. אפשר לבדוק ולהמשיך לערוך אותם.');
-    } catch (error) {
-      const unavailable = !error.response || Number(error.response.status) >= 500;
-      setLookupState(unavailable ? 'unavailable' : 'failure');
-      setLookupMessage(
-        unavailable
-          ? 'שירות החיפוש אינו זמין כרגע. אפשר להמשיך בהזנה ידנית.'
-          : 'הסט לא נמצא. אפשר לבדוק את המספר או להמשיך בהזנה ידנית.',
-      );
-    } finally {
+  const requestId = ++lookupRequestIdRef.current;
+
+  lookupInFlightRef.current = true;
+  setLookupState('loading');
+  setLookupMessage('מחפש את פרטי הסט ב-Rebrickable…');
+
+  try {
+    setForm((previous) => ({
+      ...previous,
+      name: '',
+      theme: '',
+      subtheme: null,
+      pieces: '',
+      image_url: '',
+    }));
+
+    const response = await getLegoSetDetails(trimmed);
+
+    if (requestId !== lookupRequestIdRef.current) return;
+
+    setForm((previous) => ({
+      ...previous,
+      name: response.data.name ?? '',
+      theme: response.data.theme ?? '',
+      subtheme: response.data.subtheme ?? null,
+      pieces: response.data.parts ?? '',
+      image_url: response.data.img ?? '',
+    }));
+
+    setLookupState('success');
+    setLookupMessage('פרטי הסט נמצאו. אפשר לבדוק ולהמשיך לערוך אותם.');
+  } catch (error) {
+    if (requestId !== lookupRequestIdRef.current) return;
+
+    const unavailable = !error.response || Number(error.response.status) >= 500;
+    setLookupState(unavailable ? 'unavailable' : 'failure');
+    setLookupMessage(
+      unavailable
+        ? 'שירות החיפוש אינו זמין כרגע. אפשר להמשיך בהזנה ידנית.'
+        : 'הסט לא נמצא. אפשר לבדוק את המספר או להמשיך בהזנה ידנית.',
+    );
+  } finally {
+    if (requestId === lookupRequestIdRef.current) {
       lookupInFlightRef.current = false;
     }
-  };
+  }
+};
 
   const validate = () => {
     const nextErrors = {};
@@ -183,6 +215,7 @@ const AddLegoSetModal = ({
         set_number: form.set_number.trim(),
         name: form.name.trim(),
         theme: form.theme.trim() || null,
+        subtheme: form.subtheme?.trim() || null,
         brand: form.brand,
         status: form.status,
         acquisition_type: form.acquisition_type,
@@ -312,7 +345,15 @@ const AddLegoSetModal = ({
             label="נושא"
             value={form.theme}
             onValueChange={(value) => updateField('theme', value)}
-            placeholder="לדוגמה: Star Wars"
+            placeholder="לדוגמה: Speed Champions"
+            dir="auto"
+          />
+          <TextField
+            id="lego-set-subtheme"
+            label="תת נושא"
+            value={form.subtheme ?? ''}
+            onValueChange={(value) => updateField('subtheme', value)}
+            placeholder="לדוגמה: Shrek"
             dir="auto"
           />
         </div>

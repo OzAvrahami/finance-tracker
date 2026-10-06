@@ -15,6 +15,7 @@ const buildLegoPayload = (input, { create = false } = {}) => {
     if (hasOwn(input, 'set_number')) payload.set_number = String(input.set_number).trim();
     if (hasOwn(input, 'name')) payload.name = String(input.name).trim();
     if (hasOwn(input, 'theme')) payload.theme = input.theme ? String(input.theme).trim() : null;
+    if (hasOwn(input, 'subtheme')) payload.subtheme = input.subtheme == null ? null : String(input.subtheme).trim() ||  null;
     if (hasOwn(input, 'brand')) payload.brand = input.brand || 'LEGO';
     if (hasOwn(input, 'status')) payload.status = input.status || 'New';
     if (hasOwn(input, 'pieces')) payload.pieces = nullableNumber(input.pieces);
@@ -29,6 +30,7 @@ const buildLegoPayload = (input, { create = false } = {}) => {
         payload.brand ??= 'LEGO';
         payload.status ??= 'New';
         payload.theme ??= null;
+        payload.subtheme ??= null;
         payload.pieces ??= null;
         payload.image_url ??= null;
         payload.purchase_date ??= null;

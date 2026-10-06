@@ -39,6 +39,7 @@ const LegoCollection = () => {
   const { setPageHeader } = useContext(PageHeaderContext);
   const collectionRevision = useLegoCollectionRevision();
   const [sets, setSets] = useState([]);
+  const [filterSetNumber, setFilterSetNumber] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterTheme, setFilterTheme] = useState('All');
   const [loading, setLoading] = useState(true);
@@ -154,12 +155,14 @@ const LegoCollection = () => {
   const filteredSets = useMemo(
     () => sets
       .filter((set) => filterStatus === 'All' || set.status === filterStatus)
-      .filter((set) => filterTheme === 'All' || set.theme === filterTheme),
-    [filterStatus, filterTheme, sets],
+      .filter((set) => filterTheme === 'All' || set.theme === filterTheme)
+      .filter((set) => (set.set_number ?? '').includes(filterSetNumber.trim())),
+    [filterStatus, filterTheme, filterSetNumber, sets],
   );
   const resetFilters = () => {
     setFilterStatus('All');
     setFilterTheme('All');
+    setFilterSetNumber('');
   };
 
   return (
@@ -180,6 +183,8 @@ const LegoCollection = () => {
         <>
           <StatsDashboard stats={stats} />
           <CollectionFilters
+            filterSetNumber={filterSetNumber}
+            onSetNumberFilterChange={setFilterSetNumber}
             filterStatus={filterStatus}
             onFilterChange={setFilterStatus}
             filterTheme={filterTheme}

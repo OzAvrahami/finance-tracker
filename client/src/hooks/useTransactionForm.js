@@ -474,7 +474,8 @@ const useTransactionForm = () => {
           return {
             ...item,
             item_name: item.item_name || res.data.name,
-            theme: item.theme || res.data.theme,
+            theme: res.data.theme ?? '',
+            subtheme: res.data.subtheme ?? null,
             brand: item.brand || res.data.brand || 'LEGO',
             pieces: res.data.parts ?? item.pieces ?? null,
             image_url: res.data.img ?? item.image_url ?? null,

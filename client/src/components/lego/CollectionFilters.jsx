@@ -1,8 +1,10 @@
 import { X } from 'lucide-react';
-import { SecondaryButton, Select } from '../ui';
+import { SecondaryButton, Select, TextField } from '../ui';
 import { STATUS_OPTIONS } from '../../utils/legoHelpers';
 
 const CollectionFilters = ({
+  filterSetNumber,
+  onSetNumberFilterChange,
   filterStatus,
   onFilterChange,
   filterTheme,
@@ -10,11 +12,22 @@ const CollectionFilters = ({
   onReset,
   themes,
 }) => {
-  const hasFilters = filterStatus !== 'All' || filterTheme !== 'All';
+  const hasFilters = filterStatus !== 'All' || filterTheme !== 'All' || filterSetNumber !== '';
 
   return (
     <section className="lego-filters" aria-label="סינון אוסף לגו">
       <div className="lego-filters__controls">
+        <TextField
+          id="lego-set-number-filter"
+          className="lego-filter-field"
+          label="מספר סט"
+          type="text"
+          dir="ltr"
+          value={filterSetNumber}
+          onValueChange={onSetNumberFilterChange}
+          placeholder="77242"
+        >
+        </TextField>
         <Select
           id="lego-status-filter"
           className="lego-filter-field"

@@ -13,6 +13,8 @@ const STATUS_META = {
   New: { label: 'חדש בקופסה', className: 'is-new' },
   'In Progress': { label: 'בבנייה', className: 'is-progress' },
   Built: { label: 'בנוי', className: 'is-built' },
+  Disassembled: { label: 'מפורק', className: 'is-neutral' },
+
 };
 
 const MoneyOrDash = ({ value, className = '' }) => (
@@ -76,7 +78,7 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
           <h2 id={titleId} dir="auto" title={set.name}>{set.name}</h2>
           <div className="lego-set-card__identity">
             <TechnicalValue>#{rawSetNumber}</TechnicalValue>
-            {set.theme && <><span aria-hidden="true">·</span><span dir="auto">{set.theme}</span></>}
+            {set.theme && <><span aria-hidden="true">·</span><span dir="auto">{set.theme}{set.subtheme && ` -> ${set.subtheme}`}</span></>}
           </div>
         </header>
 

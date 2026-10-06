@@ -10,11 +10,18 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- #93: Add separate summary counts for regular sets and individually catalogued collectible minifigures, full/partial set-number filtering, and a Disassembled status.
+- #93: Store parent theme and optional subtheme names and display them together on collection cards.
+
 ### Fixed
 
 - #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
 
 - #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
+
+- #93: Allow refreshing set details while editing existing collection records. Ignore outdated lookup responses after changing the set number or closing the dialog.
 
 ## [1.6.0] - Prepared (unpublished)
 

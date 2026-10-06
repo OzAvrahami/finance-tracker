@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { Blocks, HandCoins, PiggyBank, ReceiptText } from 'lucide-react';
+import { Blocks, HandCoins, PiggyBank, ReceiptText, User } from 'lucide-react';
 import { GlassCard, MoneyAmount, TechnicalValue } from '../ui';
 
 const SUMMARY_ITEMS = [
@@ -8,6 +8,14 @@ const SUMMARY_ITEMS = [
     label: 'מספר הסטים',
     note: 'כל הסטים באוסף',
     icon: Blocks,
+    tone: 'primary',
+    money: false,
+  },
+  {
+    key: 'totalMinifigs',
+    label: 'MiniFigs',
+    note: 'פריטי מיניפיגס באוסף',
+    icon: User,
     tone: 'primary',
     money: false,
   },

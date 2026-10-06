@@ -91,6 +91,7 @@ const getTransactionLegoPayload = (pricedItem, transactionId, transactionDate) =
     set_number: String(item.set_number).trim(),
     name: item.item_name,
     theme: item.theme || 'General',
+    subtheme: item.subtheme == null ? null : String(item.subtheme).trim() || null,
     ...(item.brand ? { brand: item.brand } : {}),
     pieces: getOptionalPieces(item.pieces),
     image_url: getOptionalImageUrl(item.image_url),
@@ -624,16 +625,31 @@ exports.getLegoSetDetails = async (req, res) => {
       headers: { 'Authorization': `key ${apiKey}` }
     });
 
+    let theme = themeResponse.data.name;
+    let subtheme = null;
+
+    const parentId = themeResponse.data.parent_id;
+
+    if (parentId != null) {
+      const parentResponse = await axios.get(`https://rebrickable.com/api/v3/lego/themes/${parentId}/`, {
+        headers: { 'Authorization': `key ${apiKey}` }
+      });
+
+      theme = parentResponse.data.name;
+      subtheme = themeResponse.data.name
+    }
+
     res.status(200).json({
       name: setResponse.data.name,
-      theme: themeResponse.data.name,
+      theme,
+      subtheme,
       img: setResponse.data.set_img_url,
       year: setResponse.data.year,
       parts: setResponse.data.num_parts
     });
-
   } catch (error) {
-    console.error("Lego Fetch Error:", error.message);
+    console.error('Lego Fetch Error:', error.stack);
+    //console.error("Lego Fetch Error:", error.message);
     res.status(404).json({ error: 'Set not found' });
   }
 };

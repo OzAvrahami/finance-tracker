@@ -293,6 +293,7 @@ describe('LEGO add and edit dialog', () => {
       set_number: '75192-1',
       name: 'Millennium Falcon',
       theme: 'Star Wars',
+      subtheme: null,
       brand: 'Mould King',
       status: 'In Progress',
       acquisition_type: 'purchase',

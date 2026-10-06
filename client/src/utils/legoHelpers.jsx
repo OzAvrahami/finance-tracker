@@ -8,11 +8,14 @@ export const sortBySetNumber = (sets) => {
 };
 
 export const calculateStats = (sets) => {
-  const totalSets = sets.length;
+  const totalMinifigs = sets.filter((set) => set.theme === 'Collectible Minifigures').length
+
+  const totalSets = sets.length - totalMinifigs;
   const totalListPrice = sets.reduce((sum, set) => sum + (Number(set.original_price) || Number(set.purchase_price) || 0), 0);
   const totalPaid = sets.reduce((sum, set) => sum + (Number(set.purchase_price) || 0), 0);
   const totalSaved = totalListPrice - totalPaid;
-  return { totalSets, totalListPrice, totalPaid, totalSaved };
+
+  return { totalSets, totalMinifigs, totalListPrice, totalPaid, totalSaved };
 };
 
 export const STATUS_OPTIONS = [
@@ -20,6 +23,7 @@ export const STATUS_OPTIONS = [
   { key: 'New', label: 'חדש בקופסה' },
   { key: 'In Progress', label: 'בבנייה' },
   { key: 'Built', label: 'בנוי' },
+  { key: 'Disassembled', label: 'מפורק'},
 ];
 
 export const BRAND_OPTIONS = ['LEGO', 'CaDA', 'Mould King', 'Cobi', 'Other'];
