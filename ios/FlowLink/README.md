@@ -1,11 +1,11 @@
 # FlowLink — native foundation and Wallet ingestion
 
-Current correction: [String Amount boundary](#string-amount-boundary--2026-09-29). Earlier dated build/typed-parameter instructions below are historical; use the current section for installation and owner testing.
+Current correction: [version display and Release recovery](#version-display-and-release-recovery--2026-10-11). The [String Amount boundary](#string-amount-boundary--2026-09-29) remains unchanged. Earlier dated build/typed-parameter instructions below are historical.
 
 FlowLink is a small iPhone companion for Finance Tracker. The FLI-04 foundation pairs a device and lists approved cards. [FLI-05 #90](https://github.com/OzAvrahami/finance-tracker/issues/90) adds a native Wallet action and durable delivery receipts. **The local-first synthetic gate was accepted on hardware. A subsequent real Wallet event resolved its binding but did not record perform() entry. The owner now confirms direct Wallet Amount/Merchant/Name → String configuration mapping. The permanent String-based action is implemented; its new synthetic test and actual real Wallet String/locked-background runtime remain pending.**
 
 - Project: `ios/FlowLink/FlowLink.xcodeproj`, shared scheme **FlowLink**.
-- App version **0.1.0**, build **2**, independent of the Finance Tracker product version (see the [documentation index](../../docs/README.md)).
+- App version **0.1.0**, installed owner build **4 (Release)**, independent of the Finance Tracker product version (see the [documentation index](../../docs/README.md)).
 - Temporary bundle identifier: `com.ozavrahami.flowlink.local`.
 - iPhone; deployment target **iOS 17.0**; Swift 6 language mode; Apple frameworks only.
 - Targets: `FlowLink`, `FlowLinkTests`, `FlowLinkUITests`.
@@ -24,9 +24,152 @@ Read back `CFBundleShortVersionString` and `CFBundleVersion` from the final sign
 before giving the owner its installation command. This does not change Finance Tracker's
 product SemVer fields. Test bundles are not separately installable owner app deliveries.
 
-Current owner delivery is **FlowLink 0.1.0 (3)**, a Release signing-renewal build for #91.
-Builds 1 and 2 and their commands/results below are historical. The build-3 recovery
-checkpoint below records its installation and remaining device-trust gate.
+Current owner delivery is **FlowLink 0.1.0 (4), Release**. Builds 1–3 and their commands/results
+below are historical. Build 4 corrects Diagnostics; the existing-device connection is recovered,
+while original receipt accessibility remains unresolved because of installation isolation.
+
+## Version display and Release recovery — 2026-10-11
+
+Started on clean `main`, HEAD `8258798de2f50011396ddabb988ea40a9554b590`. Read-only remote
+comparison found `38b2b8fe6ca6ec4bb20822495f56601978511fc5` one unrelated LEGO commit ahead;
+FlowLink source is identical. No pull/reset/branch change was made. No configured Octocode
+policy or callable Octocode tool was found; the configuration, metadata, pairing and receipt
+paths were traced directly in repository source.
+
+**Confirmed display defect:** ConnectionView used a literal `0.1.0 (1)`, while installed
+metadata independently reported **0.1.0 (3)**. Diagnostics now reads
+`CFBundleShortVersionString` and `CFBundleVersion` from `Bundle.main`, uses explicit unavailable
+fallbacks, and separately displays the compiled **Debug / Release** configuration. Device
+credential, protocol and binding revisions remain separate and unchanged.
+
+**Confirmed connection cause:** the pre-update private container's installation marker selected
+the saved Debug development origin and a new installation namespace. The original production
+device metadata and binding cache still existed, but their installation identity did not match
+the active marker. The owner's Xcode Run observation and the inspected Debug selection path
+explain the loss; this was not a loss of the five original receipts. Release deliberately creates
+another isolated production namespace on return; installing it does not resurrect the old
+Keychain namespace. No UUID, receipt scope or origin isolation was rewritten to force access.
+
+**Installed and observed:** 0.1.0 (4), `com.ozavrahami.flowlink.local`, on the existing iPhone
+17 Pro Max / iOS 27.0.1. Build inventory found no relevant artifact/delivered build above 3.
+Both app configurations incremented to 4; test targets remain 1. The explicit Release artifact
+passed codesign/plist checks with unchanged signed entitlements, application identifier and
+Personal Team. The valid development profile covers this iPhone and expires **2026-10-18
+10:52:12 Asia/Jerusalem (+03:00)**. Release ignores the retained Debug override, uses the
+existing production HTTPS endpoint and has no ATS exceptions.
+
+In-place installation and normal launch succeeded. A read-only XCTest inspection on the actual
+iPhone confirmed **FlowLink, 0.1.0 (4)** and **Build configuration, Release**, and confirmed
+the app was still unconnected before credential recovery. No screenshot or routine owner
+confirmation was substituted for that hardware readback. The tracked scheme's Run action still defaults to Debug; future owner
+renewals must explicitly choose **Release**, as in the command below.
+
+**Initial recovery blocker (subsequently resolved):** Safari had the Finance Tracker Settings tab,
+but rejected Apple Events JavaScript because **Allow JavaScript from Apple Events** was disabled.
+Its authenticated owner session was therefore unavailable to the authorized recovery automation;
+no browser credential extraction or permission bypass was attempted. The required operation was the existing
+owner-authorized `POST /owner/pairings` with `purpose: replace_credential` and the verified
+original device ID, followed by the app's existing Keychain-first redemption flow. Do not use
+enrollment to create a duplicate device or revoke the existing device. Credentials/capabilities
+must not be pasted into issue comments or committed files.
+
+**Authorized recovery continuation:** the owner enabled Safari Apple Events JavaScript access.
+Authenticated read-only owner API checks returned HTTP 200, found exactly one active server
+device matching the original private metadata, and verified its original active binding UUID.
+The existing `replace_credential` endpoint then returned HTTP 201 for that exact device.
+A one-use replacement QR was rendered entirely locally and displayed on the Mac; its capability
+was temporarily retained only in protected private recovery files, never in this repository or chat,
+and those secret copies were removed after redemption.
+The owner scanned the private QR and completed redemption in the already-installed Release app.
+Read-only owner API checks then confirmed the same single active device, credential revision
+**1 → 2**, and an entirely unchanged original binding snapshot (including IDs/status/revision).
+No duplicate enrollment, device revocation, receipt retry or financial request occurred.
+The original five receipts remain a separate recovery concern: their immutable installation
+scope differs from the current Release namespace. Credential replacement alone cannot make
+them visible in the app, and no scope/marker/database rewrite is authorized or performed.
+
+**Recovery readback:** the existing compiled physical-device Diagnostics test ran without a
+rebuild/reinstall and passed **1 test, 0 failures**. It observed **Connected**, **0.1.0 (4)** and
+**Release** on the actual iPhone. A fresh private container export confirms metadata in the current
+Release namespace retains the original device ID; the binding cache refreshed by authenticated
+device reads contains the original binding ID, active and available. The five-receipt database is
+byte-identical to the original export: two held, one needing review, two excluded tests, zero
+automatic candidates. **Zero receipts match the current installation namespace**, so connection
+recovery does not resolve their visibility. All original diagnostic rows remain; one additional
+`entity_resolution_failed / binding` checkpoint was observed, without a new receipt or delivery.
+
+The owner API session was used only for scoped device/binding reads and the authorized credential
+replacement. Temporary Safari recovery variables were cleared, the consumed private QR was closed,
+and its local secret copies were removed. The original private backup remains intact (15 file
+hashes verified). Safari's **Allow JavaScript from Apple Events** can now be disabled again.
+The existing Wallet automation has not been edited or executed. CoreDevice cannot list the
+Shortcuts container (ActionError 3); the owner then inspected the existing Wallet automation on
+the iPhone and confirmed its approved card displays normally, without a missing/unavailable
+warning. This is configuration evidence, not a new Wallet execution. No automation trigger or
+Amount/Merchant/Name mapping was changed. A final private export after this inspection again
+confirmed a byte-identical five-receipt database, zero current-namespace receipts, zero automatic
+candidates, and preservation of all original diagnostics. Connection recovery is complete;
+access to the original isolated receipts requires a separately reviewed recovery approach and
+has not been forced by rewriting identity or storage. **Actual Wallet transaction capture after
+this recovery is still unverified.** The FlowLink initiative is not being marked complete.
+
+The earlier private exports bracketing installation and launch, before credential replacement,
+proved **captures.sqlite, diagnostics.sqlite,
+the original production device metadata, cached bindings and the Debug selection file remained
+byte-identical**. Five receipts remain: two held for owner review, one needing review, and two
+excluded synthetic tests. There are **zero queued/retryWait/inFlight rows across all namespaces**;
+no automatic candidates, attempts, states or financial records were changed. Old receipts remain
+isolated in their original installation namespace, not made retryable or remapped during repair.
+The cached device identity matched the earlier verified phone evidence. Live server device/card
+access was subsequently verified during credential recovery as recorded above. The existing Wallet
+automation was inspected without execution; actual post-recovery Wallet capture remains pending.
+No automation was edited or invoked, and no binding identity changed.
+
+Private evidence is outside Git at
+`~/Library/Application Support/FinanceTracker-verification/flowlink-repair-20261011T081641Z/`.
+The original export is retained read-only; SQLite inspection used a working copy in read-only
+mode. No credential, pairing capability, Keychain content or financial payload is included here.
+
+### Build and focused verification
+
+- Debug Simulator unit tests: **96 passed, 1 existing hardware-only skip, 0 failed**.
+- New Diagnostics UI test: **1 Simulator pass**, independently reads 0.1.0 (4) / Debug.
+- Physical Release Diagnostics UI test: **1 pass**, independently reads 0.1.0 (4) / Release.
+- Explicit normal Release build, signature, device provisioning, plist/project, UTF-8,
+  local links, unchanged seven Finance Tracker version fields (1.6.0), and diff checks passed.
+- The first physical test-harness attempt required supplying the existing team for test targets;
+  the second needed `ENABLE_TESTABILITY=YES` for existing `@testable` imports. Both failed
+  before installation. A test-enabled harness was built, then the actual delivered app was
+  rebuilt with normal Release settings without that override. No source isolation was weakened.
+  The initial UI selector selected zero tests; its corrected class-qualified selector passed.
+
+```sh
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink-repair-build4-sim -only-testing:FlowLinkTests test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Debug -destination 'platform=iOS Simulator,id=C016BBEB-E3EB-4D81-AC87-4B74571C74D1' -derivedDataPath /private/tmp/flowlink-repair-build4-sim -only-testing:FlowLinkUITests/FlowLinkUITests/testInstalledVersionAndBuildConfiguration test
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS,id=00008150-00181C513E30C01C' -derivedDataPath /private/tmp/flowlink-repair-build4-device DEVELOPMENT_TEAM=AVQU374YW5 ENABLE_TESTABILITY=YES -allowProvisioningUpdates build-for-testing
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS,id=00008150-00181C513E30C01C' -derivedDataPath /private/tmp/flowlink-repair-build4-device -allowProvisioningUpdates build
+xcodebuild -project ios/FlowLink/FlowLink.xcodeproj -scheme FlowLink -configuration Release -destination 'platform=iOS,id=00008150-00181C513E30C01C' -derivedDataPath /private/tmp/flowlink-repair-build4-device -only-testing:FlowLinkUITests/FlowLinkUITests/testInstalledVersionAndBuildConfiguration test-without-building
+```
+
+The hardware inspection test only activates the existing app and reads Diagnostics; it does not
+use the Simulator helper's backend override or touch pairing, bindings or capture controls.
+Unchanged broad web/server suites were not rerun. No commit, stage, push, backend deployment,
+migration, ingestion-flag change, Wallet invocation, receipt retry or financial operation occurred.
+
+### Release / Version gate
+
+- Release impact: **Yes** — correct misleading installed-app Diagnostics.
+- SemVer impact: **Patch** — backwards-compatible display correction, no new ingestion capability.
+- Candidate release: **Pending (TBD)** — owner-coordinated release after the current product line.
+- Grouping / included release candidate: existing **FlowLink #85**; exact release inclusion pending.
+- CHANGELOG status: **Updated under Unreleased**.
+- Version-bump status: product bump **Deferred** to coordinated owner release preparation;
+  seven Finance Tracker fields remain **1.6.0**. FlowLink remains **0.1.0**, owner build **4**.
+- Publication status: **Out of scope**.
+- Owner verification / acceptance: **Pending**; display/configuration and existing-device
+  connection recovery are verified. Original receipt accessibility remains unresolved;
+  the owner confirmed the existing Wallet automation's binding displays normally without execution.
+  Actual Wallet capture after recovery remains unverified.
 
 ### Build 3 signing recovery — 2026-10-04
 

@@ -3,6 +3,32 @@ import XCTest
 @testable import FlowLink
 
 final class DomainTests: XCTestCase {
+  func testAppBuildInfoReadsBundleMetadataIndependently() {
+    let info = AppBuildInfo(metadata: [
+      "CFBundleShortVersionString": "2.3.4", "CFBundleVersion": "17",
+    ])
+    XCTAssertEqual(info.display, "2.3.4 (17)")
+    XCTAssertEqual(AppBuildInfo().display, AppBuildInfo(metadata: Bundle.main.infoDictionary).display)
+  }
+
+  func testAppBuildInfoUsesHonestFallbackForMissingOrInvalidMetadata() {
+    XCTAssertEqual(AppBuildInfo(metadata: nil).display, "Version unavailable (build unavailable)")
+    XCTAssertEqual(AppBuildInfo(metadata: ["CFBundleShortVersionString": " ",
+      "CFBundleVersion": 1]).display, "Version unavailable (build unavailable)")
+    XCTAssertEqual(AppBuildInfo(metadata: ["CFBundleShortVersionString": "0.1.0"]).display,
+      "0.1.0 (build unavailable)")
+    XCTAssertEqual(AppBuildInfo(metadata: ["CFBundleVersion": " 42\n"]).display,
+      "Version unavailable (42)")
+  }
+
+  func testAppBuildConfigurationMatchesCompilation() {
+    #if DEBUG
+      XCTAssertEqual(AppBuildInfo.configuration, "Debug")
+    #else
+      XCTAssertEqual(AppBuildInfo.configuration, "Release")
+    #endif
+  }
+
   func testCredentialFormatAndNativeEntropy() throws {
     let a = try CredentialGenerator().generate()
     let b = try CredentialGenerator().generate()

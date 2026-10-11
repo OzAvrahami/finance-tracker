@@ -1,5 +1,30 @@
 import Foundation
 
+struct AppBuildInfo {
+  let version: String
+  let build: String
+
+  init(metadata: [String: Any]? = Bundle.main.infoDictionary) {
+    func value(_ key: String) -> String? {
+      guard let text = metadata?[key] as? String else { return nil }
+      let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed.isEmpty ? nil : trimmed
+    }
+    version = value("CFBundleShortVersionString") ?? "Version unavailable"
+    build = value("CFBundleVersion") ?? "build unavailable"
+  }
+
+  var display: String { "\(version) (\(build))" }
+
+  static var configuration: String {
+    #if DEBUG
+      "Debug"
+    #else
+      "Release"
+    #endif
+  }
+}
+
 enum FlowLinkError: Error, Equatable, LocalizedError {
   case invalidPairing, invalidConfiguration, credentialUnavailable, storageUnavailable
   case offline, timeout, unauthorized, pairingInvalid, pairingUnavailable, pairingConflict

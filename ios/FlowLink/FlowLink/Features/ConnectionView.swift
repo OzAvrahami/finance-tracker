@@ -137,7 +137,10 @@ struct ConnectionView: View {
           } else {
             Text("Backend status not yet verified").foregroundStyle(.secondary)
           }
-          LabeledContent("FlowLink", value: "0.1.0 (1)")
+          LabeledContent("FlowLink", value: AppBuildInfo().display)
+            .accessibilityIdentifier("flowlinkVersion")
+          LabeledContent("Build configuration", value: AppBuildInfo.configuration)
+            .accessibilityIdentifier("flowlinkConfiguration")
           DisclosureGroup("Connection details") {
             Text(model.backend).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
           }
