@@ -10,6 +10,8 @@ database guidance, operator instructions and historical evidence.
 
 [v1.5.0 is published](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.5.0).
 [v1.6.0 reconciliation is prepared locally, unpublished](docs/history/RELEASE_1_6_0.md).
+[v1.7.0 Shopping UX and Settings version display is prepared locally, unpublished](docs/history/RELEASE_1_7_0.md).
+The seven application-version fields now read 1.7.0; this does not establish deployment or publication.
 Deployment does not authorize CAL/phone activation or imply complete device acceptance.
 This is not a tenant-isolated SaaS product; multi-user work is deferred to v2.0.0.
 

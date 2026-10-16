@@ -10,6 +10,19 @@
   background: var(--ft-glass);
 }
 
+.settings-about {
+  margin-block-start: var(--ft-space-6);
+  padding: var(--ft-space-4);
+  border-block-start: 1px solid var(--ft-border);
+  color: var(--ft-text-muted);
+  font-size: var(--ft-font-size-sm);
+}
+
+.settings-about h2 { margin: 0; font-size: var(--ft-font-size-label); font-weight: 600; }
+.settings-about dl { margin: var(--ft-space-3) 0 0; }
+.settings-about dl > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ft-space-2) var(--ft-space-4); }
+.settings-about dd { margin: 0; }
+
 .settings-shell.ui-glass::after {
   display: none;
 }

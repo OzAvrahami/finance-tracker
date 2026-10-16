@@ -1,4 +1,3 @@
-import ShoppingReceiptDialog from "./ShoppingReceiptDialog";
 import PersonalItemProducts from './PersonalItemProducts';
 import { useState } from "react";
 import {
@@ -70,7 +69,7 @@ export default function ShoppingIntelligence({ list, onChanged }) {
           if (!open && !data) refresh();
         }}
       >
-        מוצרים קבועים, הצעות וקבלות
+        מוצרים קבועים והצעות
       </SecondaryButton>
       {open && (
         <section aria-label="תכנון קנייה ובדיקת קבלה" dir="rtl">
@@ -88,7 +87,7 @@ export default function ShoppingIntelligence({ list, onChanged }) {
                   <h3>המוצרים הקבועים שלי</h3>
                   <p>
                     אין היסטוריה? בחרו מוצרים וכמויות רגילות מהקטלוג. מוצר חדש
-                    אפשר להוסיף דרך הוספת פריט לרשימה ואז לרענן כאן.
+                    אפשר להוסיף לרשימה כשהאפשרות ״להציע את הפריט גם ברשימות הבאות״ מסומנת בפרטים נוספים, ואז לרענן כאן.
                   </p>
                   <form
                     className="shopping-smart-grid"
@@ -247,7 +246,6 @@ export default function ShoppingIntelligence({ list, onChanged }) {
           )}
         </section>
       )}
-      <ShoppingReceiptDialog list={list} onChanged={onChanged} />
     </GlassCard>
   );
 }

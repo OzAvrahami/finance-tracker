@@ -1,6 +1,9 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, it, expect, vi } from "vitest";
-import ShoppingIntelligence from "./ShoppingIntelligence";
+import ShoppingHabits from "./ShoppingIntelligence";
+import ShoppingReceiptDialog from "./ShoppingReceiptDialog";
+// The page now places receipt access in the heading, separate from the habits panel.
+const ShoppingIntelligence = props => <><ShoppingHabits {...props}/><ShoppingReceiptDialog {...props}/></>;
 import * as api from "../../services/api";
 vi.mock("../../services/api", () => ({
   getShoppingReceiptDuplicates: vi.fn().mockResolvedValue({data: []}),
@@ -24,10 +27,10 @@ const base = () => ({
   receipt: null,
   reconciliation: null,
 });
-const list = { id: 1, status: "active", shopping_list_items: [] };
+const list = { id: 1, status: "active", shopping_list_items: [{id:900,custom_name:'Milk'}] };
 const open = async () => {
   fireEvent.click(
-    screen.getByRole("button", { name: "מוצרים קבועים, הצעות וקבלות" }),
+    screen.getByRole("button", { name: "מוצרים קבועים והצעות" }),
   );
   await screen.findByRole("heading", { name: "המוצרים הקבועים שלי" });
 };
@@ -175,6 +178,7 @@ it("upload failure shows actionable provider message and remains retryable", asy
   render(<ShoppingIntelligence list={list} onChanged={vi.fn()} />);
   await open();
   fireEvent.click(screen.getByRole("button",{name:/^(סריקת קבלה|בדיקת קבלה)$/}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'הוספת תמונות או PDF'})).toBeEnabled());
   fireEvent.change(screen.getByLabelText(/הוספת תמונות קבלה/), {
     target: {
       files: [new File(["fixture"], "receipt.jpg", { type: "image/jpeg" })],
@@ -202,7 +206,7 @@ it("checked-out lists still permit receipt review without a financial action", a
     />,
   );
   fireEvent.click(
-    screen.getByRole("button", { name: "מוצרים קבועים, הצעות וקבלות" }),
+    screen.getByRole("button", { name: "מוצרים קבועים והצעות" }),
   );
   fireEvent.click(await screen.findByRole("button",{name:"סריקת קבלה"}));
   expect(await screen.findByRole("table")).toBeInTheDocument();

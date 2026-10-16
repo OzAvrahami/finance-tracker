@@ -17,6 +17,12 @@ This is the documentation entry point. Choose by purpose rather than by issue nu
 
 ## Current baseline and boundaries
 
+The owner approved [candidate v1.7.0](history/RELEASE_1_7_0.md) for the reviewed
+Shopping UX and Settings version-display bundle on 2026-10-16. It is prepared
+locally and unpublished; seven product-version fields now read 1.7.0. See the
+[exact owner commit scope and separate migration procedure](operations/SHOPPING_UX.md).
+The earlier v1.6.0 grouping/history is unchanged; no production state is inferred.
+
 For published v1.5.0 and the 2026-10-01 prepared v1.6.0 #82/#83 candidate, see
 [release preparation](history/RELEASE_1_6_0.md) and
 [integrated readiness](operations/APY_06_RELEASE_READINESS.md). The release-preparation
@@ -57,6 +63,7 @@ owns live Issue state; dated handoffs below must not be interpreted as current s
 - [APY integrated readiness and CAL activation gate](operations/APY_06_RELEASE_READINESS.md)
 - [Transaction source status and owner review](operations/APY_05_RECONCILIATION_REVIEW.md)
 - [Shopping habits, receipt review and OCR setup](operations/SHOPPING_RECEIPTS.md)
+- [Shopping UX and Settings version: owner review, commit scope and migrations 050–051](operations/SHOPPING_UX.md)
 - [Database files and operational SQL checks](operations/DATABASE.md)
 - [Funded Budget migration boundaries](operations/FUNDED_BUDGET_MIGRATION_RUNBOOK.md)
 - [CAL / FlowLink reconciliation and producer transition](operations/APY_04_CAL_RECONCILIATION.md)

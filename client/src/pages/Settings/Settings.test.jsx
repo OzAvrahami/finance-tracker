@@ -26,6 +26,7 @@ import {
   updateSettingsPaymentSource,
 } from '../../services/api';
 import Settings from './Settings';
+import { version as appVersion } from '../../../package.json';
 
 vi.mock('../../services/api', () => ({
   createAdminShoppingCatalogCategory: vi.fn(),
@@ -139,6 +140,8 @@ describe('Settings navigation and categories', () => {
     expect(getSettingsCategories).toHaveBeenCalledTimes(1);
     expect(getSettingsPaymentSources).not.toHaveBeenCalled();
     expect(getAdminShoppingListTypes).not.toHaveBeenCalled();
+    const about = screen.getByRole('region', { name: 'אודות המערכת' });
+    expect(within(about).getByText(`v${appVersion}`)).toHaveAttribute('dir', 'ltr');
   });
 
   it('preserves create payload including type, emoji, and comma-separated keyword behavior', async () => {

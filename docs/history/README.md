@@ -7,6 +7,7 @@ for publication and the existing Issue/Project for live acceptance and workflow.
 
 | Record | Purpose |
 | --- | --- |
+| [v1.7.0 preparation](RELEASE_1_7_0.md) | Owner-approved Shopping UX/Settings candidate; exact local scope, version synchronization and scoped acceptance |
 | [v1.2.0](RELEASE_1_2_0.md) | Dashboard/Loans/Shopping acceptance and 029 evidence |
 | [v1.3.0 Savings](RELEASE_1_3_0.md) | Integrated verification, migration and recovery handoff |
 | [v1.3.1](RELEASE_1_3_1.md), [patch review](PATCH_1_3_1_REVIEW.md) | #49/#51/#47 notes and explicit synthetic-preview/DB evidence limits |

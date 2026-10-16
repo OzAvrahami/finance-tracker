@@ -1,5 +1,7 @@
 const supabase = require('../config/supabase');
 const { normalizeShoppingListFields } = require('../utils/shoppingListFields');
+const { planningUnit, supportedPlanningUnit } = require('../../shared/shoppingEntryOptions.mjs');
+const { decimal } = require('../../shared/shoppingQuantities.mjs');
 
 // ========== Reference Data ==========
 
@@ -27,14 +29,14 @@ exports.getCatalogCategories = async (req, res) => {
       // Filter via M2M table: only categories linked to this list type
       const { data, error } = await supabase
         .from('shopping_catalog_category_list_types')
-        .select('shopping_catalog_categories(id, name, icon, is_active)')
+        .select('shopping_catalog_categories(id, name, icon, is_active, is_neutral)')
         .eq('list_type_id', list_type_id);
 
       if (error) throw error;
 
       const categories = (data || [])
         .map(row => row.shopping_catalog_categories)
-        .filter(cat => cat && cat.is_active)
+        .filter(cat => cat && (cat.is_active || cat.is_neutral))
         .sort((a, b) => a.name.localeCompare(b.name, 'he'));
 
       return res.json(categories);
@@ -89,7 +91,7 @@ exports.createCatalogCategory = async (req, res) => {
 
 exports.getCatalogItems = async (req, res) => {
   try {
-    const { category_id, search } = req.query;
+    const { category_id, search, list_type_id, limit } = req.query;
 
     let query = supabase
       .from('shopping_catalog_items')
@@ -97,9 +99,18 @@ exports.getCatalogItems = async (req, res) => {
       .eq('is_active', true);
 
     if (category_id) query = query.eq('category_id', category_id);
-    if (search) query = query.ilike('name', `%${search}%`);
+    if (list_type_id) {
+      const { data: links, error: scopeError } = await supabase.from('shopping_catalog_category_list_types')
+        .select('category_id,shopping_catalog_categories(is_active,is_neutral)').eq('list_type_id', list_type_id);
+      if (scopeError) throw scopeError;
+      const ids = (links || []).filter(row => row.shopping_catalog_categories?.is_active || row.shopping_catalog_categories?.is_neutral).map(row => row.category_id);
+      if (!ids.length) return res.json([]);
+      query = query.in('category_id', ids);
+    }
+    if (search) query = query.ilike('name', `%${String(search).slice(0,300).replace(/[\\%_]/g, '\\$&')}%`);
 
     query = query.order('name');
+    if (limit !== undefined || list_type_id) query = query.limit(Math.min(20, Math.max(1, Number.parseInt(limit,10) || 8)));
 
     const { data, error } = await query;
     if (error) throw error;
@@ -237,7 +248,38 @@ exports.deleteShoppingList = async (req, res) => {
 exports.addListItem = async (req, res) => {
   try {
     const { id } = req.params;
-    const { catalog_item_id, custom_name, category_id, quantity, unit, price, notes } = req.body;
+    if (req.body.entry_mode === 'name_first') {
+      const item = { ...req.body };
+      if (item.unit_mode === 'controlled') {
+        if (item.unit != null && typeof item.unit !== 'string') return res.status(400).json({ error: 'יש לבחור יחידה מהרשימה.' });
+        item.unit = planningUnit(item.unit);
+      }
+      const { data, error } = await supabase.rpc('shopping_add_planned_item', { p_list: id, p_item: item });
+      if (error) {
+        const messages = {
+          shopping_category_scope: 'הקטגוריה או הפריט אינם זמינים לסוג הרשימה. בחרו הצעה אחרת או הוסיפו פריט חדש.',
+          shopping_category_name_invalid: 'יש להזין שם קטגוריה עד 300 תווים, או להשאיר את השדה ריק.',
+          shopping_category_ambiguous: 'יש כמה קטגוריות בשם זה. בחרו קטגוריה מפורשת מההצעות.',
+          shopping_category_exists: 'קטגוריה בשם זה כבר קיימת. נסו שוב כדי להשתמש בזהות הקיימת.',
+          shopping_unit_invalid: 'יש לבחור יחידה מהרשימה. יחידה ישנה מותרת רק ללא שינוי בפריט השמור.',
+          shopping_list_closed: 'הרשימה נסגרה ואינה ניתנת לשינוי.',
+          shopping_catalog_missing: 'הפריט השמור אינו זמין עוד. אפשר להוסיף את השם כפריט חדש.',
+          shopping_item_name_required: 'יש להזין שם פריט עד 300 תווים.',
+          shopping_item_invalid: 'יש להזין כמות חיובית, מחיר תקין ופרטים באורך המותר.',
+        };
+        return res.status(error.code === '23505' ? 409 : 400).json({ error: messages[error.message] || (error.code === '23505'
+          ? 'פריט בשם זה כבר שמור בקטגוריה. בחרו אותו מההצעות או הוסיפו לרשימה בלבד.'
+          : 'הפריט לא נוסף. בדקו את הפרטים ונסו שוב.') });
+      }
+      return res.status(201).json(data);
+    }
+    const { catalog_item_id, custom_name, quantity, unit, price, notes } = req.body;
+    let { category_id } = req.body;
+    if (catalog_item_id) {
+      const { data: catalog, error } = await supabase.from('shopping_catalog_items').select('category_id').eq('id',catalog_item_id).single();
+      if (error || !catalog) return res.status(400).json({ error: 'catalog item not found' });
+      category_id = catalog.category_id;
+    }
 
     if (!catalog_item_id && !custom_name) {
       return res.status(400).json({ error: 'catalog_item_id or custom_name is required' });
@@ -330,10 +372,38 @@ exports.updateListItem = async (req, res) => {
     const { id, itemId } = req.params;
     const updates = {};
 
+    if (req.body.planned_name !== undefined) {
+      if (typeof req.body.planned_name !== 'string' || !req.body.planned_name.trim() || req.body.planned_name.trim().length > 300)
+        return res.status(400).json({ error: 'יש להזין שם פריט עד 300 תווים.' });
+      updates.planned_name = req.body.planned_name.trim();
+      if ((req.body.quantity !== undefined && (!Number.isFinite(Number(req.body.quantity)) || Number(req.body.quantity)<=0 || Number(req.body.quantity)>10000)) ||
+          (req.body.price != null && req.body.price !== '' && (!Number.isFinite(Number(req.body.price)) || Number(req.body.price)<0 || Number(req.body.price)>100000000)) ||
+          (req.body.notes != null && (typeof req.body.notes !== 'string' || req.body.notes.length>2000)) ||
+          (req.body.unit != null && (typeof req.body.unit !== 'string' || (req.body.unit_mode !== 'controlled' && req.body.unit.length>30))))
+        return res.status(400).json({ error: 'יש להזין כמות חיובית, מחיר תקין ופרטים באורך המותר.' });
+    }
+
     const fields = ['quantity', 'unit', 'price', 'notes', 'is_purchased', 'custom_name', 'category_id'];
     fields.forEach(f => {
       if (req.body[f] !== undefined) updates[f] = req.body[f];
     });
+
+    if (req.body.unit_mode === 'controlled') {
+      if (req.body.quantity !== undefined) {
+        const quantity=decimal(req.body.quantity);
+        if (quantity === null || quantity<=0n || quantity>10000000n)
+          return res.status(400).json({error:'יש להזין כמות חיובית עד 10000, עם עד שלוש ספרות אחרי הנקודה.'});
+      }
+      if (req.body.unit !== undefined) {
+        if (typeof req.body.unit !== 'string') return res.status(400).json({error:'יש לבחור יחידה מהרשימה.'});
+        const unit=planningUnit(req.body.unit);
+        if (!supportedPlanningUnit(unit)) {
+          const {data:current,error}=await supabase.from('shopping_list_items').select('unit').eq('id',itemId).eq('list_id',id).single();
+          if (error || !current || unit !== current.unit) return res.status(400).json({error:'בחרו יחידה מהרשימה או השאירו את היחידה הקיימת ללא שינוי.'});
+        }
+        updates.unit=unit;
+      }
+    }
 
     if (updates.is_purchased === true) updates.purchased_at = new Date().toISOString();
     if (updates.is_purchased === false) updates.purchased_at = null;

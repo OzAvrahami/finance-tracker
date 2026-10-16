@@ -1,3 +1,6 @@
+import ShoppingQuickEntry from './ShoppingQuickEntry';
+import ShoppingUnitSelect from './ShoppingUnitSelect';
+import { planningUnit, planningUnitLabel } from '../../../../shared/shoppingEntryOptions.mjs';
 import ReceiptDuplicateWarning from "./ReceiptDuplicateWarning";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -5,12 +8,10 @@ import {
   ChevronRight,
   Info,
   Lock,
-  Package,
   Plus,
   Receipt,
   ShoppingBag,
   Trash2,
-  X,
 } from 'lucide-react';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
@@ -26,7 +27,6 @@ import {
   PrimaryButton,
   ProgressBar,
   SecondaryButton,
-  SegmentedControl,
   Select,
   Skeleton,
   TechnicalValue,
@@ -34,14 +34,10 @@ import {
   useToast,
 } from '../../components/ui';
 import {
-  addShoppingListItem,
   checkoutShoppingList,
   getShoppingReceiptDuplicates,
-  createShoppingCatalogCategory,
   getCategories,
   getPaymentSources,
-  getShoppingCatalogCategories,
-  getShoppingCatalogItems,
   getShoppingListById,
   removeShoppingListItem,
   toggleShoppingItemPurchased,
@@ -51,23 +47,9 @@ import {
 import { SHOPPING_STATUS } from './shoppingConstants';
 import ShoppingListDialog from './ShoppingListDialog';
 import ShoppingIntelligence from './ShoppingIntelligence';
+import ShoppingReceiptDialog from './ShoppingReceiptDialog';
 import { safeShoppingLink } from './shoppingListFields';
 import { formatCalendarDate } from '../../utils/calendarDate';
-
-const ITEM_MODES = [
-  { value: 'catalog', label: 'פריט מהקטלוג', icon: Package },
-  { value: 'custom', label: 'פריט חופשי', icon: Plus },
-];
-
-const initialItemForm = {
-  categoryId: '',
-  catalogItemId: '',
-  customName: '',
-  quantity: 1,
-  unit: '',
-  price: '',
-  notes: '',
-};
 
 const calculateStats = (items = []) => {
   const purchasedItems = items.filter((item) => item.is_purchased);
@@ -80,7 +62,7 @@ const calculateStats = (items = []) => {
   };
 };
 
-const getItemName = (item) => item.shopping_catalog_items?.name || item.custom_name || 'פריט';
+const getItemName = (item) => item.planned_name || item.shopping_catalog_items?.name || item.custom_name || 'פריט';
 
 const ShoppingDetailSkeleton = ({ onBack }) => (
   <div className="shopping-detail shopping-detail--loading" role="status" aria-label="טעינת רשימת קניות">
@@ -107,13 +89,15 @@ const ShoppingDetailSkeleton = ({ onBack }) => (
 const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) => {
   const [editing,setEditing] = useState(false);
   const [editQuantity,setEditQuantity] = useState(String(item.quantity || 1));
-  const [editUnit,setEditUnit] = useState(item.unit || 'יח׳');
+  const [editUnit,setEditUnit] = useState(planningUnit(item.unit));
   const [editPrice,setEditPrice] = useState(item.price ?? '');
   const [saving,setSaving] = useState(false);
   const [editError,setEditError] = useState('');
+  const [editName,setEditName] = useState(getItemName(item));
+  const [editNotes,setEditNotes] = useState(item.notes || '');
   const name = getItemName(item);
   const quantity = item.quantity || 1;
-  const unit = item.unit || 'יח׳';
+  const unit = planningUnitLabel(item.unit);
   const hasPrice = item.price !== null && item.price !== undefined && item.price !== '';
   const total = (Number(item.quantity) || 1) * (Number(item.price) || 0);
 
@@ -126,7 +110,7 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) =
             className="shopping-purchase-toggle"
             aria-label={item.is_purchased ? `סימון ${name} כטרם נקנה` : `סימון ${name} כנקנה`}
             aria-pressed={Boolean(item.is_purchased)}
-            disabled={pending}
+            disabled={pending || saving}
             onClick={() => onToggle(item)}
           >
             {item.is_purchased && <Check size={17} aria-hidden="true" />}
@@ -142,11 +126,17 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) =
         </div>
       </div>
 
-      {editable && <SecondaryButton disabled={pending} onClick={()=>setEditing(!editing)}>עריכת {name}</SecondaryButton>}
-      {editing && <form className="shopping-smart-grid" onSubmit={async e=>{e.preventDefault();setSaving(true);setEditError('');try{await onEdit(item,{quantity:editQuantity,unit:editUnit,price:editPrice===''?null:editPrice});setEditing(false);}catch{setEditError('השינוי לא נשמר. נסו שוב.');}finally{setSaving(false);}}}>
-       <NumberField label={`כמות: ${name}`} required min="0.001" step="0.001" value={editQuantity} onValueChange={setEditQuantity}/>
-       <TextField label={`יחידה: ${name}`} required value={editUnit} onValueChange={setEditUnit}/>
-       <NumberField label={`מחיר: ${name}`} min="0" step="0.01" value={editPrice} onValueChange={setEditPrice}/>
+      {editable && <SecondaryButton aria-label={`עריכת ${name}`} disabled={pending || saving} onClick={()=>{
+        setEditName(getItemName(item)); setEditNotes(item.notes || ''); setEditQuantity(String(item.quantity || 1));
+        setEditUnit(planningUnit(item.unit)); setEditPrice(item.price ?? ''); setEditing(!editing);
+      }}>עריכה</SecondaryButton>}
+      {editing && <form className="shopping-smart-grid" onSubmit={async e=>{e.preventDefault();if(saving)return;setSaving(true);setEditError('');try{await onEdit(item,{planned_name:editName.trim(),notes:editNotes.trim() || null,quantity:editQuantity,unit:editUnit,unit_mode:'controlled',price:editPrice===''?null:editPrice});setEditing(false);}catch{setEditError('השינוי לא נשמר. נסו שוב.');}finally{setSaving(false);}}}>
+       <TextField label="שם ברשימה" value={editName} onValueChange={setEditName} required maxLength={300} dir="auto" disabled={saving}
+         helperText={item.catalog_item_id ? 'השם משתנה ברשימה זו בלבד; הפריט השמור והמיפויים נשארים.' : undefined}/>
+       <TextField label="הערות ודרישות" value={editNotes} onValueChange={setEditNotes} maxLength={2000} dir="auto" disabled={saving}/>
+       <NumberField label={`כמות: ${name}`} required min="0.001" max="10000" step="0.001" value={editQuantity} onValueChange={setEditQuantity} disabled={saving}/>
+       <ShoppingUnitSelect label={`יחידה: ${name}`} value={editUnit} onValueChange={setEditUnit} disabled={saving}/>
+       <NumberField label={`מחיר: ${name}`} min="0" max="100000000" step="0.01" value={editPrice} onValueChange={setEditPrice} disabled={saving}/>
        {editError && <Alert variant="error">{editError}</Alert>}
        <PrimaryButton type="submit" disabled={saving}>שמירת פריט</PrimaryButton>
        <SecondaryButton disabled={saving} onClick={()=>setEditing(false)}>ביטול עריכת פריט</SecondaryButton>
@@ -170,7 +160,7 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) =
               />
             </>
           ) : (
-            <span className="shopping-item__no-price">ללא מחיר</span>
+            null
           )}
         </span>
         {editable && (
@@ -179,7 +169,7 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) =
             size="touch"
             className="shopping-item-delete"
             aria-label={`הסרת ${name} מהרשימה`}
-            disabled={pending}
+            disabled={pending || saving}
             onClick={(event) => onRemove(item, event)}
           >
             <Trash2 size={16} aria-hidden="true" />
@@ -207,7 +197,7 @@ const ShoppingItemGroup = ({ group, editable, pendingItemId, onToggle, onRemove,
   ));
 
   return (
-    <GlassCard className="shopping-item-group" padding="var(--ft-space-7)">
+    <GlassCard className="shopping-item-group" padding="var(--ft-space-5)" style={{boxShadow:'none'}}>
       <section aria-labelledby={`shopping-group-${group.key}`}>
         <div className="shopping-item-group__header">
           <span className="shopping-category-icon" aria-hidden="true">{group.icon || '🛒'}</span>
@@ -226,175 +216,6 @@ const ShoppingItemGroup = ({ group, editable, pendingItemId, onToggle, onRemove,
             <div className="shopping-item-list">{renderItems(purchasedItems)}</div>
           </div>
         )}
-      </section>
-    </GlassCard>
-  );
-};
-
-const AddShoppingItem = ({
-  open,
-  mode,
-  form,
-  catalogCategories,
-  catalogItems,
-  catalogLoading,
-  pending,
-  error,
-  touched,
-  onOpen,
-  onClose,
-  onModeChange,
-  onFormChange,
-  onCreateCategory,
-  onSubmit,
-}) => {
-  if (!open) {
-    return (
-      <GlassCard className="shopping-add-collapsed" padding="0">
-        <button type="button" onClick={onOpen}>
-          <Plus size={18} aria-hidden="true" />
-          הוספת פריט לרשימה
-        </button>
-      </GlassCard>
-    );
-  }
-
-  const itemMissing = touched && mode === 'catalog' && !form.catalogItemId;
-  const nameMissing = touched && mode === 'custom' && !form.customName.trim();
-  const categoryMissing = touched && !form.categoryId;
-
-  return (
-    <GlassCard className="shopping-add-item" padding="20px">
-      <section aria-labelledby="shopping-add-item-title">
-        <div className="shopping-section-heading">
-          <h3 id="shopping-add-item-title">הוספת פריט</h3>
-          <IconButton type="button" size="touch" aria-label="סגירת טופס הוספת פריט" disabled={pending} onClick={onClose}>
-            <X size={17} aria-hidden="true" />
-          </IconButton>
-        </div>
-
-        <SegmentedControl
-          className="shopping-item-mode"
-          value={mode}
-          onValueChange={onModeChange}
-          options={ITEM_MODES}
-          label="מקור הפריט"
-          disabled={pending}
-        />
-
-        {error && <Alert variant="error" urgent>{error}</Alert>}
-
-        <form className="shopping-add-form" onSubmit={onSubmit} noValidate>
-          <div className="shopping-add-form__primary">
-            {mode === 'catalog' ? (
-              <Select
-                id="shopping-catalog-item"
-                label="פריט מהקטלוג"
-                required
-                helperText="בחירת פריט מביאה את יחידת המידה והמחיר המוגדרים בקטלוג; ניתן לשנות אותם לרשימה הזו."
-                value={form.catalogItemId}
-                onValueChange={(value) => onFormChange('catalogItemId', value)}
-                error={itemMissing ? 'יש לבחור פריט מהקטלוג' : undefined}
-                loading={catalogLoading}
-                disabled={!form.categoryId || pending}
-              >
-                <option value="">בחירת פריט מהקטלוג</option>
-                {catalogItems.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </Select>
-            ) : (
-              <TextField
-                id="shopping-custom-item"
-                label="שם הפריט"
-                required
-                placeholder="למשל: רוטב פסטו"
-                value={form.customName}
-                onValueChange={(value) => onFormChange('customName', value)}
-                error={nameMissing ? 'יש להזין שם לפריט' : undefined}
-                disabled={pending}
-              />
-            )}
-          </div>
-
-          <div className="shopping-add-form__details">
-            <div className="shopping-category-field">
-              <Select
-                id="shopping-catalog-category"
-                label="קטגוריית קטלוג"
-                required
-                value={form.categoryId}
-                onValueChange={(value) => onFormChange('categoryId', value)}
-                error={categoryMissing ? 'יש לבחור קטגוריית קטלוג' : undefined}
-                disabled={pending}
-              >
-                <option value="">בחירת קטגוריית קטלוג</option>
-                {catalogCategories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.icon} {category.name}</option>
-                ))}
-              </Select>
-              <IconButton
-                type="button"
-                size="touch"
-                aria-label="יצירת קטגוריית קטלוג חדשה"
-                disabled={pending}
-                onClick={onCreateCategory}
-              >
-                <Plus size={17} aria-hidden="true" />
-              </IconButton>
-            </div>
-            <NumberField
-              id="shopping-item-quantity"
-              label="כמות"
-              min="1"
-              required
-              value={form.quantity}
-              onValueChange={(value) => onFormChange('quantity', value)}
-              disabled={pending}
-            />
-            <TextField
-              id="shopping-item-unit"
-              label="יחידה"
-              placeholder="ק״ג / יח׳ / ליטר"
-              value={form.unit}
-              onValueChange={(value) => onFormChange('unit', value)}
-              disabled={pending}
-            />
-            <NumberField
-              id="shopping-item-price"
-              label="מחיר ליחידה"
-              prefix="₪"
-              step="0.01"
-              value={form.price}
-              onValueChange={(value) => onFormChange('price', value)}
-              disabled={pending}
-            />
-          </div>
-
-          <TextField
-            id="shopping-item-notes"
-            label="הערות"
-            placeholder="למשל: אם אין — תחליף"
-            value={form.notes}
-            onValueChange={(value) => onFormChange('notes', value)}
-            disabled={pending}
-          />
-
-          {mode === 'custom' && (
-            <div className="shopping-catalog-behavior">
-              <Package size={16} aria-hidden="true" />
-              פריט חופשי שנוסף בהצלחה נשמר בקטלוג לשימוש חוזר.
-            </div>
-          )}
-
-          <div className="shopping-form-actions">
-            <PrimaryButton type="submit" loading={pending} loadingText="מוסיף פריט…">
-              <Plus size={16} aria-hidden="true" />
-              הוספה לרשימה
-            </PrimaryButton>
-            <SecondaryButton type="button" disabled={pending} onClick={onClose}>ביטול</SecondaryButton>
-          </div>
-        </form>
       </section>
     </GlassCard>
   );
@@ -494,30 +315,16 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   const { setPageHeader } = useContext(PageHeaderContext);
   const toast = useToast();
   const checkoutReturnFocusRef = useRef(null);
-  const categoryReturnFocusRef = useRef(null);
   const itemDeleteReturnFocusRef = useRef(null);
   const activateReturnFocusRef = useRef(null);
-  const newCategoryInputRef = useRef(null);
   const [list, setList] = useState(null);
   const [showEditList, setShowEditList] = useState(false);
   const editListReturnFocusRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [catalogCategories, setCatalogCategories] = useState([]);
-  const [catalogItems, setCatalogItems] = useState([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [itemMode, setItemMode] = useState('catalog');
-  const [itemForm, setItemForm] = useState(initialItemForm);
-  const [itemTouched, setItemTouched] = useState(false);
-  const [itemPending, setItemPending] = useState(false);
-  const [itemError, setItemError] = useState('');
+  const itemNameRef = useRef(null);
   const [pendingItemId, setPendingItemId] = useState(null);
   const [itemDeleteTarget, setItemDeleteTarget] = useState(null);
-  const [showNewCategoryDialog, setShowNewCategoryDialog] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [categoryPending, setCategoryPending] = useState(false);
-  const [categoryError, setCategoryError] = useState('');
   const [showActivateConfirm, setShowActivateConfirm] = useState(false);
   const [activating, setActivating] = useState(false);
   const [checkoutDuplicates, setCheckoutDuplicates] = useState([]), [checkoutDuplicateReviewed, setCheckoutDuplicateReviewed] = useState(false);
@@ -551,53 +358,6 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     fetchList();
   }, [fetchList]);
 
-  useEffect(() => {
-    if (!list?.list_type_id) {
-      setCatalogCategories([]);
-      return;
-    }
-    let active = true;
-    getShoppingCatalogCategories(list.list_type_id)
-      .then((response) => {
-        if (active) setCatalogCategories(Array.isArray(response.data) ? response.data : []);
-      })
-      .catch(() => {
-        if (active) setItemError('טעינת קטגוריות הקטלוג נכשלה.');
-      });
-    return () => { active = false; };
-  }, [list?.list_type_id]);
-
-  useEffect(() => {
-    if (!itemForm.categoryId) {
-      setCatalogItems([]);
-      return;
-    }
-    let active = true;
-    setCatalogLoading(true);
-    getShoppingCatalogItems({ category_id: itemForm.categoryId })
-      .then((response) => {
-        if (active) setCatalogItems(Array.isArray(response.data) ? response.data : []);
-      })
-      .catch(() => {
-        if (active) setItemError('טעינת פריטי הקטלוג נכשלה.');
-      })
-      .finally(() => {
-        if (active) setCatalogLoading(false);
-      });
-    return () => { active = false; };
-  }, [itemForm.categoryId]);
-
-  useEffect(() => {
-    if (!itemForm.catalogItemId) return;
-    const item = catalogItems.find((entry) => String(entry.id) === String(itemForm.catalogItemId));
-    if (!item) return;
-    setItemForm((current) => ({
-      ...current,
-      unit: item.default_unit || current.unit,
-      price: item.default_price || item.default_price === 0 ? item.default_price : current.price,
-    }));
-  }, [catalogItems, itemForm.catalogItemId]);
-
   const isEditable = list?.status === 'draft' || list?.status === 'active';
 
   const saveListDetails = async (payload) => {
@@ -606,11 +366,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     setShowEditList(false);
   };
 
-  const openAddForm = useCallback(() => {
-    if (!isEditable) return;
-    setItemError('');
-    setShowAddForm(true);
-  }, [isEditable]);
+  const openAddForm = useCallback(() => { itemNameRef.current?.focus(); }, []);
 
   useEffect(() => {
     setPageHeader({
@@ -646,52 +402,6 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     });
     return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'he'));
   }, [items]);
-
-  const updateItemForm = (name, value) => {
-    setItemForm((current) => ({
-      ...current,
-      [name]: value,
-      ...(name === 'categoryId' ? { catalogItemId: '', unit: '', price: '' } : {}),
-    }));
-  };
-
-  const handleItemModeChange = (mode) => {
-    setItemMode(mode);
-    setItemTouched(false);
-    setItemError('');
-    setItemForm((current) => ({ ...current, catalogItemId: '', customName: '' }));
-  };
-
-  const handleAddItem = async (event) => {
-    event.preventDefault();
-    if (itemPending) return;
-    setItemTouched(true);
-    setItemError('');
-    if (!itemForm.categoryId) return;
-    if (itemMode === 'catalog' && !itemForm.catalogItemId) return;
-    if (itemMode === 'custom' && !itemForm.customName.trim()) return;
-
-    setItemPending(true);
-    try {
-      await addShoppingListItem(listId, {
-        catalog_item_id: itemMode === 'custom' ? null : itemForm.catalogItemId,
-        custom_name: itemMode === 'custom' ? itemForm.customName : null,
-        category_id: itemForm.categoryId,
-        quantity: itemForm.quantity || 1,
-        unit: itemForm.unit || null,
-        price: itemForm.price || null,
-        notes: itemForm.notes || null,
-      });
-      setItemForm(initialItemForm);
-      setItemTouched(false);
-      setCatalogItems([]);
-      await fetchList({ showLoading: false });
-    } catch {
-      setItemError('הוספת הפריט נכשלה. הפרטים נשמרו וניתן לנסות שוב.');
-    } finally {
-      setItemPending(false);
-    }
-  };
 
   const handleToggle = async (item) => {
     if (pendingItemId !== null) return;
@@ -794,33 +504,6 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     }
   };
 
-  const openNewCategory = (event) => {
-    categoryReturnFocusRef.current = event.currentTarget;
-    setNewCategoryName('');
-    setCategoryError('');
-    setShowNewCategoryDialog(true);
-  };
-
-  const handleCreateCategory = async (event) => {
-    event.preventDefault();
-    if (categoryPending || !newCategoryName.trim()) return;
-    setCategoryPending(true);
-    setCategoryError('');
-    try {
-      const response = await createShoppingCatalogCategory({
-        name: newCategoryName.trim(),
-        list_type_id: list?.list_type_id || null,
-      });
-      setCatalogCategories((current) => [...current, response.data]);
-      updateItemForm('categoryId', String(response.data.id));
-      setShowNewCategoryDialog(false);
-    } catch {
-      setCategoryError('יצירת קטגוריית הקטלוג נכשלה. השם נשמר וניתן לנסות שוב.');
-    } finally {
-      setCategoryPending(false);
-    }
-  };
-
   if (loading) return <ShoppingDetailSkeleton onBack={onBack} />;
 
   if (loadError) {
@@ -874,6 +557,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
               <span className={`shopping-badge shopping-status ${status.className}`}>{status.label}</span>
             </div>
           </div>
+          <ShoppingReceiptDialog key={list.id} list={list} compact onChanged={() => fetchList({ showLoading: false })} />
           {isEditable && (
             <div className="shopping-detail-primary-action">
               <div className="shopping-mobile-action-total">
@@ -911,6 +595,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
           עריכת פרטי הרשימה
         </SecondaryButton>}
 
+        <details className="shopping-cost-summary"><summary>סיכום הרשימה ועלויות משוערות</summary>
         <div className="shopping-detail-kpis" aria-label="סיכום הרשימה">
           <div className="shopping-detail-kpi"><span>פריטים</span><strong><TechnicalValue>{stats.total}</TechnicalValue></strong></div>
           <div className="shopping-detail-kpi"><span>נקנו</span><strong><TechnicalValue>{stats.purchased}</TechnicalValue></strong></div>
@@ -918,6 +603,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
           <div className="shopping-detail-kpi is-positive"><span>עלות מה שנקנה</span><MoneyAmount value={stats.purchasedCost} minimumFractionDigits={2} maximumFractionDigits={2} /></div>
         </div>
 
+        </details>
         <div className="shopping-detail-progress">
           <div className="shopping-progress-label">
             <span>התקדמות הקנייה</span>
@@ -940,7 +626,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
       </GlassCard>
 
       {confirmedPurchase && <Alert>הסכום לסגירת הקנייה מבוסס על פריטי הקבלה שאושרו, בנפרד מסימוני הרשימה. לאחר סגירה, אישור קבלה אינו משנה הוצאה קיימת.</Alert>}
-      <ShoppingIntelligence key={list.id} list={list} onChanged={() => fetchList({ showLoading: false })} />
+
 
       {mutationError && (
         <Alert variant="error" urgent onDismiss={() => setMutationError('')}>
@@ -948,32 +634,14 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
         </Alert>
       )}
 
-      {isEditable && (
-        <AddShoppingItem
-          open={showAddForm}
-          mode={itemMode}
-          form={itemForm}
-          catalogCategories={catalogCategories}
-          catalogItems={catalogItems}
-          catalogLoading={catalogLoading}
-          pending={itemPending}
-          error={itemError}
-          touched={itemTouched}
-          onOpen={openAddForm}
-          onClose={() => setShowAddForm(false)}
-          onModeChange={handleItemModeChange}
-          onFormChange={updateItemForm}
-          onCreateCategory={openNewCategory}
-          onSubmit={handleAddItem}
-        />
-      )}
+      {isEditable && <ShoppingQuickEntry key={list.id} list={list} inputRef={itemNameRef} onAdded={() => fetchList({ showLoading: false })} />}
 
       {items.length === 0 ? (
         <EmptyState
           icon={ShoppingBag}
           title="הרשימה עדיין ריקה"
           description={isEditable
-            ? 'אפשר להוסיף פריטים מהקטלוג או להזין פריט חופשי.'
+            ? 'כתבו מה צריך לקנות — אין צורך במחיר, חנות או קבלה.'
             : 'אין פריטים ברשימה הזו.'}
           primaryAction={isEditable ? (
             <PrimaryButton type="button" onClick={openAddForm}>
@@ -998,40 +666,10 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
         </div>
       )}
 
+      <ShoppingIntelligence key={`habits-${list.id}`} list={list} onChanged={() => fetchList({ showLoading: false })} />
+
       {showEditList && <ShoppingListDialog open initialList={list} onClose={() => setShowEditList(false)}
         onSave={saveListDetails} returnFocusRef={editListReturnFocusRef} />}
-
-      <Dialog
-        open={showNewCategoryDialog}
-        onClose={() => !categoryPending && setShowNewCategoryDialog(false)}
-        title="קטגוריית קטלוג חדשה"
-        description="הקטגוריה תתווסף למיפוי של סוג הרשימה הנוכחי."
-        size="sm"
-        className="shopping-dialog"
-        initialFocusRef={newCategoryInputRef}
-        returnFocusRef={categoryReturnFocusRef}
-        closeDisabled={categoryPending}
-        footer={(
-          <>
-            <SecondaryButton type="button" disabled={categoryPending} onClick={() => setShowNewCategoryDialog(false)}>ביטול</SecondaryButton>
-            <PrimaryButton type="submit" form="shopping-category-form" loading={categoryPending} loadingText="שומר…">שמירה</PrimaryButton>
-          </>
-        )}
-      >
-        <form id="shopping-category-form" className="shopping-dialog-form" onSubmit={handleCreateCategory}>
-          {categoryError && <Alert variant="error" urgent>{categoryError}</Alert>}
-          <TextField
-            ref={newCategoryInputRef}
-            id="shopping-new-category"
-            label="שם קטגוריית הקטלוג"
-            required
-            placeholder="למשל: מוצרי ניקוי"
-            value={newCategoryName}
-            onValueChange={setNewCategoryName}
-            disabled={categoryPending}
-          />
-        </form>
-      </Dialog>
 
       <ConfirmDialog
         open={Boolean(itemDeleteTarget)}

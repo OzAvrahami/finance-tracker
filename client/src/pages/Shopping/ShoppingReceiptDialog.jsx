@@ -128,7 +128,7 @@ function Photo({ file, index, total, onRemove, onMove, readOnly }) {
     </li>
   );
 }
-export default function ShoppingReceiptDialog({ list, onChanged }) {
+export default function ShoppingReceiptDialog({ list, onChanged, compact = false }) {
   const [activeListId,setActiveListId]=useState(list.id);
   const [merchantAck,setMerchantAck]=useState(''),[identityConflictReviewed,setIdentityConflictReviewed]=useState(false);
   const [progress,setProgress]=useState(null),[targetLists,setTargetLists]=useState(null);
@@ -410,7 +410,11 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
       }
     });
   const limits=data?.limits??{files:20,fileBytes:20*1024**2,totalBytes:64*1024**2,pdfPages:30};
-  const nonEmpty=(data?.current_items??list.shopping_list_items??[]).length>0;
+  // The checklist can change while receipt access stays mounted in the heading.
+  // For transferred receipts, use the destination context instead of the source list.
+  const currentItems=String(activeListId)===String(list.id) && Array.isArray(list.shopping_list_items)
+    ? list.shopping_list_items : data?.current_items??[];
+  const nonEmpty=currentItems.length>0;
   const storeReview=merchantReview(data?.store,identity,data?.receipt?.extracted?.identity_evidence?.merchant??[],data?.context_token);
   const fulfillment=allocateReceipt(data?.plan??[],rows);
   useEffect(()=>{
@@ -478,10 +482,10 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
     data?.receipt?.extracted?.receipt_total,
   );
   return (
-    <section className="shopping-receipt-summary" dir="rtl" aria-label="קבלה">
+    <section className={`shopping-receipt-summary${compact ? ' shopping-receipt-summary--compact' : ''}`} dir="rtl" aria-label="קבלה">
       <div>
-        <strong>קבלה מול התוכנית</strong>
-        <p>
+        {!compact && <strong>קבלה מול התוכנית</strong>}
+        {(!compact || dirty || data?.receipt?.state === "review") && <p role="status">
           {dirty
             ? "שינויים שטרם נשמרו — שמרו טיוטה לפני יציאה"
             : data?.receipt?.state === "confirmed"
@@ -489,16 +493,16 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
               : data?.receipt?.state === "review"
                 ? "הסריקה מוכנה לבדיקה"
                 : "תמונות של קבלה אחת, בדיקה ואישור בנפרד מהוצאה"}
-        </p>
+        </p>}
       </div>
       <SecondaryButton
         ref={entry}
         onClick={() => {
           setOpen(true);
-          if (!data) run(readData);
+          if (!data || !data.receipt) run(readData);
         }}
       >
-        {data?.receipt?.extracted ? "בדיקת קבלה" : "סריקת קבלה"}
+        {data?.receipt?.extracted ? "בדיקת קבלה" : compact ? "קבלות" : "סריקת קבלה"}
       </SecondaryButton>
       <Dialog
         open={open}

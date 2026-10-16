@@ -8,6 +8,8 @@ import PaymentSourcesTab from './PaymentSourcesTab';
 import ShoppingSettingsTab from './ShoppingSettingsTab';
 import FlowlinkBindingsTab from './FlowlinkBindingsTab';
 import './Settings.css';
+// Vite embeds only this metadata value in the loaded frontend artifact.
+import { version as appVersion } from '../../../package.json';
 
 const TABS = [
   { key: 'categories', label: 'קטגוריות', icon: <Tags size={16} aria-hidden="true" /> },
@@ -58,6 +60,12 @@ const Settings = () => {
           </TabPanel>
         </Tabs>
       </GlassCard>
+      <section className="settings-about" aria-labelledby="settings-about-heading">
+        <h2 id="settings-about-heading">אודות המערכת</h2>
+        <dl>
+          <div><dt>גרסת האפליקציה</dt><dd><bdi dir="ltr" className="u-technical-ltr">v{appVersion}</bdi></dd></div>
+        </dl>
+      </section>
     </div>
   );
 };

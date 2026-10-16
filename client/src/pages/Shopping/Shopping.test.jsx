@@ -22,6 +22,7 @@ import {
   removeShoppingListItem,
   toggleShoppingItemPurchased,
   updateShoppingList,
+  updateShoppingListItem,
 } from '../../services/api';
 import ShoppingLists from './ShoppingLists';
 
@@ -43,6 +44,7 @@ vi.mock('../../services/api', () => ({
   removeShoppingListItem: vi.fn(),
   toggleShoppingItemPurchased: vi.fn(),
   updateShoppingList: vi.fn(),
+  updateShoppingListItem: vi.fn(),
 }));
 
 const listTypes = [
@@ -196,6 +198,7 @@ beforeEach(() => {
   createShoppingList.mockResolvedValue({ data: {} });
   deleteShoppingList.mockResolvedValue({ data: { success: true } });
   addShoppingListItem.mockResolvedValue({ data: {} });
+  updateShoppingListItem.mockResolvedValue({ data: {} });
   createShoppingCatalogCategory.mockResolvedValue({ data: { id: 23, name: 'מאפים', icon: '🥖' } });
   toggleShoppingItemPurchased.mockResolvedValue({ data: {} });
   removeShoppingListItem.mockResolvedValue({ data: { success: true } });
@@ -306,57 +309,45 @@ describe('Shopping in-page detail and item lifecycle', () => {
     expect(screen.getByText(/פירוט הרשימה נשאר בתוך עמוד הקניות/)).toBeInTheDocument();
   });
 
-  it('adds an existing catalog item with mapped defaults and the unchanged payload', async () => {
+  it('corrects a list name and requirements without detaching its catalog identity', async () => {
     await openList();
-    await userEvent.click(screen.getByRole('button', { name: 'הוספת פריט' }));
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /^קטגוריית קטלוג/ }), '21');
-    await waitFor(() => expect(getShoppingCatalogItems).toHaveBeenCalledWith({ category_id: '21' }));
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: /^פריט מהקטלוג/ }), '31');
-    await waitFor(() => expect(screen.getByLabelText('יחידה')).toHaveValue('ק״ג'));
-    expect(screen.getByLabelText(/^מחיר ליחידה$/)).toHaveValue(12.9);
-    await userEvent.clear(screen.getByLabelText(/^כמות/));
-    await userEvent.type(screen.getByLabelText(/^כמות/), '2');
-    await userEvent.type(screen.getByLabelText('הערות'), 'ללא אריזה');
-    await userEvent.click(screen.getByRole('button', { name: 'הוספה לרשימה' }));
-
-    await waitFor(() => expect(addShoppingListItem).toHaveBeenCalledWith(1, {
-      catalog_item_id: '31',
-      custom_name: null,
-      category_id: '21',
-      quantity: '2',
-      unit: 'ק״ג',
-      price: 12.9,
-      notes: 'ללא אריזה',
-    }));
+    await userEvent.click(screen.getByRole('button', {name:'עריכת עגבניות שרי'}));
+    const row=screen.getByRole('article',{name:'עגבניות שרי'});
+    await userEvent.clear(within(row).getByLabelText(/^שם ברשימה/));
+    await userEvent.type(within(row).getByLabelText(/^שם ברשימה/),'עגבניות שרי אורגניות');
+    await userEvent.clear(within(row).getByLabelText('הערות ודרישות'));
+    await userEvent.type(within(row).getByLabelText('הערות ודרישות'),'רק טריות, באריזה');
+    getShoppingListById.mockResolvedValueOnce({data:detailList({shopping_list_items:[{...detailList().shopping_list_items[0],planned_name:'עגבניות שרי אורגניות',notes:'רק טריות, באריזה'}]})});
+    await userEvent.click(within(row).getByRole('button',{name:'שמירת פריט'}));
+    await waitFor(()=>expect(updateShoppingListItem).toHaveBeenCalledWith(1,11,{planned_name:'עגבניות שרי אורגניות',notes:'רק טריות, באריזה',quantity:'2',unit:'kg',unit_mode:'controlled',price:12.9}));
+    expect(await screen.findByRole('article',{name:'עגבניות שרי אורגניות'})).toHaveTextContent('רק טריות, באריזה');
+    expect(checkoutShoppingList).not.toHaveBeenCalled();
   });
 
-  it('adds a custom item and creates a mapped catalog category using the existing APIs', async () => {
+  it('edits legacy row units with the same closed selector, preserving fractions and failed values',async()=>{
+    getShoppingListById.mockResolvedValue({data:detailList({shopping_list_items:[{...detailList().shopping_list_items[0],unit:'קופסה מיוחדת',quantity:0.125}]})});
+    await openList();await userEvent.click(screen.getByRole('button',{name:'עריכת עגבניות שרי'}));
+    const row=screen.getByRole('article',{name:'עגבניות שרי'}), unit=within(row).getByLabelText(/^יחידה:/);
+    expect(unit).toHaveValue('קופסה מיוחדת');expect(unit.options).toHaveLength(8);
+    updateShoppingListItem.mockRejectedValueOnce(new Error('offline'));
+    await userEvent.click(within(row).getByRole('button',{name:'שמירת פריט'}));
+    await waitFor(()=>expect(updateShoppingListItem).toHaveBeenCalledWith(1,11,expect.objectContaining({unit:'קופסה מיוחדת',quantity:'0.125',unit_mode:'controlled'})));
+    await waitFor(()=>expect(within(row).getByRole('button',{name:'שמירת פריט'})).toBeEnabled());
+    expect(unit).toHaveValue('קופסה מיוחדת');await userEvent.selectOptions(unit,'pair');
+    expect(within(row).getByLabelText(/^כמות:/)).toHaveValue(0.125);
+    await userEvent.click(within(row).getByRole('button',{name:'שמירת פריט'}));
+    await waitFor(()=>expect(updateShoppingListItem).toHaveBeenLastCalledWith(1,11,expect.objectContaining({unit:'pair',quantity:'0.125'})));
+    expect(checkoutShoppingList).not.toHaveBeenCalled();
+  });
+
+  it('shows compact entry before the checklist, with receipt review as a separate secondary action',async()=>{
     await openList();
-    await userEvent.click(screen.getByRole('button', { name: 'הוספת פריט' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'פריט חופשי' }));
-    await userEvent.click(screen.getByRole('button', { name: 'יצירת קטגוריית קטלוג חדשה' }));
-    const categoryDialog = screen.getByRole('dialog', { name: 'קטגוריית קטלוג חדשה' });
-    await userEvent.type(within(categoryDialog).getByLabelText(/שם קטגוריית הקטלוג/), 'מאפים');
-    await userEvent.click(within(categoryDialog).getByRole('button', { name: 'שמירה' }));
-    await waitFor(() => expect(createShoppingCatalogCategory).toHaveBeenCalledWith({ name: 'מאפים', list_type_id: 4 }));
-
-    await userEvent.type(screen.getByLabelText(/שם הפריט/), 'לחם מחמצת');
-    await userEvent.clear(screen.getByLabelText(/^כמות/));
-    await userEvent.type(screen.getByLabelText(/^כמות/), '1');
-    await userEvent.type(screen.getByLabelText('יחידה'), 'יח׳');
-    await userEvent.type(screen.getByLabelText(/^מחיר ליחידה$/), '18.5');
-    await userEvent.type(screen.getByLabelText('הערות'), 'פרוס');
-    await userEvent.click(screen.getByRole('button', { name: 'הוספה לרשימה' }));
-
-    await waitFor(() => expect(addShoppingListItem).toHaveBeenCalledWith(1, {
-      catalog_item_id: null,
-      custom_name: 'לחם מחמצת',
-      category_id: '23',
-      quantity: '1',
-      unit: 'יח׳',
-      price: '18.5',
-      notes: 'פרוס',
-    }));
+    expect(screen.getByRole('button',{name:'קבלות'})).toBeInTheDocument();
+    expect(screen.queryByRole('radio',{name:'פריט חופשי'})).not.toBeInTheDocument();
+    const input=screen.getByRole('combobox',{name:'מה צריך לקנות?'});
+    await userEvent.click(screen.getByRole('button',{name:'הוספת פריט'}));expect(input).toHaveFocus();
+    const checklist=screen.getByLabelText('פריטי רשימת הקניות');
+    expect(input.compareDocumentPosition(checklist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('toggles purchase only after the existing API and removes through confirmation', async () => {

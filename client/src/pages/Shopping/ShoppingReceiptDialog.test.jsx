@@ -69,12 +69,32 @@ const add = (files) =>
   fireEvent.change(screen.getByLabelText("הוספת תמונות קבלה"), {
     target: { files },
   });
+it('compact receipt access keeps a waiting review visible without opening the dialog',async()=>{
+  api.getShoppingIntelligence.mockResolvedValue({data:review});
+  render(<ShoppingReceiptDialog list={list} compact onChanged={vi.fn()}/>);
+  expect(await screen.findByText('הסריקה מוכנה לבדיקה')).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'בדיקת קבלה'})).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(api.confirmShoppingReceipt).not.toHaveBeenCalled();
+});
 it('empty actual list blocks upload despite catalog entries',async()=>{
   await open({...base,current_items:[]});
   expect(screen.getByText(/הוסיפו לפחות פריט אחד/)).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'הוספת תמונות או PDF'})).toBeDisabled();
   add([photo('receipt.jpg')]);
   expect(screen.getByRole('button',{name:'סריקת התמונות'})).toBeDisabled();
+  expect(api.uploadShoppingReceipt).not.toHaveBeenCalled();
+});
+it('receipt eligibility follows the first added item and its removal while the heading stays mounted',async()=>{
+  api.getShoppingIntelligence.mockResolvedValue({data:{...base,current_items:[]}});
+  const props={compact:true,onChanged:vi.fn()};
+  const {rerender}=render(<ShoppingReceiptDialog {...props} list={{...list,shopping_list_items:[]}}/>);
+  await waitFor(()=>expect(api.getShoppingIntelligence).toHaveBeenCalled());
+  rerender(<ShoppingReceiptDialog {...props} list={{...list,shopping_list_items:[{id:1,custom_name:'Gift'}]}}/>);
+  fireEvent.click(screen.getByRole('button',{name:'קבלות'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'הוספת תמונות או PDF'})).toBeEnabled());
+  rerender(<ShoppingReceiptDialog {...props} list={{...list,shopping_list_items:[]}}/>);
+  expect(screen.getByRole('button',{name:'הוספת תמונות או PDF'})).toBeDisabled();
   expect(api.uploadShoppingReceipt).not.toHaveBeenCalled();
 });
 it('ten images plus PDF retain ordering and a PDF preview without truncation',async()=>{
