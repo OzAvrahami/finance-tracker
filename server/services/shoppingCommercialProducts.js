@@ -15,7 +15,7 @@ function commercialProduct(p,key) {
   source:'owner_catalog',owner_approved:!!p.approved_name,mapping_revision:p.mapping_revision,mapping:snapshot(p.mapping)};
 }
 function applyCommercial(row,p,{replaceMapping=false}={}) {
- if(!replaceMapping&&!Object.hasOwn(row,'mapping_snapshot')&&row.owner_edited_fields?.includes('catalog_item_id'))return {...row,commercial_product_id:p.id};
+ if(!replaceMapping&&!row.mapping_snapshot&&row.owner_edited_fields?.includes('catalog_item_id'))return {...row,commercial_product_id:p.id};
  const mapping=Object.hasOwn(row,'mapping_snapshot')&&!replaceMapping?row.mapping_snapshot:snapshot(p.mapping);
  return {...row,commercial_product_id:p.id,mapping_snapshot:mapping,
    catalog_item_id:mapping?.personal_item_id??null};

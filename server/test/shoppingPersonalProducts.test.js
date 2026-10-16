@@ -2,6 +2,11 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {suggestions,reconcile}=require('../services/shoppingHabitsService');
 const {applyCommercial,validateMappingSnapshots}=require('../services/shoppingCommercialProducts');
+
+test('saved explicit catalog correction survives hydration with an intentionally cleared mapping',()=>{
+ const row={catalog_item_id:'9',mapping_snapshot:null,owner_edited_fields:['catalog_item_id']};
+ assert.equal(applyCommercial(row,{id:'product',mapping:{personal_item_id:'1'}}).catalog_item_id,'9');
+});
 const {convertQuantity,mappedQuantity,packageFromText}=require('../../shared/shoppingQuantities.mjs');
 const id='11111111-1111-4111-8111-111111111111';
 const mapping={commercial_product_id:id,revision:1,personal_item_id:'1',personal_name:'Milk 3%',receipt_unit:'unit',planning_unit:'liter',factor:'1'};
@@ -11,12 +16,12 @@ test('two brands fulfill one personal need without changing separate occurrences
  const rows=[line('2'),{...line(),name:'Second brand',product_code:'7622300356767'}];
  const before=JSON.stringify(rows),plan=[{catalog_item_id:'1',name:'Milk 3%',quantity:'3',unit:'liter'}];
  const result=reconcile(plan,rows,catalog);
- assert.equal(result.items.length,2);assert.equal(result.fulfillment[0].quantity,'3');assert.equal(result.fulfillment[0].unresolved,0);
+ assert.equal(result.items.length,2);assert.equal(result.fulfillment[0].purchased_quantity,'3');assert.equal(result.fulfillment[0].unresolved,0);
  assert.ok(result.items.every(i=>i.comparison==='bought'));assert.equal(JSON.stringify(rows),before);
 });
 test('dietary similarities suggest only; no exact-name auto grouping or catalogue creation',()=>{
  const result=reconcile([{catalog_item_id:'1',name:'Milk 3%',quantity:'3',unit:'liter'}],[{name:'Milk 3%',quantity:'1',unit:'unit',price:'5'},{name:'Lactose free',quantity:'1',unit:'unit',price:'5'}],catalog);
- assert.ok(result.items.every(r=>r.catalog_item_id===null));
+ assert.equal(result.items[0].catalog_item_id,'1');assert.equal(result.items[1].catalog_item_id,null);
  assert.deepEqual(result.items[1].suggested_personal_items,[{id:'2',name:'Lactose free'}]);
 });
 test('same printed product repetitions remain separate but count as one confirmed trip',()=>{

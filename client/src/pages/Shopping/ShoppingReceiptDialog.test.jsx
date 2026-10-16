@@ -10,7 +10,7 @@ import { beforeEach, it, expect, vi } from "vitest";
 import ShoppingReceiptDialog from "./ShoppingReceiptDialog";
 import * as api from "../../services/api";
 vi.mock("../../services/api", () => ({
-  getShoppingIntelligence: vi.fn(),
+  getShoppingIntelligence: vi.fn(), getShoppingReceiptProgress:vi.fn(), moveShoppingReceipt:vi.fn(), getShoppingLists:vi.fn(), updateShoppingList:vi.fn(),
   getShoppingReceiptDuplicates: vi.fn(),
   uploadShoppingReceipt: vi.fn(),
   confirmShoppingReceipt: vi.fn(),
@@ -31,6 +31,7 @@ const item = {
   overlap_uncertain: true,
 };
 const base = {
+  context_token:'a'.repeat(32),store:'Market',current_items:[{list_item_id:'1',catalog_item_id:'1',name:'Milk',quantity:'1',unit:'unit'}],
   receipt: null,
   plan: [],
   catalog: [{ id: 1, name: "חלב" }],
@@ -43,6 +44,7 @@ const review = {
     attempts: 1,
     image_hashes: ["hash"],
     extracted: {
+      identity:{merchant:'Market',receipt_number:null,purchase_date:null},
       items: [item],
       overlap_warnings: ["בדקו את שורת החלב בחפיפה"],
     },
@@ -67,8 +69,37 @@ const add = (files) =>
   fireEvent.change(screen.getByLabelText("הוספת תמונות קבלה"), {
     target: { files },
   });
+it('empty actual list blocks upload despite catalog entries',async()=>{
+  await open({...base,current_items:[]});
+  expect(screen.getByText(/הוסיפו לפחות פריט אחד/)).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'הוספת תמונות או PDF'})).toBeDisabled();
+  add([photo('receipt.jpg')]);
+  expect(screen.getByRole('button',{name:'סריקת התמונות'})).toBeDisabled();
+  expect(api.uploadShoppingReceipt).not.toHaveBeenCalled();
+});
+it('ten images plus PDF retain ordering and a PDF preview without truncation',async()=>{
+  await open();add(Array.from({length:10},(_,i)=>photo(`${i}.jpg`)));add([photo('receipt.pdf',20,'application/pdf')]);
+  expect(screen.getAllByRole('img')).toHaveLength(10);
+  expect(screen.getByLabelText('PDF 11')).toBeInTheDocument();
+  expect(screen.getByText('נבחרו 11 מתוך 20 קבצים')).toBeInTheDocument();
+});
+it('merchant mismatch is prominent and acknowledgment is invalidated by merchant changes',async()=>{
+  await open({...review,store:'KSP',receipt:{...review.receipt,extracted:{...review.receipt.extracted,identity:{merchant:'יוחננוף',receipt_number:null,purchase_date:null}}}});
+  await screen.findByLabelText('שם מוצר 1');
+  expect(screen.getByText('הקבלה שייכת לחנות אחרת')).toBeInTheDocument();
+  expect(screen.getByText(/חנות הרשימה: KSP.*חנות בקבלה: יוחננוף/)).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText(/בדקתי את השורות/));
+  expect(screen.getByRole('button',{name:'אישור להיסטוריה'})).toBeDisabled();
+  fireEvent.click(screen.getByLabelText(/בדקתי את החנויות/));
+  expect(screen.getByRole('button',{name:'אישור להיסטוריה'})).toBeEnabled();
+  fireEvent.change(screen.getByLabelText('בית עסק'),{target:{value:'שופרסל'}});
+  expect(screen.getByLabelText(/בדקתי את החנויות/)).not.toBeChecked();
+  expect(screen.getByRole('button',{name:'אישור להיסטוריה'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'בחירת רשימה קיימת אחרת'})).toBeInTheDocument();
+});
 beforeEach(() => {
   vi.resetAllMocks();
+  api.getShoppingReceiptProgress.mockResolvedValue({data:{state:'extracting',progress:{stage:'extracting',completed:1,total:10}}});
   api.saveShoppingReceiptDraft.mockResolvedValue({data:{revision:1}});
   api.uploadShoppingReceipt.mockResolvedValue({ data: { state: "review" } });
   URL.createObjectURL = vi.fn((f) => "blob:" + f.name);
@@ -110,13 +141,13 @@ it("ordered previews accept additions, remove/reorder and send all images in one
 it("invalid type, image count and bytes are actionable and leave prior selection untouched", async () => {
   await open();
   add([photo("ok.jpg")]);
-  add([photo("bad.pdf", 4, "application/pdf")]);
+  add([photo("bad.webp", 4, "image/webp")]);
   expect(screen.getByRole("alert")).toHaveTextContent("JPEG");
   expect(screen.getAllByRole("img")).toHaveLength(1);
-  add(Array.from({ length: 6 }, (_, i) => photo(i + ".jpg")));
-  expect(screen.getByRole("alert")).toHaveTextContent("1–6");
-  add([photo("huge.jpg", 8 * 1024 * 1024 + 1)]);
-  expect(screen.getByRole("alert")).toHaveTextContent("24 MiB");
+  add(Array.from({ length: 20 }, (_, i) => photo(i + ".jpg")));
+  expect(screen.getByRole("alert")).toHaveTextContent("מספר הקבצים");
+  add([photo("huge.jpg", 20 * 1024 * 1024 + 1)]);
+  expect(screen.getByRole("alert")).toHaveTextContent("מגבלת הגודל");
   expect(api.uploadShoppingReceipt).not.toHaveBeenCalled();
 });
 it("dialog close deliberately retains corrections and restores focus; changing photos blocks stale confirmation", async () => {
@@ -207,11 +238,11 @@ it("styled picker counts selected photos and preserves full filenames with expli
   await open();
   const input = screen.getByLabelText("הוספת תמונות קבלה");
   expect(input).toHaveAttribute("hidden");
-  expect(screen.getByRole("button", { name: "הוספת תמונות" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "הוספת תמונות או PDF" })).toBeEnabled();
   add([photo("long-footer-file.jpg"), photo("long-header-file.jpg")]);
-  expect(screen.getByText("נבחרו 2 מתוך 6 תמונות")).toBeInTheDocument();
+  expect(screen.getByText("נבחרו 2 מתוך 20 קבצים")).toBeInTheDocument();
   expect(
-    screen.getByText("תמונה 1 צריכה להציג את ראש הקבלה."),
+    screen.getByText("הקובץ הראשון צריך להציג את ראש הקבלה."),
   ).toBeInTheDocument();
   expect(screen.getByTitle("long-header-file.jpg")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "הקדמת תמונה 2" }));
@@ -289,6 +320,7 @@ it("unknown extracted quantity and unit remain blank and block confirmation unti
 it("products lead the review and extracted date is autofilled without conflating printed and confirmed dates", async () => {
   const data = {
     ...review,
+    store:'סופר',
     receipt: {
       ...review.receipt,
       extracted: {

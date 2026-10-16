@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { lookupShoppingProduct, approveShoppingProduct } from "../../services/api";
-import ProductPersonalLink from './ProductPersonalLink';
 import {productInput} from './receiptProductInput';
 const statusText = {
  missing:"לא נמצא שם מלא; שם הקבלה נשמר.",invalid_identifier:"הקוד אינו ברקוד תקין. בדקו ספרות או בחרו קוד פנימי של החנות.",
@@ -8,7 +7,7 @@ const statusText = {
  unavailable:"מאגר המוצרים אינו זמין; שם הקבלה נשמר.",timeout:"החיפוש לא השיב בזמן; אפשר לנסות שוב.",
  identifier_mismatch:"הקוד בתשובה אינו תואם; לא הוחלף שם.",invalid_response:"תשובת המאגר אינה תקינה; לא הוחלף שם."
 };
-export default function ReceiptProductDetails({row,index,listTypeId,merchant,readOnly,onChange,onResolved,onMapped,catalog=[]}) {
+export default function ReceiptProductDetails({row,index,merchant,readOnly,onChange,onResolved}) {
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[provider,setProvider]=useState('open_food_facts');
  const code=row.lookup_code??row.product_code??'',kind=row.identifier_kind??'gtin',scope=row.retailer_scope??merchant??'';
  async function lookup() {
@@ -36,7 +35,7 @@ export default function ReceiptProductDetails({row,index,listTypeId,merchant,rea
    <button type="button" disabled={busy||!code} onClick={lookup}>חיפוש שם מלא</button>
    <button type="button" disabled={busy||!code||!row.name?.trim()} onClick={approve}>אישור שם נוכחי בלבד</button>
   </>}
-  {!readOnly&&<ProductPersonalLink key={row.commercial_product_id??code} row={row} catalog={catalog} listTypeId={listTypeId} merchant={merchant} onMapped={onMapped}/>}
+  {!readOnly&&<span>בחרו את הפריט האישי בהתאמה לקטלוג. הקישור יישמר באישור הקבלה.</span>}
   {row.resolved_product && <span>שם ממקור: {row.resolved_product.full_name} · {row.resolved_product.source==='owner_catalog'?'שם מאושר':<a href={row.resolved_product.source_url} target="_blank" rel="noreferrer">{row.resolved_product.source==='open_products_facts'?'Open Products Facts':'Open Food Facts'} · ODbL / DbCL</a>}{row.resolved_product.environment==='staging'?' · סביבת בדיקה':row.resolved_product.environment==='production'?' · מאגר ציבורי':''}</span>}
   {!!message && <span role="status">{message}</span>}
  </div>;

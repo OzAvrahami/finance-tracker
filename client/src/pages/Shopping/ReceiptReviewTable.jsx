@@ -3,7 +3,8 @@ import ReceiptProductDetails from './ReceiptProductDetails';
 import {projectPrice,priceBreakdown} from '../../../../shared/receiptPricing.mjs';
 
 import { rowTotal } from "./receiptReviewMoney";
-import {mappedQuantity,aggregatePlanning} from '../../../../shared/shoppingQuantities.mjs';
+import {mappedQuantity} from '../../../../shared/shoppingQuantities.mjs';
+import {allocateReceipt} from '../../../../shared/shoppingReceiptMatching.mjs';
 const targetField = (field) =>
   ["discount", "line_total"].includes(field) ? "price" : field;
 const unresolved = (row) =>
@@ -13,15 +14,14 @@ const unresolved = (row) =>
       !(['price','line_total'].includes(c.field) && row.owner_edited_fields?.includes('original_unit_price')),
   );
 const comparison = (row, plan, rows) => {
-  const p = plan.find(
+  const p = allocateReceipt(plan,rows).find(
     (item) =>
-      row.catalog_item_id &&
-      String(item.catalog_item_id) === String(row.catalog_item_id),
+      row.catalog_item_id ? String(item.catalog_item_id) === String(row.catalog_item_id)
+        : row.planned_item_id && String(item.list_item_id) === String(row.planned_item_id),
   );
   if (!p) return "נוסף לתוכנית";
-  const sum=aggregatePlanning(rows,p);
-  return sum.unresolved ? `תוכנן: ${p.quantity} ${p.unit} · המרה חסרה`
-    : `בתוכנית: ${sum.quantity} מתוך ${p.quantity} ${p.unit}`;
+  return p.unresolved ? `תוכנן: ${p.quantity} ${p.unit} · התאמה או המרה חסרה`
+    : `בתוכנית: ${p.purchased_quantity} מתוך ${p.quantity} ${p.unit}`;
 };
 export default function ReceiptReviewTable({
   rows,
@@ -169,7 +169,7 @@ export default function ReceiptReviewTable({
                       {priceBreakdown(row).conflict && <span role="alert">ההנחה גדולה מסכום הברוטו; נדרש תיקון.</span>}
                       {priceBreakdown(row).source_mismatch && <span role="status">הכמות ומחיר הנטו שנבחרו אינם תואמים לברוטו פחות ההנחה המודפסת. התיקון שלך נשמר; בדקו את קריאות המקור.</span>}
                       {row.raw_price && <span>מקור מודפס — מחיר מקורי: {row.raw_price.original_unit_price??'לא ידוע'} · ברוטו: {row.raw_price.gross_total??'לא ידוע'} · הנחה: {row.raw_price.discount??'לא ידועה'}{row.raw_price.discount_percent!=null?` · ${row.raw_price.discount_percent}%`:''} {row.raw_price.promotion??''}</span>}
-                      {!row.product_code&&!row.commercial_product_id&&<label>
+                      {<label>
                         התאמה לקטלוג{" "}
                         <select
                           aria-label={`התאמה לקטלוג ${i + 1}`}
@@ -186,13 +186,17 @@ export default function ReceiptReviewTable({
                           <option value="">
                             ללא התאמה — לא ישפיע על הצעות
                           </option>
-                          {catalog.map((c) => (
+                          {!!row.suggested_personal_items?.length&&<optgroup label="התאמות מוצעות מהתוכנית">
+                            {row.suggested_personal_items.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                          </optgroup>}
+                          {catalog.filter(c=>!row.suggested_personal_items?.some(p=>String(p.id)===String(c.id))).map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.name}
                             </option>
                           ))}
                         </select>
                       </label>}
+                      {!readOnly&&row.match_requires_review&&!row.mapping_snapshot&&<span>התאמה מוצעת — תישמר רק באישור הקבלה.</span>}
                       <span>{comparison(row, plan, rows)}</span>
                       {!!row.possible_substitutions?.length && (
                         <span>
@@ -204,8 +208,9 @@ export default function ReceiptReviewTable({
                           מקור:{" "}
                           {row.source_lines
                             .map(
-                              (s) =>
-                                `תמונה ${s.photo_number}, שורה ${s.line_number}`,
+                              (s,index) => row.provenance?.[index]?.page_number
+                                ? `קובץ ${row.provenance[index].file_number}, עמוד ${row.provenance[index].page_number}, שורה ${s.line_number}`
+                                : `תמונה ${s.photo_number}, שורה ${s.line_number}`,
                             )
                             .join(" · ")}
                         </span>

@@ -1,3 +1,8 @@
+const {receiptLimits}=require('../services/shoppingReceiptLimits');
+const {validateFiles}=require('../services/shoppingReceiptSources');
+const {prepareConfirmation}=require('../services/shoppingReceiptConfirmation');
+const {receiptStorage}=require('../services/shoppingReceiptUpload');
+const {merchantKey}=require('../../shared/shoppingMerchant.mjs');
 const { z } = require('zod');
 const { createProductLookup, enrichKnownProducts } = require('../services/shoppingProductLookup');
 const { identifier } = require('../services/shoppingProductIdentifiers');
@@ -19,7 +24,6 @@ const {
 } = require("../services/shoppingHabitsService");
 const {
   extractReceipt,
-  validateImages,
 } = require("../services/shoppingReceiptExtractor");
 const unwrap = async (query) => {
   const { data, error } = await query;
@@ -41,6 +45,7 @@ const errorResponse = (res, error) => {
 };
 function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup = createProductLookup(db) }) {
   const router = express.Router();
+  const limits=receiptLimits();
   const handle = (fn) => async (req, res) => {
     try {
       if (req.params.id) id.parse(req.params.id);
@@ -63,7 +68,7 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
       const list = await unwrap(
         db
           .from("shopping_lists")
-          .select("list_type_id")
+          .select("list_type_id,store")
           .eq("id", req.params.id)
           .single(),
       );
@@ -105,7 +110,9 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
           db.from("shopping_receipts").select("*").eq("list_id", req.params.id),
         ),
       ]);
+      const context=await unwrap(db.rpc('shopping_receipt_context',{p_list:req.params.id}));
       res.json({
+        context_token:context?.token,current_items:context?.current_items??[],store:list.store??null,limits,
         duplicate_candidates: await unwrap(
           db.rpc("shopping_receipt_duplicates", { p_list: req.params.id }),
         ),
@@ -169,7 +176,7 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
   }));
   router.put('/lists/:id/receipt/draft', handle(async(req,res)=> {
     const input=z.object({attempt:z.number().int().min(1).max(5),revision:z.number().int().nonnegative(),draft:reviewSchema}).strict().parse(req.body);
-    if(Buffer.byteLength(JSON.stringify(input.draft))>262144) return res.status(413).json({error:'receipt_draft_too_large'});
+    if(Buffer.byteLength(JSON.stringify(input.draft))>2097152) return res.status(413).json({error:'receipt_draft_too_large'});
     res.json(await unwrap(db.rpc('shopping_save_receipt_draft',{p_list:req.params.id,p_attempt:input.attempt,p_revision:input.revision,p_draft:input.draft})));
   }));
   router.post(
@@ -237,15 +244,15 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
     }),
   );
   const upload = multer({
-    storage: multer.memoryStorage(),
+    storage: receiptStorage(limits.totalBytes),
     limits: {
-      fileSize: 8 * 1024 * 1024,
-      files: 6,
+      fileSize: limits.fileBytes,
+      files: limits.files,
       fields: 5,
-      fieldSize: 131072,
-      parts: 12,
+      fieldSize: 2097152,
+      parts: limits.files+5,
     },
-  }).array("receipt", 6);
+  }).array("receipt", limits.files);
   router.post(
     "/lists/:id/receipt",
     rateLimit({
@@ -275,7 +282,7 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
           draft_revision: z.string().regex(/^\d+$/).optional(),
           review_draft: z
             .string()
-            .max(131072)
+            .max(2097152)
             .optional()
             .transform((v) => (v ? JSON.parse(v) : undefined))
             .pipe(reviewSchema.optional()),
@@ -291,13 +298,14 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
         )
         .parse(req.body);
       const images = (req.files ?? []).map((f) => f.buffer);
-      validateImages(images);
+      validateFiles(images,limits);
       const hashes = images.map((image) =>
         createHash("sha256").update(image).digest("hex"),
       );
       if (new Set(hashes).size !== hashes.length)
         return res.status(400).json({ error: "receipt_duplicate_photo" });
       const r = await rpc(req.params.id, "begin", {
+        duration_ms:limits.durationMs,
         image_hash:
           hashes.length === 1
             ? hashes[0]
@@ -313,7 +321,8 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
       if (r.state !== "extracting" || r.processing_replay)
         return res.status(r.state === "extracting" ? 202 : 200).json(r);
       try {
-        const extracted = await extract(images);
+        const extracted = await extract(images,{onProgress:progress=>rpc(req.params.id,'progress',{attempt:r.attempts,progress})});
+        extracted.items=extracted.items.map(row=>({...row,...(row.product_code&&row.product_code.length<8&&merchantKey(extracted.identity?.merchant)?{identifier_kind:'retailer',retailer_scope:merchantKey(extracted.identity.merchant)}:{})}));
         extracted.items=(await hydrateCommercialRows(extracted.items,db)).map(row=>({...row,mapping_snapshot:row.mapping_snapshot??null}));
         res.json(
           await rpc(req.params.id, "extracted", {
@@ -332,10 +341,26 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
     handle(async (req, res) => {
       // Preserve metadata/identifiers and independently derive discounted totals.
       // Legacy clients retain their exact confirmation payload and replay meaning.
-      const base = confirmationSchema.omit({items:true}).extend({items:reviewSchema.shape.items.min(1),draft_revision:z.number().int().nonnegative().optional()}).parse(req.body);
-      res.json(await rpc(req.params.id, 'confirm', {...base,items:await validateMappingSnapshots(await confirmationItems(base.items),db)}));
+      if(!req.user?.id)return res.status(401).json({error:'unauthorized'});
+      const base = confirmationSchema.omit({items:true}).extend({items:reviewSchema.shape.items.min(1),draft_revision:z.number().int().nonnegative().optional(),
+        context_token:z.string().length(32),merchant_acknowledgment:z.string().max(4000).optional(),identity_conflict_reviewed:z.boolean().optional()}).parse(req.body);
+      const context=await unwrap(db.rpc('shopping_receipt_context',{p_list:req.params.id}));
+      if(context?.receipt?.state==='confirmed') {
+        if(!require('node:util').isDeepStrictEqual(context.receipt.confirmation_request,base))throw Error('receipt_confirmation_conflict');
+        return res.json(context.receipt);
+      }
+      const prepared=await prepareConfirmation({...base,items:await confirmationItems(base.items)},context,db,req.user.id);
+      res.json(await rpc(req.params.id, 'confirm', {...prepared,_request:base}));
     }),
   );
+  router.get('/lists/:id/receipt/progress',handle(async(req,res)=>{
+    const r=await unwrap(db.from('shopping_receipts').select('state,progress,attempts,error_code').eq('list_id',req.params.id).maybeSingle());
+    res.json(r??{state:'idle'});
+  }));
+  router.post('/lists/:id/receipt/move',handle(async(req,res)=>{
+    const input=z.object({target_list_id:id,context_token:z.string().length(32)}).strict().parse(req.body);
+    res.json(await unwrap(db.rpc('shopping_move_receipt',{p_list:req.params.id,p_target:input.target_list_id,p_token:input.context_token})));
+  }));
   return router;
 }
 module.exports = { createShoppingIntelligenceRouter, errorResponse };

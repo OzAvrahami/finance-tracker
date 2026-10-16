@@ -8,7 +8,8 @@ const container = `finance-shopping-039-${process.pid}`;
 let created = false,
   sequence = 0;
 const read = (f) => fs.readFileSync(path.join(__dirname, "../..", f), "utf8");
-const full = read("server/full_schema.sql"),
+// Historical upgrade coverage through 048; 049 workflow has its own transaction suite.
+const full = read("server/full_schema.sql").split("-- 049:")[0],
   migration = read("server/migrations/039_shopping_purchase_receipts.sql");
 function docker(args, input, allow = false) {
   const r = spawnSync("docker", args, {

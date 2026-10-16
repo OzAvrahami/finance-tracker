@@ -1,7 +1,8 @@
+const { ceilings } = require('./shoppingReceiptLimits');
 const { z } = require('zod');
 const { identifier } = require('./shoppingProductIdentifiers');
 const text=z.string().max(200), value=z.string().max(30).nullable();
-const source=z.object({photo_number:z.number().int().min(1).max(6),line_number:z.number().int().min(1).max(200)}).strict();
+const source=z.object({photo_number:z.number().int().min(1).max(ceilings.sources),line_number:z.number().int().min(1).max(ceilings.rows)}).strict();
 const conflict=z.object({field:z.string().max(40),values:z.array(value).max(12),resolution:z.string().max(40).optional()}).strict();
 const mappingSchema=z.object({commercial_product_id:z.string().uuid(),revision:z.number().int().positive(),personal_item_id:z.string().regex(/^\d+$/).nullable(),personal_name:text.nullable(),planning_unit:value,receipt_unit:value,factor:value}).strict();
 const product=z.object({code:z.string().regex(/^\d{3,20}$/),full_name:text,source:z.enum(['open_food_facts','open_products_facts','owner_catalog']),
@@ -11,7 +12,9 @@ const product=z.object({code:z.string().regex(/^\d{3,20}$/),full_name:text,sourc
   package_quantity:value.optional(),package_unit:value.optional(),
   language:z.string().max(10).nullable().optional(),source_url:z.string().regex(/^https:\/\/world\.open(food|products)facts\.(org|net)\/product\/\d{8,14}$/).optional(),license:text.optional(),environment:z.enum(['staging','production']).optional()}).strict();
 const reviewItemSchema=z.object({
- name:text,quantity:value,unit:value,price:value,catalog_item_id:z.union([z.string().regex(/^\d+$/),z.number().int().positive()]).nullable().optional(),
+ name:text,quantity:value,unit:value,price:value,catalog_item_id:z.union([z.string().regex(/^\d+$/),z.number().int().positive()]).nullable().optional(),planned_item_id:z.string().regex(/^\d+$/).nullable().optional(),
+ package_quantity:value.optional(),package_unit:z.enum(['unit','package','pack','g','kg','ml','l']).nullable().optional(),
+ continuation_text:z.string().max(300).optional(),provenance:z.array(z.object({file_number:z.number().int().min(1).max(ceilings.files),page_number:z.number().int().min(1).max(ceilings.pdfPages).nullable(),kind:z.enum(['photo','pdf_text','pdf_scan']),line_number:z.number().int().min(1).max(ceilings.rows),layout_y:z.number().optional()}).strict()).max(ceilings.sources).optional(),
  row_id:z.string().max(120).optional(),original_name:text.optional(),product_code:z.string().regex(/^\d{3,20}$/).nullable().optional(),
  resolved_product:product.nullable().optional(),identifier_kind:z.enum(['gtin','retailer']).optional(),retailer_scope:z.string().max(120).optional(),
  lookup_status:z.string().max(40).optional(),lookup_code:z.string().regex(/^\d{0,20}$/).optional(),
@@ -21,14 +24,14 @@ const reviewItemSchema=z.object({
  price_basis:z.enum(['legacy_net','line_discount']).optional(), original_unit_price:value.optional(),row_discount:value.optional(),printed_gross_total:value.optional(),
  line_total:value.optional(),discount:value.optional(),discount_percent:value.optional(),promotion:z.string().max(300).nullable().optional(),
  raw_price:z.object({gross_total:value,discount:value,original_unit_price:value,discount_percent:value.optional(),promotion:z.string().max(300).nullable().optional()}).strict().optional(),
- source_lines:z.array(source).max(6).optional(),photo_numbers:z.array(z.number().int().min(1).max(6)).max(6).optional(),
- source_readings:z.array(source.extend({name:text,product_code:value,quantity:value,unit:value,price:value,line_total:value,discount:value,discount_percent:value,promotion:z.string().max(300).nullable()})).max(6).optional(),
+ source_lines:z.array(source).max(ceilings.sources).optional(),photo_numbers:z.array(z.number().int().min(1).max(ceilings.sources)).max(ceilings.sources).optional(),
+ source_readings:z.array(source.extend({name:text,product_code:value,quantity:value,unit:value,price:value,line_total:value,discount:value,discount_percent:value,promotion:z.string().max(300).nullable()})).max(ceilings.sources).optional(),
  possible_overlap_sources:z.array(source).max(12).optional(),overlap_uncertain:z.boolean().optional(),
  field_conflicts:z.array(conflict).max(10).optional(),resolved_conflicts:z.array(conflict).max(10).optional(),raw_unit_readings:z.array(value).max(12).optional(),
  owner_edited_fields:z.array(z.string().max(40)).max(20).optional(),
  match_requires_review:z.boolean().optional(),comparison:z.string().max(40).optional(),possible_substitutions:z.array(text).max(200).optional(),
 }).strict();
-const reviewSchema=z.object({items:z.array(reviewItemSchema).max(200),identity:require('./shoppingHabitsService').receiptIdentitySchema,
+const reviewSchema=z.object({items:z.array(reviewItemSchema).max(ceilings.rows),identity:require('./shoppingHabitsService').receiptIdentitySchema,
  purchase_date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/)}).strict();
 function sourceIdentity(row,index,attempt) {
  return row.row_id ?? `a${attempt}:${row.source_lines?.length?row.source_lines.map(s=>`p${s.photo_number}l${s.line_number}`).join('-'):`r${index+1}`}`;

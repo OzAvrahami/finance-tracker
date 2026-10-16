@@ -1,6 +1,8 @@
 """Build clean local Linux artifacts; never deploy or read application env files.
 
 Run from any directory: python docs/operations/verify_deployment_package.py
+Use --staged to build the reviewed index, including new receipt dependencies,
+and verify native image/PDF rendering in the actual backend Docker artifact.
 Requires Docker and network for public base images/npm install only. Runtime
 checks have --network none and dummy configuration; no database is contacted.
 """
@@ -13,6 +15,7 @@ import tarfile
 import tempfile
 import time
 import uuid
+import argparse
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OVERLAYS = ("Dockerfile.backend", ".dockerignore", "railway.json", "client/vercel.json")
@@ -26,7 +29,7 @@ def output(*args):
     return subprocess.check_output(args, text=True).strip()
 
 
-def verify():
+def verify(staged=False):
     suffix = uuid.uuid4().hex[:12]
     backend, frontend = "ft-package-back-" + suffix, "ft-package-front-" + suffix
     images = []
@@ -38,7 +41,7 @@ def verify():
         checks += 1
         print(f"PASS {checks}: {description}", flush=True)
 
-    # Export only committed files, overlay the four reviewed packaging files.
+    # Default: committed files and four packaging overlays. --staged: exact index.
     # No owner/untracked files, local node_modules or environment files are read.
     with tempfile.TemporaryDirectory(prefix="finance-tracker-package-") as directory:
         base = pathlib.Path(directory).resolve()
@@ -54,12 +57,25 @@ def verify():
                 assert target.is_relative_to(base)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(tar.extractfile(member).read())
-        for relative in OVERLAYS:
-            (base / relative).write_bytes((ROOT / relative).read_bytes())
+        if staged:
+            names = subprocess.check_output(["git", "-C", str(ROOT), "diff", "--cached", "--name-only", "-z"]).decode().split('\0')
+            for relative in filter(None, names):
+                target = (base / relative).resolve()
+                assert target.is_relative_to(base)
+                assert not any('.env' in p or p in ('node_modules', '.git') for p in pathlib.PurePosixPath(relative).parts)
+                content = subprocess.run(["git", "-C", str(ROOT), "show", ":" + relative], capture_output=True)
+                if content.returncode:
+                    target.unlink(missing_ok=True)
+                else:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(content.stdout)
+        else:
+            for relative in OVERLAYS:
+                (base / relative).write_bytes((ROOT / relative).read_bytes())
         locks = {p: hashlib.sha256((base / p).read_bytes()).hexdigest()
                  for p in ("server/package-lock.json", "client/package-lock.json")}
         assert not list(base.rglob("node_modules")) and not list(base.rglob(".env*"))
-        passed("clean git export, reviewed overlays, no local dependencies/env/untracked data")
+        passed("clean staged export" if staged else "clean HEAD export and packaging overlays")
         config = json.loads((base / "railway.json").read_text())
         assert config["build"]["builder"] == "DOCKERFILE"
         assert config["deploy"]["startCommand"] == "npm --prefix server start"
@@ -82,6 +98,11 @@ def verify():
                 "require('./server/services/shoppingCommercialProducts');"
                 "const fs=require('fs');for(const p of ['client','docs','.git','server/.env','server/test','server/migrations'])a(!fs.existsSync(p),p)")
             passed("Linux Node 22 supported; shared/runtime modules resolve; backend excludes client/local artifacts")
+            if staged:
+                # Actual production image, no host sources/dependencies, network or credentials.
+                run("docker", "run", "--rm", "-i", "--network", "none", backend, "node",
+                    input=(base / "docs/operations/verify_receipt_runtime.cjs").read_text(encoding="utf-8"))
+                passed("production Linux artifact decodes image, extracts PDF text and renders scanned PDF in bounded workers")
             container = backend + "-health"
             run("docker", "run", "-d", "--name", container, "--network", "none",
                 "-e", "SUPABASE_URL=http://127.0.0.1:9", "-e", "SUPABASE_KEY=packaging-dummy-key",
@@ -125,7 +146,7 @@ RUN npm run build
             passed("client bundle excludes server secret sentinels and server tree; uses explicit isolated public API URL")
             for p, digest in locks.items():
                 assert hashlib.sha256((base / p).read_bytes()).hexdigest() == digest
-            passed("both committed dependency lockfiles unchanged")
+            passed("both exported dependency lockfiles unchanged")
             print(f"RESULT: {checks}/{checks} packaging checks passed; local Docker artifacts only, no provider deployment.")
         finally:
             for container in containers:
@@ -135,4 +156,6 @@ RUN npm run build
 
 
 if __name__ == "__main__":
-    verify()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--staged', action='store_true', help='Validate exact reviewed index instead of HEAD/config overlays')
+    verify(staged=parser.parse_args().staged)

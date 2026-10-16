@@ -8,6 +8,7 @@ async function app(t, extract, options={}) {
   const calls = [];
   const db = {
     rpc: async (name, args) => {
+      if(name==='shopping_receipt_context'&&!options.contextRpc)return {data:{token:'a'.repeat(32),store:'Market',plan:[],current_items:[],receipt:{state:'review',extracted:{identity:{merchant:'Market',receipt_number:null,purchase_date:null}}}}};
       calls.push({ name, args });
       if(options.rpc)return options.rpc(name,args);
       return {
@@ -31,7 +32,7 @@ async function app(t, extract, options={}) {
   };
   const a = express();
   a.use(express.json({ limit: "2mb" }));
-  if(options.user)a.use((req,res,next)=>{req.user=options.user;next();});
+  a.use((req,res,next)=>{req.user=options.user??{id:'11111111-1111-4111-8111-111111111111'};next();});
   a.use("/shopping", createShoppingIntelligenceRouter({ db, extract, ...(options.lookup?{lookup:options.lookup}:{}) }));
   const server = await new Promise((r) => {
     const s = a.listen(0, "127.0.0.1", () => r(s));
@@ -45,6 +46,15 @@ const post = (url, body) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+
+test('empty list rejection occurs before extraction and never creates a list',async t=>{
+ let extractions=0;
+ const {url,calls}=await app(t,()=>{extractions++;},{rpc:async()=>({error:{message:'receipt_list_empty'}})});
+ const form=new FormData();form.append('receipt',new Blob([Buffer.from([255,216,255,1])],{type:'image/jpeg'}),'receipt.jpg');
+ const response=await fetch(`${url}/lists/1/receipt`,{method:'POST',body:form});
+ assert.equal(response.status,409);assert.equal((await response.json()).error,'receipt_list_empty');
+ assert.equal(extractions,0);assert.deepEqual(calls.map(c=>c.args.p_action),['begin']);
+});
 test('confirmed reconciliation reads immutable owner-approved occurrences, never old extraction or current product mappings',async t=>{
  const actual={name:'Owner corrected',quantity:'1',price:'13.00',unit:'unit',catalog_item_id:null,row_id:'retained'};
  const {url}=await app(t,()=>{throw Error('No extraction');},{rpc:async()=>({data:[]}),tables:{
@@ -114,7 +124,7 @@ test('durable draft saves metadata/deletions without confirmation; malformed IDs
 });
 test('weighted row discount is server-derived; caller cannot forge final total',async(t)=>{
  const {url,calls}=await app(t,()=>{throw Error('no OCR');});
- const body={purchase_date:'2026-09-30',reviewed:true,extraction_attempt:1,items:[{name:'Weighted',quantity:'0.333',unit:'kg',price:null,price_basis:'line_discount',original_unit_price:'10.00',row_discount:'1.00',catalog_item_id:null}]};
+ const body={context_token:'a'.repeat(32),purchase_date:'2026-09-30',reviewed:true,extraction_attempt:1,items:[{name:'Weighted',quantity:'0.333',unit:'kg',price:null,price_basis:'line_discount',original_unit_price:'10.00',row_discount:'1.00',catalog_item_id:null}]};
  assert.equal((await post(url+'/lists/1/receipt/confirm',body)).status,200);
  assert.equal(calls[0].args.p_data.items[0].final_total,'2.33');
  assert.equal((await post(url+'/lists/1/receipt/confirm',{...body,items:[{...body.items[0],final_total:'0.01'}]})).status,400);
@@ -142,6 +152,7 @@ test("provider unconfigured preserves failed receipt and sends safe retry respon
 test("confirmation is explicit, bounded, and rejects unknown financial fields before RPC", async (t) => {
   const { url, calls } = await app(t);
   const input = {
+    context_token:'a'.repeat(32),
     purchase_date: "2026-09-30",
     reviewed: true,
     extraction_attempt: 1,
@@ -173,7 +184,7 @@ test("confirmation is explicit, bounded, and rejects unknown financial fields be
 });
 test("invalid file signature and oversized upload never reach database", async (t) => {
   const { url, calls } = await app(t);
-  for (const size of [10, 8 * 1024 * 1024 + 1]) {
+  for (const size of [10, 20 * 1024 * 1024 + 1]) {
     const form = new FormData();
     form.append(
       "receipt",
@@ -286,8 +297,8 @@ test("multi-photo upload passes ordered images to ONE extraction, set hash and r
 test("multi-photo count, combined bytes and identical file reject BEFORE any receipt command", async (t) => {
   const { url, calls } = await app(t);
   for (const [count, size, same] of [
-    [7, 4, false],
-    [4, 7 * 1024 * 1024, false],
+    [21, 4, false],
+    [4, 17 * 1024 * 1024, false],
     [2, 4, true],
   ]) {
     const f = new FormData();
@@ -305,13 +316,13 @@ test("multi-photo count, combined bytes and identical file reject BEFORE any rec
   assert.equal(calls.length, 0);
 });
 
-test("six distinct images plus expected revision are accepted at the configured multipart boundary", async (t) => {
+test("ten distinct images plus expected revision are accepted at the configured multipart boundary", async (t) => {
   const { url } = await app(t, async () => ({
     currency: "ILS",
     items: [{ name: "Milk", quantity: "1", unit: "unit", price: "3" }],
   }));
   const f = new FormData();
-  for (let i = 0; i < 6; i++)
+  for (let i = 0; i < 10; i++)
     f.append(
       "receipt",
       new Blob([Buffer.from([255, 216, 255, i])], { type: "image/jpeg" }),

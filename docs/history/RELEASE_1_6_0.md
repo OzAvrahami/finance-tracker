@@ -1,5 +1,71 @@
 # Finance Tracker v1.6.0 candidate
 
+## Shipping preparation update — 2026-10-16
+
+The owner explicitly accepted shipping the current #95 scope and authorized its
+production rollout, while reserving the Git commit to the owner. This accepts the
+known implementation limits; it does **not** assert that missing manual desktop,
+mobile, theme or live scanned-receipt checks were performed. Further improvements
+can follow separately. Tagging and formal GitHub Release publication are out of scope.
+
+Live release readback still shows **v1.5.0** as Latest; no v1.6.0 release exists.
+The additive #95 work joins the existing **v1.6.0** candidate. All seven version
+fields already equal 1.6.0 and remain unchanged; no 1.7.0 bump is warranted.
+
+Finalized candidate membership relative to published v1.5.0:
+
+- #82: opt-in CAL reconciliation (`e4dbf01`).
+- #83: owner review UI and amount formatting (`3861684`).
+- #84: billing-contract compatibility (`7933ebc`).
+- #93: existing collection/minifigure/search/status improvements (`38b2b8f`),
+  including the additive `lego_sets.subtheme` migration 048.
+- #95: Shopping PDFs/larger uploads, merchant validation, accepted generic-product
+  mappings and atomic quantity fulfillment, with forward migration 049.
+
+`5391e53` prepared the existing version fields. Main also contains native recovery
+commits `8258798` and `713027c`; they remain disclosed tree carryover, without a
+new native build, distribution or completion claim. Their separate Unreleased
+notes and #90/#91 acceptance/activation boundaries remain intact. No FlowLink code
+or configuration changes are included in this shipping preparation. Candidate
+membership does not mean all pre-existing open issues are complete.
+
+Read-only production evidence: Railway's successful deployment
+`62d4e3d2-11a6-4e58-8184-a3c4e8742d62` runs main SHA
+`713027cbf5cb886b3d35827cdbc56345a9bb0f29`; GitHub records Vercel Production success
+at the same SHA. Thus the older "undeployed" preparation checkpoint below is
+historical. Railway's effective deployment uses repository-root Docker packaging.
+An active GitHub main trigger has `checkSuites=false`; a push is **not** a deployment
+hold. Vercel's current trigger/build controls and aliases still require authenticated
+readback. No trigger was changed during preparation.
+
+The production PostgREST schema was inspected through the existing Railway service
+credentials without returning private rows or credentials. Shopping tables, drafts,
+commercial mappings and expected existing RPCs are exposed; 049's columns/context/
+move RPCs are absent. CAL billing columns/RPCs and LEGO `subtheme` are exposed.
+This is current schema evidence, **not proof of complete migration bodies, grants,
+constraints or a recoverable backup**. Direct PostgreSQL catalog/backup access is
+still required. Never rerun 039–048 based on the historical pending list below.
+
+Reuse #95's 65 focused backend, 35 disposable PostgreSQL and 26 UI tests, targeted
+lint, frontend build, private local PDF verification and synthetic local-API retry/
+fulfillment evidence. Private receipt contents and credentials remain outside the
+repository. No production receipt upload, purchase confirmation, expense or import
+replay is part of deployment verification. Exact staged Linux artifact validation
+uses `python docs/operations/verify_deployment_package.py --staged`, including
+native image/PDF rendering with network disabled and synthetic input.
+This check passed **8/8** on the staged candidate: clean Linux Node 22 backend and
+frontend builds, native sharp/canvas and PDF text/scanned-page workers, startup
+health, shared modules, secret-sentinel exclusion and unchanged lockfiles. The
+frontend retains its existing bundle-size advisory. This validates the candidate
+artifact locally; it is not a new production deployment or live scanned OCR test.
+
+The reviewed ordering/recovery procedure and outstanding access requirements are
+in [the #95 rollout section](../operations/SHOPPING_RECEIPTS.md#95-production-shipping-decision--2026-10-16).
+No production mutation, migration or deployment has occurred for #95 at this
+checkpoint. Commit, database backup/catalog checks and controlled cutover remain.
+
+## Historical preparation checkpoint — 2026-10-01
+
 Prepared **2026-10-01; unpublished and undeployed**. Feature branch
 `feat/reconciliation-review-83` was verified locally and remotely at
 `7933ebc3e42586ec7c16f48e6aa5506f42bbc248`. Relative to published v1.5.0
@@ -98,10 +164,11 @@ registration or activation was performed by this preparation.
 
 ## Release / Version gate
 
-- Release impact: Yes; SemVer: Minor, additive opt-in reconciliation/review.
-- Candidate: v1.6.0, prepared/unpublished; grouped #82/#83 plus compatibility work under #84.
-- CHANGELOG: candidate entries moved to prepared 1.6.0; unrelated #90 entries retained.
-- Version bump: seven fields synchronized locally; dependencies/native versions unchanged.
-- Publication: pending final integration/deployment verification and separate authorization.
-- Owner acceptance: refined #83 UI/synthetic link accepted; remaining integrated,
-  Bridge visual and production-phone criteria pending. Issues remain open.
+- Release impact: Yes — expanded Shopping capabilities and existing additive candidate scope.
+- SemVer impact: Minor — highest included impact relative to published v1.5.0.
+- Candidate release: v1.6.0 — finalized scope, prepared and unpublished.
+- Grouping / included release candidate: this record coordinates #82, #83, #84 compatibility, #93 and #95; actual native tree carryover is disclosed above.
+- CHANGELOG status: finalized candidate entries under prepared 1.6.0; unrelated native Unreleased notes preserved.
+- Version-bump status: Synchronized — all seven fields already 1.6.0, no additional bump; #95 dependency additions are intentional.
+- Publication status: Out of scope — no tag or formal Release is authorized by this rollout.
+- Owner verification / acceptance status: Accepted for shipping #95's current scope by the explicit 2026-10-16 instruction; unperformed manual checks remain unperformed. Existing #83 evidence and separate Bridge/phone limitations are unchanged. #95 remains Verify until commit/push/deployment and safe production verification complete.

@@ -4,7 +4,7 @@ import ShoppingIntelligence from "./ShoppingIntelligence";
 import * as api from "../../services/api";
 vi.mock("../../services/api", () => ({
   getShoppingReceiptDuplicates: vi.fn().mockResolvedValue({data: []}),
-  getShoppingIntelligence: vi.fn(),
+  getShoppingIntelligence: vi.fn(),getShoppingReceiptProgress:vi.fn(),
   saveShoppingRegular: vi.fn(),
   removeShoppingRegular: vi.fn(),
   acceptShoppingSuggestion: vi.fn(),
@@ -16,6 +16,7 @@ const catalog = [
   { id: 2, name: "לחם" },
 ];
 const base = () => ({
+  context_token:'a'.repeat(32),store:'Market',current_items:[{list_item_id:'1',catalog_item_id:'1',name:'Milk',quantity:'1',unit:'unit'}],
   catalog,
   regulars: [],
   suggestions: [],
@@ -105,7 +106,7 @@ it("review preserves plan, requires corrections and confirmation; absent is unce
       { catalog_item_id: "1", name: "חלב", quantity: "2", unit: "ליטר" },
       { catalog_item_id: "2", name: "לחם", quantity: "1", unit: "יח׳" },
     ],
-    receipt: { state: "review", attempts: 1 },
+    receipt: { state: "review", attempts: 1,extracted:{identity:{merchant:'Market',receipt_number:null,purchase_date:null}} },
     reconciliation: {
       items: [
         {
@@ -216,7 +217,7 @@ it('duplicate warning shows prior list/history/expense and requires distinct-pur
  const identity={merchant:'סופר בדיקה',receipt_number:'R-17',purchase_date:'2026-09-29'};
  const candidate={receipt_id:'123e4567-e89b-42d3-a456-426614174000',list_id:'2',list_title:'קנייה קודמת',identity,history_confirmed:true,transaction_id:'45',checkout_total:10};
  const items=[{name:'חלב',quantity:'2',unit:'יח׳',price:'5',catalog_item_id:'1'}];
- api.getShoppingIntelligence.mockResolvedValue({data:{...base(),receipt:{state:'review',attempts:1,extracted:{identity}},reconciliation:{items},duplicate_candidates:[candidate]}});
+ api.getShoppingIntelligence.mockResolvedValue({data:{...base(),store:identity.merchant,receipt:{state:'review',attempts:1,extracted:{identity}},reconciliation:{items},duplicate_candidates:[candidate]}});
  api.getShoppingReceiptDuplicates.mockResolvedValue({data:[candidate]});
  render(<ShoppingIntelligence list={list} onChanged={vi.fn()} />);await open();
   fireEvent.click(screen.getByRole("button",{name:/^(סריקת קבלה|בדיקת קבלה)$/}));

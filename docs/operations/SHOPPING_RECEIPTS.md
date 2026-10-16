@@ -1,6 +1,153 @@
-# Shopping habits and receipt reconciliation (#92)
+# Shopping habits and receipt reconciliation (#92, follow-up #95)
 
 Implementation guide. Release-preparation checkpoint (2026-09-30): the owner accepted the name-approval, personal-item mapping and draft-persistence workflow. Earlier pending-acceptance statements below record their dated implementation checkpoints. The initial successful owner extraction and isolated desktop/mobile review are not full OCR or production acceptance. No production migration, configuration or deployment has been performed by this release preparation.
+
+## PDF, store validation and automatic fulfillment — #95 (2026-10-16)
+
+This section describes the follow-up implementation and supersedes earlier six-photo and 200-row limits. #92's completed history is unchanged. The owner accepted **shipping the current #95 scope on 2026-10-16**, with the verification limitations below retained. Unperformed manual checks are not recorded as passes.
+
+### #95 production shipping decision — 2026-10-16
+
+The owner authorizes narrow staging, subsequent push and production deployment,
+but performs the commit. Pause after preparing the exact index and commit command.
+Do not infer permission to tag/publish a release, enable integrations, replay imports,
+confirm real purchases, create expenses or upload the private receipt in production.
+The finalized candidate is [v1.6.0](../history/RELEASE_1_6_0.md), including #82/#83,
+#84 compatibility, existing #93 and #95; all seven version fields remain 1.6.0.
+
+**Read-only readiness:** Railway has existing authenticated access and a successful
+Docker deployment at `713027cbf5cb886b3d35827cdbc56345a9bb0f29`, with repository root
+`/`, `Dockerfile.backend`, `npm --prefix server start` and `/health`. Its active
+GitHub `main` trigger does not wait for check suites. The API schema exposes existing
+Shopping/CAL/LEGO prerequisites, but not 049's new columns or RPCs. No SQL-applied
+state is inferred from historical release notes or an HTTP health check.
+
+**Access blockers at preparation:** Vercel has no usable saved CLI authentication
+and no connected browser; current deployment controls cannot yet be verified.
+Run `npx --yes vercel login` and `npx --yes vercel whoami` locally. Direct Supabase
+PostgreSQL access is separate: existing application service-role HTTP credentials
+cannot perform `pg_dump` or verify function bodies/constraints. Use the existing
+database password and Supabase Connect → Session pooler credentials in a private
+file outside the checkout (`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`,
+`PGSSLMODE=require`); do not reset credentials. Provider backup/PITR and restore
+readiness still need verification. These blockers prevent rollout, not local staging.
+
+**Candidate artifact verification:** `python docs/operations/verify_deployment_package.py --staged`
+passed **8/8** checks using the exact staged source and production Dockerfile.
+The clean Linux Node 22 image installs the locked native dependencies and decodes
+an image, extracts PDF text and renders a real raster page through bounded workers.
+Startup health, shared modules, clean frontend build, secret-sentinel exclusion and
+unchanged lockfiles also passed. Runtime checks use synthetic inputs and no network.
+No additional OS rendering package was needed. This is local artifact evidence,
+not deployed-runtime or live scanned OCR acceptance; the existing bundle-size
+advisory remains.
+
+**After the owner commits, execute in this order:**
+
+1. Compare the owner commit's parent, exact paths/blobs and reviewed index manifest.
+   Verify remote main has not advanced. Do not push a changed/unreviewed scope.
+2. Read and privately record Railway/Vercel Git controls and production aliases/API
+   targeting. Hold Vercel production/preview triggers and Railway main auto-deploy,
+   then read back those holds. Preserve previous settings for restoration. Do not
+   rely on watch patterns, a draft PR or GitHub check suites for ordering. No push
+   while the holds or database readiness are unverified.
+3. Open the verified production PostgreSQL target; inspect actual catalog definitions
+   for 039–048 and all 049 prerequisites: receipt columns, both named constraints,
+   snapshot/draft/receipt/commercial/duplicate functions, item-lock trigger, grants
+   and RLS. Inspect new 049 objects for absence/partial installation. Match function
+   definitions to the latest reviewed migration, not just their names. Stop on
+   partial/drifted state; apply only demonstrably pending required migrations.
+4. Capture a recoverable full logical backup (schema, data and relevant roles/grants)
+   and current provider backup/PITR evidence outside the repository. Use a PostgreSQL
+   client compatible with the live server; record SHA-256 checksums and restore-test
+   a copy in a disposable isolated database, including row counts and constraints.
+   A successful download/listing or counts alone do not establish recoverability.
+   Do not print credentials or put private backup data into the repository/issues.
+5. Coordinate a short Shopping write pause and drain extraction leases before 049.
+   Existing open clients must reload after cutover. Prefer a temporary, reversible
+   route-scoped hold at the current hosting edge; if unavailable, coordinate the
+   necessary application downtime explicitly rather than inventing a maintenance
+   environment flag or changing ingestion settings. Capture Shopping fingerprints
+   and canonical financial/provenance evidence immediately before migration.
+6. Apply only the reviewed pending SQL, with `ON_ERROR_STOP`, a short lock timeout,
+   and its existing transaction. Expected Shopping delta is 049; verify rather than
+   blindly rerunning 039–048. Validate columns, count/draft constraints, current
+   function bodies and service-role-only context/move grants; refresh PostgREST.
+   Existing plan, receipt, draft, history and financial contents must be preserved.
+7. Push the verified owner commit with the holds effective. Deploy **backend first**
+   from that SHA; verify effective Docker build, lockfile/native dependencies, health,
+   version and read-only authenticated Shopping access. Then deploy/promote the
+   matching frontend SHA, verifying its production API/Auth targets and source
+   inclusion for `shared/`. Preserve all current secrets, flags and integrations.
+8. Run only safe authenticated reads and non-mutating validation failures; no real
+   confirmation/checkout, receipt upload, import replay or financial smoke writes.
+   Verify both remote/deployed SHAs and current production aliases, then lift the
+   Shopping hold and restore the recorded Git controls. Record actual evidence on
+   #95 and its existing Project item. Done requires completed commit/push/deployment
+   verification; shipping acceptance does not substitute for those steps.
+
+**Recovery:** Before 049 commits, an error rolls back its transaction; preserve the
+old deployment and diagnose rather than partially applying statements. After 049
+commits, keep Shopping writes held if the new backend/frontend fails. Preserve the
+new schema and data and forward-fix/redeploy the reviewed artifact; the old backend
+lacks the required confirmation context and is not a safe automatic rollback.
+Do not drop columns/tables, erase receipts or restore an old whole-database backup
+over unrelated ongoing financial/integration writes. Restore the verified backup
+first to an isolated target for comparison; any production restore needs a defined
+write cutoff and reconciliation of later writes. Escalate a concrete restore/data
+reconciliation decision to the owner if a compatible forward fix is unavailable.
+
+These are the reviewed future actions, not claims of completed production work.
+
+### Workflow and integrity
+
+Start with an existing list containing actual planned rows. Catalog entries alone do not qualify. The server checks non-emptiness and list status under the existing list/advisory locks **before decoding or provider work**. The initial plan is frozen, including row IDs and explicit requirements. Later list edits do not rewrite it. Confirmation validates the current list, store, receipt attempt and draft revision again under locks; only unchanged, fulfilled planned rows gain checkmarks. An absent receipt match never clears a manual checkmark.
+
+Choose ordered JPEG/PNG files, PDFs, or both. Preview/remove/reorder the selected files before processing; PDF pages retain document order. Original bytes remain browser-local and are not persisted by the application. Ordered file hashes identify safe retries; PDF pages are separate processing sources, not separate uploaded files. Failed/stale workers cannot overwrite a later attempt. Reprocessing retains the existing five-attempt limit, archived draft recovery and explicit request UUID behavior.
+
+The review shows the intended store and evidence-derived merchant. Known Hebrew/English retailer aliases and branch suffixes normalize, while unrelated retailers remain distinct. Mismatch, absent store, uncertain merchant and conflicting receipt identities require a deliberate review. Users can cancel, explicitly transfer the preserved draft to another open non-empty list without an existing receipt, change the intended store, or acknowledge the warning. Transfers preserve the original source-list plan in `origin_plan`. Acknowledgments are bound to the current context and merchant evidence, and cannot bypass a changed store/list/receipt revision. No store changes or receipt transfers happen implicitly.
+
+Approved barcode/product mappings take precedence. Conservative token/requirement matching against the frozen plan preselects clear unfamiliar products and offers candidates for ambiguous ones. It is not a general language-model semantic matcher: unfamiliar synonyms may need correction. Explicit brand, dietary, flavor, size and note requirements remain constraints; unresolved unit conversions stay unresolved. Printed names, suggested names, approved names, string identifiers, package contents, source readings and file/page/row provenance remain distinct. Retailer codes remain merchant-scoped. Invalid GTINs are not automatically reclassified as retailer SKUs.
+
+The personal item stays generic (for example, mayonnaise); the exact commercial product and its barcode stay separate. Newly accepted mappings use the existing commercial-product/identifier/mapping tables and immutable snapshots. Suggestions do not create approved mappings. Confirmation refuses a conflicting established mapping instead of overwriting it. Several products can fulfill the same generic item while retaining separate purchase occurrences.
+
+The comparison shows full, partial, absent and unresolved planned rows plus the matched products; unmatched receipt rows remain additional purchases. Exact quantity allocation consumes each purchased quantity once. A 500 g package can be one package, or its explicit contents can support a compatible mass conversion; it is never inferred to be 500 units. Two planned packages and one purchased package stay partial. Confirmation, reusable mappings, fulfilled checkmarks and one purchase-history event commit atomically and replay safely. **No upload, extraction or confirmation creates an expense.** Checkout remains separate and deliberate.
+
+### Limits and extraction
+
+Configure these positive integer environment settings on the backend. Invalid values or values exceeding the hard storage/protocol ceiling fail configuration; there is no silent truncation. Defaults work for ten photographs. The UI reads actual limits from the authenticated API.
+
+| Setting | Default | Hard ceiling |
+| --- | ---: | ---: |
+| `SHOPPING_RECEIPT_FILES` | 20 | 24 |
+| `SHOPPING_RECEIPT_FILE_BYTES` | 20 MiB (20971520) | 20 MiB |
+| `SHOPPING_RECEIPT_TOTAL_BYTES` | 64 MiB (67108864) | 80 MiB |
+| `SHOPPING_RECEIPT_PDF_PAGES` | 30 across all PDFs | 40 |
+| `SHOPPING_RECEIPT_SOURCES` | 64 photos + PDF pages | 64 |
+| `SHOPPING_RECEIPT_PIXELS` | 25000000 per decoded image | 40000000 |
+| `SHOPPING_RECEIPT_ROWS` | 1000 | 1000 |
+| `SHOPPING_RECEIPT_DURATION_MS` | 480000 | 600000 |
+| `SHOPPING_RECEIPT_BATCH` | 2 concurrent provider calls | 4 |
+
+Multipart storage enforces aggregate bytes while streaming, in addition to per-file/count limits. Draft JSON is bounded to 2 MiB. Each file decodes in a worker with a 256 MiB V8 heap bound and shared processing deadline; native decoder allocations also depend on the configured pixel/page limits. Images/rendered pages are bounded to a 2400-pixel edge. Embedded text exceeding 150000 characters per page falls back to rendering rather than being cut off. Per-provider request timeout is at most 60 seconds within the shared deadline. The database processing lease is the configured duration plus 60 seconds, capped at 660 seconds. Hosting/proxy request limits must accommodate the configured synchronous upload duration; lowering a hosting timeout does not silently shorten a saved receipt. Progress is available through `/lists/:id/receipt/progress` during preparation and bounded extraction batches.
+
+PDF.js preserves usable embedded text with x/y layout and page information. Image-only pages, unusable text and small text headers over raster bodies use one rendered-page extraction instead; no page takes both paths. JPEG/PNG magic bytes, unreadable/password-protected PDFs, decoded dimensions, pages and rows are validated with actionable errors. A failed batch does not persist an incomplete receipt for confirmation.
+
+Photo overlap resolution is restricted to consecutive photo sources. It never merges a PDF boundary. PDF supporting rows can continue onto the next page of the same file; leading discounts attach once to the preceding product. A conservative embedded RTL table adapter independently verifies every recognized occurrence and reads its printed quantity, original price, gross amount and supporting negative discount rows. Repeated table headings and footers are excluded. Recognizable table/provider row-count or code-sequence discrepancies reject the extraction for correction/retry. Unrecognized layouts retain provider transcription and owner review. Scanned receipt accuracy remains provider-dependent; the synthetic rendering test is not live OCR accuracy evidence.
+
+### Setup and verification
+
+- Install the updated server lockfile (`npm ci --prefix server`): PDF.js 5.6, sharp and `@napi-rs/canvas` are new runtime dependencies. Use the repository-supported Node version and install native optional packages for the target platform.
+- After verifying the target and backing it up, apply **[049](../../server/migrations/049_shopping_receipt_workflow.sql)** after the existing schema through 048, then reload the API schema cache and deploy matching backend/frontend together. This is an owner-operated future production procedure. No previous migration was edited. `full_schema.sql` includes the forward definition. Old clients lack the new confirmation context and must reload; there is no unsafe compatibility bypass.
+- Migration 049 was applied only to the isolated local Shopping database at loopback ports 55421/55422 after backup, and verified in disposable PostgreSQL. No production migration/configuration was performed.
+- Focused tests cover ten real decoded image buffers with mocked provider calls; mixed embedded-text/rendered PDFs; image-only scanned PDFs; page-boundary discounts/repeats; merchant acknowledgment, stale reviews, matching, package quantities and hydration of saved corrections. Disposable PostgreSQL verifies non-empty guards, leases, immutable plans, transfer, mapping/checkmark/history atomicity, concurrent retries and private grants. Historical financial/receipt regressions remain covered.
+- The supplied private seven-page PDF was processed with the existing authorized local provider configuration. The successful normal authenticated API import made seven provider calls and saved 111 rows. Independent layout comparison matched every row's code, quantity, original unit price, gross amount and discount, including 24 repeated-code occurrences, 13 fractional/weighted rows and the supporting discount crossing pages 2–3. The user-specified mayonnaise case was verified on page 6 (one 500 g package at ILS 10.90). A previous bounded pass exposed discount omissions; a later attempt failed strict response validation before the schema alignment. These failures were not represented as successful imports. No further provider calls are required for owner review.
+- Separate synthetic normal-API confirmation checks verified partial/full checkmarks, merchant mismatch and stale-context rejection, approved mapping reuse, identical confirmation replay and unchanged expense count. The real PDF remains **unconfirmed** for owner review. Original receipt bytes, extracted shopping/payment evidence, credentials and diagnostics stay outside tracked files/public issues. Fixtures in tests are synthetic.
+- UI component tests, targeted lint and production frontend build are automated evidence only. Interactive visual review could not run in this session: no Browser connection was available and Computer Use's native pipe was unavailable. Owner desktop/mobile, RTL/theme and full-workflow acceptance remain Pending.
+
+Automated checkpoint: **65 focused backend tests, 35 disposable PostgreSQL tests and 26 Shopping UI tests passed**, plus targeted ESLint and frontend build (existing bundle-size advisory). Subsequent parser/requirement refinements passed their affected focused tests and an offline replay against the private document. The image-only PDF regression detected incompatible duplicate native canvas versions; pinning `@napi-rs/canvas` to 0.1.100, shared with PDF.js, fixed rendering and avoids mixed native canvas objects.
+
+The normal local frontend is `http://localhost:5173`, using the isolated backend at `http://127.0.0.1:5050`. Open Shopping list **#95 — בדיקת PDF: שתי חבילות מיונז** and **בדיקת קבלה**. It has two planned packages, the saved seven-page extraction and a deliberately mismatched KSP store. Review the warning and partial quantity, then exercise the explicit store-resolution options. Source files are not needed unless deliberately reprocessing. Synthetic confirmation lists demonstrate partial and full checkmarks; their titles identify them as test data. Authentication credentials are supplied privately outside the repository, never in this document. Do not change normal production-targeting environment files to run this local review.
 
 ## v1.5.0 deployment preparation
 

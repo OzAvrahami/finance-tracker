@@ -7,9 +7,11 @@ const {
   regularSchema,
 } = require("../services/shoppingHabitsService");
 const {
-  extractReceipt,
+  extractReceipt:extractPipeline, extractSource,
   imageType,
 } = require("../services/shoppingReceiptExtractor");
+
+const extractReceipt=(input,options)=>Array.isArray(input)?extractPipeline(input,{...options,prepare:async buffers=>buffers.map((image,i)=>({image,kind:'photo',file_number:i+1,page_number:null,source_number:i+1}))}):extractSource(input,options);
 const catalog = [{ id: 1, name: "חלב", default_unit: "ליטר", is_active: true }];
 const purchase = (date, quantity = "2") => ({
   purchase_date: date,
@@ -63,8 +65,8 @@ test("reconciliation never modifies original plan; uncertain substitutions requi
     ],
     catalog,
   );
-  assert.equal(result.items[0].comparison, "added");
-  assert.equal(result.items[0].catalog_item_id,null);
+  assert.equal(result.items[0].comparison, "quantity_changed");
+  assert.equal(result.items[0].catalog_item_id,'1');
   assert.deepEqual(result.items[0].suggested_personal_items,[{id:'1',name:'חלב'}]);
   assert.equal(result.items[1].catalog_item_id, null);
   assert.deepEqual(result.items[1].possible_substitutions, ["חלב"]);

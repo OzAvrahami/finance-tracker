@@ -1,7 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { extractReceipt } = require("../services/shoppingReceiptExtractor");
+const { extractReceipt:extractPipeline, extractSource } = require("../services/shoppingReceiptExtractor");
 const { confirmationSchema } = require("../services/shoppingHabitsService");
+
+const extractReceipt=(input,options)=>Array.isArray(input)?extractPipeline(input,{...options,prepare:async buffers=>buffers.map((image,i)=>({image,kind:'photo',file_number:i+1,page_number:null,source_number:i+1}))}):extractSource(input,options);
 const env = {
   SHOPPING_RECEIPT_OPENAI_KEY: "secret-test-value",
   SHOPPING_RECEIPT_MODEL: "test-model",

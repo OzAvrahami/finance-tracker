@@ -42,7 +42,7 @@ const confirmationSchema = z
           !Number.isNaN(Date.parse(v + "T12:00:00Z")) &&
           new Date(v + "T12:00:00Z").toISOString().slice(0, 10) === v,
       ),
-    items: z.array(itemSchema).min(1).max(200),
+    items: z.array(itemSchema).min(1).max(require('./shoppingReceiptLimits').ceilings.rows),
     reviewed: z.literal(true),
     extraction_attempt: z.number().int().min(1).max(5),
     identity: receiptIdentitySchema.optional(),
@@ -126,7 +126,8 @@ function suggestions(catalog, regulars, history, now = new Date()) {
     });
 }
 function reconcile(plan, items, catalog) {
-  const actual = items.map((i) => {
+  const {suggestReceiptMatches,allocateReceipt}=require('../../shared/shoppingReceiptMatching.mjs');
+  const actual = suggestReceiptMatches(items,plan).map((i) => {
     const exact = catalog.filter(
       (c) => normalizeName(c.name) === normalizeName(i.name),
     );
@@ -138,7 +139,7 @@ function reconcile(plan, items, catalog) {
       ...i,
       catalog_item_id,
       match_requires_review: true,
-      suggested_personal_items: !catalog_item_id?exact.map(c=>({id:String(c.id),name:c.name})):[],
+      suggested_personal_items: i.suggested_personal_items?.length?i.suggested_personal_items:(!catalog_item_id?exact.map(c=>({id:String(c.id),name:c.name})):[]),
       comparison: planned
         ? aggregatePlanning(items,{...planned,unit:planned.unit}).unresolved===0 &&
           Number(planned.quantity) === Number(aggregatePlanning(items,{...planned,unit:planned.unit}).quantity)
@@ -162,7 +163,7 @@ function reconcile(plan, items, catalog) {
   });
   return {
     items: actual,
-    fulfillment:plan.map(p=>({...aggregatePlanning(actual,p),catalog_item_id:String(p.catalog_item_id),planned_quantity:String(p.quantity),name:p.name})),
+    fulfillment:allocateReceipt(plan,actual),
     absent: plan.filter(
       (p) =>
         !actual.some(

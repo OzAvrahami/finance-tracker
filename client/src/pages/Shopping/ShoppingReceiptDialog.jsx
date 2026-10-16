@@ -1,3 +1,7 @@
+import ReceiptStoreReview from './ReceiptStoreReview';
+import ReceiptPlanComparison from './ReceiptPlanComparison';
+import {merchantReview} from '../../../../shared/shoppingMerchant.mjs';
+import {allocateReceipt} from '../../../../shared/shoppingReceiptMatching.mjs';
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -13,7 +17,7 @@ import { receiptTotals } from "./receiptReviewMoney";
 import {editPrice,projectPrice,priceBreakdown} from '../../../../shared/receiptPricing.mjs';
 import ReceiptDuplicateWarning from "./ReceiptDuplicateWarning";
 import {
-  getShoppingIntelligence,
+  getShoppingIntelligence, getShoppingReceiptProgress, moveShoppingReceipt, getShoppingLists, updateShoppingList,
   getShoppingReceiptDuplicates,
   uploadShoppingReceipt,
   confirmShoppingReceipt,
@@ -28,14 +32,26 @@ const emptyIdentity = () => ({
 });
 const localDate = () => new Date().toLocaleDateString("en-CA");
 const messages = {
+  receipt_list_empty: 'הוסיפו לפחות פריט אחד לרשימת הקניות לפני העלאת קבלה. מוצרים בקטלוג בלבד אינם תוכנית קנייה.',
+  receipt_file_invalid: 'בחרו JPEG, PNG או PDF תקין. פורמט זה אינו נתמך.',
+  receipt_file_unreadable: 'פענוח הקובץ נכשל. ייצאו עותק תקין או הקטינו את הרזולוציה ונסו שוב.',
+  receipt_image_decode: 'לא ניתן לפענח את התמונה או שהיא גדולה מדי. ייצאו תמונה תקינה ברזולוציה קטנה יותר.',
+  receipt_pdf_unreadable: 'לא ניתן לקרוא את ה־PDF. ייצאו עותק תקין או צלמו את העמודים.',
+  receipt_pdf_password: 'ה־PDF מוגן בסיסמה. העלו עותק ללא הגנה.',
+  receipt_pdf_pages: 'מספר עמודי ה־PDF או המקורות חורג מהמגבלה. לא נשמרה תוצאה חלקית.',
+  receipt_row_limit: 'הקבלה חורגת ממגבלת השורות. לא נשמרה תוצאה חלקית.',
+  receipt_text_rows_incomplete: 'שורות הסריקה אינן תואמות לטבלת ה־PDF. לא נשמרה תוצאה חלקית. נסו שוב או העלו צילום ברור של העמודים.',
+  receipt_merchant_review_required: 'בית העסק או הרשימה השתנו. בדקו שוב את אזהרת החנות.',
+  receipt_identity_review_required: 'יש לבדוק את פרטי הקבלה הסותרים לפני אישור.',
+  shopping_mapping_conflict: 'קיימת התאמה מאושרת אחרת למוצר. בדקו אותה באזור המוצרים המקושרים לפני אישור.',
   receipt_provider_unconfigured:
     "סריקת קבלות טרם הוגדרה בשרת. אפשר לנסות שוב לאחר ההגדרה.",
   receipt_duplicate:
     "אחת התמונות כבר משויכת לרשימה אחרת. אין לאשר שוב את אותה קנייה.",
   receipt_duplicate_photo: "אותה תמונה נבחרה פעמיים. הסירו את העותק הכפול.",
-  receipt_photo_count: "יש לבחור 1–6 תמונות JPEG/PNG של קבלה אחת.",
-  receipt_photo_size: "כל תמונה עד 8 MiB, וכל התמונות יחד עד 24 MiB.",
-  receipt_image_invalid: "יש לבחור תמונות JPEG או PNG תקינות.",
+  receipt_photo_count: "מספר הקבצים חורג מהמגבלה המוצגת. בחרו קבצים של קבלה אחת.",
+  receipt_photo_size: "הקבצים חורגים ממגבלת הגודל המוצגת. הקטינו את הקבצים ונסו שוב.",
+  receipt_image_invalid: "יש לבחור תמונות JPEG/PNG או PDF תקינים.",
   receipt_stale:
     "הקבלה השתנתה במסך אחר. סגרו את הרשימה ופתחו אותה מחדש כדי לבדוק את הגרסה העדכנית.",
   receipt_reprocess_conflict:
@@ -75,14 +91,14 @@ function Photo({ file, index, total, onRemove, onMove, readOnly }) {
   const imageRef = useRef(null);
   useEffect(() => {
     const value = URL.createObjectURL(file);
-    if (imageRef.current) imageRef.current.src = value;
+    if (imageRef.current) { if(file.type==='application/pdf')imageRef.current.data=value;else imageRef.current.src=value; }
     return () => URL.revokeObjectURL(value);
   }, [file]);
   return (
     <li className="shopping-receipt-photo">
-      <img ref={imageRef} alt={`תמונה ${index + 1}: ${file.name}`} />
+      {file.type==='application/pdf' ? <object ref={imageRef} type="application/pdf" aria-label={`PDF ${index+1}`}><span>תצוגת PDF · {file.name}</span></object> : <img ref={imageRef} alt={`תמונה ${index + 1}: ${file.name}`} />}
       <strong className="shopping-receipt-photo-number">
-        תמונה {index + 1}
+        קובץ {index + 1}
       </strong>
       <span className="shopping-receipt-filename" title={file.name} dir="auto">
         {file.name}
@@ -113,6 +129,9 @@ function Photo({ file, index, total, onRemove, onMove, readOnly }) {
   );
 }
 export default function ShoppingReceiptDialog({ list, onChanged }) {
+  const [activeListId,setActiveListId]=useState(list.id);
+  const [merchantAck,setMerchantAck]=useState(''),[identityConflictReviewed,setIdentityConflictReviewed]=useState(false);
+  const [progress,setProgress]=useState(null),[targetLists,setTargetLists]=useState(null);
   const [open, setOpen] = useState(false),
     [data, setData] = useState(null),
     [busy, setBusy] = useState(false),
@@ -143,8 +162,9 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
   const [looking,setLooking]=useState(false),[lookupSummary,setLookupSummary]=useState('');
   useEffect(()=>()=>{lookupQueue.current=false;},[]);
   const readData = async () => {
-    const { data: next } = await getShoppingIntelligence(list.id);
+    const { data: next } = await getShoppingIntelligence(activeListId);
     setData(next);
+    setMerchantAck('');setIdentityConflictReviewed(false);
     draftRevision.current=next.receipt?.draft_revision??0;
     setRows(next.receipt?.confirmed?.items ?? next.reconciliation?.items ?? []);
     setIdentity(
@@ -165,7 +185,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
   };
   useEffect(() => {
     let active = true;
-    getShoppingIntelligence(list.id)
+    getShoppingIntelligence(activeListId)
       .then(({ data: next }) => {
         if (active) {
           setData(next);
@@ -197,7 +217,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
     return () => {
       active = false;
     };
-  }, [list.id]);
+  }, [activeListId]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (e) => {
@@ -236,6 +256,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
           ? ['quantity','price','original_unit_price','row_discount'].includes(key)
             ? editPrice(r,key,value)
             : {...r,[key]:value,owner_edited_fields:[...new Set([...(r.owner_edited_fields??[]),key])],
+              ...(key==='catalog_item_id'?{mapping_snapshot:null,planned_item_id:null}:{}),
               ...(['lookup_code','identifier_kind','retailer_scope'].includes(key)?{resolved_product:null,commercial_product_id:null,mapping_snapshot:null,catalog_item_id:null}: {})}
           : r,
       ),
@@ -252,7 +273,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
     setRows(all=>all.map((r,i)=>(typeof index==='string'?r.row_id!==index:i!==index)?r:{...r,commercial_product_id:product.commercial_product_id,
       mapping_snapshot:product.mapping,catalog_item_id:product.mapping?.personal_item_id??null,resolved_product:{...product}}));
     setDirty(true);setReviewed(false);
-    getShoppingIntelligence(list.id).then(({data:next})=>setData(previous=>({...previous,catalog:next.catalog}))).catch(()=>{});
+    getShoppingIntelligence(activeListId).then(({data:next})=>setData(previous=>({...previous,catalog:next.catalog}))).catch(()=>{});
   };
   const approveName=index=>run(async()=>{
     const row=rows[index],{data:product}=await approveShoppingProduct(productInput(row,identity.merchant,row.resolved_product.full_name));
@@ -282,9 +303,12 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
   const saveDraft = async () => {
     if(data?.receipt?.state!=='review') return;
     const draft={items:rows,identity,purchase_date:date};
-    const {data:result}=await saveShoppingReceiptDraft(list.id,{attempt:data.receipt.attempts,revision:draftRevision.current,draft});
+    const {data:result}=await saveShoppingReceiptDraft(activeListId,{attempt:data.receipt.attempts,revision:draftRevision.current,draft});
     draftRevision.current=result.revision;
     setData(previous=>({...previous,receipt:{...previous.receipt,review_draft:draft,draft_revision:result.revision}}));
+    const {data:latest}=await getShoppingIntelligence(activeListId);
+    setData(previous=>({...previous,context_token:latest.context_token,current_items:latest.current_items,store:latest.store}));
+    setMerchantAck('');
     setDirty(false);
   };
   const changeIdentity = (key, value) => {
@@ -294,7 +318,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
     setDirty(true);
   };
   const checkDuplicates = async () => {
-    const result = await getShoppingReceiptDuplicates(list.id, { identity });
+    const result = await getShoppingReceiptDuplicates(activeListId, { identity });
     setDuplicates(result.data);
     setDuplicateReviewed(false);
     setIdentityChecked(true);
@@ -311,17 +335,17 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
     event.target.value = "";
     if (!additions.length) return;
     const next = [...files, ...additions];
-    if (next.length > 6) {
+    if (next.length > limits.files) {
       setError(messages.receipt_photo_count);
       return;
     }
-    if (next.some((f) => !["image/jpeg", "image/png"].includes(f.type))) {
+    if (next.some((f) => !["image/jpeg", "image/png", "application/pdf"].includes(f.type))) {
       setError(messages.receipt_image_invalid);
       return;
     }
     if (
-      next.some((f) => f.size > 8 * 1024 * 1024) ||
-      next.reduce((n, f) => n + f.size, 0) > 24 * 1024 * 1024
+      next.some((f) => f.size > limits.fileBytes) ||
+      next.reduce((n, f) => n + f.size, 0) > limits.totalBytes
     ) {
       setError(messages.receipt_photo_size);
       return;
@@ -353,7 +377,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
             },
           };
         const response = await uploadShoppingReceipt(
-          list.id,
+          activeListId,
           files,
           pendingScan.current.attempt,
           pendingScan.current.options,
@@ -377,7 +401,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
           pendingScan.current = null;
         // Refresh only the server revision, never discard the user's correction draft.
         try {
-          const { data: latest } = await getShoppingIntelligence(list.id);
+          const { data: latest } = await getShoppingIntelligence(activeListId);
           setData(latest);
         } catch {
           /* A same-set retry remains safe; changed sets fail closed as stale. */
@@ -385,7 +409,19 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
         throw error;
       }
     });
+  const limits=data?.limits??{files:20,fileBytes:20*1024**2,totalBytes:64*1024**2,pdfPages:30};
+  const nonEmpty=(data?.current_items??list.shopping_list_items??[]).length>0;
+  const storeReview=merchantReview(data?.store,identity,data?.receipt?.extracted?.identity_evidence?.merchant??[],data?.context_token);
+  const fulfillment=allocateReceipt(data?.plan??[],rows);
+  useEffect(()=>{
+    if(scanState!=='scanning' && data?.receipt?.state!=='extracting')return;
+    let active=true;
+    const timer=setInterval(()=>getShoppingReceiptProgress(activeListId).then(({data:p})=>{if(active)setProgress(p.progress);}).catch(()=>{}),1500);
+    return ()=>{active=false;clearInterval(timer);};
+  },[scanState,data?.receipt?.state,activeListId]);
   const canConfirm =
+    (storeReview.state==='matched'||merchantAck===storeReview.acknowledgment) &&
+    (!data?.receipt?.extracted?.identity_conflict||identityConflictReviewed) &&
     data?.receipt?.state === "review" &&
     !busy &&
     !photosChanged &&
@@ -405,8 +441,9 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
     );
   const confirm = () =>
     run(async () => {
-      await confirmShoppingReceipt(list.id, {
+      await confirmShoppingReceipt(activeListId, {
         purchase_date: date,
+        context_token:data.context_token,merchant_acknowledgment:merchantAck||undefined,identity_conflict_reviewed:identityConflictReviewed,
         reviewed: true,
         extraction_attempt: data.receipt.attempts,
         draft_revision:draftRevision.current,
@@ -511,7 +548,7 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
             {data?.receipt?.state !== "confirmed" &&
               (tab === "upload" ? (
                 <PrimaryButton
-                  disabled={busy || !files.length}
+                  disabled={busy || !files.length || !nonEmpty}
                   onClick={() => {
                     if (data?.receipt?.state === "review") setReplacing(true);
                     else scan();
@@ -543,7 +580,8 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
               בדיקת פריטים
             </SecondaryButton>
           </div>
-          {busy && <p role="status">מעבד… אין לסגור עד לסיום.</p>}
+          {busy && <p role="status">מעבד… {progress ? `${progress.stage==='preparing'?'הכנת קבצים':'עיבוד מקורות'} ${progress.completed}/${progress.total}` : 'אין לסגור עד לסיום.'}</p>}
+          {!nonEmpty && <Alert>{messages.receipt_list_empty}</Alert>}
           {error && (
             <Alert variant="error" urgent>
               {error}
@@ -553,14 +591,14 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
             {tab === "upload" && (
               <div>
                 <p className="shopping-receipt-order-guide">
-                  <strong>תמונה 1 צריכה להציג את ראש הקבלה.</strong> המשיכו לפי
+                  <strong>הקובץ הראשון צריך להציג את ראש הקבלה.</strong> המשיכו לפי
                   הסדר עד התחתית. המספרים קובעים את סדר השליחה; במחשב מתחילים
                   מימין. הקדמה מעבירה למספר קטן יותר.
                 </p>
                 <p>
                   צלמו את הקבלה לפי הסדר מלמעלה למטה. אפשר חפיפה קטנה בין
-                  התמונות. 1–6 תמונות JPEG/PNG, עד 8 MiB לתמונה ו־24 MiB יחד.
-                  התמונות נשלחות לספק זיהוי חיצוני.
+                  התמונות. עד {limits.files} קובצי JPEG/PNG/PDF, עד {limits.fileBytes/1024**2} MiB לקובץ ו־{limits.totalBytes/1024**2} MiB יחד. עד {limits.pdfPages} עמודי PDF בסך הכול; עמודים אינם נספרים כקבצים.
+                  תוכן הקבלה נשלח לספק זיהוי חיצוני. עמודי PDF נשמרים בסדר המקורי.
                 </p>
                 {data?.receipt?.state !== "confirmed" && (
                   <div className="shopping-receipt-upload">
@@ -569,15 +607,15 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
                       hidden
                       aria-label="הוספת תמונות קבלה"
                       type="file"
-                      accept="image/jpeg,image/png"
+                      accept="image/jpeg,image/png,application/pdf"
                       multiple
                       onChange={addPhotos}
                     />
-                    <SecondaryButton onClick={() => fileInput.current?.click()}>
-                      הוספת תמונות
+                    <SecondaryButton disabled={!nonEmpty} onClick={() => fileInput.current?.click()}>
+                      הוספת תמונות או PDF
                     </SecondaryButton>
                     <span role="status" aria-live="polite">
-                      נבחרו {files.length} מתוך 6 תמונות
+                      נבחרו {files.length} מתוך {limits.files} קבצים
                     </span>
                   </div>
                 )}
@@ -598,9 +636,9 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
                 </ol>
                 {!files.length && data?.receipt && (
                   <p>
-                    התמונות אינן נשמרות בשרת. נסרקו{" "}
-                    {data.receipt.image_hashes?.length ?? 1} תמונות; לתיקון סדרת
-                    הצילומים יש לבחור מחדש את כל התמונות.
+                    קובצי המקור אינם נשמרים בשרת. נסרקו{" "}
+                    {data.receipt.image_hashes?.length ?? 1} קבצים; לסריקה מחדש
+                    יש לבחור שוב את כל הקבצים.
                   </p>
                 )}
                 {photosChanged && data?.receipt?.extracted && (
@@ -707,6 +745,10 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
                       </ul>
                       <p>פריט שלא זוהה אינו בהכרח פריט שלא נקנה.</p>
                     </details>
+                    {data.receipt?.origin_plan&&<details>
+                      <summary>התוכנית שנשמרה לפני העברת הקבלה</summary>
+                      <ul>{data.receipt.origin_plan.items.map((p,i)=><li key={i}>{p.name}: {p.quantity} {p.unit}</li>)}</ul>
+                    </details>}
                     {!!data.receipt?.extracted?.overlap_warnings?.length && (
                       <details>
                         <summary>הערות מקור</summary>
@@ -744,6 +786,13 @@ export default function ShoppingReceiptDialog({ list, onChanged }) {
                   {looking&&<button type="button" onClick={()=>{lookupQueue.current=false;}}>עצירת איתור</button>}
                   {!!lookupSummary&&<span role="status">{lookupSummary}</span>}
                 </div>}
+                {data.receipt?.state!=='confirmed'&&<ReceiptStoreReview review={storeReview}
+                  conflict={data.receipt?.extracted?.identity_conflict} conflictReviewed={identityConflictReviewed} onConflictReview={setIdentityConflictReviewed}
+                  acknowledgment={merchantAck} onAcknowledge={setMerchantAck} onCancel={close} lists={targetLists}
+                  onLists={()=>run(async()=>{const {data:lists}=await getShoppingLists();setTargetLists(lists.filter(l=>l.item_count>0&&['draft','active'].includes(l.status)&&String(l.id)!==String(activeListId)));})}
+                  onStore={store=>run(async()=>{await saveDraft();await updateShoppingList(activeListId,{store});const {data:next}=await getShoppingIntelligence(activeListId);setData(next);setMerchantAck('');await onChanged();})}
+                  onMove={target=>run(async()=>{await saveDraft();const {data:latest}=await getShoppingIntelligence(activeListId);await moveShoppingReceipt(activeListId,{target_list_id:target,context_token:latest.context_token});setActiveListId(target);setTargetLists(null);setMerchantAck('');await onChanged();})}/>}
+                <ReceiptPlanComparison fulfillment={fulfillment}/>
                 <ReceiptReviewTable
                   rows={rows}
                   plan={data.plan ?? []}

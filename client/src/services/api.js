@@ -279,3 +279,6 @@ export const getReconciliationSummary = ids => api.get("/reconciliation/summary"
 export const getReconciliationPending = before => api.get("/reconciliation/pending", { params: { before } });
 export const getReconciliationDetail = (kind, id) => api.get(`/reconciliation/${kind}/${id}`);
 export const resolveReconciliation = (id, command) => api.post(`/reconciliation/observation/${id}/resolve`, command);
+
+export const getShoppingReceiptProgress = id => api.get(`/shopping/lists/${id}/receipt/progress`);
+export const moveShoppingReceipt = (id,data) => api.post(`/shopping/lists/${id}/receipt/move`,data);
