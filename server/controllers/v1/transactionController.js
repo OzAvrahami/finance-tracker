@@ -4,6 +4,8 @@ const { rejectUnsupported } = require('../../services/savingsTransactionService'
 const { insertLegacyTransaction } = require('../../services/transactionIngestionService');
 
 const cal = require('../../services/calIngestionService');
+const general = require('../../services/generalTransactionIngestion');
+let generalRequests = 0;
 
 const schema = z.object({
   type: z.enum(['expense', 'income']),
@@ -29,6 +31,16 @@ const schema = z.object({
 });
 
 async function createTransaction(req, res) {
+  if (req.body && Object.hasOwn(req.body, 'contract')) {
+    if (typeof req.is === 'function' && !req.is('application/json')) return res.status(415).json({ error: 'json_required' });
+    if (generalRequests >= 2) return res.status(503).json({ error: 'ingestion_busy', retryable: true });
+    generalRequests++;
+    try {
+      const result = await general.processSubmission(supabase, req.body, { rawBytes: req.transactionBodyBytes });
+      return res.status(result.status).json(result.body);
+    } finally { generalRequests--; }
+  }
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return res.status(400).json({ error: 'invalid_envelope' });
   // Explicit server registration selects this producer; hashes/names alone never infer CAL.
   try {
     const profile = cal.selectProfile(req.body);
@@ -197,6 +209,7 @@ async function createTransaction(req, res) {
 
     // FK violation: category_id or payment_source_id doesn't exist
     if (error.code === 'PCAL1') return res.status(503).json({ error: 'cal_adapter_required' });
+    if (error.code === 'PGEN1') return res.status(503).json({ error: 'general_adapter_required' });
     if (error.code === '23503') {
       const field = error.detail?.includes('category_id') ? 'category_id'
         : error.detail?.includes('payment_source_id') ? 'payment_source_id'

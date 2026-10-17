@@ -41,3 +41,25 @@ test('stale and protected decisions return actionable safe failures',async t=>{
   const r=await f.send('/observation/1/resolve',command());assert.equal(r.status,status);assert.equal(JSON.stringify(r.body).includes('must not leak'),false);
  }
 });
+
+const receiptCommand=()=>({request_key:randomUUID(),expected_revision:0,review_token:'b'.repeat(64),
+ item:require('./fixtures/generalTransaction').item(),reason:'Synthetic provider evidence checked',relationship:{kind:'same_identity'}});
+test('receipt resolution requires owner, validates evidence and derives actor without privileged producer fields',async t=>{
+ const f=await fixture(t,{receipt_id:'1',revision:1,outcome:'created'}),b=receiptCommand();
+ for(const token of ['','Bearer external-key','Bearer fldev1_private'])assert.equal((await f.send('/receipt/1/resolve',b,token)).status,401);
+ assert.equal((await f.send('/receipt/1/resolve',b,'Bearer ordinary-session')).status,403);
+ assert.equal((await f.send('/receipt/1/resolve',{...b,actor:'forged'})).status,400);
+ assert.equal((await f.send('/receipt/1/resolve',{...b,item:{...b.item,payment_source_id:'1'}})).status,400);
+ assert.equal((await f.send('/receipt/1/resolve',{...b,relationship:{kind:'provider_link'}})).status,400);
+ assert.equal(f.calls.length,0);
+ assert.equal((await f.send('/receipt/1/resolve',b)).status,200);
+ assert.equal(f.calls[0].name,'resolve_general_receipt');assert.equal(f.calls[0].args.p_command.actor,`owner:${owner}`);
+ assert.equal(f.calls[0].args.p_command.receipt_id,'1');assert.equal(f.calls[0].args.p_command.item.client_id,undefined);
+ assert.equal((await f.send('/receipt/1')).status,200);assert.equal(f.calls[1].name,'get_general_receipt');
+ assert.equal((await f.send('/receipt/1?token=bad')).status,400);
+});
+test('receipt resolution returns actionable stale and protected failures',async t=>{
+ for(const [reason,status]of[['stale_review',409],['command_key_conflict',409],['observation_review_required',422],['identity_relationship_required',422]]){
+  const f=await fixture(t,{outcome:'rejected',reason_code:reason});assert.equal((await f.send('/receipt/1/resolve',receiptCommand())).status,status);
+ }
+});

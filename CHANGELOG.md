@@ -10,6 +10,10 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- #96: Add an explicit general single/batch evidence contract on `POST /api/v1/transactions`, preserving legacy and registered CAL callers. Bound requests, validate exact money and distinct date/status evidence, resolve trusted account registrations, and persist repeat-safe per-item receipts through existing atomic reconciliation. Use owner-selected confirmed billing dates for observed installments without expanding future payments or double-posting whole purchases. Migrations 052 and 053 are required; registrations remain disabled by default and explicit account cutover blocks legacy external-write bypass. Refunds, uncertain identities/mappings and unsupported evidence retain explicit review outcomes. Owner-only receipt resolution now records immutable evidence revisions, revalidates mapping/review state and safely promotes eligible pending or incomplete evidence exactly once. Changed provider references require an explicit investigated relationship; ordinary changed-content delivery still conflicts. Current producer installment output lacks separate original-purchase evidence; producer agreement and owner acceptance remain pending, and no live ingestion is enabled.
+
 ### Fixed
 
 - FlowLink: show the installed bundle's actual version/build and compiled Debug/Release configuration in Diagnostics instead of the hard-coded `0.1.0 (1)`. Release build 4 is installed and verified on the owner's iPhone. Authenticated credential replacement restored the original device connection and binding after the Debug-origin namespace change; original captures remain preserved but isolated in their previous namespace, with no delivery attempted.

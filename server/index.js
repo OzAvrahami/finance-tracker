@@ -63,7 +63,10 @@ app.use(flowlinkPath, createFlowlinkRouter({ db: require('./config/supabase') })
 app.use(morgan("combined"));
 
 // Body limits
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "2mb", verify: (req, res, buffer) => {
+    // Retain only byte count, never raw data; route casing cannot bypass the general envelope limit.
+    req.transactionBodyBytes = buffer.length;
+} }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
 const allowedOrigins = [
@@ -141,6 +144,8 @@ app.use((req, res) => {
 
 // Central error handler
 app.use((err, req, res, next) => {
+    if (err.type === 'entity.too.large') return res.status(413).json({ error: 'request_too_large' });
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
     console.error("Unhandled error:", err);
     if (String(err.message || "").includes("Not allowed by CORS")) {
         return res.status(403).json({ error: "CORS blocked" });

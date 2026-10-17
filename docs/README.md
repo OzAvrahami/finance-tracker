@@ -52,6 +52,7 @@ owns live Issue state; dated handoffs below must not be interpreted as current s
 
 ## Technical contracts
 
+- [General transaction API: single/batch evidence, compatibility and retries](architecture/GENERAL_TRANSACTION_API.md)
 - [Budget transaction navigation](architecture/BUDGET_TRANSACTION_CONTEXT.md)
 - [Named Savings accounting](architecture/SAVINGS_V1_3_0_SPEC.md)
 - [APY identity, time, money and reconciliation](architecture/APPLE_PAY_TRANSACTION_RECONCILIATION.md)
@@ -60,6 +61,7 @@ owns live Issue state; dated handoffs below must not be interpreted as current s
 
 ## Operator and implementation guides
 
+- [General transaction API local review, receipt resolution and migrations 052 / 053](operations/GENERAL_TRANSACTION_API.md)
 - [APY integrated readiness and CAL activation gate](operations/APY_06_RELEASE_READINESS.md)
 - [Transaction source status and owner review](operations/APY_05_RECONCILIATION_REVIEW.md)
 - [Shopping habits, receipt review and OCR setup](operations/SHOPPING_RECEIPTS.md)

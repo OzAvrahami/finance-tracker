@@ -80,6 +80,15 @@ async function invoke(bodyOverrides = {}, fakeOptions = {}) {
   return { fake, res };
 }
 
+test('external legacy caller cannot bypass a deliberately registered general account', async () => {
+  const fake = { from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ error: { code: 'PGEN1' } }) }) }) }) };
+  const controller = loadControllerWithFake('../../controllers/v1/transactionController', fake);
+  const res = createMockResponse();
+  await controller.createTransaction(request({ payment_source_id: 1 }), res);
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.error, 'general_adapter_required');
+});
+
 test('external v1 omits the TEXT tags column when tags are absent', async () => {
   const { fake, res } = await invoke();
 
