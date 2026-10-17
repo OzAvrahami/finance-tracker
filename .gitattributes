@@ -1,0 +1,2 @@
+server/migrations/** -linguist-detectable
+server/full_schema.sql -linguist-detectable
