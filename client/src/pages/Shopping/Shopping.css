@@ -984,7 +984,7 @@
 .shopping-quick-quantity input { text-align: center; }
 .shopping-effective-unit { align-self: center; padding-inline: 4px; color: var(--ft-text-muted); max-width: 100px; overflow-wrap: anywhere; }
 .shopping-suggestion-popup { position: absolute; inset-inline: 0; top: 100%; z-index: 5; background: var(--ft-surface-solid); border: 1px solid var(--ft-border-strong); border-radius: var(--ft-radius-md); box-shadow: var(--ft-shadow-lg); overflow: hidden; }
-.shopping-suggestion-popup ul { list-style: none; padding: 6px; margin: 0; max-height: 300px; overflow-y: auto; }
+.shopping-suggestion-popup ul { list-style: none; padding: 6px; margin: 0; }
 .shopping-suggestion-popup li { min-height: 44px; padding: 10px 12px; cursor: pointer; border-radius: var(--ft-radius-sm); display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
 .shopping-suggestion-popup li:hover, .shopping-suggestion-popup li[aria-selected="true"] { background: var(--ft-primary-weak); }
 .shopping-suggestion-popup small, .shopping-suggestion-popup p { color: var(--ft-text-muted); }
@@ -1024,4 +1024,11 @@
   .shopping-entry-details { grid-template-columns: minmax(0,1fr); }
   .shopping-suggestion-popup { position: static; margin-top: 4px; }
   .shopping-effective-unit { max-width: 64px; }
+}
+
+/* Body portal: card overflow, transforms and narrow-screen inline rules cannot clip it. */
+.shopping-suggestion-popup.shopping-suggestion-overlay {
+  position: fixed; inset-inline: auto; z-index: 1100; margin: 0;
+  box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  text-align: right;
 }

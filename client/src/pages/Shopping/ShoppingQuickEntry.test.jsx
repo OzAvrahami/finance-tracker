@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import ShoppingQuickEntry from './ShoppingQuickEntry';
+import { AuthContext } from '../../context/auth-context';
+import { CATALOG_SUGGESTIONS_CHANGED } from './shoppingSuggestionCache';
 import { addShoppingListItem, getShoppingCatalogCategories, getShoppingCatalogItems } from '../../services/api';
 vi.mock('../../services/api', () => ({ addShoppingListItem: vi.fn(), getShoppingCatalogCategories: vi.fn(), getShoppingCatalogItems: vi.fn() }));
 const milk = { id: 42, category_id: 3, name: 'חלב', default_unit: 'אריזה', default_price: 10.9, shopping_catalog_categories: { name: 'מזון' } };
@@ -15,7 +17,11 @@ const details = async () => userEvent.click(screen.getByRole('button',{name:/פ�
 const category = () => screen.getByRole('combobox',{name:'קטגוריה'});
 const reuse = () => screen.getByLabelText('להציע את הפריט גם ברשימות הבאות');
 const categories = [{id:3,name:'ירקות ופירות'},{id:4,name:'ציוד לבית'}];
-beforeEach(()=>{vi.resetAllMocks();getShoppingCatalogCategories.mockResolvedValue({data:[]});getShoppingCatalogItems.mockResolvedValue({data:[]});addShoppingListItem.mockResolvedValue({data:{id:1}});});
+beforeEach(()=>{vi.resetAllMocks();getShoppingCatalogCategories.mockResolvedValue({data:[]});getShoppingCatalogItems.mockResolvedValue({data:[]});addShoppingListItem.mockImplementation(async()=>{
+ window.dispatchEvent(new Event(CATALOG_SUGGESTIONS_CHANGED));return {data:{id:1}};
+});});
+// Synthetic geometry for portal behavior; this does NOT verify browser layout.
+beforeEach(()=>vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockReturnValue({left:20,right:320,top:100,bottom:144,width:300,height:44}));
 
 it('defaults new names to reusable with empty catalog/categories, resets and restores focus',async()=>{
  const {ref}=setup();expect(screen.queryByLabelText('קטגוריה')).not.toBeInTheDocument();
@@ -26,21 +32,22 @@ it('defaults new names to reusable with empty catalog/categories, resets and res
  await type('מטען 65W');await add();expect(addShoppingListItem).toHaveBeenCalledTimes(2);
  expect(addShoppingListItem).toHaveBeenLastCalledWith(1,expect.objectContaining({save_to_catalog:true}));
 });
-it('debounces bounded scoped suggestions and selects with arrows/Enter without submitting',async()=>{
+it('preloads bounded scoped suggestions and selects with arrows/Enter without submitting',async()=>{
  getShoppingCatalogItems.mockResolvedValue({data:[milk]});setup();await type('חל');
  await screen.findByRole('option',{name:/חלב.*מזון/});
- expect(getShoppingCatalogItems).toHaveBeenCalledTimes(1);expect(getShoppingCatalogItems).toHaveBeenCalledWith({search:'חל',list_type_id:2,limit:8});
+ expect(getShoppingCatalogItems).toHaveBeenCalledWith({search:'',list_type_id:2,limit:20},expect.objectContaining({timeout:8000}));
  await userEvent.keyboard('{ArrowDown}{Enter}');expect(addShoppingListItem).not.toHaveBeenCalled();expect(nameField()).toHaveValue('חלב');
  expect(screen.getByLabelText('יחידה')).toHaveValue('אריזה');await add();
  expect(addShoppingListItem).toHaveBeenCalledWith(1,expect.objectContaining({catalog_item_id:42,custom_name:null,unit:'אריזה',price:10.9,quantity:'1',save_to_catalog:false}));
 });
 it('keeps typed requirements, notes and corrected defaults when selecting a suggestion',async()=>{
- getShoppingCatalogItems.mockResolvedValue({data:[milk]});setup();await type('חלב ללא לקטוז');
+ getShoppingCatalogItems.mockResolvedValue({data:[milk]});setup();await type('חל');
  await userEvent.click(screen.getByRole('button',{name:/פרטים נוספים/}));
  await userEvent.type(screen.getByLabelText('הערות והעדפות'),'500 גרם בכל אריזה');
  await userEvent.selectOptions(screen.getByLabelText('יחידה'),'pack');
  fireEvent.change(screen.getByLabelText('מחיר משוער ליחידה'),{target:{value:'0'}});
  await userEvent.click(nameField());await userEvent.click(await screen.findByRole('option',{name:/חלב.*מזון/}));
+ await userEvent.type(nameField(),' ללא לקטוז');
  fireEvent.change(screen.getByLabelText(/^כמות/),{target:{value:'2'}});await add();
  expect(addShoppingListItem).toHaveBeenCalledWith(1,expect.objectContaining({catalog_item_id:42,planned_name:'חלב ללא לקטוז',quantity:'2',unit:'pack',price:'0',notes:'500 גרם בכל אריזה'}));
 });
@@ -53,9 +60,9 @@ it('allows explicit list-only choice, then resets checked with details collapsed
  await details();expect(reuse()).toBeChecked();
 });
 it('ignores stale search results and permits explicit new entry after search failure',async()=>{
- const old=deferred();getShoppingCatalogItems.mockReturnValueOnce(old.promise).mockRejectedValueOnce(new Error('offline'));
+ const old=deferred();getShoppingCatalogItems.mockImplementation(({search})=>search ? Promise.reject(new Error('offline')) : old.promise);
  setup();await type('חלב');await waitFor(()=>expect(getShoppingCatalogItems).toHaveBeenCalledTimes(1));
- await userEvent.clear(nameField());await type('מטען');await screen.findByText(/ההצעות אינן זמינות/);
+ await userEvent.clear(nameField());await type('מטען');await screen.findByText(/טעינת הצעות נוספות נכשלה/);
  await act(async()=>old.resolve({data:[milk]}));expect(screen.queryByRole('option',{name:/חלב.*מזון/})).not.toBeInTheDocument();
  await userEvent.click(screen.getByRole('option',{name:'הוספת “מטען” כפריט חדש'}));await add();
  expect(addShoppingListItem).toHaveBeenCalledWith(1,expect.objectContaining({custom_name:'מטען',catalog_item_id:null,save_to_catalog:true}));
@@ -172,8 +179,81 @@ it('offers seven closed units, never rescales fractions or package contents, and
 it('loads supported saved units and preserves a legacy value until deliberate replacement',async()=>{
  getShoppingCatalogItems.mockResolvedValue({data:[{...milk,default_unit:'ק״ג'}]});setup();await type('חל');
  await userEvent.click(await screen.findByRole('option',{name:/חלב.*מזון/}));expect(screen.getByLabelText('יחידה')).toHaveValue('kg');
- await add();getShoppingCatalogItems.mockResolvedValue({data:[milk]});await type('חל');
+ getShoppingCatalogItems.mockResolvedValue({data:[milk]});await add();await type('חל');
  await userEvent.click(await screen.findByRole('option',{name:/חלב.*מזון/}));expect(screen.getByLabelText('יחידה')).toHaveValue('אריזה');
  await userEvent.selectOptions(screen.getByLabelText('יחידה'),'pack');await add();
  expect(addShoppingListItem).toHaveBeenLastCalledWith(1,expect.objectContaining({catalog_item_id:42,unit:'pack'}));
+});
+
+it('renders available matches in the same input update while delayed remote work is pending',async()=>{
+ const remote=deferred();getShoppingCatalogItems.mockImplementation(({search})=>search ? remote.promise : Promise.resolve({data:[milk]}));
+ setup();await act(async()=>{});
+ fireEvent.focus(nameField());
+ fireEvent.change(nameField(),{target:{value:'חל'}});
+ expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+ expect(getShoppingCatalogItems).toHaveBeenCalledTimes(1); // no timer/network needed for this render
+ await waitFor(()=>expect(getShoppingCatalogItems).toHaveBeenCalledTimes(2));
+ expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+ await act(async()=>remote.reject(new Error('offline')));
+ expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+ fireEvent.change(nameField(),{target:{value:'מטען'}});
+ expect(screen.queryByRole('option',{name:/חלב.*מזון/})).not.toBeInTheDocument();
+ expect(screen.getByRole('option',{name:'הוספת “מטען” כפריט חדש'})).toBeInTheDocument();
+});
+
+it('separates cold debounce/network delay from immediate warm input updates',async()=>{
+ vi.useFakeTimers();
+ try {
+  getShoppingCatalogItems.mockImplementation(({search})=>search ? new Promise(resolve=>setTimeout(()=>resolve({data:[milk]}),1000)) : Promise.resolve({data:[]}));
+  setup();await act(async()=>{});fireEvent.change(nameField(),{target:{value:'חל'}});
+  await act(async()=>vi.advanceTimersByTimeAsync(249));expect(getShoppingCatalogItems).toHaveBeenCalledTimes(1);
+  await act(async()=>vi.advanceTimersByTimeAsync(1));expect(getShoppingCatalogItems).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('status')).toHaveTextContent('מחפש');
+  await act(async()=>vi.advanceTimersByTimeAsync(999));expect(screen.queryByRole('option',{name:/חלב.*מזון/})).not.toBeInTheDocument();
+  await act(async()=>vi.advanceTimersByTimeAsync(1));expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+  // No timer advance, request dispatch or waiting: broaden/narrow from available data.
+  fireEvent.change(nameField(),{target:{value:'ח'}});expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+  fireEvent.change(nameField(),{target:{value:'חלב'}});expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+  expect(getShoppingCatalogItems).toHaveBeenCalledTimes(2);
+  fireEvent.keyDown(nameField(),{key:'ArrowDown'});
+  await act(async()=>vi.advanceTimersByTimeAsync(1250));
+  expect(screen.getByRole('option',{name:/חלב.*מזון/})).toHaveAttribute('aria-selected','true');
+  fireEvent.keyDown(nameField(),{key:'Enter'});expect(addShoppingListItem).not.toHaveBeenCalled();
+  expect(nameField()).toHaveValue('חלב');
+ } finally {vi.useRealTimers();}
+});
+
+it('isolates results by list type and authenticated owner, including late responses',async()=>{
+ const old=deferred();getShoppingCatalogItems.mockReturnValueOnce(old.promise).mockResolvedValue({data:[]});
+ const ref=createRef();const view=(owner,scope)=><AuthContext.Provider value={{user:{id:owner}}}><ShoppingQuickEntry list={{id:1,list_type_id:scope}} inputRef={ref} onAdded={vi.fn()}/></AuthContext.Provider>;
+ const {rerender}=render(view('first',2));fireEvent.change(nameField(),{target:{value:'חל'}});
+ rerender(view('first',3));await act(async()=>old.resolve({data:[milk]}));
+ expect(screen.queryByRole('option',{name:/חלב.*מזון/})).not.toBeInTheDocument();
+ getShoppingCatalogItems.mockResolvedValue({data:[milk]});rerender(view('second',3));await act(async()=>{});
+ expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+ getShoppingCatalogItems.mockResolvedValue({data:[]});rerender(view(null,3));await act(async()=>{});
+ expect(screen.queryByRole('option',{name:/חלב.*מזון/})).not.toBeInTheDocument();
+});
+
+it('invalidates suggestions on catalog mutations and successful reusable addition',async()=>{
+ getShoppingCatalogItems.mockResolvedValue({data:[milk]});setup();await act(async()=>{});
+ fireEvent.change(nameField(),{target:{value:'חל'}});expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+ getShoppingCatalogItems.mockResolvedValue({data:[]});await act(async()=>window.dispatchEvent(new Event(CATALOG_SUGGESTIONS_CHANGED)));
+ expect(screen.queryByRole('option',{name:/חלב.*מזון/})).not.toBeInTheDocument();
+ getShoppingCatalogItems.mockResolvedValue({data:[milk]});await add();
+ fireEvent.change(nameField(),{target:{value:'חל'}});expect(screen.getByRole('option',{name:/חלב.*מזון/})).toBeInTheDocument();
+});
+
+it('portals both popups outside the clipping card and right-aligns the empty category',async()=>{
+ getShoppingCatalogCategories.mockResolvedValue({data:categories});setup();await type('חלב');
+ expect(screen.getByRole('listbox').closest('.ui-glass')).toBeNull();
+ await details();await userEvent.click(category());
+ expect(category()).toHaveAttribute('dir','rtl');expect(category()).toHaveStyle({textAlign:'right'});
+ const popup=screen.getByRole('listbox',{name:'הצעות לקטגוריה'});
+ expect(popup.closest('.ui-glass')).toBeNull();expect(popup.parentElement).toHaveClass('shopping-suggestion-overlay');
+ await userEvent.click(screen.getByRole('option',{name:'ציוד לבית'}));expect(category()).toHaveValue('ציוד לבית');
+ expect(category()).toHaveFocus();expect(category()).toHaveAttribute('aria-expanded','false');
+ await userEvent.clear(category());expect(category()).toHaveAttribute('dir','rtl');
+ await userEvent.type(category(),'קטגוריה חדשה');expect(screen.getByText(/קטגוריה חדשה תיווצר בהוספה:/)).toHaveTextContent('קטגוריה חדשה');
+ expect(addShoppingListItem).not.toHaveBeenCalled();
 });

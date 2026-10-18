@@ -16,6 +16,10 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- Authentication: replace an indefinite startup spinner when session restoration fails or stalls with a bounded Hebrew error/retry state. Preserve stored sessions and access controls, and ignore stale bootstrap results after retry, sign-in or sign-out.
+
+- Shopping: prevent category and item suggestions from being clipped by the entry card, keep popups within the viewport and right-align the empty Hebrew category placeholder. Show matching cached catalog items immediately while bounded, scoped searches refresh in the background; preserve free-text entry, catalog identities and existing receipt/financial behavior.
+
 - FlowLink: show the installed bundle's actual version/build and compiled Debug/Release configuration in Diagnostics instead of the hard-coded `0.1.0 (1)`. Release build 4 is installed and verified on the owner's iPhone. Authenticated credential replacement restored the original device connection and binding after the Debug-origin namespace change; original captures remain preserved but isolated in their previous namespace, with no delivery attempted.
 
 - #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.

@@ -24,7 +24,14 @@ api.interceptors.request.use(async (config) => {
 
 // On 401 response, sign out and redirect to login
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Catalog/category mutations (including reusable items and receipt mappings)
+    // invalidate the small mounted-entry caches; never cache authenticated data on disk.
+    if (response.config.method !== 'get' && response.config.url?.startsWith('/shopping/')) {
+      window.dispatchEvent(new Event('shopping-catalog-suggestions-changed'));
+    }
+    return response;
+  },
   async (error) => {
     if (error.response?.status === 401) {
       await supabase.auth.signOut();
@@ -195,7 +202,7 @@ export const deleteBudget = (id) => api.delete(`/budgets/${id}`);
 export const getShoppingListTypes = () => api.get('/shopping/list-types');
 export const getShoppingCatalogCategories = (listTypeId) => api.get('/shopping/catalog-categories', { params: listTypeId ? { list_type_id: listTypeId } : {} });
 export const createShoppingCatalogCategory = (data) => api.post('/shopping/catalog-categories', data);
-export const getShoppingCatalogItems = (params) => api.get('/shopping/catalog-items', { params });
+export const getShoppingCatalogItems = (params, options = {}) => api.get('/shopping/catalog-items', { ...options, params });
 export const getShoppingLists = (status) => api.get('/shopping/lists', { params: status ? { status } : {} });
 export const getShoppingListById = (id) => api.get(`/shopping/lists/${id}`);
 export const createShoppingList = (data) => api.post('/shopping/lists', data);

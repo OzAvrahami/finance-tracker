@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { TextField } from '../../components/ui';
+import ShoppingSuggestionPopup from './ShoppingSuggestionPopup';
 import { categoryDisplayName, categoryNameKey, categoryNameLimit } from '../../../../shared/shoppingEntryOptions.mjs';
 
 export default function ShoppingCategoryInput({ value, categoryId, onChange, categories, loading, failed, disabled, derived = false }) {
@@ -17,7 +18,8 @@ export default function ShoppingCategoryInput({ value, categoryId, onChange, cat
   return <div className="shopping-category-entry" onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget)) close();
   }}>
-    <TextField ref={input} label="קטגוריה" role="combobox" dir="auto" value={value} maxLength={categoryNameLimit}
+    <TextField ref={input} label="קטגוריה" role="combobox" dir={value ? 'auto' : 'rtl'}
+      style={{ textAlign: value ? 'start' : 'right' }} value={value} maxLength={categoryNameLimit}
       disabled={disabled} placeholder="ללא קטגוריה" autoComplete="off" aria-autocomplete="list"
       aria-expanded={expanded} aria-controls={expanded ? id : undefined}
       aria-activedescendant={expanded && active >= 0 && options[active] ? `${id}-${active}` : undefined}
@@ -34,7 +36,7 @@ export default function ShoppingCategoryInput({ value, categoryId, onChange, cat
         }
         if (event.key === 'Enter' && expanded && options[active]) { event.preventDefault(); select(options[active]); }
       }} />
-    {expanded && <div className="shopping-suggestion-popup">
+    {expanded && <ShoppingSuggestionPopup anchorRef={input} onDismiss={close}>
       {loading && <p role="status">טוען קטגוריות…</p>}
       <ul id={id} role="listbox" aria-label="הצעות לקטגוריה">
         {options.map((option,index) => <li key={option.id} id={`${id}-${index}`} role="option" dir="auto"
@@ -42,7 +44,7 @@ export default function ShoppingCategoryInput({ value, categoryId, onChange, cat
           onPointerDown={e => e.preventDefault()}
           onMouseDown={e => e.preventDefault()} onClick={() => select(option)}>{option.name}</li>)}
       </ul>
-    </div>}
+    </ShoppingSuggestionPopup>}
     {!derived && display && !categoryId && !exact && !loading && !failed &&
       <p className="shopping-category-pending" role="status">קטגוריה חדשה תיווצר בהוספה: <bdi>{display}</bdi></p>}
     {!derived && failed && <p role="status">טעינת ההצעות נכשלה. הקטגוריה תיבדק לפי השם בעת ההוספה{display ? `: ${display}` : ''}; אם אינה קיימת, תיווצר קטגוריה חדשה.</p>}

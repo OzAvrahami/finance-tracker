@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const getMock = vi.fn(() => Promise.resolve({ data: {} }));
 const postMock = vi.fn(() => Promise.resolve({ data: {} }));
 const patchMock = vi.fn(() => Promise.resolve({ data: {} }));
+const responseInterceptor = vi.fn();
 
 vi.mock('../config/supabase', () => ({
   supabase: {
@@ -26,7 +27,7 @@ vi.mock('axios', () => ({
       delete: vi.fn(),
       interceptors: {
         request: { use: vi.fn() },
-        response: { use: vi.fn() },
+        response: { use: responseInterceptor },
       },
     }),
   },
@@ -45,8 +46,28 @@ const {
   getDashboardSummary,
   getFundedBudgetMonth,
   getTransactions,
+  getShoppingCatalogItems,
   removeFundedBudget,
 } = await import('./api');
+
+it('invalidates mounted Shopping suggestions only after successful Shopping mutations',()=>{
+ const listener=vi.fn();window.addEventListener('shopping-catalog-suggestions-changed',listener);
+ const [success]=responseInterceptor.mock.calls[0];
+ success({config:{method:'get',url:'/shopping/catalog-items'}});
+ success({config:{method:'post',url:'/transactions'}});
+ expect(listener).not.toHaveBeenCalled();
+ for(const url of ['/shopping/catalog-categories','/shopping/catalog-items','/shopping/lists/1/items','/shopping/products/map']) {
+  const response={config:{method:'post',url}};expect(success(response)).toBe(response);
+ }
+ expect(listener).toHaveBeenCalledTimes(4);window.removeEventListener('shopping-catalog-suggestions-changed',listener);
+});
+
+it('preserves catalog callers and passes cancellation and timeout options for quick entry',()=>{
+ const params={list_type_id:2,limit:8};getShoppingCatalogItems(params);
+ expect(getMock).toHaveBeenLastCalledWith('/shopping/catalog-items',{params});
+ const signal=new AbortController().signal;getShoppingCatalogItems(params,{signal,timeout:8000});
+ expect(getMock).toHaveBeenLastCalledWith('/shopping/catalog-items',{params,signal,timeout:8000});
+});
 
 /** Returns the parsed query params of the most recent GET. */
 function lastQuery() {

@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, GlassCard, IconButton, NumberField, PrimaryButton, SecondaryButton, TextField } from '../../components/ui';
 import { addShoppingListItem, getShoppingCatalogCategories, getShoppingCatalogItems } from '../../services/api';
 import ShoppingUnitSelect from './ShoppingUnitSelect';
 import ShoppingCategoryInput from './ShoppingCategoryInput';
+import ShoppingSuggestionPopup from './ShoppingSuggestionPopup';
+import { createSuggestionCache, CATALOG_SUGGESTIONS_CHANGED } from './shoppingSuggestionCache';
+import { useAuth } from '../../context/auth-context';
 import { defaultPlanningUnit, planningUnit, planningUnitLabel, stepPlanningQuantity, categoryDisplayName } from '../../../../shared/shoppingEntryOptions.mjs';
 
 const blank = () => ({ name: '', quantity: '1', unit: defaultPlanningUnit, price: '', notes: '', category: '', categoryId: '', reusable: true });
@@ -13,7 +16,10 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
   const [details, setDetails] = useState(false);
   const [categories, setCategories] = useState([]);
   const [categoryState, setCategoryState] = useState('loading');
-  const [suggestions, setSuggestions] = useState([]);
+  const [, refreshSuggestions] = useState(0);
+  const [catalogRevision, setCatalogRevision] = useState(0);
+  const { user } = useAuth();
+  const cache = useMemo(() => ({ owner: user?.id, ...createSuggestionCache(getShoppingCatalogItems,list.list_type_id) }), [list.list_type_id,user?.id]);
   const [searchState, setSearchState] = useState('idle');
   const [expanded, setExpanded] = useState(false);
   const [active, setActive] = useState(-1);
@@ -23,18 +29,21 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
   const edits = useRef(new Set());
   const queryVersion = useRef(0);
   const name = form.name.trim();
+  const suggestions = cache.matches(name);
+  const suggestionIdentity = suggestions.map(item => item.id).join(',');
   const visible = expanded && !!name;
   const update = (key, value) => {
     edits.current.add(key);
     if (key === 'name') {
       ++queryVersion.current; // invalidate immediately, before the next effect/debounce
-      setSuggestions([]); setActive(-1); setSearchState('idle'); setExpanded(true);
+      setActive(-1); setSearchState('idle'); setExpanded(true);
     }
     setForm(current => ({ ...current, [key]: value }));
   };
 
   useEffect(() => {
     let alive = true;
+    setCategories([]); setCategoryState('loading');
     getShoppingCatalogCategories(list.list_type_id).then(({ data }) => {
       if (alive) {
         setCategories(current => [...new Map([...(Array.isArray(data) ? data : []),...current].map(c=>[String(c.id),c])).values()]);
@@ -42,7 +51,16 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
       }
     }).catch(() => { if (alive) setCategoryState('failed'); });
     return () => { alive = false; };
-  }, [list.list_type_id]);
+  }, [list.list_type_id,user?.id,catalogRevision]);
+
+  useEffect(() => {
+    let alive = true;
+    const preload = () => cache.load().then(() => { if (alive) refreshSuggestions(n => n+1); }).catch(() => {});
+    const invalidate = () => { cache.clear(); setActive(-1); setCatalogRevision(n => n+1); preload(); };
+    preload();
+    window.addEventListener(CATALOG_SUGGESTIONS_CHANGED,invalidate);
+    return () => { alive = false; window.removeEventListener(CATALOG_SUGGESTIONS_CHANGED,invalidate); cache.clear(); };
+  }, [cache]);
 
   useEffect(() => {
     const version = ++queryVersion.current;
@@ -51,16 +69,20 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
     const timer = setTimeout(async () => {
       setSearchState('loading');
       try {
-        const { data } = await getShoppingCatalogItems({ search: name, list_type_id: list.list_type_id, limit: 8 });
+        await cache.load(name);
         if (alive && version === queryVersion.current) {
-          setSuggestions(Array.isArray(data) ? data.slice(0,8) : []); setActive(-1); setSearchState('ready');
+          refreshSuggestions(n => n+1); setSearchState('ready');
         }
       } catch {
-        if (alive && version === queryVersion.current) { setSuggestions([]); setSearchState('failed'); }
+        if (alive && version === queryVersion.current) setSearchState('failed');
       }
     }, 250);
     return () => { alive = false; clearTimeout(timer); };
-  }, [name, list.list_type_id, expanded]);
+  }, [name, cache, expanded,catalogRevision]);
+
+  // A refresh with the same identities must not erase a keyboard highlight.
+  // Changed results must not move that highlight onto a different catalog item.
+  useEffect(() => { setActive(-1); }, [suggestionIdentity]);
 
   useEffect(() => {
     if (visible && active >= 0) document.getElementById(`shopping-option-${active}`)?.scrollIntoView?.({ block: 'nearest' });
@@ -82,6 +104,7 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
   }
 
   function onKeyDown(event) {
+    if (event.nativeEvent.isComposing) return;
     if (event.key === 'Escape') { event.preventDefault(); setExpanded(false); setActive(-1); return; }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault(); setExpanded(true);
@@ -115,7 +138,7 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
         const canonical = saved.shopping_catalog_categories;
         setCategories(current => [...current.filter(c => String(c.id)!==String(canonical.id)),canonical].sort((a,b)=>a.name.localeCompare(b.name,'he')));
       }
-      setForm(blank()); setSelected(null); setDetails(false); setSuggestions([]); edits.current.clear();
+      setForm(blank()); setSelected(null); setDetails(false); edits.current.clear();
       await onAdded();
     } catch (failure) {
       setError(failure.response?.data?.error || 'הפריט לא נוסף. הפרטים נשמרו; אפשר לנסות שוב.');
@@ -137,21 +160,21 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
             aria-activedescendant={visible && active >= 0 ? `shopping-option-${active}` : undefined}
             value={form.name} maxLength={300} onValueChange={v => update('name',v)} onKeyDown={onKeyDown}
             onFocus={() => setExpanded(true)} disabled={pending} required placeholder="חלב, מטען, מתנה…" />
-          {visible && <div className="shopping-suggestion-popup">
+          {visible && <ShoppingSuggestionPopup anchorRef={inputRef} onDismiss={() => { setExpanded(false); setActive(-1); }}>
             {searchState === 'loading' && <p role="status">מחפש פריטים שמורים…</p>}
-            {searchState === 'failed' && <p role="status">ההצעות אינן זמינות. אפשר להוסיף את השם כפריט חדש.</p>}
+            {searchState === 'failed' && <p role="status">טעינת הצעות נוספות נכשלה. אפשר להוסיף את השם כפריט חדש.</p>}
             <ul id="shopping-name-options" role="listbox" aria-label="הצעות לפריט">
               {suggestions.map((item,index) => <li key={item.id} role="option" id={`shopping-option-${index}`}
                 aria-label={`${item.name} · ${item.shopping_catalog_categories?.name || 'פריט שמור'}${item.default_unit ? ` · ${planningUnitLabel(item.default_unit)}` : ''}`}
-                aria-selected={active === index} onMouseDown={e => e.preventDefault()} onClick={() => choose(item)}>
+                aria-selected={active === index} onPointerDown={e => e.preventDefault()} onMouseDown={e => e.preventDefault()} onClick={() => choose(item)}>
                 <strong dir="auto">{item.name}</strong><small>{item.shopping_catalog_categories?.name || 'פריט שמור'}{item.default_unit ? ` · ${planningUnitLabel(item.default_unit)}` : ''}</small>
               </li>)}
               <li role="option" id={`shopping-option-${suggestions.length}`} aria-selected={active === suggestions.length}
-                className="shopping-new-option" onMouseDown={e => e.preventDefault()} onClick={() => choose(null)}>
+                className="shopping-new-option" onPointerDown={e => e.preventDefault()} onMouseDown={e => e.preventDefault()} onClick={() => choose(null)}>
                 הוספת “{name}” כפריט חדש
               </li>
             </ul>
-          </div>}
+          </ShoppingSuggestionPopup>}
         </div>
         <div className="shopping-quick-quantity">
           <IconButton type="button" size="touch" aria-label="הקטנת כמות" disabled={pending || stepPlanningQuantity(form.quantity,-1)===null}

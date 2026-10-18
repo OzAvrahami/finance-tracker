@@ -12,9 +12,11 @@ there is no permanent sidebar and no new list-type system.
   Additional details contain optional category, estimated unit price, requirements
   and a checked **להציע את הפריט גם ברשימות הבאות** choice. Uncheck it for a list-only item.
 - Suggestions search generic planning/catalog items, not commercial products or
-  barcodes. Requests debounce for 250 ms, request 8 results, and discard stale
-  responses. The server caps scoped searches at 20 and applies list-type/category
-  scope. An explicit new-name option remains available after an empty or failed search.
+  barcodes. Available scoped matches filter immediately; background searches debounce
+  for 250 ms and request 8 results. A bounded 20-item preload starts on entry mount.
+  Neither response is a complete catalog; broader/uncached queries still search the
+  server. See the 2026-10-18 correction below for cache bounds and verification.
+  An explicit new-name option remains available after an empty or failed search.
 - Selecting a suggestion retains its catalog ID. Completing a typed prefix is
   allowed; extra typed words remain the list-specific name. Explicit unit/price
   corrections and notes are retained. No quantity or package-content conversion occurs.
@@ -564,3 +566,200 @@ requires an isolated comparison and a defined write cutoff/reconciliation plan.
 - Owner verification / acceptance status: v1.7.0 preparation approved. Accepted only for the specific Hebrew
   placeholder/RTL visual correction, per owner's confirmation. Settings and overall
   Shopping functional acceptance remain Pending; no unperformed scenario is accepted.
+
+## Quick-entry dropdown/search correction (2026-10-18)
+
+This is a separate local Patch follow-up, not v1.7.0 release preparation. Baseline:
+`main` at `12f2c8f0eb36710cf74bf565e1131cbea919fae7`; index initially empty.
+
+Source-confirmed causes: both absolutely positioned suggestion lists were descendants
+of `.ui-glass { overflow: hidden }`; GlassCard also establishes a backdrop-filter
+stacking context. A larger z-index cannot escape that clipping. The empty category
+used `dir="auto"` without explicit alignment. Item edits discarded all suggestions
+and waited 250 ms before every network search; the scoped backend then fetches
+category links and catalog rows sequentially. Actual multi-second backend latency
+and owner-browser clipping geometry have **not** been measured in this session.
+
+Both popups now use a body portal anchored to the input. Placement follows ancestor
+scrolling, resizing, input/popup resizing and the visual viewport, flips upward near
+the bottom, clamps width, and scrolls within at most 320 px. Existing GlassCard
+overflow stays intact. Pointer selection retains input focus; blur/Tab/Escape close
+the popup. ARIA IDs remain connected across the portal. Category's empty placeholder
+explicitly uses RTL/right alignment; entered text retains automatic direction.
+
+Each mounted entry has an in-memory cache isolated by authenticated user and list
+type, cleared/aborted on scope changes, logout or unmount. The existing API remains
+unchanged: preload **20** items on mount, search at most **8** after a 250 ms remote
+debounce. Preload and query responses are **partial**; there is no complete-catalog
+claim or pagination bypass. Broader or uncached queries still request the server.
+Local matching runs in the input render without a debounce, ranks exact/prefix/
+substring matches deterministically and retains IDs, category context and defaults.
+
+Bounds: 128 rows, 32 recent query keys, 30-second exact-query reuse, 2-minute row
+freshness, and 8-second request timeout. At most the preload and latest query remain
+in flight; identical requests share work. Aborted/stale work cannot refill a cleared
+cache. Eviction invalidates query reuse so a missing cached row is not mistaken for
+absence. Successful Shopping mutations invalidate/refetch mounted suggestions and
+categories, including reusable-item creation; failures preserve useful matching rows
+and the explicit new-name action. Cached data never replaces server validation.
+No backend/schema/dependency/migration or financial workflow changes are required.
+
+### Focused evidence and local review
+
+- 51 focused client tests passed: quick entry (21), cache (6), popup placement with
+  synthetic geometry (2), API wrapper/interceptor regressions (22). These cover
+  immediate matches, partial/narrow/broad caches, failure/stale work, auth/list-type
+  isolation, invalidation/eviction, keyboard category selection and new-category
+  submission, preserved units/default reuse/requirements/failure values.
+- Cold path, controlled clock/network: dispatch at 250 ms, a deliberately delayed
+  1,000 ms response available at 1,250 ms. Warm broad/narrow edits display the cached
+  match in the same input update with no clock advance or extra request. This is
+  deterministic DOM evidence, **not real network or browser paint timing**.
+- Node-only benchmark: 128 synthetic cached rows / 1,000 filters, median 0.149 ms,
+  p95 0.229 ms. This measures filtering only, not rendering or production latency.
+- Focused ESLint, production frontend build and whitespace checks pass. Existing
+  >500 kB bundle warning remains. All seven version fields remain 1.7.0.
+- Normal frontend/back end were already listening on 5173/5050. The frontend returns
+  HTTP 200 and serves the updated quick-entry module. Normal environment files and
+  owner data were not changed; no live financial writes or database tests were run.
+- Browser runtime discovery returned no available browser. Actual computed styles,
+  desktop/narrow viewport, light/dark themes, touch/scrollbar behavior, real keyboard
+  interaction and cold/warm browser latency (including the <100 ms target) remain
+  **unperformed**. Earlier owner acceptance of other RTL corrections does not accept
+  this new category correction or either bug fix.
+
+Review at **http://localhost:5173/shopping** using an existing synthetic review list
+(listed above). Expand details, focus empty category and verify its placeholder,
+then scroll the page near the bottom, scroll the popup and select by pointer or
+arrows/Enter. Check Escape/Tab and a new typed category without submitting. Type an
+existing catalog name such as `אקטימל`, allow its initial lookup, then clear/retype
+and broaden/narrow it. Repeat at narrow width in both themes and with network
+throttling: available matches should remain usable while remote work is pending.
+No receipt confirmation or checkout is needed.
+
+### Release / Version gate for this correction
+
+- Release impact: **Yes**, visible dropdown/search bug corrections.
+- SemVer impact: **Patch**, compatible fixes with no new API/schema capability.
+- Candidate release: **Pending owner selection**; no candidate selected here.
+- Grouping: **Pending owner selection**; not assigned to the prior candidate.
+- CHANGELOG: **Updated under Unreleased**; unrelated/history entries preserved.
+- Version bump: **Deferred** to owner-led release preparation; seven fields at 1.7.0.
+- Publication: **Out of scope**.
+- Owner verification / acceptance: **Pending** for these fixes.
+
+This was the initial handoff state; the subsequent owner acceptance and combined
+commit scope are recorded below.
+
+## Local startup recovery (2026-10-18)
+
+The owner's subsequent loading report exposed a stopped local dependency. Frontend
+5173 and backend 5050 were running, but Docker Desktop was stopped and isolated
+Supabase on 55421 was refusing connections. The served frontend configuration was
+verified to target that local Supabase URL, not production. `ProtectedRoute` waits
+on `AuthProvider.getSession()` before mounting Dashboard or Shopping; the existing
+provider had neither a rejection handler nor a loading timeout. No evidence showed
+the Shopping portal or cache causing this startup failure: they mount only within
+Shopping, and the API cache invalidation interceptor excludes initial GET requests.
+
+Started the existing Docker Desktop installation. Its existing Shopping containers
+resumed without a database reset, migration, environment change, or frontend/backend
+restart. Auth, gateway and PostgreSQL became healthy. Read-only authenticated checks
+using the existing isolated review account then returned HTTP 200 for all nine
+startup resources: Dashboard summary/monthly series, tasks, loans, budgets,
+transactions, Savings report, Shopping lists and list types (39–111 ms in this run).
+Authentication itself returned 200 in 147 ms. Category options, bounded catalog
+preload and a typed search also returned 200 (47–65 ms). The typed `אקטימל` search
+has no matches in synthetic list 7's catalog; this is not a failure or a claim that
+the owner's other catalog contains no such product. No financial mutations occurred.
+
+The focused frontend correction bounds initial authentication loading at 15 seconds,
+handles rejected/failed session restoration, and offers a Hebrew **ניסיון חוזר**
+action. It preserves stored authentication data, keeps protected content hidden on
+error, accepts recovery events, ignores stale responses, and cleans up timers and
+subscriptions. No application version or Shopping feature was changed by recovery.
+
+Verification: six AuthProvider cases and four ProtectedRoute cases cover hung/error
+restoration, retry, recovery, sign-out, stale results and unmount cleanup. The 23
+existing quick-entry/popup tests were rerun after the auth change. Focused lint and
+the production frontend build pass, retaining the existing bundle-size advisory.
+Browser discovery still returned no available browser: actual Dashboard/Shopping
+rendering, popup appearance and warm-search browser timing remain unverified.
+HTTP/process success is not presented as visual acceptance. Refresh
+**http://localhost:5173** (then `/shopping`) for owner review.
+
+Release gate: **Yes / Patch** for the compatible authentication recovery correction;
+candidate and grouping **Pending owner selection**; CHANGELOG **Updated under
+Unreleased**; version bump **Deferred**, all seven fields remain 1.7.0; publication
+**Out of scope**; owner acceptance **Pending**. The local service restart itself is
+not a deployment. No staging, commit, push, production SQL or hosting changes occurred.
+
+## Combined bug-fix owner acceptance and commit scope (2026-10-18)
+
+The owner confirms that the normal local application now loads and the reviewed
+Shopping behavior looks correct. Record this as **Accepted for local loading and
+the Shopping behavior actually reviewed**. It does not establish additional mobile,
+theme, keyboard, touch, viewport or browser-performance coverage. The authentication
+timeout/error/retry fault scenarios remain supported by automated evidence, not a
+claim that the owner manually induced and tested each failure. This current record
+supersedes the Pending acceptance checkpoints for these corrections above; it does
+not expand historical v1.7.0 or unrelated feature acceptance.
+
+Final combined review: branch `main`, HEAD and read-only remote `origin/main` lookup
+both `12f2c8f0eb36710cf74bf565e1131cbea919fae7`; index empty. Reviewed tracked diffs
+and all five new files. No unrelated owner hunks are mixed into the following
+**17-file task scope** (the original 12-file Shopping scope plus five auth files):
+
+```text
+CHANGELOG.md
+client/src/components/ProtectedRoute.css
+client/src/components/ProtectedRoute.jsx
+client/src/components/ProtectedRoute.test.jsx
+client/src/context/AuthContext.jsx
+client/src/context/AuthContext.test.jsx
+client/src/pages/Shopping/Shopping.css
+client/src/pages/Shopping/ShoppingCategoryInput.jsx
+client/src/pages/Shopping/ShoppingQuickEntry.jsx
+client/src/pages/Shopping/ShoppingQuickEntry.test.jsx
+client/src/pages/Shopping/ShoppingSuggestionPopup.jsx
+client/src/pages/Shopping/ShoppingSuggestionPopup.test.jsx
+client/src/pages/Shopping/shoppingSuggestionCache.js
+client/src/pages/Shopping/shoppingSuggestionCache.test.js
+client/src/services/api.js
+client/src/services/api.test.js
+docs/operations/SHOPPING_UX.md
+```
+
+Exclude owner work in `docs/operations/APY_04_CAL_RECONCILIATION.md`,
+`docs/MULTI_USER_ARCHITECTURE.md`, `docs/MULTI_USER_INVENTORY.md` and
+`docs/operations/__pycache__/`, plus all private/environment files. Neither the
+index nor these files was changed during preparation. No schema, migrations,
+package metadata, hosting or production changes belong to this bundle.
+
+Both corrections are accurately covered by the two new Unreleased / Fixed entries;
+unrelated entries are preserved. Reuse the **61 distinct passing focused cases**
+(51 Shopping/cache/API cases plus 10 auth/route cases), focused lint, final frontend
+build, and recorded local authenticated HTTP evidence. The 23 Shopping entry/popup
+cases rerun during startup recovery are a subset, not extra cases. Only acceptance
+documentation changed in this preparation, so no runtime suite/build was repeated;
+whitespace, manifest, version inventory and preservation checks were rerun.
+
+Proposed owner commit: `fix: repair shopping suggestions and auth startup recovery`.
+Stage only the explicit paths, review the staged diff, then commit in a separate
+step. Push only that verified commit to `origin main` through the existing Git
+workflow; stop if branch, parent, staged tree/scope or remote baseline changes.
+The agent has not staged, committed or pushed anything. Commit/push completion and
+deployment are not claimed by this preparation.
+
+### Complete Release / Version gate for the combined bundle
+
+- Release impact: **Yes** — visible Shopping corrections and auth startup recovery.
+- SemVer impact: **Patch** — compatible bug fixes; no new schema/API contract.
+- Candidate release: **Pending owner selection**; unselected.
+- Grouping / included release candidate: **Pending owner selection**; unselected.
+- CHANGELOG: **Updated under Unreleased**, both corrections included.
+- Version bump: **Deferred** to owner-led release preparation; seven fields stay 1.7.0.
+- Publication: **Out of scope**; no tag or release is prepared.
+- Owner verification / acceptance: **Accepted for the local loading and Shopping
+  behavior actually reviewed**, with the unperformed/manual fault-scenario limits
+  stated above. No broader coverage is inferred.

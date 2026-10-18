@@ -14,3 +14,6 @@
   width: 1.1rem;
   height: 1.1rem;
 }
+
+.protected-route-error { flex-direction: column; padding: var(--ft-space-6); text-align: center; }
+.protected-route-error p { max-width: 36rem; margin: 0; }

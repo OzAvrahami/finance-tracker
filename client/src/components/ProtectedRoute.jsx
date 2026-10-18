@@ -1,9 +1,17 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/auth-context';
+import { PrimaryButton } from './ui';
 import './ProtectedRoute.css';
 
 const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, authError, retryAuth } = useAuth();
+
+  if (authError) {
+    return <div className="protected-route-loading protected-route-error" dir="rtl">
+      <p role="alert">{authError}</p>
+      <PrimaryButton type="button" onClick={retryAuth}>ניסיון חוזר</PrimaryButton>
+    </div>;
+  }
 
   if (loading) {
     return (
