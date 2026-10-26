@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ImageOff, Pencil, Trash2 } from 'lucide-react';
-import { IconButton, MoneyAmount, TechnicalValue } from '../ui';
+import { ImageOff, Pencil, Tag, Trash2 } from 'lucide-react';
+import { IconButton, MoneyAmount, SecondaryButton, TechnicalValue } from '../ui';
 import { BRAND_OPTIONS, STATUS_OPTIONS } from '../../utils/legoHelpers';
 
 const ACQUISITION_LABELS = {
@@ -14,6 +14,7 @@ const STATUS_META = {
   'In Progress': { label: 'בבנייה', className: 'is-progress' },
   Built: { label: 'בנוי', className: 'is-built' },
   Disassembled: { label: 'מפורק', className: 'is-neutral' },
+  Sold: { label: 'נמכר', className: 'is-neutral' },
 
 };
 
@@ -28,7 +29,7 @@ const MoneyOrDash = ({ value, className = '' }) => (
   ) : <span className={`lego-money-empty ${className}`.trim()}>—</span>
 );
 
-const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, onDelete }) => {
+const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, onDelete, onSell, onReturn }) => {
   const rawSetNumber = String(set.set_number || '').trim();
   const imageCandidates = useMemo(() => {
     const candidates = [];
@@ -109,19 +110,24 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
             {set.purchase_date ? <TechnicalValue>{set.purchase_date}</TechnicalValue> : 'תאריך לא צוין'}
           </span>
           <div className="lego-set-card__quick-actions">
-            <label className="lego-visually-hidden" htmlFor={`lego-status-${set.id}`}>עדכון סטטוס עבור {set.name}</label>
-            <select
-              id={`lego-status-${set.id}`}
-              className="lego-quick-select"
-              aria-label={`עדכון סטטוס עבור ${set.name}`}
-              value={set.status}
-              disabled={pending}
-              onChange={(event) => onStatusChange(set.id, event.target.value)}
-            >
-              {STATUS_OPTIONS.filter((option) => option.key !== 'All').map((option) => (
-                <option key={option.key} value={option.key}>{option.label}</option>
-              ))}
-            </select>
+            {set.status !== 'Sold' && (
+              <>
+                <label className="lego-visually-hidden" htmlFor={`lego-status-${set.id}`}>עדכון סטטוס עבור {set.name}</label>
+                <select
+                  id={`lego-status-${set.id}`}
+                  className="lego-quick-select"
+                  aria-label={`עדכון סטטוס עבור ${set.name}`}
+                  value={set.status}
+                  disabled={pending}
+                  onChange={(event) => onStatusChange(set.id, event.target.value)}
+                >
+                  {STATUS_OPTIONS.filter((option) => option.key !== 'All').map((option) => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
 
             <label className="lego-visually-hidden" htmlFor={`lego-brand-${set.id}`}>עדכון מותג עבור {set.name}</label>
             <select
@@ -135,13 +141,23 @@ const SetCard = ({ set, pending = false, onStatusChange, onBrandChange, onEdit, 
               {BRAND_OPTIONS.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
             </select>
 
-            <IconButton type="button" size="touch" aria-label={`עריכת ${set.name}`} disabled={pending} onClick={(event) => onEdit(set, event)}>
+            <IconButton type="button" size="touch" aria-label={`עריכת ${set.name}`} disabled={pending || set.status === 'Sold'} onClick={(event) => onEdit(set, event)}>
               <Pencil size={15} aria-hidden="true" />
             </IconButton>
             <IconButton type="button" size="touch" className="lego-delete-action" aria-label={`מחיקת ${set.name}`} disabled={pending} onClick={(event) => onDelete(set, event)}>
               <Trash2 size={15} aria-hidden="true" />
             </IconButton>
           </div>
+          {set.status === 'Sold' ? (
+            <SecondaryButton type="button" disabled={pending} onClick={(event) => onReturn(set, event)} aria-label={`החזר לאוסף: ${set.name}`}>
+              החזר לאוסף
+            </SecondaryButton>
+          ) : (
+            <SecondaryButton type="button" disabled={pending} onClick={() => onSell(set.id)} aria-label={`סמן כנמכר: ${set.name}`}>
+              <Tag size={15} aria-hidden="true" />
+              סמן כנמכר
+            </SecondaryButton>
+          )}
         </footer>
       </div>
     </article>

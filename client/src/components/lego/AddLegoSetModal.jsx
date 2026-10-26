@@ -69,6 +69,7 @@ const AddLegoSetModal = ({
   onClose,
   onSave,
   initialData = null,
+  isReturnMode = false,
   existingSets = [],
   returnFocusRef,
 }) => {
@@ -85,7 +86,18 @@ const AddLegoSetModal = ({
 
   useEffect(() => {
     if (!show) return;
-    setForm(initialData ? formFromSet(initialData) : { ...DEFAULT_FORM });
+    const nextForm = initialData ? formFromSet(initialData) : { ...DEFAULT_FORM };
+    // A repurchase is a new acquisition of the same record, not reuse of its
+    // previous receipt/date/cost or its Sold value as a physical condition.
+    setForm(isReturnMode ? {
+      ...nextForm,
+      status: 'New',
+      acquisition_type: 'purchase',
+      purchase_date: '',
+      purchase_price: '',
+      receipt_price: '',
+      original_price: '',
+    } : nextForm);
     setErrors({});
     setSaveError('');
     setLookupState('idle');
@@ -97,7 +109,7 @@ const AddLegoSetModal = ({
       lookupInFlightRef.current = false;
     };
 
-  }, [initialData, show]);
+  }, [initialData, isReturnMode, show]);
 
   const isDuplicateSetNumber = (trimmed) => existingSets.some(
     (set) => set.set_number === trimmed && (!initialData || set.id !== initialData.id),
@@ -192,12 +204,24 @@ const runLookup = async ({ force = false } = {}) => {
       nextErrors.set_number = 'הסט כבר קיים באוסף';
     }
     if (!form.name.trim()) nextErrors.name = 'שדה חובה';
+    if (isReturnMode && !STATUS_OPTIONS.some((option) => option.key !== 'All' && option.key === form.status)) {
+      nextErrors.status = 'יש לבחור מצב הרכבה';
+    }
+    for (const field of ['purchase_price', 'receipt_price', 'original_price']) {
+      if (isReturnMode && form[field] !== '' && (!Number.isFinite(Number(form[field])) || Number(form[field]) < 0)) {
+        nextErrors[field] = 'יש להזין מחיר לא שלילי';
+      }
+    }
     return nextErrors;
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (saving) return;
+    if (initialData?.status === 'Sold' && !isReturnMode) {
+      setSaveError('יש להשתמש בפעולת החזר לאוסף.');
+      return;
+    }
 
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
@@ -212,6 +236,7 @@ const runLookup = async ({ force = false } = {}) => {
       const numberOrNull = (value) => (value !== '' && value != null ? Number(value) : null);
       const isFreeAcquisition = FREE_ACQUISITION_TYPES.has(form.acquisition_type);
       const payload = {
+        ...(isReturnMode ? { action: 'return' } : {}),
         set_number: form.set_number.trim(),
         name: form.name.trim(),
         theme: form.theme.trim() || null,
@@ -231,7 +256,9 @@ const runLookup = async ({ force = false } = {}) => {
       else await addLegoSet(payload);
       await onSave();
     } catch (error) {
-      if (error.response?.status === 409) {
+      if (error.response?.status === 409 && error.response?.data?.code?.startsWith('LEGO_')) {
+        setSaveError('מצב הסט השתנה. סגרו את החלון ורעננו את האוסף לפני ניסיון נוסף.');
+      } else if (error.response?.status === 409) {
         const duplicateMessage = 'הסט כבר קיים באוסף';
         setErrors((previous) => ({ ...previous, set_number: duplicateMessage }));
         setLookupState('duplicate');
@@ -258,7 +285,7 @@ const runLookup = async ({ force = false } = {}) => {
     <Dialog
       open={show}
       onClose={handleClose}
-      title={isEditMode ? 'עריכת סט באוסף' : 'הוספת סט לאוסף'}
+      title={isReturnMode ? 'החזרת סט לאוסף' : isEditMode ? 'עריכת סט באוסף' : 'הוספת סט לאוסף'}
       header={(
         <span className="lego-dialog__title-icon" aria-hidden="true">
           <Blocks size={19} />
@@ -277,9 +304,9 @@ const runLookup = async ({ force = false } = {}) => {
             type="submit"
             form="lego-set-form"
             loading={saving}
-            loadingText={isEditMode ? 'שומר שינויים…' : 'מוסיף את הסט…'}
+            loadingText={isReturnMode ? 'מחזיר לאוסף…' : isEditMode ? 'שומר שינויים…' : 'מוסיף את הסט…'}
           >
-            {isEditMode ? 'שמירת שינויים' : 'הוספת הסט'}
+            {isReturnMode ? 'החזר לאוסף' : isEditMode ? 'שמירת שינויים' : 'הוספת הסט'}
           </PrimaryButton>
           <SecondaryButton type="button" disabled={saving} onClick={handleClose}>ביטול</SecondaryButton>
         </>
@@ -287,6 +314,12 @@ const runLookup = async ({ force = false } = {}) => {
     >
       <form id="lego-set-form" className="lego-form" onSubmit={handleSubmit} noValidate>
         {saveError && <Alert variant="error" urgent>{saveError}</Alert>}
+        {isReturnMode && (
+          <Alert variant="info">
+            הסט יוחזר לאוסף באותה רשומה. בחרו מצב הרכבה והזינו את פרטי הרכישה החדשה.
+            שדות רכישה ריקים ינקו את הנתונים הקודמים, והקישור לעסקה הישנה יוסר.
+          </Alert>
+        )}
 
         <div className="lego-lookup-row">
           <TextField
@@ -295,6 +328,7 @@ const runLookup = async ({ force = false } = {}) => {
             className="lego-set-number-field"
             label="מספר סט"
             value={form.set_number}
+            readOnly={isReturnMode}
             onValueChange={(value) => updateField('set_number', value)}
             onBlur={runLookup}
             placeholder="לדוגמה: 75367-1"
@@ -380,6 +414,7 @@ const runLookup = async ({ force = false } = {}) => {
             id="lego-set-status"
             label="סטטוס"
             value={form.status}
+            error={errors.status}
             onValueChange={(value) => updateField('status', value)}
           >
             {formStatuses.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
@@ -417,6 +452,7 @@ const runLookup = async ({ force = false } = {}) => {
             id="lego-original-price"
             label="מחיר לפני הנחת פריט"
             value={form.original_price}
+            error={errors.original_price}
             onValueChange={(value) => updateField('original_price', value)}
             min="0"
             step="0.01"
@@ -428,6 +464,7 @@ const runLookup = async ({ force = false } = {}) => {
                 id="lego-receipt-price"
                 label="מחיר בקבלה"
                 value={form.receipt_price}
+                error={errors.receipt_price}
                 onValueChange={(value) => updateField('receipt_price', value)}
                 min="0"
                 step="0.01"
@@ -438,6 +475,7 @@ const runLookup = async ({ force = false } = {}) => {
                 id="lego-purchase-price"
                 label="מחיר ששולם"
                 value={form.purchase_price}
+                error={errors.purchase_price}
                 onValueChange={(value) => updateField('purchase_price', value)}
                 min="0"
                 step="0.01"

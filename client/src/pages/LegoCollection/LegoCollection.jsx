@@ -42,20 +42,25 @@ const LegoCollection = () => {
   const [filterSetNumber, setFilterSetNumber] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterTheme, setFilterTheme] = useState('All');
+  const [filterOwnership, setFilterOwnership] = useState('Active');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [mutationError, setMutationError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSet, setEditingSet] = useState(null);
+  const [isReturnMode, setIsReturnMode] = useState(false);
   const [pendingQuickUpdate, setPendingQuickUpdate] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const addButtonRef = useRef(null);
+  const modalReturnFocusRef = useRef(null);
   const deleteReturnFocusRef = useRef(null);
 
   const openAddModal = useCallback(() => {
     setEditingSet(null);
+    setIsReturnMode(false);
+    modalReturnFocusRef.current = document.activeElement;
     setShowAddModal(true);
   }, []);
 
@@ -109,6 +114,7 @@ const LegoCollection = () => {
   const handleModalClose = () => {
     setShowAddModal(false);
     setEditingSet(null);
+    setIsReturnMode(false);
   };
 
   const handleSaved = async () => {
@@ -152,14 +158,26 @@ const LegoCollection = () => {
     () => [...new Set(sets.map((set) => set.theme).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he')),
     [sets],
   );
+
   const filteredSets = useMemo(
     () => sets
-      .filter((set) => filterStatus === 'All' || set.status === filterStatus)
+      .filter((set) => {
+        if (filterOwnership === 'Active') return set.status !== 'Sold';
+        if (filterOwnership === 'Sold') return set.status === 'Sold';
+        return true;
+      })
+      .filter((set) =>
+        filterOwnership === 'Sold' ||
+        filterStatus === 'All' ||
+        set.status === filterStatus
+      )
       .filter((set) => filterTheme === 'All' || set.theme === filterTheme)
       .filter((set) => (set.set_number ?? '').includes(filterSetNumber.trim())),
-    [filterStatus, filterTheme, filterSetNumber, sets],
+    [sets, filterOwnership, filterStatus, filterTheme, filterSetNumber],
   );
+
   const resetFilters = () => {
+    setFilterOwnership('Active');
     setFilterStatus('All');
     setFilterTheme('All');
     setFilterSetNumber('');
@@ -191,6 +209,11 @@ const LegoCollection = () => {
             onThemeFilterChange={setFilterTheme}
             onReset={resetFilters}
             themes={themes}
+            filterOwnership={filterOwnership}
+            onOwnershipChange={(value) => {
+              setFilterOwnership(value);
+              setFilterStatus('All');
+            }}
           />
 
           {mutationError && (
@@ -217,7 +240,7 @@ const LegoCollection = () => {
             <EmptyState
               variant="filtered"
               title="לא נמצאו סטים למסננים שנבחרו"
-              description="האוסף קיים, אך אין כרגע התאמה לסטטוס ולנושא שנבחרו."
+              description="אין התאמה לבעלות, למצב ההרכבה, לנושא ולמספר הסט שנבחרו. סטים שנמכרו זמינים במסנן הבעלות."
               primaryAction={(
                 <PrimaryButton type="button" onClick={resetFilters}>ניקוי מסננים</PrimaryButton>
               )}
@@ -234,7 +257,16 @@ const LegoCollection = () => {
                     pending={pendingQuickUpdate?.id === set.id}
                     onStatusChange={(id, status) => updateSetField(id, 'status', status)}
                     onBrandChange={(id, brand) => updateSetField(id, 'brand', brand)}
-                    onEdit={(selectedSet) => {
+                    onSell={(id) => updateSetField(id, 'status', 'Sold')}
+                    onEdit={(selectedSet, event) => {
+                      modalReturnFocusRef.current = event.currentTarget;
+                      setIsReturnMode(false);
+                      setShowAddModal(false);
+                      setEditingSet(selectedSet);
+                    }}
+                    onReturn={(selectedSet, event) => {
+                      modalReturnFocusRef.current = event.currentTarget;
+                      setIsReturnMode(true);
                       setShowAddModal(false);
                       setEditingSet(selectedSet);
                     }}
@@ -250,10 +282,11 @@ const LegoCollection = () => {
       <AddLegoSetModal
         show={showAddModal || Boolean(editingSet)}
         initialData={editingSet}
+        isReturnMode={isReturnMode}
         existingSets={sets}
         onClose={handleModalClose}
         onSave={handleSaved}
-        returnFocusRef={addButtonRef}
+        returnFocusRef={modalReturnFocusRef}
       />
 
       <ConfirmDialog

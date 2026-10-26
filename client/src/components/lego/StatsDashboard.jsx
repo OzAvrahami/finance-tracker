@@ -6,7 +6,7 @@ const SUMMARY_ITEMS = [
   {
     key: 'totalSets',
     label: 'מספר הסטים',
-    note: 'כל הסטים באוסף',
+    note: 'הסטים שנמצאים כעת באוסף',
     icon: Blocks,
     tone: 'primary',
     money: false,
@@ -14,7 +14,7 @@ const SUMMARY_ITEMS = [
   {
     key: 'totalMinifigs',
     label: 'MiniFigs',
-    note: 'פריטי מיניפיגס באוסף',
+    note: 'פריטי מיניפיגס שנמצאים כעת באוסף',
     icon: User,
     tone: 'primary',
     money: false,
@@ -22,15 +22,15 @@ const SUMMARY_ITEMS = [
   {
     key: 'totalListPrice',
     label: 'מחיר מחירון כולל',
-    note: 'לפי מחירי המקור שתועדו',
+    note: 'מחירי המקור של האוסף הפעיל',
     icon: ReceiptText,
     tone: 'primary',
     money: true,
   },
   {
     key: 'totalPaid',
-    label: 'סך ששולם',
-    note: 'מחירי הרכישה המתועדים',
+    label: 'עלות רכישת האוסף',
+    note: 'עלות רכישת הסטים שבבעלותך כעת',
     icon: HandCoins,
     tone: 'expense',
     money: true,
@@ -38,7 +38,7 @@ const SUMMARY_ITEMS = [
   {
     key: 'totalSaved',
     label: 'פער ממחיר מחירון',
-    note: 'מחיר מקור פחות הסכום ששולם',
+    note: 'מחיר מקור פחות עלות רכישת האוסף הפעיל',
     icon: PiggyBank,
     tone: 'positive',
     money: true,

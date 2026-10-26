@@ -105,7 +105,7 @@ describe('LEGO collection loading, summary, filters, and cards', () => {
     expect(getLegoSets).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'הוספת סט' })).toBeInTheDocument();
-    for (const label of ['מספר הסטים', 'מחיר מחירון כולל', 'סך ששולם', 'פער ממחיר מחירון']) {
+    for (const label of ['מספר הסטים', 'מחיר מחירון כולל', 'עלות רכישת האוסף', 'פער ממחיר מחירון']) {
       expect(within(summary).getByText(label)).toBeInTheDocument();
     }
     expect(within(summary).getByText('2')).toBeInTheDocument();
@@ -520,11 +520,211 @@ describe('LEGO add and edit dialog', () => {
 });
 
 describe('LEGO product truth', () => {
-  it('does not expose unsupported marketplace, wishlist, sale, pricing-history, or synchronization actions', async () => {
+  it('supports Sold actions without unrelated marketplace, wishlist, pricing-history or synchronization features', async () => {
     renderPage();
     await screen.findByRole('article', { name: /Venator-Class/ });
 
-    expect(screen.queryByRole('button', { name: /מכירה|רשימת משאלות|מחירון חי|התראת מחיר|סנכרון/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /סמן כנמכר/ })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /רשימת משאלות|מחירון חי|התראת מחיר|סנכרון/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/BrickLink|Marketplace|היסטוריית שווי|תשואת השקעה/)).not.toBeInTheDocument();
+  });
+});
+
+const soldSet = {
+  ...collection[0],
+  id: '9fa904bf-b63f-43e0-a24e-dcd42d48bcb5',
+  set_number: '42207', name: 'Synthetic Sold Set', theme: 'Technic', status: 'Sold',
+  purchase_price: 574.60, receipt_price: 600, original_price: 650, transaction_id: 42,
+};
+
+const openReturn = async () => {
+  await screen.findByRole('region', { name: 'סיכום אוסף לגו' });
+  await userEvent.selectOptions(screen.getByLabelText('בעלות'), 'Sold');
+  await userEvent.click(screen.getByRole('button', { name: `החזר לאוסף: ${soldSet.name}` }));
+  return screen.getByRole('dialog', { name: 'החזרת סט לאוסף' });
+};
+
+describe('LEGO Sold ownership and manual return', () => {
+  it('defaults to Active, combines ownership/theme/number/build filters and keeps summaries active-only', async () => {
+    const active = { ...collection[0], purchase_price: 100, original_price: 150 };
+    const minifig = { ...collection[1], theme: 'Collectible Minifigures', purchase_price: 10, original_price: 20 };
+    getLegoSets.mockResolvedValue({ data: [active, minifig, soldSet,
+      { ...soldSet, id: 'sold-minifig', set_number: '71053-1', name: 'Sold figure', theme: 'Collectible Minifigures' },
+    ] });
+    renderPage();
+    const summary = await screen.findByRole('region', { name: 'סיכום אוסף לגו' });
+    expect(screen.getByLabelText('בעלות')).toHaveValue('Active');
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(within(summary).getAllByText('1')).toHaveLength(2);
+    for (const amount of ['₪170.00', '₪110.00', '₪60.00']) expect(within(summary).getByText(amount)).toBeInTheDocument();
+    const summaryText = summary.textContent;
+
+    await userEvent.selectOptions(screen.getByLabelText('סטטוס הרכבה'), 'Built');
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    await userEvent.selectOptions(screen.getByLabelText('בעלות'), 'Sold');
+    expect(screen.getByLabelText('סטטוס הרכבה')).toHaveValue('All');
+    expect(screen.getByLabelText('סטטוס הרכבה')).toBeDisabled();
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(summary.textContent).toBe(summaryText);
+    await userEvent.selectOptions(screen.getByLabelText('נושא'), 'Technic');
+    await userEvent.type(screen.getByLabelText('מספר סט'), ' 422 ');
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    const soldCard = screen.getByRole('article', { name: soldSet.name });
+    expect(within(soldCard).getByText('נמכר')).toBeInTheDocument();
+    expect(within(soldCard).queryByLabelText(/עדכון סטטוס/)).not.toBeInTheDocument();
+    expect(within(soldCard).getByRole('button', { name: `עריכת ${soldSet.name}` })).toBeDisabled();
+    expect(within(soldCard).queryByRole('button', { name: /סמן כנמכר/ })).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('בעלות'), 'All');
+    expect(screen.getAllByRole('article')).toHaveLength(1); // theme/number still apply
+    await userEvent.selectOptions(screen.getByLabelText('נושא'), 'All');
+    await userEvent.clear(screen.getByLabelText('מספר סט'));
+    expect(screen.getAllByRole('article')).toHaveLength(4);
+    await userEvent.selectOptions(screen.getByLabelText('סטטוס הרכבה'), 'Built');
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(summary.textContent).toBe(summaryText);
+    await userEvent.click(screen.getByRole('button', { name: 'ניקוי מסננים' }));
+    expect(screen.getByLabelText('בעלות')).toHaveValue('Active');
+    expect(screen.getByLabelText('סטטוס הרכבה')).toHaveValue('All');
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+  });
+
+  it('sends only Sold, prevents repeat clicks while pending and refreshes persisted sale data', async () => {
+    const pending = deferred();
+    updateLegoSet.mockReturnValueOnce(pending.promise);
+    getLegoSets.mockResolvedValueOnce({ data: [{ ...soldSet, status: 'Built' }] })
+      .mockResolvedValue({ data: [soldSet] });
+    renderPage();
+    const card = await screen.findByRole('article', { name: soldSet.name });
+    const sell = within(card).getByRole('button', { name: /סמן כנמכר/ });
+    await userEvent.click(sell);
+    expect(sell).toBeDisabled();
+    expect(within(card).getByLabelText(/עדכון סטטוס/)).toBeDisabled();
+    fireEvent.click(sell);
+    expect(updateLegoSet).toHaveBeenCalledTimes(1);
+    expect(updateLegoSet).toHaveBeenCalledWith(soldSet.id, { status: 'Sold' });
+    await act(async () => pending.resolve({ data: [soldSet] }));
+    await waitFor(() => expect(screen.queryByRole('article')).not.toBeInTheDocument());
+    expect(screen.queryByText('האוסף עדיין ריק')).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('בעלות'), 'Sold');
+    expect(screen.getByRole('article', { name: soldSet.name })).toHaveTextContent('₪574.60');
+    expect(addLegoSet).not.toHaveBeenCalled();
+    expect(deleteLegoSet).not.toHaveBeenCalled();
+  });
+
+  it('sale failure keeps the active card and enables retry; refresh failure is reported separately', async () => {
+    updateLegoSet.mockRejectedValueOnce(new Error('offline'));
+    renderPage();
+    const card = await screen.findByRole('article', { name: /Venator-Class/ });
+    await userEvent.click(within(card).getByRole('button', { name: /סמן כנמכר/ }));
+    expect(await screen.findByText('עדכון סטטוס הסט נכשל.')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /סמן כנמכר/ })).toBeEnabled();
+    getLegoSets.mockRejectedValueOnce(new Error('refresh failed'));
+    await userEvent.click(within(card).getByRole('button', { name: /סמן כנמכר/ }));
+    expect(await screen.findByText(/העדכון נשמר, אך רענון האוסף נכשל/)).toBeInTheDocument();
+  });
+
+  it('explicit Return starts fresh, submits valid condition/new price to the same UUID and refreshes totals', async () => {
+    getLegoSets.mockResolvedValue({ data: [soldSet] });
+    renderPage();
+    const dialog = await openReturn();
+    expect(within(dialog).getByLabelText('סטטוס')).toHaveValue('New');
+    expect(within(dialog).queryByRole('option', { name: 'נמכר' })).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/מספר סט/)).toHaveAttribute('readonly');
+    for (const label of ['מחיר ששולם', 'מחיר בקבלה', 'מחיר לפני הנחת פריט']) {
+      expect(within(dialog).getByLabelText(label)).toHaveValue(null);
+    }
+    expect(within(dialog).getByLabelText('תאריך כניסה לאוסף')).toHaveValue('');
+    expect(within(dialog).getByText(/שדות רכישה ריקים ינקו/)).toBeInTheDocument();
+    await userEvent.selectOptions(within(dialog).getByLabelText('סטטוס'), 'Disassembled');
+    await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '500.25');
+    await userEvent.type(within(dialog).getByLabelText('מחיר בקבלה'), '520');
+    await userEvent.clear(within(dialog).getByLabelText('מחיר בקבלה'));
+    fireEvent.change(within(dialog).getByLabelText('תאריך כניסה לאוסף'), { target: { value: '2026-10-26' } });
+    fireEvent.change(within(dialog).getByLabelText('תאריך כניסה לאוסף'), { target: { value: '' } });
+    getLegoSets.mockResolvedValue({ data: [{ ...soldSet, status: 'Disassembled', purchase_price: 500.25, receipt_price: null, original_price: null, purchase_date: null, transaction_id: null }] });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(updateLegoSet).toHaveBeenCalledWith(soldSet.id, expect.objectContaining({
+      action: 'return', status: 'Disassembled', acquisition_type: 'purchase', purchase_price: 500.25,
+      receipt_price: null, original_price: null, purchase_date: null,
+    }));
+    expect(updateLegoSet.mock.calls[0][1]).not.toHaveProperty('transaction_id');
+    expect(addLegoSet).not.toHaveBeenCalled();
+    expect(screen.queryByRole('article')).not.toBeInTheDocument(); // still viewing Sold
+    expect(screen.getByRole('region', { name: 'סיכום אוסף לגו' })).toHaveTextContent('₪500.25');
+    await userEvent.selectOptions(screen.getByLabelText('בעלות'), 'Active');
+    expect(screen.getByRole('article', { name: soldSet.name })).toHaveTextContent('מפורק');
+  });
+
+  it.each(['gift', 'gwp'])('a former %s returns as a purchase without inheriting zero price', async (acquisition_type) => {
+    getLegoSets.mockResolvedValue({ data: [{ ...soldSet, acquisition_type, purchase_price: 0 }] });
+    renderPage();
+    const dialog = await openReturn();
+    expect(within(dialog).getByRole('radio', { name: 'רכישה' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).getByLabelText('מחיר ששולם')).not.toHaveAttribute('readonly');
+    await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '150');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    await waitFor(() => expect(updateLegoSet).toHaveBeenCalledWith(soldSet.id, expect.objectContaining({ action: 'return', acquisition_type: 'purchase', purchase_price: 150 })));
+  });
+
+  it.each([['gift', 'מתנה'], ['gwp', 'GWP']])('a return explicitly selected as %s keeps zero paid and receipt cost', async (type, label) => {
+    getLegoSets.mockResolvedValue({ data: [soldSet] });
+    renderPage();
+    const dialog = await openReturn();
+    await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '150');
+    await userEvent.click(within(dialog).getByRole('radio', { name: label }));
+    expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveAttribute('readonly');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    await waitFor(() => expect(updateLegoSet).toHaveBeenCalledWith(soldSet.id, expect.objectContaining({ action: 'return', acquisition_type: type, purchase_price: 0, receipt_price: 0 })));
+  });
+
+  it('cancelling Return leaves Sold unchanged, restores focus and discards the unsaved draft', async () => {
+    getLegoSets.mockResolvedValue({ data: [soldSet] });
+    renderPage();
+    const dialog = await openReturn();
+    await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '123');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'ביטול' }));
+    expect(updateLegoSet).not.toHaveBeenCalled();
+    expect(screen.getByRole('article', { name: soldSet.name })).toHaveTextContent('נמכר');
+    const button = screen.getByRole('button', { name: `החזר לאוסף: ${soldSet.name}` });
+    expect(button).toHaveFocus();
+    await userEvent.click(button);
+    expect(screen.getByLabelText('מחיר ששולם')).toHaveValue(null);
+  });
+
+  it('Return keeps the draft on failure, prevents duplicate pending requests and reports state conflicts accurately', async () => {
+    const pending = deferred();
+    updateLegoSet.mockReturnValueOnce(pending.promise);
+    getLegoSets.mockResolvedValue({ data: [soldSet] });
+    renderPage();
+    const dialog = await openReturn();
+    await userEvent.type(within(dialog).getByLabelText('מחיר ששולם'), '123');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    expect(within(dialog).getByRole('button', { name: 'ביטול' })).toBeDisabled();
+    const submit = within(dialog).getByRole('button', { name: 'מחזיר לאוסף…' });
+    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(updateLegoSet).toHaveBeenCalledTimes(1);
+    await act(async () => pending.reject(new Error('offline')));
+    expect(await within(dialog).findByText(/שמירת הסט נכשלה/)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('מחיר ששולם')).toHaveValue(123);
+    expect(getLegoSets).toHaveBeenCalledTimes(1);
+    updateLegoSet.mockRejectedValueOnce({ response: { status: 409, data: { code: 'LEGO_STATE_CHANGED' } } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    expect(await within(dialog).findByText(/מצב הסט השתנה/)).toBeInTheDocument();
+    expect(within(dialog).queryByText('הסט כבר קיים באוסף')).not.toBeInTheDocument();
+    expect(addLegoSet).not.toHaveBeenCalled();
+  });
+
+  it('retains sold records in duplicate validation while they are hidden from the Active view', async () => {
+    getLegoSets.mockResolvedValue({ data: [soldSet] });
+    renderPage();
+    await screen.findByRole('region', { name: 'סיכום אוסף לגו' });
+    await userEvent.click(screen.getByRole('button', { name: 'הוספת סט' }));
+    const dialog = screen.getByRole('dialog', { name: 'הוספת סט לאוסף' });
+    await userEvent.type(within(dialog).getByLabelText(/מספר סט/), soldSet.set_number);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'הוספת הסט' }));
+    expect(within(dialog).getAllByText('הסט כבר קיים באוסף').length).toBeGreaterThan(0);
+    expect(addLegoSet).not.toHaveBeenCalled();
   });
 });

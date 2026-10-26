@@ -100,6 +100,7 @@
 
 .lego-filters {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
   gap: var(--ft-space-5);
@@ -114,6 +115,7 @@
 
 .lego-filters__controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: var(--ft-space-3);
   min-width: 0;

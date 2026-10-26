@@ -11,12 +11,30 @@ const CollectionFilters = ({
   onThemeFilterChange,
   onReset,
   themes,
+  filterOwnership,
+  onOwnershipChange,
 }) => {
-  const hasFilters = filterStatus !== 'All' || filterTheme !== 'All' || filterSetNumber !== '';
+  const hasFilters =
+    filterOwnership !== 'Active' ||
+    filterStatus !== 'All' ||
+    filterTheme !== 'All' ||
+    filterSetNumber !== '';
 
   return (
     <section className="lego-filters" aria-label="סינון אוסף לגו">
       <div className="lego-filters__controls">
+        <Select
+          id="lego-ownership-filter"
+          className="lego-filter-field"
+          size="compact"
+          label="בעלות"
+          value={filterOwnership}
+          onValueChange={onOwnershipChange}
+        >
+          <option value="Active">באוסף</option>
+          <option value="Sold">נמכרו</option>
+          <option value="All">הכול</option>
+        </Select>
         <TextField
           id="lego-set-number-filter"
           className="lego-filter-field"
@@ -35,6 +53,7 @@ const CollectionFilters = ({
           label="סטטוס הרכבה"
           value={filterStatus}
           onValueChange={onFilterChange}
+          disabled={filterOwnership === 'Sold'}
         >
           {STATUS_OPTIONS.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
         </Select>
@@ -58,7 +77,7 @@ const CollectionFilters = ({
           </SecondaryButton>
         )}
       </div>
-      <p>השווי המוצג מבוסס על הנתונים שהוזנו לאוסף ואינו מחיר מכירה בפועל.</p>
+      <p>הסיכום מתייחס תמיד לסטים שבבעלותך כעת, ללא קשר למסנן. הסכומים אינם הוצאות לאורך זמן, שווי שוק או תמורת מכירה.</p>
     </section>
   );
 };

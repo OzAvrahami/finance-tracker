@@ -8,11 +8,14 @@ export const sortBySetNumber = (sets) => {
 };
 
 export const calculateStats = (sets) => {
-  const totalMinifigs = sets.filter((set) => set.theme === 'Collectible Minifigures').length
+  const activeSets = sets.filter((set) => set.status !== 'Sold');
 
-  const totalSets = sets.length - totalMinifigs;
-  const totalListPrice = sets.reduce((sum, set) => sum + (Number(set.original_price) || Number(set.purchase_price) || 0), 0);
-  const totalPaid = sets.reduce((sum, set) => sum + (Number(set.purchase_price) || 0), 0);
+  const totalMinifigs = activeSets.filter((set) => set.theme === 'Collectible Minifigures').length;
+
+  const totalSets = activeSets.length - totalMinifigs;
+  const totalListPrice = activeSets.reduce((sum, set) => sum + (Number(set.original_price) || Number(set.purchase_price) || 0), 0);
+  const totalPaid = activeSets.reduce((sum, set) => sum + (Number(set.purchase_price) || 0), 0);
+
   const totalSaved = totalListPrice - totalPaid;
 
   return { totalSets, totalMinifigs, totalListPrice, totalPaid, totalSaved };
