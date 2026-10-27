@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const axios = require('axios');
 const savingsCash = require('../services/savingsTransactionService');
+const { repurchases } = require('../services/legoRepurchaseService');
 const {
   parseTransactionListQuery,
   encodeCursor,
@@ -141,6 +142,7 @@ const synchronizeTransactionLegoSets = async ({
   transactionDate,
   categoryName,
   pricing,
+  detectRepurchases = false,
 }) => {
   if (!isLegoCategoryName(categoryName)) return;
 
@@ -160,7 +162,7 @@ const synchronizeTransactionLegoSets = async ({
   const setNumbers = [...desiredBySetNumber.keys()];
   const { data: existingSets, error: existingError } = await supabase
     .from('lego_sets')
-    .select('set_number')
+    .select(detectRepurchases ? '*' : 'set_number')
     .in('set_number', setNumbers);
 
   if (existingError) {
@@ -187,7 +189,11 @@ const synchronizeTransactionLegoSets = async ({
       status: 'New',
     }));
 
-  if (missingSets.length === 0) return;
+  const soldSets = detectRepurchases
+    ? (existingSets || []).filter((set) => set.status === 'Sold'
+      && existingSets.filter((row) => row.set_number === set.set_number).length === 1)
+    : [];
+  if (missingSets.length === 0) return soldSets;
 
   const { error: insertError } = await supabase
     .from('lego_sets')
@@ -202,9 +208,11 @@ const synchronizeTransactionLegoSets = async ({
     });
     throw new Error('Failed to synchronize LEGO collection');
   }
+  return soldSets;
 };
 
 exports.createTransaction = async (req, res) => {
+  const creationStartedAt = Date.now();
   try {
     const savingsResult = await savingsCash.saveCash(supabase, req.body);
     if (savingsResult) return res.status(201).json(savingsResult);
@@ -274,11 +282,12 @@ exports.createTransaction = async (req, res) => {
       if (itemsError) throw itemsError;
     }
 
-    await synchronizeTransactionLegoSets({
+    const soldSets = await synchronizeTransactionLegoSets({
       transactionId,
       transactionDate: transaction.transaction_date,
       categoryName,
       pricing,
+      detectRepurchases: transaction.movement_type === 'expense',
     });
 
     const description = transaction.description ? transaction.description.trim() : '';
@@ -341,10 +350,22 @@ exports.createTransaction = async (req, res) => {
       if (siblingsError) throw siblingsError;
     }
 
+    // Offer only after the entire new purchase (including installments) saved.
+    // An offer failure must never tell the user to save the financial record again.
+    let repurchaseCandidates = [];
+    let repurchaseUnavailable = false;
+    try {
+      repurchaseCandidates = await repurchases.issue(supabase, req.user?.id, transactionId, soldSets, creationStartedAt);
+      repurchaseUnavailable = (soldSets?.length || 0) > repurchaseCandidates.length;
+    } catch {
+      repurchaseUnavailable = true;
+    }
     res.status(201).json({
       message: 'Transaction saved successfully',
       id: transactionId,
       ...(accountingResult || {}),
+      ...(repurchaseCandidates.length ? { lego_repurchase_candidates: repurchaseCandidates } : {}),
+      ...(repurchaseUnavailable ? { lego_repurchase_unavailable: true } : {}),
     });
 
   } catch (error) {
@@ -685,3 +706,7 @@ exports.getPaymentSources = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
+// Historical edits/deletions revoke outstanding offers; they never mint one.
+exports.updateTransaction = repurchases.guardMutation('transaction', exports.updateTransaction);
+exports.deleteTransaction = repurchases.guardMutation('transaction', exports.deleteTransaction);

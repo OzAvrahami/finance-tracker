@@ -14,6 +14,7 @@ import {
 import useTransactionForm from '../../hooks/useTransactionForm';
 import CategoryCombobox from '../../components/CategoryCombobox';
 import NewCategoryModal from '../../components/NewCategoryModal';
+import LegoRepurchaseDialog from '../../components/lego/LegoRepurchaseDialog';
 import ItemCard from '../../components/ItemCard';
 import {
   Alert,
@@ -50,6 +51,7 @@ const loanHandlingOptions = [
 
 const AddTransaction = () => {
   const {
+    repurchaseCandidates, repurchaseUnavailable, dismissRepurchase,
     loading,
     savingsAccounts, savingsAccountId, setSavingsAccountId, savingsRole, savingsContext,
     savedCash, savingsReason, setSavingsReason, cutoffConfirmed, setCutoffConfirmed,
@@ -529,6 +531,14 @@ const AddTransaction = () => {
         onSave={handleSaveNewCategory}
         onClose={() => setShowNewCategoryModal(false)}
       />
+      {repurchaseUnavailable && <Alert variant="info" title="התנועה נשמרה בהצלחה">
+        לא ניתן להציע החזרה כרגע. ניתן להחזיר סט שנמכר דרך מסנן נמכרו באוסף, בלי לשמור תנועה נוספת.
+      </Alert>}
+      {repurchaseCandidates[0] && <LegoRepurchaseDialog
+        key={repurchaseCandidates[0].confirmation_token}
+        candidate={repurchaseCandidates[0]}
+        onDone={dismissRepurchase}
+      />}
     </div>
   );
 };

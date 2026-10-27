@@ -5,6 +5,7 @@ const legoController = require('../controllers/legoController');
 router.get('/', legoController.getAllSets);
 
 router.post('/', legoController.addSet);
+router.post('/repurchases/confirm', legoController.confirmRepurchase);
 
 router.put('/:id', legoController.updateSet);
 

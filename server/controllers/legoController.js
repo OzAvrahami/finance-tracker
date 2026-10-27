@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const axios = require('axios');
+const { repurchases } = require('../services/legoRepurchaseService');
 
 const ACQUISITION_TYPES = ['purchase', 'gift', 'gwp'];
 const FREE_ACQUISITION_TYPES = new Set(['gift', 'gwp']);
@@ -206,3 +207,22 @@ exports.getThemes = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
+exports.confirmRepurchase = async (req, res) => {
+  if (!req.body || Object.keys(req.body).length !== 1 || typeof req.body.confirmation_token !== 'string') {
+    return res.status(400).json({ error: 'Invalid repurchase confirmation' });
+  }
+  try {
+    const set = await repurchases.confirm(supabase, req.user?.id, req.body.confirmation_token);
+    return res.status(200).json({ set });
+  } catch (error) {
+    return res.status(error.status || 503).json({
+      code: error.code === 'LEGO_REPURCHASE_STALE' ? error.code : 'LEGO_REPURCHASE_RETRY',
+      error: error.status === 409 ? 'האישור פג או שפרטי הרכישה השתנו. ניתן להחזיר את הסט ידנית דרך האוסף.'
+        : 'התנועה נשמרה, אך החזרת הסט נכשלה. ניתן לנסות שוב בלי לשמור תנועה נוספת.',
+    });
+  }
+};
+
+exports.updateSet = repurchases.guardMutation('set', exports.updateSet);
+exports.deleteSet = repurchases.guardMutation('set', exports.deleteSet);

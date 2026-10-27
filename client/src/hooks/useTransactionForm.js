@@ -42,6 +42,8 @@ const useTransactionForm = () => {
   const [savingsAccounts, setSavingsAccounts] = useState([]);
   const [savingsAccountId, setSavingsAccountId] = useState(searchParams.get('savingsAccountId') || '');
   const [savedCash, setSavedCash] = useState(null);
+  const [repurchaseCandidates, setRepurchaseCandidates] = useState([]);
+  const [repurchaseUnavailable, setRepurchaseUnavailable] = useState(false);
   const [savingsReason, setSavingsReason] = useState('');
   const [cutoffConfirmed, setCutoffConfirmed] = useState(false);
   const [cashReuseConfirmed, setCashReuseConfirmed] = useState(false);
@@ -421,11 +423,14 @@ const useTransactionForm = () => {
         navigate(returnTo);
         return;
       } else {
-        await createTransaction(payload);
+        const { data } = await createTransaction(payload);
+        const candidates = data?.lego_repurchase_candidates || [];
+        setRepurchaseCandidates(candidates);
+        setRepurchaseUnavailable(Boolean(data?.lego_repurchase_unavailable));
         if (isLegoCategory() && items.some((item) => String(item.set_number || '').trim())) {
           invalidateLegoCollection();
         }
-        alert('התנועה נשמרה בהצלחה! 🚀');
+        if (!candidates.length) alert('התנועה נשמרה בהצלחה! 🚀');
       }
 
       // Reset form
@@ -489,6 +494,9 @@ const useTransactionForm = () => {
   };
 
   return {
+    repurchaseCandidates,
+    repurchaseUnavailable,
+    dismissRepurchase: () => setRepurchaseCandidates((current) => current.slice(1)),
     // State
     loading,
     savingsAccounts, savingsAccountId, setSavingsAccountId, savingsRole, savingsContext,

@@ -7,6 +7,7 @@ import { invalidateLegoCollection } from '../../utils/legoCollectionInvalidation
 import {
   createCategory,
   createTransaction,
+  confirmLegoRepurchase,
   getAllLoans,
   getCategories,
   getLegoSetDetails,
@@ -21,6 +22,7 @@ vi.mock('../../services/api', () => ({
   getSavingsAccounts: vi.fn().mockResolvedValue({ data: [] }),
   createCategory: vi.fn(),
   createTransaction: vi.fn(),
+  confirmLegoRepurchase: vi.fn(),
   getAllLoans: vi.fn(),
   getCategories: vi.fn(),
   getLegoSetDetails: vi.fn(),
@@ -118,6 +120,7 @@ beforeEach(() => {
     calculation_mode: 'legacy',
   }] });
   createTransaction.mockResolvedValue({ data: { id: 100 } });
+  confirmLegoRepurchase.mockReset().mockResolvedValue({ data: { set: { id: 'same-uuid', status: 'New' } } });
   updateTransaction.mockResolvedValue({ data: { id: 42 } });
 });
 
@@ -841,5 +844,103 @@ describe('AddTransaction characterization', () => {
     await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('שגיאה')));
     expect(screen.getByRole('textbox', { name: /^תיאור/ })).toHaveValue('יישאר בטופס');
     expect(screen.getByRole('spinbutton', { name: /^סכום$/ })).toHaveValue(55);
+  });
+});
+
+describe('explicit LEGO repurchase after saving', () => {
+  const candidate = { confirmation_token: 'server-offer', set_number: '42207', name: 'Test set',
+    purchase_price: '450.00', purchase_date: '2026-10-26', acquisition_type: 'purchase' };
+  const savePurchase = async (response = { id: 100, lego_repurchase_candidates: [candidate] }) => {
+    createTransaction.mockResolvedValue({ data: response });
+    getLegoSetDetails.mockResolvedValue({ data: { name: 'Test set', theme: 'Technic', parts: 100 } });
+    const user = userEvent.setup();
+    renderForm();
+    await settleInitialData();
+    await user.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'קניית לגו');
+    await user.click(screen.getByRole('radio', { name: 'פירוט פריטים' }));
+    fireEvent.change(screen.getByLabelText('מספר סט'), { target: { value: '42207' } });
+    fireEvent.blur(screen.getByLabelText('מספר סט'));
+    await waitFor(() => expect(getLegoSetDetails).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: 'שמור תנועה' }));
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1));
+    return user;
+  };
+
+  it('offers only after save and cancellation preserves the saved transaction without returning', async () => {
+    const user = await savePurchase();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/התנועה נשמרה בהצלחה/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/עלות הרכישה החדשה/)).toHaveTextContent('450.00');
+    expect(within(dialog).getByText(/תאריך רכישה/)).toHaveTextContent('2026-10-26');
+    expect(within(dialog).getByText('42207').closest('[dir]')).toHaveAttribute('dir', 'rtl');
+    expect(confirmLegoRepurchase).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'לא כרגע' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^תיאור/ })).toHaveValue('');
+    expect(createTransaction).toHaveBeenCalledTimes(1);
+    expect(confirmLegoRepurchase).not.toHaveBeenCalled();
+  });
+
+  it('confirms with only the server token, prevents double clicks and refreshes active statistics', async () => {
+    const pending = deferred();
+    confirmLegoRepurchase.mockReturnValue(pending.promise);
+    const user = await savePurchase();
+    const dialog = await screen.findByRole('dialog');
+    const button = within(dialog).getByRole('button', { name: 'החזר לאוסף' });
+    await user.dblClick(button);
+    expect(confirmLegoRepurchase).toHaveBeenCalledExactlyOnceWith('server-offer');
+    expect(within(dialog).getByRole('button', { name: 'לא כרגע' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'מחזיר לאוסף…' })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    pending.resolve({ data: { set: { id: 'same-uuid', status: 'New' } } });
+    expect(await within(dialog).findByText('הסט הוחזר לאוסף')).toBeInTheDocument();
+    expect(invalidateLegoCollection).toHaveBeenCalledTimes(2); // Saved purchase, then confirmed Return.
+    expect(createTransaction).toHaveBeenCalledTimes(1);
+    await user.click(within(dialog).getByRole('button', { name: 'המשך' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('retries a Return failure independently without saving the transaction again', async () => {
+    confirmLegoRepurchase.mockRejectedValueOnce(new Error('offline'));
+    const user = await savePurchase();
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    expect(await within(dialog).findByText(/התנועה כבר נשמרה/)).toBeInTheDocument();
+    expect(invalidateLegoCollection).toHaveBeenCalledTimes(1);
+    await user.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    expect(await within(dialog).findByText('הסט הוחזר לאוסף')).toBeInTheDocument();
+    expect(confirmLegoRepurchase).toHaveBeenCalledTimes(2);
+    expect(createTransaction).toHaveBeenCalledTimes(1);
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  it('stale confirmation explains manual fallback and stops retries', async () => {
+    confirmLegoRepurchase.mockRejectedValueOnce({ response: { status: 409 } });
+    const user = await savePurchase();
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'החזר לאוסף' }));
+    expect(await within(dialog).findByText(/האישור פג/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'החזר לאוסף' })).toBeDisabled();
+    await user.click(within(dialog).getByRole('button', { name: 'לא כרגע' }));
+    expect(createTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles multiple candidates independently with a single financial save', async () => {
+    const user = await savePurchase({ id: 100, lego_repurchase_candidates: [candidate,
+      { ...candidate, confirmation_token: 'second-offer', set_number: '42208' }] });
+    await user.click(await screen.findByRole('button', { name: 'לא כרגע' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('42208');
+    await user.click(screen.getByRole('button', { name: 'החזר לאוסף' }));
+    expect(await screen.findByText('הסט הוחזר לאוסף')).toBeInTheDocument();
+    expect(confirmLegoRepurchase).toHaveBeenCalledExactlyOnceWith('second-offer');
+    expect(createTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('offer unavailability reports saved success and manual fallback', async () => {
+    await savePurchase({ id: 100, lego_repurchase_unavailable: true });
+    expect(await screen.findByText(/לא ניתן להציע החזרה כרגע/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(alert).toHaveBeenCalledWith(expect.stringContaining('נשמרה'));
   });
 });

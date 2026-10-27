@@ -156,6 +156,7 @@ export const createLoan = (data) => api.post('/loans', data);
 export const getLegoSets = () => api.get('/lego');
 export const addLegoSet = (setData) => api.post('/lego', setData);
 export const updateLegoSet = (id, setData) => api.put(`/lego/${id}`, setData);
+export const confirmLegoRepurchase = (confirmationToken) => api.post('/lego/repurchases/confirm', { confirmation_token: confirmationToken });
 export const deleteLegoSet = (id) => api.delete(`/lego/${id}`);
 export const getLegoThemes = () => api.get('/lego/themes');
 export const getLegoSetDetails = (setNum) => api.get(`/transactions/lego/details/${setNum}`);
