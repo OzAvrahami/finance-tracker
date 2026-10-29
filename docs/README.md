@@ -17,30 +17,26 @@ This is the documentation entry point. Choose by purpose rather than by issue nu
 
 ## Current baseline and boundaries
 
-The owner approved [candidate v1.7.0](history/RELEASE_1_7_0.md) for the reviewed
-Shopping UX and Settings version-display bundle on 2026-10-16. It is prepared
-locally and unpublished; seven product-version fields now read 1.7.0. See the
-[exact owner commit scope and separate migration procedure](operations/SHOPPING_UX.md).
-The earlier v1.6.0 grouping/history is unchanged; no production state is inferred.
+[v1.7.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.7.0).
+The owner authorized [v1.8.0 preparation](history/RELEASE_1_8_0.md) on 2026-10-29,
+using current main (Strategy A). Seven product-version fields read 1.8.0 locally;
+the candidate is unpublished. Accepted scope is #100/#101 and reviewed Shopping/Auth
+corrections. Deployed #96 is explicitly included, with full owner acceptance and
+live producer activation pending; keep its Issue open.
 
-For published v1.5.0 and the 2026-10-01 prepared v1.6.0 #82/#83 candidate, see
-[release preparation](history/RELEASE_1_6_0.md) and
-[integrated readiness](operations/APY_06_RELEASE_READINESS.md). The release-preparation
-and device-acceptance statements below describe the earlier checkpoint, not later acceptance.
+The candidate record attributes production evidence to the owner: Railway d610a31,
+one replica/standard Node startup, the confirmed Supabase project, matching key
+052/053 functions and verified RLS/trigger/privilege boundaries. General API
+registrations, receipts and resolutions are all zero. No new producer activation
+is authorized; complete live CAL/Apple Pay acceptance is not established.
 
-Release-preparation checkpoint 2026-09-30: [v1.4.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0)
-is the published stable release. [v1.5.0 Shopping preparation](history/RELEASE_1_5_0.md)
-synchronizes seven product-version fields to 1.5.0 locally; publication remains pending.
-FlowLink retains its independent native version/build unchanged. Repository migrations
-run through **044**; 039–044 were verified only in isolated/disposable databases.
-File presence is not proof of an applied production migration.
+Backup unavailable — owner elected to proceed with release preparation despite the risk.
+Backup/recovery verification is not Passed. This decision authorizes no destructive
+database operations or new migrations. Preparation itself changes no production state.
 
-- Budget-origin review and the APY/FlowLink backend foundations are in the release.
-  [#81](https://github.com/OzAvrahami/finance-tracker/issues/81) and
-  [#90](https://github.com/OzAvrahami/finance-tracker/issues/90) remain unaccepted.
-  Real Wallet-charge/device verification is outstanding; CAL transition and review
-  UI are unfinished. Publishing version metadata does not authorize enabling either
-  Apple or FlowLink ingestion flag. See the owner rollout guide before any operation.
+- Historical unresolved FlowLink/#81/#90 device and real Wallet acceptance remains
+  separate. Its unrelated CHANGELOG entries stay under Unreleased. Native version/build
+  numbers are unchanged, and no Apple/FlowLink ingestion activation is authorized.
 - Multi-user [#63](https://github.com/OzAvrahami/finance-tracker/issues/63) is deferred
   to **v2.0.0**. #64 is Backlog; its local architecture/inventory drafts are unaccepted
   and outside the release. They are not an approved replacement for current contracts.

@@ -7,6 +7,7 @@ for publication and the existing Issue/Project for live acceptance and workflow.
 
 | Record | Purpose |
 | --- | --- |
+| [v1.8.0 preparation](RELEASE_1_8_0.md) | Strategy A; accepted LEGO/Shopping/Auth, deployed but unaccepted #96, production evidence attribution, backup risk and owner handoff |
 | [v1.7.0 preparation](RELEASE_1_7_0.md) | Owner-approved Shopping UX/Settings candidate; exact local scope, version synchronization and scoped acceptance |
 | [v1.2.0](RELEASE_1_2_0.md) | Dashboard/Loans/Shopping acceptance and 029 evidence |
 | [v1.3.0 Savings](RELEASE_1_3_0.md) | Integrated verification, migration and recovery handoff |
@@ -20,9 +21,9 @@ for publication and the existing Issue/Project for live acceptance and workflow.
 | [Former root README](README_2026_09_28.md) | Retains unique older acceptance/runtime statements removed from the entry point |
 | [Former architecture overview](ARCHITECTURE_2026_09_15.md) | Preserves migration-era descriptions, including subsequently retired Budget structures |
 
-[v1.4.0 is published](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.4.0)
-at `9b84a3cd112f28886d96cea249947371de6f5ac9`; its preparation document is intentionally
-retained rather than rewritten as if publication had already occurred during review.
+[v1.7.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.7.0)
+at `1da80871f57354f6429358d37e97b0517d1efaf3` (read back 2026-10-29). v1.8.0 is
+prepared locally and unpublished. Older preparation documents remain historical.
 Current technical contracts live under [architecture](../README.md#technical-contracts),
 and executable checks/runbooks under [operations](../operations/DATABASE.md).
 
