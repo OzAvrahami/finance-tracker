@@ -5,6 +5,7 @@ const { insertLegacyTransaction } = require('../../services/transactionIngestion
 
 const cal = require('../../services/calIngestionService');
 const general = require('../../services/generalTransactionIngestion');
+const bulk = require('../../services/externalTransactionBulk');
 let generalRequests = 0;
 
 const schema = z.object({
@@ -28,9 +29,21 @@ const schema = z.object({
   ).optional(),
   external_id: z.string().max(255).optional(),
   dry_run: z.boolean().optional(),
+  // One observed installment only. Never generate sibling installments here.
+  installment_number: z.number().int().min(1).max(999).optional(),
+  installment_count: z.number().int().min(2).max(999).optional(),
+}).superRefine((data, ctx) => {
+  const number = data.installment_number;
+  const count = data.installment_count;
+  if ((number === undefined) !== (count === undefined) ||
+      (number !== undefined && (number > count || data.type !== 'expense'))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['installment_number'], message: 'Invalid installment counters' });
+  }
 });
 
 async function createTransaction(req, res) {
+  // Established v1 item shape, now also available in a bounded batch.
+  if (req.body && Object.hasOwn(req.body, 'items')) return bulk.runBulk(req, res, createTransaction);
   if (req.body && Object.hasOwn(req.body, 'contract')) {
     if (typeof req.is === 'function' && !req.is('application/json')) return res.status(415).json({ error: 'json_required' });
     if (generalRequests >= 2) return res.status(503).json({ error: 'ingestion_busy', retryable: true });
@@ -74,7 +87,7 @@ async function createTransaction(req, res) {
     type, amount, date, description, charge_date,
     category_id, payment_source_id, payment_source_name,
     currency, original_amount, exchange_rate,
-    notes, tags, external_id, dry_run,
+    notes, tags, external_id, dry_run, installment_number, installment_count,
   } = parsed.data;
 
   const serializedTags = serializeTags(tags);
@@ -166,6 +179,11 @@ async function createTransaction(req, res) {
     ...(notes !== undefined && { notes }),
     ...(serializedTags !== null && { tags: serializedTags }),
     ...(external_id !== undefined && { external_id }),
+    ...(installment_number !== undefined && {
+      installment_number,
+      installment_count,
+      installments_info: `${installment_number}/${installment_count}`,
+    }),
   };
 
   if (dry_run) {
