@@ -2,10 +2,11 @@
 const { before, after, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { normalizeSql, schemaThrough } = require('./helpers/sqlFixtures');
 const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 const container = `finance-sav03-tests-${process.pid}`;
-const read = p => fs.readFileSync(path.join(__dirname, '../..', p), 'utf8');
+const read = p => normalizeSql(fs.readFileSync(path.join(__dirname, '../..', p), 'utf8'));
 const migration = read('server/migrations/031_savings_manual_transactions.sql');
 const baseline = read('server/full_schema.sql').split('-- Migration 031:')[0];
 let created = false; let sequence = 0;
@@ -81,7 +82,7 @@ test('031 clean/upgrade inventory and grants preserve two-table/one-view boundar
   assert.equal(scalar(db, "SELECT has_function_privilege('service_role','post_savings_event(uuid,jsonb)','EXECUTE'),has_function_privilege('anon','post_savings_event(uuid,jsonb)','EXECUTE'),has_function_privilege('service_role','savings_post_event_locked(uuid,jsonb)','EXECUTE');"), 't|f|f');
   assert.equal(sql(db, "SET ROLE service_role; UPDATE transactions SET voided_at=now();", true).status !== 0, true);
   scalar(db, 'SET ROLE service_role; SELECT count(*) FROM budget_category_composition; SELECT count(*) FROM budget_month_category_actuals;');
-  sql('postgres', 'CREATE DATABASE sav03_clean;'); sql('sav03_clean', read('server/full_schema.sql'));
+  sql('postgres', 'CREATE DATABASE sav03_clean;'); sql('sav03_clean', schemaThrough(read('server/full_schema.sql'), 31));
   assert.deepEqual(json('sav03_clean', objects), json(db, objects));
   assert.equal(scalar('sav03_clean', "SELECT pg_get_functiondef('post_savings_event(uuid,jsonb)'::regprocedure);"), scalar(db, "SELECT pg_get_functiondef('post_savings_event(uuid,jsonb)'::regprocedure);"));
 });

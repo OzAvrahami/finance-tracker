@@ -1,3 +1,5 @@
+const { createHash, randomUUID } = require('node:crypto');
+const { submitOwned } = require('../services/unifiedTransactionIngestion');
 const xlsx = require('xlsx');
 const supabase = require('../config/supabase');
 const profiles = require('../config/importProfiles');
@@ -22,6 +24,7 @@ exports.previewImport = async (req, res) => {
     const { data: categories } = await supabase.from('categories').select('*');
     const generalCategory = categories.find(c => c.name === 'General') || categories[0];
 
+    const documentKey = createHash('sha256').update(profileKey).update(file.buffer).digest('hex');
     const processedRows = rawRows
       .filter(row => profile.isValidRow(row))
       .map((row, index) => {
@@ -56,7 +59,7 @@ exports.previewImport = async (req, res) => {
         }
 
         return {
-            id: index,
+            id: `csv:${documentKey}:${index}`,
             transaction_date: formattedDate,
             charge_date: chargeDate,
             description: description,
@@ -96,36 +99,46 @@ exports.saveImport = async (req, res) => {
 
 
 
-    console.log('🔍 First Transaction Check:', {
-        description: transactions[0].description,
-        received_cat_id: transactions[0].category_id,
-        type_of_cat: typeof transactions[0].category_id
-    });
-    
     const paymentSourceId = req.body.payment_source_id || null;
 
-    const recordsToInsert = transactions.map(t => ({
+    let recordsToInsert = transactions.map(t => ({
       payment_source_id: paymentSourceId,
       transaction_date: (t.transaction_date === '' || !t.transaction_date) ? null : t.transaction_date,
       charge_date: (t.charge_date && t.charge_date !== '') ? t.charge_date : t.transaction_date,
       description: t.description,
-      total_amount: isNaN(parseFloat(t.total_amount)) ? 0 : parseFloat(t.total_amount),
+      total_amount: String(t.total_amount),
       movement_type: t.movement_type,
       category_id: t.category_id || null,
-      original_amount: isNaN(parseFloat(t.original_amount)) ? 0 : parseFloat(t.original_amount),
+      original_amount: t.original_amount == null || t.original_amount === '' ? null : String(t.original_amount),
       currency: t.currency,
       exchange_rate: t.exchange_rate === '' ? null : t.exchange_rate,
       installments_info: t.installments_info,
       notes: t.notes,
 
-      created_at: new Date()
+      ...(typeof t.installments_info === 'string' && /^\d{1,3}\/\d{1,3}$/.test(t.installments_info) ? {
+        installment_number: Number(t.installments_info.split('/')[0]),
+        installment_count: Number(t.installments_info.split('/')[1]),
+      } : {}),
     }));
 
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert(recordsToInsert);
-
-    if (error) throw error;
+    const accepted = [], outcomes = [];
+    let interrupted = false;
+    for (const [index, row] of recordsToInsert.entries()) {
+      if (interrupted) { outcomes.push({ index, status: 'not_attempted', reason: 'batch_interrupted' }); continue; }
+      const suppliedKey = transactions[index].id;
+      const key = typeof suppliedKey === 'string' && /^csv:[a-f0-9]{64}:\d+$/.test(suppliedKey)
+        ? suppliedKey : `csv:${randomUUID()}:${index}`;
+      try {
+        const result = await submitOwned(supabase, 'csv', row, { key, evidence: row });
+        const saved = result.transaction_id && result.outcome !== 'conflict' && result.disposition !== 'cancelled';
+        outcomes.push({ index, status: saved ? 'saved' : 'review_required', reason: result.reason_code });
+        if (saved && !result.replayed) accepted.push(row);
+      } catch (error) {
+        interrupted = error.code === 'INGESTION_UNCERTAIN';
+        outcomes.push({ index, status: interrupted ? 'uncertain' : 'failed', reason: error.code || 'invalid_import_row' });
+      }
+    }
+    recordsToInsert = accepted;
 
     const newKeyword = recordsToInsert
       .filter(t => t.category_id)
@@ -178,7 +191,9 @@ exports.saveImport = async (req, res) => {
         }
     }
 
-    res.json({ success: true, count: recordsToInsert.length });
+    res.json({ success: outcomes.every(o => o.status === 'saved'), count: outcomes.filter(o => o.status === 'saved').length,
+      review_required: outcomes.filter(o => o.status === 'review_required').length,
+      errors: outcomes.filter(o => o.status !== 'saved') });
 
   } catch (error) {
     console.error('Save Error:', error);

@@ -7,7 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const config = require('../config/flowlink');
 const { harness, claim, token, ownerId, otherOwnerId } = require('./helpers/flowlinkHttp');
-const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8');
+// Historical protocol boundary. Active cutover is tested in unifiedIngestionPostgres.
+const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 054:')[0];
 const migration = fs.readFileSync(path.join(__dirname, '../migrations/045_cal_reconciliation.sql'), 'utf8');
 const baseline = full.split('-- Migration 045:')[0];
 const container = `finance-cal04-${process.pid}`;
@@ -102,7 +103,7 @@ const patch = (c, b, changes, command) => c.send(`/owner/bindings/${b.id}`, comm
 const nativeArgs = (e, p) => ({ p_credential_sha256: config.digest(e.body.device_credential), p_request: p });
 const cash = c => json(c.db, "SELECT jsonb_build_object('count',count(*),'amount',coalesce(sum(total_amount),0)::text) FROM transactions WHERE voided_at IS NULL;");
 
-const calService = require('../services/calIngestionService');
+const calService = require('./fixtures/calIngestionService');
 const profile = () => ({ instance_key: 'test-cal-card', request_key: randomUUID(), payment_source_name: 'Synthetic card', payment_source_id: '1' });
 const calBody = (extra = {}) => ({ type: 'expense', amount: 4, date: '2026-09-26', description: 'Israel Post',
  charge_date: '2026-09-28', payment_source_name: 'Synthetic card', currency: 'ILS', original_amount: 4,
@@ -218,7 +219,7 @@ test('045 upgrade/rerun is additive; RLS/private grants/immutable registry and r
  const before=financialSnapshot(db);assert.notEqual(sql(db,migration.replace('COMMIT;','SELECT 1/0;COMMIT;'),true).status,0);
  assert.equal(scalar(db,"SELECT to_regclass('cal_ingestion_receipts') IS NULL;"),'t');
  sql(db,migration);sql(db,migration);assert.deepEqual(financialSnapshot(db),before);
- for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>45).sort())sql(db,fs.readFileSync(path.join(__dirname,'../migrations',f),'utf8'));
+ for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>45&&Number(f.slice(0,3))<54).sort())sql(db,fs.readFileSync(path.join(__dirname,'../migrations',f),'utf8'));
  const defs=d=>json(d,"SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace;");
  const canonicalDefs=d=>Object.fromEntries(Object.entries(defs(d)).map(([name,definition])=>[name,definition.replace(/\r\n/g,'\n')]));
  assert.deepEqual(canonicalDefs(db),canonicalDefs('flowlink_clean'));

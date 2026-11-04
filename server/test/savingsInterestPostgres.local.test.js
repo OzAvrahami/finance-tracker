@@ -2,10 +2,11 @@
 const { before, after, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { normalizeSql, schemaThrough } = require('./helpers/sqlFixtures');
 const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 const container = `finance-sav04-tests-${process.pid}`;
-const read = p => fs.readFileSync(path.join(__dirname, '../..', p), 'utf8');
+const read = p => normalizeSql(fs.readFileSync(path.join(__dirname, '../..', p), 'utf8'));
 const migration = read('server/migrations/032_savings_realized_interest.sql');
 const baseline = read('server/full_schema.sql').split('-- Migration 032:')[0];
 let created = false; let sequence = 0;
@@ -87,7 +88,7 @@ test('032 upgrade preserves all rows, object counts, Loan definitions/grants; cl
   assert.equal(scalar(db,objects),scalar('sav04_baseline',objects));
   const loans="SELECT jsonb_agg(jsonb_build_object('definition',pg_get_functiondef(oid),'acl',proacl) ORDER BY oid::regprocedure::text) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE '%loan%';";
   assert.equal(scalar(db,loans),scalar('sav04_baseline',loans));
-  sql('postgres','CREATE DATABASE sav04_clean;'); sql('sav04_clean',read('server/full_schema.sql'));
+  sql('postgres','CREATE DATABASE sav04_clean;'); sql('sav04_clean',schemaThrough(read('server/full_schema.sql'), 32));
   for(const fn of ['savings_post_event_locked(uuid,jsonb)','get_savings_account(bigint,date,date,bigint,integer)']) assert.equal(scalar(db,`SELECT pg_get_functiondef('${fn}'::regprocedure);`),scalar('sav04_clean',`SELECT pg_get_functiondef('${fn}'::regprocedure);`));
   assert.equal(scalar('sav04_clean','SELECT count(*) FROM savings_accounts;'),'0');
 });

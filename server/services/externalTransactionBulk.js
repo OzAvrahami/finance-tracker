@@ -2,7 +2,7 @@
 
 // Extend the established POST /api/v1/transactions single-item contract, not a new
 // public protocol. Each row uses the same controller path, including the existing
-// CAL/APY guard and historical external_id reservations.
+// unified observation guard and historical external_id reservations.
 const LIMITS = Object.freeze({ maxItems: 50, maxBytes: 1024 * 1024, maxItemBytes: 16 * 1024 });
 const statusError = (status, error) => ({ status, body: { error } });
 const BULK_FIELDS = new Set([

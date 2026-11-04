@@ -1,3 +1,4 @@
+const { submitOwned } = require('../services/unifiedTransactionIngestion');
 const supabase = require('../config/supabase');
 const axios = require('axios');
 const savingsCash = require('../services/savingsTransactionService');
@@ -14,7 +15,6 @@ const {
 } = require('../utils/transactionPricing');
 const { normalizeLoanHandling } = require('../utils/manualLoanPayment');
 const {
-  createTransactionWithLoanPayment,
   updateTransactionWithLoanPayment,
   deleteTransactionWithLoanPayment,
 } = require('../services/loanPaymentService');
@@ -248,24 +248,13 @@ exports.createTransaction = async (req, res) => {
       createsInstallmentSiblings,
     });
 
-    let transactionId;
-    let accountingResult = null;
-    if (isLoanLinked) {
-      accountingResult = await createTransactionWithLoanPayment(
-        supabase,
-        mainTransaction,
-        normalizedLoanHandling.payment,
-      );
-      transactionId = accountingResult.transaction.id;
-    } else {
-      const { data: transData, error: transError } = await supabase
-        .from('transactions')
-        .insert([mainTransaction])
-        .select();
-
-      if (transError) throw transError;
-      transactionId = transData[0].id;
-    }
+    const ingestion = await submitOwned(supabase, 'manual', mainTransaction, {
+      evidence: req.body,
+      domain: isLoanLinked ? { loan_payment: normalizedLoanHandling.payment } : null,
+    });
+    if (!ingestion.transaction_id) return res.status(202).json({ ...ingestion, review_required: true });
+    const transactionId = Number(ingestion.transaction_id);
+    const accountingResult = ingestion.accounting;
 
     const categoryName = await getCategoryName(transaction.category_id);
 

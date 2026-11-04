@@ -5,6 +5,7 @@ This is the documentation entry point. Choose by purpose rather than by issue nu
 | Need | Authoritative location |
 | --- | --- |
 | Local setup, commands, configuration, deployment entry points | [Development and operations](operations/DEVELOPMENT.md) |
+| Unified ingestion, retained single/Bulk API, review limits and migration 054 | [Unified transaction ingestion](architecture/UNIFIED_TRANSACTION_INGESTION.md) |
 | Runtime/domain boundaries | [Architecture](architecture/ARCHITECTURE.md) |
 | Accounting design decisions | [Decision record](architecture/DECISIONS.md); domain contracts below |
 | Database history, schema reference, safe checks | [Database guide](operations/DATABASE.md) |

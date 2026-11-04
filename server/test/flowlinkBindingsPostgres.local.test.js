@@ -113,7 +113,7 @@ test('037 upgrade, rerun, failed migration rollback and full schema definitions 
   assert.equal(scalar(db, "SELECT to_regclass('flowlink_card_bindings') IS NULL;"), 't');
   sql(db, migration);sql(db, migration);assert.deepEqual(financialSnapshot(db), snap);
   for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).filter(f => /^\d{3}_.*\.sql$/.test(f) && Number(f.slice(0,3)) > 38).sort()) sql(db, fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
-  const defs = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace;");
+  const defs = d => json(d, "SELECT jsonb_object_agg(proname,replace(pg_get_functiondef(oid),chr(13),'')) FROM pg_proc WHERE pronamespace='public'::regnamespace;");
   assert.deepEqual(defs(db), defs('flowlink_clean'));
 });
 test('create binds an explicit singleton source and replays the original receipt after later updates', async t => {
@@ -161,7 +161,7 @@ test('owner lists are safe, paginated and active-only; owner auth remains mandat
 test('bindings are per device; multiple cards and same payment source on different devices remain independent', async t => {
   const { c, e, b } = await setup(t), b2 = await binding(c, e, '2'), other = await enroll(c), b3 = await binding(c, other);
   assert.equal((await send(c, e, purchase(b))).status, 201);assert.equal((await send(c, e, purchase(b2))).status, 201);
-  assert.equal((await send(c, other, purchase(b3))).status, 201);assert.equal(cash(c).count, 3);
+  assert.equal((await send(c, other, purchase(b3))).status, 202);assert.equal(cash(c).count, 2);
   assert.equal((await send(c, e, purchase(b3))).status, 403);assert.equal((await send(c, e, purchase({ id: randomUUID() }))).status, 403);
   const list = (await c.send('/device/bindings', undefined, auth(e.body.device_credential))).body.bindings;
   assert.deepEqual(list.map(x => x.id).sort(), [b.id, b2.id].sort());
@@ -183,9 +183,9 @@ function cal(c, times = 1) {
     transaction_date: '2026-09-26', payment_source_id: '1' } });
   return source;
 }
-test('one strong CAL candidate attaches through existing APY without extra cash', async t => {
+test('date-only CAL candidate stays pending without extra cash', async t => {
   const { c, e, b } = await setup(t);cal(c);
-  const r = await send(c, e, purchase(b));assert.equal(r.status, 200);assert.equal(r.body.outcome, 'reconciled');assert.equal(cash(c).count, 1);
+  const r = await send(c, e, purchase(b));assert.equal(r.status, 202);assert.equal(r.body.outcome, 'ambiguous');assert.equal(cash(c).count, 1);
 });
 test('ambiguous CAL candidates retain pending evidence and create zero avoidable cash', async t => {
   const { c, e, b } = await setup(t);cal(c, 2);
@@ -263,7 +263,7 @@ test('concurrent native and existing APY ingestion share the same financial lock
   const source = call(c.db, 'configure_ingestion_source', { p_request_key: randomUUID(), p_command: { source_kind: 'cal', instance_key: 'race', actor: 'test', configuration: { payment_source_ids: ['1'] } } });
   const results = await Promise.all([send(c, e, purchase(b)), c.client.rpc('ingest_observation', { p_source_id: source.source_id, p_observation: {
     idempotency_key: randomUUID(), merchant: 'Israel Post', accounting_amount: '4.00', currency: 'ILS', movement_type: 'expense', transaction_date: '2026-09-26', payment_source_id: '1' } })]);
-  assert.ok(results[0].status < 300);assert.ok(['created', 'reconciled'].includes(results[1].data.outcome));assert.equal(cash(c).count, 1);
+  assert.ok(results[0].status < 300);assert.ok(['created', 'ambiguous'].includes(results[1].data.outcome));assert.equal(cash(c).count, 1);
 });
 test('bindings/history immutable; RLS and private helper/RPC grants deny browser and direct service access', async t => {
   const { c, b } = await setup(t);

@@ -6,8 +6,8 @@ import Context from './ReconciliationContext';
 import { formatCalendarDate } from '../../utils/calendarDate';
 import './Reconciliation.css';
 
-const labels = { awaiting_cal: 'Apple Pay · ממתינה ל־CAL', reconciled: 'אושרה בשני המקורות', cal_only: 'CAL בלבד', cancelled: 'תנועה מבוטלת' };
-const source = value => value === 'apple_pay' ? 'Apple Pay / Wallet' : 'CAL';
+const labels = { observed: '\u05de\u05e7\u05d5\u05e8 \u05d0\u05d7\u05d3', awaiting_cal: 'Apple Pay · ממתינה ל־CAL', reconciled: 'אושרה בשני המקורות', cal_only: 'CAL בלבד', cancelled: 'תנועה מבוטלת' };
+const source = value => ({ apple_pay: 'Apple Pay / Wallet', cal: 'CAL', external_api: 'Bank Data Sync / API', manual: '\u05d4\u05d6\u05e0\u05d4 \u05d9\u05d3\u05e0\u05d9\u05ea', file_import: '\u05d9\u05d9\u05d1\u05d5\u05d0 \u05e7\u05d5\u05d1\u05e5' }[value] || value);
 const stored = id => { try { return JSON.parse(sessionStorage.getItem(`apy-review:${id}`)); } catch { return null; } };
 const remember = (id, command) => { sessionStorage.setItem(`apy-review:${id}`, JSON.stringify(command)); };
 const forget = id => sessionStorage.removeItem(`apy-review:${id}`);
@@ -82,6 +82,13 @@ function ReviewDialog({ view, onClose, onView }) {
       const { data: result } = await resolveReconciliation(view.id, request.current);
       forget(view.id); request.current = null;
       invalidateFinance(result);
+      if (result.reason_code === 'manual_domain_approved') {
+        if (alive.current) {
+          setNotice('הקנייה אושרה כנפרדת. חזרו לטופס ושמרו שוב את אותה טיוטה כדי להשלים את הפעולה.');
+          setChoice(''); reload();
+        }
+        return;
+      }
       if (alive.current) onClose();
     } catch (e) {
       if (!alive.current) return;
@@ -97,7 +104,7 @@ function ReviewDialog({ view, onClose, onView }) {
   return <Dialog open onClose={onClose} title={view.kind === 'observation' ? 'האם זו אותה קנייה?' : 'התאמת עסקאות'} size="lg" closeDisabled={busy}
     className="reconciliation-dialog" footer={<>
       {observation && validChoice && <p className="reconciliation-effect" role="status">{separate
-        ? <>תתווסף הוצאה של <ReviewMoney value={observation.amount} /> לסיכומים.</>
+        ? observation.source === 'manual' ? 'לאחר האישור יש לחזור לטופס ולשמור שוב את אותה טיוטה. עדיין לא יתווסף חיוב.' : <>תתווסף הוצאה של <ReviewMoney value={observation.amount} /> לסיכומים.</>
         : 'הקישור לא יוסיף הוצאה.'}</p>}
       <SecondaryButton onClick={onClose} disabled={busy}>ביטול</SecondaryButton>
       {observation && (retry || !observation.transaction_id) && <PrimaryButton onClick={submit} disabled={loading || busy || !validChoice}>
@@ -149,7 +156,7 @@ function ReviewDialog({ view, onClose, onView }) {
             </div>)}
             {data.can_separate && <label className={`reconciliation-separate${choice === 'separate' ? ' is-selected' : ''}`}>
               <input type="radio" name="reconciliation-choice" checked={choice === 'separate'} onChange={() => setChoice('separate')} />
-              <span><strong>זו קנייה נפרדת</strong><small>תירשם הוצאה נוספת של <ReviewMoney value={observation.amount} /></small></span>
+              <span><strong>זו קנייה נפרדת</strong><small>{observation.source === 'manual' ? 'אישור לחידוש השמירה דרך הטופס המקורי' : <>תירשם הוצאה נוספת של <ReviewMoney value={observation.amount} /></>}</small></span>
             </label>}
             {!data.can_separate && <small>יצירת הוצאה נפרדת אינה מותרת במצב זה.</small>}
           </fieldset>}

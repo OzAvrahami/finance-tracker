@@ -3,6 +3,7 @@
 const { before, after, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { normalizeSql, schemaThrough } = require('./helpers/sqlFixtures');
 const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
@@ -10,8 +11,8 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '../..');
 const evidenceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'finance-sav08-release-'));
 const container = `finance-sav08-release-${process.pid}`;
-const read = p => fs.readFileSync(path.join(root, p), 'utf8');
-const full = read('server/full_schema.sql');
+const read = p => normalizeSql(fs.readFileSync(path.join(root, p), 'utf8'));
+const full = schemaThrough(read('server/full_schema.sql'), 35);
 const baseline = full.split('-- Migration 030: Savings foundation')[0];
 const files = fs.readdirSync(path.join(root, 'server/migrations')).filter(f => /^03[0-5]_.*\.sql$/.test(f)).sort();
 assert.equal(files.length, 6);
@@ -106,7 +107,7 @@ test('issue 47 allocation contracts on complete v1.3.0 schema 035', () => {
   save('issue47-schema', { baseline: 'full_schema.sql consolidated through 029',
     applied: files, clean035CatalogEquivalent: true,
     sha256: Object.fromEntries(['server/full_schema.sql', ...files.map(f => 'server/migrations/' + f)]
-      .map(f => [f, crypto.createHash('sha256').update(read(f)).digest('hex')])) });
+      .map(f => [f, crypto.createHash('sha256').update(fs.readFileSync(path.join(root, f))).digest('hex')])) });
   const snapshot = db => json(db, `SELECT jsonb_build_object(
     'cash',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM transactions t),
     'entries',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM savings_entries t),

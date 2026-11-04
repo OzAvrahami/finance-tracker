@@ -4,7 +4,7 @@ const { once } = require('node:events');
 const express = require('express');
 const { item, envelope, producerFixtures } = require('./fixtures/generalTransaction');
 const { validateItem, LIMITS, envelope:validateEnvelope, CONTRACT } = require('../services/generalTransactionContract');
-const { processSubmission } = require('../services/generalTransactionIngestion');
+const { processSubmission } = require('./fixtures/generalTransactionIngestion');
 const { loadControllerWithFake } = require('./helpers/fakeSupabase');
 const { apiKeyAuth } = require('../middleware/apiKeyAuth');
 const created = { outcome: 'created', accepted: true, financial_posted: true, receipt_id: '1', transaction_id: '1' };
@@ -88,7 +88,7 @@ test('lost acknowledgements/timeouts are indeterminate; unstarted items are expl
   const db = fake(); const expired = await processSubmission(db, envelope([item()]), { durationMs: 0 });
   assert.equal(db.calls.length, 0); assert.equal(expired.body.results[0].reason_code, 'batch_deadline');
 });
-test('existing authenticated endpoint selects general contract explicitly and safely handles bad JSON', async t => {
+test('existing endpoint retires registered-account intake and still protects auth and parsing', async t => {
   const db = fake(), controller = loadControllerWithFake('../../controllers/v1/transactionController', db);
   const before = process.env.EXTERNAL_API_KEY; process.env.EXTERNAL_API_KEY = 'synthetic-test-key';
   t.after(() => { if (before === undefined) delete process.env.EXTERNAL_API_KEY; else process.env.EXTERNAL_API_KEY = before; });
@@ -102,10 +102,10 @@ test('existing authenticated endpoint selects general contract explicitly and sa
   const send = (body, auth = 'synthetic-test-key', contentType = 'application/json') => fetch(`http://127.0.0.1:${server.address().port}/api/v1/transactions`, { method: 'POST', headers: { 'Content-Type': contentType, Authorization: `Bearer ${auth}` }, body });
   assert.equal((await send(JSON.stringify(envelope(item())), 'wrong')).status, 401);
   assert.equal(db.calls.length, 0);
-  assert.equal((await send(JSON.stringify(envelope(item())))).status, 200);
+  assert.equal((await send(JSON.stringify(envelope(item())))).status, 422);assert.equal(db.calls.length,0);
   assert.equal((await send('{')).status, 400);
-  assert.equal((await send(' '.repeat(LIMITS.bytes) + JSON.stringify(envelope(item())))).status, 413);
+  assert.equal((await send(' '.repeat(LIMITS.bytes) + JSON.stringify(envelope(item())))).status, 422);
   assert.equal((await send(' '.repeat(2 * LIMITS.bytes) + '{}')).status, 413);
   assert.equal((await send('[]')).status, 400);
-  assert.equal((await send('contract=finance.transactions.v1', 'synthetic-test-key', 'application/x-www-form-urlencoded')).status, 415);
+  assert.equal((await send('contract=finance.transactions.v1', 'synthetic-test-key', 'application/x-www-form-urlencoded')).status, 422);
 });

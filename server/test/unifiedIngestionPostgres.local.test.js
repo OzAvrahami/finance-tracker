@@ -1,0 +1,213 @@
+// Synthetic, portless PostgreSQL only. No dotenv or production connections.
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const { spawnSync, spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const { randomUUID } = require('node:crypto');
+const { submitExternal } = require('../services/unifiedTransactionIngestion');
+const { runBulk } = require('../services/externalTransactionBulk');
+const container = `finance-unified-${process.pid}`;
+const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 054:')[0];
+const migration = fs.readFileSync(path.join(__dirname, '../migrations/054_unified_transaction_ingestion.sql'), 'utf8');
+let started = false, sequence = 0;
+const run = (args, input, allow = false) => {
+  const r = spawnSync('docker', args, { input, encoding: 'utf8', timeout: 60000, maxBuffer: 32e6 });
+  if (!allow) assert.equal(r.status, 0, r.stderr || r.error?.message);
+  return r;
+};
+const sql = (db, input, allow = false) => run(['exec', '-i', container, 'psql', '-U', 'postgres', '-d', db, '-v', 'ON_ERROR_STOP=1', '-Atq'], input, allow);
+const scalar = (db, input) => sql(db, input).stdout.trim();
+const json = (db, input) => JSON.parse(scalar(db, input));
+const quote = v => v === null ? 'NULL' : `'${String(typeof v === 'object' ? JSON.stringify(v) : v).replaceAll("'", "''")}'`;
+const call = (db, name, values) => json(db, `SET ROLE service_role; SELECT ${name}(${values.map(quote).join(',')});`);
+const item = (key, extra = {}) => ({ type: 'expense', amount: 150, date: '2026-11-04', charge_date: '2026-11-04',
+  description: 'Synthetic Shop', payment_source_id: 6, currency: 'ILS', external_id: key, ...extra });
+const ingest = (db, body) => call(db, 'ingest_external_transaction', [body, false]);
+const count = db => Number(scalar(db, 'SELECT count(*) FROM transactions WHERE voided_at IS NULL;'));
+const createCase = () => { const db = `case_${++sequence}`; sql('postgres', `CREATE DATABASE ${db} TEMPLATE unified_clean;`); return db; };
+const owned = (db, channel, key, extra = {}) => {
+  const row = { description: 'Synthetic Shop', movement_type: 'expense', total_amount: 150, transaction_date: '2026-11-04',
+    charge_date: '2026-11-04', payment_source_id: 6, currency: 'ILS', ...extra };
+  return call(db, 'ingest_owned_transaction', [channel, key, row, row, null]);
+};
+const configure = db => call(db, 'configure_ingestion_source', [randomUUID(), { source_kind: 'apple_pay', instance_key: 'synthetic-wallet',
+  configuration: { payment_source_ids: ['6'], time_verified: true, verified_references: [{ provider: 'synthetic', type: 'purchase', scope: 'fixture' }] }, actor: 'synthetic' }]).source_id;
+const wallet = (db, sid, key, extra = {}) => call(db, 'ingest_observation', [sid, { idempotency_key: key, merchant: 'Synthetic Shop',
+  accounting_amount: '150.00', currency: 'ILS', movement_type: 'expense', transaction_date: '2026-11-04', payment_source_id: '6', ...extra }]);
+const asyncSql = (db, input) => new Promise((resolve, reject) => {
+  const p = spawn('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', db, '-v', 'ON_ERROR_STOP=1', '-Atq']);
+  let out = '', err = ''; p.stdout.on('data', b => { out += b; }); p.stderr.on('data', b => { err += b; });
+  p.on('error', reject); p.on('close', status => resolve({ status, out, err })); p.stdin.end(input);
+});
+const dbClient = db => ({ rpc: async (name, args) => {
+  assert.equal(name, 'ingest_external_transaction');
+  const r = await asyncSql(db, `SET ROLE service_role; SELECT ${name}(${quote(args.p_request)},${args.p_dry_run});`);
+  return r.status ? { error: { code: '23514', message: r.err } } : { data: JSON.parse(r.out.trim()) };
+} });
+const sources = `INSERT INTO payment_sources(id,name,slug,method,issuer,last4) VALUES
+ (6,'CAL 2755','cal-2755','debit_card','CAL','2755'),(7,'Other CAL','cal-other','credit_card','CAL','2002'),
+ (8,'New MAX','max','credit_card','MAX','8888'),(9,'Bank account','bank','bank_transfer','Discount',NULL);
+ INSERT INTO categories(id,name,type) VALUES(100,'Ordinary','expense'),(101,'Income','income');`;
+before(async () => {
+  run(['run', '-d', '--rm', '--name', container, '--label', 'finance.disposable=unified', '-e', 'POSTGRES_PASSWORD=local_test_only', 'postgres:16-alpine']); started = true;
+  const info = JSON.parse(run(['inspect', container]).stdout)[0];
+  assert.equal(info.Config.Labels['finance.disposable'], 'unified'); assert.deepEqual(info.HostConfig.PortBindings || {}, {});
+  for (let i = 0; i < 60; i++) { if (run(['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status === 0) break; await new Promise(r => setTimeout(r, 200)); }
+  sql('postgres', 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE DATABASE unified_clean; CREATE DATABASE unified_old;');
+  sql('unified_old', full); sql('unified_old', sources);
+  sql('unified_clean', full); sql('unified_clean', migration); sql('unified_clean', sources);
+});
+after(() => { if (started) run(['rm', '-f', container]); });
+
+test('all card issuers use existing payment source records; bank events are retained without guessed cash', () => {
+  const db = createCase();
+  for (const id of [6, 7, 8]) assert.equal(ingest(db, item(`card-${id}`, { payment_source_id: id })).outcome, 'created');
+  const bank = ingest(db, item('bank', { payment_source_id: 9 }));
+  assert.equal(bank.reason_code, 'bank_event_semantics_required'); assert.equal(bank.transaction_id, null); assert.equal(count(db), 3);
+});
+test('exact replay, changed content and two distinct identical-looking provider purchases', () => {
+  const db = createCase(), first = ingest(db, item('one'));
+  assert.equal(ingest(db, item('one')).transaction_id, first.transaction_id);
+  assert.equal(ingest(db, item('one')).replayed, true);
+  assert.equal(ingest(db, item('one', { amount: 151 })).reason_code, 'idempotency_key_conflict');
+  assert.equal(ingest(db, item('two')).outcome, 'created'); assert.equal(count(db), 2);
+});
+test('foreign purchase retains charged ILS amount and original currency without inventing exchange rate', () => {
+  const db = createCase(), r = ingest(db, item('fx', { amount: 275.82, original_amount: 87, currency: 'USD' }));
+  assert.equal(r.outcome, 'created');
+  assert.deepEqual(json(db, `SELECT jsonb_build_object('amount',total_amount::text,'original',original_amount::text,'currency',currency,'rate',exchange_rate) FROM transactions WHERE id=${r.transaction_id};`),
+    { amount: '275.8200000000000000', original: '87', currency: 'USD', rate: null });
+});
+test('individual installment holds series evidence; owner-confirmed separate posts only that ordinal', () => {
+  const db = createCase(), r = ingest(db, item('part-2', { installment_number: 2, installment_count: 6 }));
+  assert.equal(r.reason_code, 'installment_series_required'); assert.equal(count(db), 0);
+  const d = call(db, 'read_reconciliation', ['observation', '{}', r.observation_id]);
+  const resolved = call(db, 'review_reconciliation', [randomUUID(), { observation_id: r.observation_id, expected_revision: r.decision_revision,
+    expected_candidate_fingerprints: d.candidate_fingerprints, action: 'separate', actor: 'synthetic-owner', reason: 'Independent observed installment confirmed' }]);
+  assert.equal(resolved.outcome, 'created'); assert.equal(count(db), 1);
+  assert.deepEqual(json(db, 'SELECT jsonb_build_object(\'n\',installment_number,\'count\',installment_count,\'parent\',parent_transaction_id) FROM transactions;'), { n: 2, count: 6, parent: null });
+  assert.equal(ingest(db, item('whole', { amount: 900 })).transaction_id, null); assert.equal(count(db), 1);
+});
+test('Wallet first and API first both retain weak matches for review with no second cash', () => {
+  for (const order of ['wallet', 'api']) {
+    const db = createCase(), sid = configure(db);
+    const a = () => wallet(db, sid, 'wallet-key'), b = () => ingest(db, item('bank-key'));
+    (order === 'wallet' ? a : b)(); const held = (order === 'wallet' ? b : a)();
+    assert.equal(held.transaction_id, null); assert.equal(held.review_required, true); assert.equal(count(db), 1);
+  }
+});
+test('manual and CSV participate in both arrival orders, preserving separate identical rows in one file', () => {
+  for (const channel of ['manual', 'csv']) for (const first of [true, false]) {
+    const db = createCase(), a = () => owned(db, channel, 'csv:document:0'), b = () => ingest(db, item('api'));
+    (first ? a : b)(); const held = (first ? b : a)(); assert.equal(held.transaction_id, null); assert.equal(count(db), 1);
+  }
+  const db = createCase(); owned(db, 'csv', 'csv:document:0'); owned(db, 'csv', 'csv:document:1'); assert.equal(count(db), 2);
+  assert.equal(owned(db, 'csv', 'csv:document:0').replayed, true);
+});
+test('user edits remain untouched and cancellation reserves an external identity', () => {
+  const db = createCase(), r = ingest(db, item('edited'));
+  sql(db, `UPDATE transactions SET description='Owner title',total_amount=151,notes='Owner note' WHERE id=${r.transaction_id};`);
+  assert.equal(ingest(db, item('edited')).transaction_id, r.transaction_id);
+  assert.equal(scalar(db, `SELECT description||':'||notes||':'||total_amount::text FROM transactions WHERE id=${r.transaction_id};`), 'Owner title:Owner note:151');
+  call(db, 'delete_transaction_with_loan_payment', [r.transaction_id]);
+  assert.equal(ingest(db, item('edited')).disposition, 'cancelled'); assert.equal(count(db), 0);
+});
+test('real concurrent deliveries serialize identity and preserve one financial posting', async () => {
+  const db = createCase(), input = `SET ROLE service_role; SELECT ingest_external_transaction(${quote(item('race'))},false);`;
+  const results = await Promise.all([asyncSql(db, input), asyncSql(db, input)]);
+  for (const r of results) assert.equal(r.status, 0, r.err);
+  assert.equal(count(db), 1); assert.deepEqual(results.map(r => JSON.parse(r.out).replayed).sort(), [false, true]);
+});
+
+test('a lost response after commit recovers through the same frozen external identity', async () => {
+  const db = createCase(), body = item('lost-response');
+  const lost = await submitExternal({ rpc: async () => { ingest(db, body); throw new Error('synthetic transport loss'); } }, body);
+  assert.equal(lost.status, 503); assert.equal(lost.body.commit_state, 'unknown');
+  const recovered = await submitExternal(dbClient(db), body);
+  assert.equal(recovered.status, 409); assert.equal(recovered.body.error, 'already_exists'); assert.equal(count(db), 1);
+});
+
+test('independently verified references can link, while a changed amount conflicts', () => {
+  const db = createCase(), a = configure(db);
+  const b = call(db, 'configure_ingestion_source', [randomUUID(), { source_kind: 'cal', instance_key: 'synthetic-evidence',
+    configuration: { payment_source_ids: ['6'], verified_references: [{ provider: 'synthetic', type: 'purchase', scope: 'fixture' }] }, actor: 'synthetic' }]).source_id;
+  const proof = { provider_reference: { provider: 'synthetic', type: 'purchase', scope: 'fixture', value: 'independent-reference' } };
+  wallet(db, a, 'wallet', proof);
+  assert.equal(wallet(db, b, 'bank', proof).outcome, 'reconciled');
+  assert.equal(wallet(db, b, 'changed', { ...proof, accounting_amount: '151.00' }).outcome, 'conflict');
+  assert.equal(count(db), 1);
+});
+
+test('mapping, refunds, incomplete FX and dry-run cannot manufacture accounting evidence', () => {
+  const db = createCase();
+  assert.equal(ingest(db, item('name', { payment_source_id: undefined, payment_source_name: 'New MAX' })).outcome, 'created');
+  assert.equal(ingest(db, item('missing', { payment_source_id: 999 })).reason_code, 'payment_source_not_found');
+  assert.equal(ingest(db, item('refund', { type: 'income' })).reason_code, 'refund_semantics_required');
+  const fx = ingest(db, item('missing-fx', { currency: 'USD' }));
+  assert.equal(fx.reason_code, 'original_amount_required');
+  assert.equal(owned(db, 'csv', 'csv:fx:0', { currency: 'USD' }).reason_code, 'original_amount_required');
+  const detail = call(db, 'read_reconciliation', ['observation', '{}', fx.observation_id]);
+  assert.equal(detail.can_separate, false);
+  const before = scalar(db, 'SELECT count(*) FROM transaction_source_observations;');
+  assert.equal(call(db, 'ingest_external_transaction', [item('dry'), true]).dry_run, true);
+  assert.equal(scalar(db, 'SELECT count(*) FROM transaction_source_observations;'), before);
+  assert.equal(count(db), 1);
+});
+
+test('manual separate approval resumes the original domain command rather than posting generic cash', () => {
+  const db = createCase(); ingest(db, item('bank-first'));
+  const held = owned(db, 'manual', 'draft');
+  const detail = call(db, 'read_reconciliation', ['observation', '{}', held.observation_id]);
+  const command = { observation_id: held.observation_id, expected_revision: held.decision_revision,
+    expected_candidate_fingerprints: detail.candidate_fingerprints, action: 'separate', actor: 'synthetic-owner', reason: 'Separate purchase verified' };
+  const approved = call(db, 'review_reconciliation', [randomUUID(), command]);
+  assert.equal(approved.reason_code, 'manual_domain_approved'); assert.equal(count(db), 1);
+  const resumed = owned(db, 'manual', 'new-http-request');
+  assert.equal(resumed.observation_id, held.observation_id); assert.equal(resumed.outcome, 'created'); assert.equal(count(db), 2);
+});
+
+test('manual loan accounting and cancellation remain atomic through the shared decision', () => {
+  const db = createCase();
+  sql(db, "INSERT INTO loans(id,name,original_amount,current_balance,monthly_payment,total_installments,remaining_installments,start_date,next_payment_date,calculation_mode,payment_source_id) VALUES(1,'Synthetic loan',1000,1000,150,10,10,'2026-11-04','2026-11-04','loan_payments',9);");
+  const row = { description: 'Loan payment', movement_type: 'expense', total_amount: 150, transaction_date: '2026-11-04', charge_date: '2026-11-04', payment_source_id: 9, loan_id: 1, currency: 'ILS' };
+  const r = call(db, 'ingest_owned_transaction', ['manual', 'loan', row, row, { loan_payment: { principal_amount: 140, interest_amount: 10, other_amount: 0, next_scheduled_due_date: '2026-12-04' } }]);
+  assert.equal(r.outcome, 'created'); assert.ok(r.accounting.loanPayment);
+  assert.equal(scalar(db, 'SELECT count(*) FROM loan_payments;'), '1');
+  call(db, 'delete_transaction_with_loan_payment', [r.transaction_id]);
+  assert.equal(count(db), 0); assert.equal(scalar(db, 'SELECT count(*) FROM loan_payments;'), '0');
+  assert.equal(call(db, 'ingest_owned_transaction', ['manual', 'loan', row, row, null]).disposition, 'cancelled');
+});
+test('8 successful / 2 failed summary and 50-item batches use the real database', async () => {
+  const db = createCase(), send = async body => {
+    const res = { status(n) { this.statusCode = n; return this; }, json(v) { this.body = v; return this; } };
+    await runBulk({ body }, res, async (req, out) => { const r = await submitExternal(dbClient(db), req.body); out.status(r.status).json(r.body); });
+    return res;
+  };
+  const ten = Array.from({ length: 10 }, (_, i) => item(`ten-${i}`, i > 7 ? { amount: -1 } : {}));
+  const r = await send({ items: ten }); assert.equal(r.body.succeeded, 8); assert.equal(r.body.failed, 2); assert.equal(count(db), 8);
+  const fifty = await send({ items: Array.from({ length: 50 }, (_, i) => item(`fifty-${i}`)) });
+  assert.equal(fifty.body.succeeded, 50); assert.equal(count(db), 58);
+});
+test('generic guard blocks direct external inserts; private core is inaccessible to callers', () => {
+  const db = createCase();
+  const direct = sql(db, "INSERT INTO transactions(description,total_amount,movement_type,transaction_date,charge_date,payment_source_id,external_id) VALUES('Direct',10,'expense','2026-11-04','2026-11-04',6,'bypass');", true);
+  assert.notEqual(direct.status, 0); assert.match(direct.stderr, /unified_ingestion_required/);
+  assert.equal(scalar(db, "SELECT has_function_privilege('service_role','unified_ingest(bigint,jsonb,jsonb,jsonb,text,jsonb)','EXECUTE');"), 'f');
+  assert.equal(scalar(db, "SELECT has_function_privilege('anon','ingest_external_transaction(jsonb,boolean)','EXECUTE');"), 'f');
+});
+test('forward upgrade preserves 38 CAL receipts and history byte-for-byte; rollback restores guards', () => {
+  const db = 'unified_old';
+  sql(db, "INSERT INTO transaction_ingestion_sources(id,source_kind,instance_key,configuration) VALUES(3,'cal','v1-cal:fdb-cal-default-debit','{\"payment_source_ids\":[\"6\"]}');");
+  for (let i = 0; i < 38; i++) {
+    const r = wallet(db, '3', `historical-${i}`, { accounting_amount: String(10 + i) });
+    sql(db, `INSERT INTO cal_ingestion_receipts(external_id,source_id,observation_id,request_hash,creation_fields) VALUES('historical-${i}',3,${r.observation_id},repeat('a',64),'{}');`);
+  }
+  const snapshot = () => scalar(db, "SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM transactions t),(SELECT jsonb_agg(to_jsonb(r) ORDER BY external_id) FROM cal_ingestion_receipts r),(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM transaction_source_observations o),(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM transaction_reconciliation_events e))::text;");
+  const original = snapshot();
+  assert.notEqual(sql(db, migration.replace(/COMMIT;\s*$/, 'SELECT 1/0; COMMIT;'), true).status, 0);
+  assert.equal(snapshot(), original);
+  assert.equal(scalar(db, "SELECT count(*) FROM pg_trigger WHERE tgname='cal_external_identity';"), '1');
+  sql(db, migration); assert.equal(snapshot(), original);
+  const r = ingest(db, item('historical-0')); assert.equal(r.reason_code, 'historical_identity_reserved'); assert.equal(count(db), 38);
+});

@@ -10,6 +10,10 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Changed
+
+- Unified ingestion: retain the existing single/Bulk transaction endpoint while moving external, manual and CSV intake decisions onto the observation/reconciliation foundation. Add atomic replay/conflict and historical identity reservations, issuer-independent payment-source resolution, conservative cross-source review, exact charged/original currency values and observed-installment protection. Preserve manual domain writers and paused FlowLink compatibility. Forward migration 054 replaces card-specific posting guards without deleting historical receipts or financial data. Retire CAL/general-envelope intake (related #96); those obsolete envelopes are incompatible and require a coordinated upgrade. Missing refund, transfer and purchase-series semantics remain review-only. See [design, limitations and migration boundary](docs/architecture/UNIFIED_TRANSACTION_INGESTION.md). Local implementation only; owner acceptance and production authorization pending.
+
 ### Fixed
 
 - FlowLink: show the installed bundle's actual version/build and compiled Debug/Release configuration in Diagnostics instead of the hard-coded `0.1.0 (1)`. Release build 4 is installed and verified on the owner's iPhone. Authenticated credential replacement restored the original device connection and binding after the Debug-origin namespace change; original captures remain preserved but isolated in their previous namespace, with no delivery attempted.

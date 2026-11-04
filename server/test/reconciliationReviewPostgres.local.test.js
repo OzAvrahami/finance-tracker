@@ -103,7 +103,7 @@ const patch = (c, b, changes, command) => c.send(`/owner/bindings/${b.id}`, comm
 const nativeArgs = (e, p) => ({ p_credential_sha256: config.digest(e.body.device_credential), p_request: p });
 const cash = c => json(c.db, "SELECT jsonb_build_object('count',count(*),'amount',coalesce(sum(total_amount),0)::text) FROM transactions WHERE voided_at IS NULL;");
 
-const calService = require('../services/calIngestionService');
+const calService = require('./fixtures/calIngestionService');
 const profile = () => ({ instance_key: 'test-cal-card', request_key: randomUUID(), payment_source_name: 'Synthetic card', payment_source_id: '1' });
 const calBody = (extra = {}) => ({ type: 'expense', amount: 4, date: '2026-09-26', description: 'Israel Post',
  charge_date: '2026-09-28', payment_source_name: 'Synthetic card', currency: 'ILS', original_amount: 4,

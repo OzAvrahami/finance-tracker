@@ -66,16 +66,11 @@ const command = (name) => (db, requestKey, payload) => {
   if (typeof requestKey !== 'string' || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(requestKey)) fail('invalid_request_key');
   return rpc(db, name, { p_request_key: requestKey, p_command: payload });
 };
-// Preserve the exact legacy Supabase result/error shape. Migration 036's trigger
-// mirrors nonempty external IDs in the SAME INSERT transaction, including callers
-// outside this wrapper. Dry-run never calls this adapter; no source matching occurs.
-const insertLegacyTransaction = (db, row) => db.from('transactions').insert(row).select('id, external_id, created_at').single();
 module.exports = { ingestObservation,
   readReconciliation: (db, mode, ids = [], id = null) => rpc(db, 'read_reconciliation', { p_mode: mode, p_ids: ids, p_id: id }),
   reviewReconciliation: command('review_reconciliation'),
-  ingestCalV1: (db, key, source, observation, request) => rpc(db, 'ingest_cal_v1', { p_request_key: key, p_source: source, p_observation: observation, p_request: request }),
   ingestFlowlinkObservation: (db, digest, request) => rpc(db, 'ingest_flowlink_observation', { p_credential_sha256: digest, p_request: request }), amendObservation: command('amend_observation'),
   resolveObservation: command('resolve_observation'), cancelIngestedTransaction: command('cancel_ingested_transaction'),
-  configureSource: command('configure_ingestion_source'), insertLegacyTransaction,
+  configureSource: command('configure_ingestion_source'),
   getObservation: (db, id) => rpc(db, 'get_ingestion_observation', { p_observation_id: identifier(id) }),
   normalizeObservation, normalizeMerchant, money, timeEvidence };

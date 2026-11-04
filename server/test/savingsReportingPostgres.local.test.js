@@ -2,10 +2,11 @@
 const { before, after, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { normalizeSql, schemaThrough } = require('./helpers/sqlFixtures');
 const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 const container = `finance-sav07-tests-${process.pid}`;
-const read = p => fs.readFileSync(path.join(__dirname, '../..', p), 'utf8');
+const read = p => normalizeSql(fs.readFileSync(path.join(__dirname, '../..', p), 'utf8'));
 const migration = read('server/migrations/035_savings_reporting.sql');
 const baseline = read('server/full_schema.sql').split('-- Migration 035:')[0];
 let created = false; let sequence = 0;
@@ -146,7 +147,7 @@ test('034 upgrade and clean snapshot preserve history, relations and all write/L
  const definitions="SELECT jsonb_object_agg(oid::regprocedure::text,md5(pg_get_functiondef(oid))) FROM pg_proc WHERE pronamespace='public'::regnamespace AND prokind='f' AND proname NOT IN ('transactions_filtered','transactions_page','get_savings_report');";
  const pre=json(db,read('docs/operations/sql/MIGRATION_035_PRODUCTION_PREFLIGHT.sql'));assert.equal(pre.result,'MIGRATION_035_PREFLIGHT_PASS',JSON.stringify(pre));const defs=json(db,definitions);sql(db,migration);const after=json(db,read('docs/operations/sql/MIGRATION_035_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_035_POSTFLIGHT_PASS',JSON.stringify(after));assert.deepEqual(after.evidence,pre.evidence);assert.deepEqual(financial(db),before);assert.deepEqual(json(db,definitions),defs);
  assert.equal(scalar(db,"SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r';"),'28');assert.equal(scalar(db,"SELECT count(*) FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='v';"),'10');
- sql('postgres','CREATE DATABASE clean_035;');sql('clean_035',read('server/full_schema.sql'));
+ sql('postgres','CREATE DATABASE clean_035;');sql('clean_035',schemaThrough(read('server/full_schema.sql'), 35));
  const reports="SELECT jsonb_object_agg(oid::regprocedure::text,md5(pg_get_functiondef(oid))) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('transactions_filtered','transactions_page','get_savings_report');";
  assert.deepEqual(json(db,reports),json('clean_035',reports));assert.equal(scalar('clean_035','SELECT count(*) FROM savings_accounts;'),'0');
 });

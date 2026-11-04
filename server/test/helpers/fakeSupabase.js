@@ -404,7 +404,26 @@ function loadControllerWithFake(controllerRelPath, fakeSupabase) {
   require.cache[supabasePath] = new Module(supabasePath, null);
   require.cache[supabasePath].filename = supabasePath;
   require.cache[supabasePath].loaded = true;
-  require.cache[supabasePath].exports = fakeSupabase;
+  // Older domain-controller fakes model the domain writer, not reconciliation.
+  // Adapt only that transport boundary; PostgreSQL integration tests exercise
+  // the real shared decision, holds, locking and historical reservations.
+  const originalRpc = fakeSupabase.rpc?.bind(fakeSupabase);
+  const client = controllerRelPath === '../../controllers/transactionController' && !fakeSupabase.unifiedIngestion
+    ? Object.assign(Object.create(fakeSupabase), { rpc: async (name, args) => {
+      if (name !== 'ingest_owned_transaction') return originalRpc(name, args);
+      let result;
+      if (args.p_row.loan_id) {
+        result = await originalRpc('create_transaction_with_manual_loan_payment', {
+          p_transaction: args.p_row, p_loan_payment: args.p_domain?.loan_payment,
+        });
+      } else {
+        result = await fakeSupabase.from('transactions').insert([args.p_row]).select();
+        if (!result.error) result = { data: { transaction: result.data[0] } };
+      }
+      if (result.error) return result;
+      return { data: { outcome: 'created', transaction_id: String(result.data.transaction.id), accounting: args.p_row.loan_id ? result.data : null } };
+    } }) : fakeSupabase;
+  require.cache[supabasePath].exports = client;
 
   const controller = require(controllerPath);
 

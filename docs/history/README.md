@@ -7,6 +7,7 @@ for publication and the existing Issue/Project for live acceptance and workflow.
 
 | Record | Purpose |
 | --- | --- |
+| [Unified ingestion regression triage](UNIFIED_INGESTION_REGRESSION_TRIAGE.md) | All 14 failures compared with 3471333 in an isolated worktree; root causes, parity evidence and local regression gate |
 | [v1.8.0 preparation](RELEASE_1_8_0.md) | Strategy A; accepted LEGO/Shopping/Auth, deployed but unaccepted #96, production evidence attribution, backup risk and owner handoff |
 | [v1.7.0 preparation](RELEASE_1_7_0.md) | Owner-approved Shopping UX/Settings candidate; exact local scope, version synchronization and scoped acceptance |
 | [v1.2.0](RELEASE_1_2_0.md) | Dashboard/Loans/Shopping acceptance and 029 evidence |

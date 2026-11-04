@@ -6,9 +6,10 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { item, envelope, producerFixtures } = require('./fixtures/generalTransaction');
-const { processSubmission } = require('../services/generalTransactionIngestion');
+const { processSubmission } = require('./fixtures/generalTransactionIngestion');
 const container = `finance-general96-${process.pid}`;
-const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8');
+// Historical protocol boundary. Active cutover is tested in unifiedIngestionPostgres.
+const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 054:')[0];
 const migration = fs.readFileSync(path.join(__dirname, '../migrations/052_general_transaction_contract.sql'), 'utf8');
 const resolutionMigration = fs.readFileSync(path.join(__dirname, '../migrations/053_general_receipt_resolution.sql'), 'utf8');
 let started = false, sequence = 0;

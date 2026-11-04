@@ -1,3 +1,5 @@
+> Historical #96 protocol. New intake is retired by the local [unified ingestion implementation](UNIFIED_TRANSACTION_INGESTION.md), pending migration 054 and separately authorized deployment. Receipts, resolution history and the original migration specifications remain preserved. This document is not an activation instruction.
+
 # General transaction evidence API (#96)
 
 Local implementation against v1.7.0 `1da80871f57354f6429358d37e97b0517d1efaf3`.

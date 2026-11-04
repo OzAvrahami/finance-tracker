@@ -1,4 +1,5 @@
-const { CONTRACT, LIMITS, validateItem, envelope } = require('./generalTransactionContract');
+// Historical protocol fixture only. Not imported by application runtime.
+const { CONTRACT, LIMITS, validateItem, envelope } = require('../../services/generalTransactionContract');
 const failure = (reason, commitState = 'not_attempted') => ({ outcome: 'retryable_failure', accepted: false,
   financial_posted: null, review_required: false, retryable: true, reason_code: reason, commit_state: commitState });
 async function processItem(db, account, raw, commandMs = LIMITS.commandMs) {

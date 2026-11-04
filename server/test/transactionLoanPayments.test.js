@@ -529,7 +529,7 @@ test('an atomic create RPC failure leaves no controller-side ledger fallback', a
   }
 
   assert.equal(res.statusCode, 400);
-  assert.equal(res.body.error, 'atomic operation rejected');
+  assert.match(res.body.error, /uncertain/);
   assert.equal(fake.state.transactions.length, 0);
   assert.equal(fake.state.rpcCalls.length, 1);
 });

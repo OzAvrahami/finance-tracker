@@ -53,8 +53,3 @@ test('APY command service preserves request key for amendment/review/cancellatio
     await service[method]({rpc:async(n,args)=>{assert.equal(n,name);assert.equal(args.p_request_key,key);assert.strictEqual(args.p_command,command);return {data:{}};}},key,command);
   }
 });
-test('legacy adapter preserves exact insert, projection and Supabase errors without source protocol', async () => {
-  const row={total_amount:1.234,external_id:' legacy '},result={data:null,error:{code:'23505'}};
-  const db={from:table=>{assert.equal(table,'transactions');return {insert:payload=>{assert.strictEqual(payload,row);return {select:projection=>{assert.equal(projection,'id, external_id, created_at');return {single:async()=>result};}};}};}};
-  assert.strictEqual(await service.insertLegacyTransaction(db,row),result);
-});

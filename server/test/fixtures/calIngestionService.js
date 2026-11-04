@@ -1,8 +1,17 @@
+// Historical protocol fixture only. Not imported by application runtime.
 // Opt-in compatibility adapter for the inspected Financial Data Bridge v1 producer.
 // Existing API-key authorization remains upstream. No matching or financial writes here.
-const ingestion = require('./transactionIngestionService');
-const { safeResult } = require('./applePayIngestionService');
-const { id, UUID, safeIdentity, keys } = require('../config/applePay');
+const ingestion = { ...require('../../services/transactionIngestionService'), ingestCalV1: async (db, key, source, observation, request) => {
+ const args={p_request_key:key,p_source:source,p_observation:observation,p_request:request};
+ for(let attempt=0;attempt<2;attempt++) {
+  const {data,error}=await db.rpc('ingest_cal_v1',args);
+  if(!error) return data;
+  if(['40P01','40001','55P03'].includes(error.code)&&attempt===0) continue;
+  throw Object.assign(new Error('Historical CAL command failed'),{code:error.code});
+ }
+} };
+const { safeResult } = require('../../services/applePayIngestionService');
+const { id, UUID, safeIdentity, keys } = require('../../config/applePay');
 const fail = (code, status = 422) => { throw Object.assign(new Error(code), { calCode: code, status }); };
 const fields = ['type', 'amount', 'date', 'description', 'charge_date', 'category_id', 'payment_source_id',
   'payment_source_name', 'currency', 'original_amount', 'exchange_rate', 'notes', 'tags', 'external_id', 'dry_run', 'cal_contract'];

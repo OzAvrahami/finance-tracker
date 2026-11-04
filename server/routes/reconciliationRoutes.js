@@ -4,7 +4,7 @@ const config = require('../config/flowlink');
 const ingestion = require('../services/transactionIngestionService');
 const { safeResult } = require('../services/applePayIngestionService');
 const { validateItem } = require('../services/generalTransactionContract');
-const { boundedCommand } = require('../services/generalTransactionIngestion');
+const { boundedCommand } = require('../services/ingestionCommand');
 const id = value => typeof value === 'string' && /^[1-9][0-9]{0,18}$/.test(value) && BigInt(value)<=9223372036854775807n;
 const invalid = () => { throw Object.assign(new Error('invalid_input'), { status: 400 }); };
 function createReconciliationRouter({ db, env = () => process.env }) {

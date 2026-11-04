@@ -50,14 +50,14 @@ must be independently stable for that ordinal: a shared series/provider ID alone
 is **not** sufficient.
 
 For bulk only, `external_id` and a payment source selector are required. Use
-**either** `payment_source_id` (preferred) **or** the existing registered
+**either** `payment_source_id` (preferred) **or** the existing uniquely resolved
 `payment_source_name`. Never supply both in the same bulk item. An optional
 `status` field may be `completed`; pending items are rejected without insertion.
 
 Batch size: **1–50 items**; maximum 1 MiB total and 16 KiB per item. Batches
 are processed sequentially by the existing single-item handler, so they do not
-bypass the existing CAL adapter, API-key authentication, database ID uniqueness,
-source guards or reconciliation logic. This is **not** an atomic all-or-nothing
+bypass API-key authentication, durable source identities, database ID uniqueness,
+generic posting guards or reconciliation logic. Migration 054 is required by the unified implementation. This is **not** an atomic all-or-nothing
 batch: partial success is possible. Retry only with the same `external_id` and
 frozen transaction content; a replay of an already-posted ID is safe. A 409
 `already_exists` is a successful idempotent replay for the bulk summary; a
@@ -95,17 +95,16 @@ original array index and external ID. A `dry_run` item contributes to
 `previewed`, never to financial success. A timeout or ambiguous server failure
 stops dispatch of remaining items for safe retry.
 
-## Integration boundaries that were NOT changed
+## Unified implementation boundary
 
-- Existing single-item input and its CAL compatibility adapter stay intact.
-- The existing registered CAL v1 adapter has **stricter supported events** than
-  generic v1: its server-side SQL rejects installment-specific fields, and
-  some foreign-currency cases require its separate `cal_contract` v2 evidence.
-  This minimal bulk change does **not** silently bypass that adapter or claim
-  to activate CAL installment posting. A dedicated, reviewed CAL reconciliation
-  implementation would be needed to post those installments safely.
-- Existing general `finance.transactions.v1` intake remains untouched. The new
-  bulk request does **not** use that contract, account aliases, or registrations.
-- Historical rows, DB migrations and running consumer behavior are not deleted.
-- This patch alone is not a production release and does not authorize switching
-  off the current writer or enabling live CAL delivery.
+The public single/Bulk shapes are preserved. Both now use the shared internal
+pipeline described in [Unified transaction ingestion](UNIFIED_TRANSACTION_INGESTION.md).
+CAL-specific routing and registered general-envelope intake are retired. There
+are no per-card API registrations. Historical receipts remain reserved.
+
+Installment counters identify only the observed ordinal; they do not prove its
+relationship to a whole purchase. Such evidence remains pending until explicit
+review. Refunds, uncertain bank events and ambiguous cross-source observations
+also remain unposted. A review outcome is not an ingestion failure or permission
+to retry with a new ID. This local implementation does not authorize migration,
+deployment, new bank delivery or FlowLink activation.

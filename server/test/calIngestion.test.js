@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const express = require('express');
 const { once } = require('node:events');
-const { profiles, selectProfile, request, handleCal, exactNumber } = require('../services/calIngestionService');
+const { profiles, selectProfile, request, handleCal, exactNumber } = require('./fixtures/calIngestionService');
 const { loadControllerWithFake } = require('./helpers/fakeSupabase');
 const { apiKeyAuth } = require('../middleware/apiKeyAuth');
 const profile = {instance_key:'cal-test',request_key:'11111111-1111-4111-8111-111111111111',payment_source_name:'Approved card',payment_source_id:'6'};
@@ -44,7 +44,7 @@ test('pending acceptance has no cash ID; replay remains pending; key conflicts c
  const changed=await handleCal(fake(result('rejected',{reason_code:'cal_payload_changed'})),profile,body);assert.equal(changed.status,422);
  const replay=await handleCal(fake(result('already_observed')),profile,body);assert.equal(replay.status,409);assert.equal(replay.body.error,'already_exists');
 });
-test('v1 real HTTP boundary retains external API auth and routes only the registered producer to APY',async t=>{
+test('v1 real HTTP boundary retains external API auth and routes every ordinary v1 item to unified ingestion',async t=>{
  const prior=process.env.CAL_INGESTION_SOURCES, priorKey=process.env.EXTERNAL_API_KEY;
  process.env.CAL_INGESTION_SOURCES=env.CAL_INGESTION_SOURCES;process.env.EXTERNAL_API_KEY='test-only-cal-key';
  t.after(()=>{if(prior===undefined)delete process.env.CAL_INGESTION_SOURCES;else process.env.CAL_INGESTION_SOURCES=prior;
@@ -56,8 +56,8 @@ test('v1 real HTTP boundary retains external API auth and routes only the regist
  const send=auth=>fetch(`http://127.0.0.1:${server.address().port}/api/v1/transactions`,{method:'POST',headers:{'Content-Type':'application/json',...(auth?{Authorization:auth}:{})},body:JSON.stringify(body)});
  assert.equal((await send()).status,401);assert.equal(calls.length,0);
  const response=await send('Bearer test-only-cal-key');assert.equal(response.status,201);assert.equal((await response.json()).id,10);
- assert.equal(calls.length,1);assert.equal(calls[0].name,'ingest_cal_v1');assert.equal(calls[0].args.p_request.external_id,body.external_id);
- assert.equal(calls[0].args.p_source.instance_key,'v1-cal:cal-test');assert.equal(JSON.stringify(calls).includes('test-only-cal-key'),false);
+ assert.equal(calls.length,1);assert.equal(calls[0].name,'ingest_external_transaction');assert.equal(calls[0].args.p_request.external_id,body.external_id);
+ assert.equal(calls[0].args.p_source,undefined);assert.equal(JSON.stringify(calls).includes('test-only-cal-key'),false);
 });
 test('CAL transport failure is sanitized and retries the same RPC after a serialization failure',async()=>{
  const seen=[];const db=fake(null);db.rpc=async(n,a)=>{seen.push(a);return seen.length===1?{error:{code:'40001'}}:{data:result()};};
@@ -88,6 +88,6 @@ test('v2 cannot silently fall back to unregistered legacy financial insertion',a
   const db={from(){throw Error('no legacy write');},rpc(){throw Error('no RPC');}};
   const controller=loadControllerWithFake('../../controllers/v1/transactionController',db);
   let status,body;const res={status(s){status=s;return this;},json(b){body=b;return this;}};
-  await controller.createTransaction({body:v2()},res);assert.equal(status,422);assert.equal(body.error,'cal_registration_required');
+  await controller.createTransaction({body:v2()},res);assert.equal(status,422);assert.equal(body.error,'retired_ingestion_contract');
  }finally{if(prior===undefined)delete process.env.CAL_INGESTION_SOURCES;else process.env.CAL_INGESTION_SOURCES=prior;}
 });

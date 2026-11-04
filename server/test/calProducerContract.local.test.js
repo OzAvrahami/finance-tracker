@@ -4,7 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { request } = require('../services/calIngestionService');
+const { request } = require('./fixtures/calIngestionService');
 const root = process.env.CAL_BRIDGE_AUDIT_ROOT;
 const options = { skip: !root && 'Set CAL_BRIDGE_AUDIT_ROOT to the inspected Bridge checkout' };
 const modules = async () => ({

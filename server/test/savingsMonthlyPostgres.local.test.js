@@ -2,10 +2,11 @@
 const { before, after, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { normalizeSql, schemaThrough } = require('./helpers/sqlFixtures');
 const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 const container = `finance-sav06-tests-${process.pid}`;
-const read = p => fs.readFileSync(path.join(__dirname, '../..', p), 'utf8');
+const read = p => normalizeSql(fs.readFileSync(path.join(__dirname, '../..', p), 'utf8'));
 const migration = read('server/migrations/034_savings_monthly_deposits.sql');
 const baseline = read('server/full_schema.sql').split('-- Migration 034:')[0];
 let created = false; let sequence = 0;
@@ -127,7 +128,7 @@ test('034 upgrade and clean snapshot preserve all history, privileges, Loan func
  sql('postgres','CREATE DATABASE upgrade_034 TEMPLATE sav06_baseline;');const db='upgrade_034';sql(db,"INSERT INTO payment_sources(id,name,slug,method) VALUES(1,'local','local','bank_transfer');");open(db,'1200');
  const pre=json(db,read('docs/operations/sql/MIGRATION_034_PRODUCTION_PREFLIGHT.sql'));assert.equal(pre.result,'MIGRATION_034_PREFLIGHT_PASS',JSON.stringify(pre));const before=financial(db);sql(db,migration);
  const after=json(db,read('docs/operations/sql/MIGRATION_034_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_034_POSTFLIGHT_PASS',JSON.stringify(after));assert.deepEqual(after.evidence,pre.evidence);assert.deepEqual(financial(db),before);assert.equal(after.evidence.public_tables,28);assert.equal(after.evidence.public_views,10);
- sql('postgres','CREATE DATABASE clean_034;');sql('clean_034',read('server/full_schema.sql'));
+ sql('postgres','CREATE DATABASE clean_034;');sql('clean_034',schemaThrough(read('server/full_schema.sql'), 34));
  const defs="SELECT jsonb_object_agg(proname,md5(prosrc)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('savings_post_event_locked','savings_validate_account','savings_assert_links','update_savings_account','get_savings_account');";
  assert.deepEqual(json(db,defs),json('clean_034',defs));assert.equal(scalar('clean_034','SELECT count(*) FROM savings_accounts;'),'0');
  for(const role of ['anon','authenticated'])assert.notEqual(sql(db,`SET ROLE ${role};SELECT post_savings_event('${key(7)}','{}');`,true).status,0);

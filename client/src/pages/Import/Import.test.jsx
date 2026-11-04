@@ -239,7 +239,7 @@ describe('Import categories and row removal', () => {
     expect(firstCategory).toHaveValue('🍔 מזון');
     expect(secondCategory).toHaveValue('');
     await userEvent.click(secondCategory);
-    await userEvent.click(table.getByRole('option', { name: /דיור/ }));
+    await userEvent.click(screen.getByRole('option', { name: /דיור/ }));
     expect(secondCategory).toHaveValue('🏠 דיור');
     expect(firstCategory).toHaveValue('🍔 מזון');
     expect(table.queryByText('ללא קטגוריה')).not.toBeInTheDocument();
@@ -252,7 +252,7 @@ describe('Import categories and row removal', () => {
     const table = within(tableRegion);
     const secondCategory = table.getByRole('combobox', { name: 'קטגוריה עבור GOOGLE *CLOUD' });
     fireEvent.change(secondCategory, { target: { value: 'כלי עבודה' } });
-    fireEvent.click(table.getByRole('button', { name: 'יצירת קטגוריה ״כלי עבודה״' }));
+    fireEvent.click(screen.getByRole('button', { name: 'יצירת קטגוריה ״כלי עבודה״' }));
 
     const dialog = screen.getByRole('dialog', { name: 'קטגוריה חדשה' });
     expect(within(dialog).getByLabelText(/שם הקטגוריה/)).toHaveValue('כלי עבודה');
@@ -290,6 +290,17 @@ describe('Import categories and row removal', () => {
 });
 
 describe('Import save behavior', () => {
+  it('retains the preview when the server saves observations for review without claiming completion', async () => {
+    saveImportedTransactions.mockResolvedValueOnce({ data: { success: false, count: 1, review_required: 1, errors: [{ index: 1, status: 'review_required' }] } });
+    await advanceToPreview();
+    await userEvent.click(screen.getByRole('button', { name: 'שמירת 2 תנועות' }));
+    await userEvent.click(screen.getByRole('button', { name: 'שמירה בכל זאת' }));
+    await waitFor(() => expect(saveImportedTransactions).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('מסך הבית')).not.toBeInTheDocument();
+    expect(screen.getAllByText('GOOGLE *CLOUD').length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/יתר השורות לא נשמרו/)).length).toBeGreaterThan(0);
+  });
+
   it('cancels and confirms uncategorized save, preserves the payload, prevents duplicates, and navigates home', async () => {
     const request = deferred();
     saveImportedTransactions.mockReturnValue(request.promise);
@@ -327,7 +338,7 @@ describe('Import save behavior', () => {
     await userEvent.click(table.getByRole('button', { name: 'הסרת השורה PAYPAL *STEAM מהייבוא' }));
     const remainingCategory = table.getByRole('combobox', { name: 'קטגוריה עבור GOOGLE *CLOUD' });
     await userEvent.click(remainingCategory);
-    await userEvent.click(table.getByRole('option', { name: /דיור/ }));
+    await userEvent.click(screen.getByRole('option', { name: /דיור/ }));
     await userEvent.click(screen.getByRole('button', { name: 'שמירת 1 תנועות' }));
 
     expect(await screen.findByText(/שמירת התנועות נכשלה/)).toBeInTheDocument();
@@ -343,7 +354,7 @@ describe('Import save behavior', () => {
     const table = within(tableRegion);
     const category = table.getByRole('combobox', { name: 'קטגוריה עבור GOOGLE *CLOUD' });
     await userEvent.click(category);
-    await userEvent.click(table.getByRole('option', { name: /דיור/ }));
+    await userEvent.click(screen.getByRole('option', { name: /דיור/ }));
     await userEvent.click(screen.getByRole('button', { name: 'שמירת 2 תנועות' }));
 
     await waitFor(() => expect(saveImportedTransactions).toHaveBeenCalledTimes(1));

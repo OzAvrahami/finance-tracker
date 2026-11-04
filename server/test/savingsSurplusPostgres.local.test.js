@@ -2,10 +2,11 @@
 const { before, after, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const { normalizeSql, schemaThrough } = require('./helpers/sqlFixtures');
 const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 const container = `finance-sav05-tests-${process.pid}`;
-const read = p => fs.readFileSync(path.join(__dirname, '../..', p), 'utf8');
+const read = p => normalizeSql(fs.readFileSync(path.join(__dirname, '../..', p), 'utf8'));
 const migration = read('server/migrations/033_savings_funded_surplus.sql');
 const baseline = read('server/full_schema.sql').split('-- Migration 033:')[0];
 let created = false; let sequence = 0;
@@ -151,7 +152,7 @@ test('upgrade from 032 preserves reserve retirement, every financial row and obj
  sql(db,migration);assert.deepEqual(financial(db),before);
  const after=json(db,read('docs/operations/sql/MIGRATION_033_PRODUCTION_POSTFLIGHT.sql'));assert.equal(after.result,'MIGRATION_033_POSTFLIGHT_PASS',JSON.stringify(after.checks));assert.deepEqual(after.evidence,pre.evidence);
  assert.equal(scalar(db,"SELECT count(*) FROM budget_savings_entries WHERE entry_kind='account_opening_retirement';"),'1');assert.equal(scalar(db,'SELECT count(*) FROM transactions;'),'1'); // only the isolated zero-spend fixture, never fabricated cash
- sql('postgres','CREATE DATABASE sav05_clean;');sql('sav05_clean',read('server/full_schema.sql'));
+ sql('postgres','CREATE DATABASE sav05_clean;');sql('sav05_clean',schemaThrough(read('server/full_schema.sql'), 33));
  for(const name of ['apply_savings_surplus(uuid,text,jsonb)','reverse_savings_surplus(uuid,bigint,text,text)','apply_budget_month_disposition(text,uuid,text,text,jsonb)','budget_actual_transactions(date,date)'])assert.equal(scalar(db,`SELECT pg_get_functiondef('${name}'::regprocedure);`),scalar('sav05_clean',`SELECT pg_get_functiondef('${name}'::regprocedure);`));
  assert.equal(scalar('sav05_clean','SELECT count(*) FROM savings_accounts;'),'0');
  for(const role of ['anon','authenticated','service_role'])assert.equal(scalar(db,`SELECT has_function_privilege('${role}','savings_apply_surplus_locked(uuid,jsonb)','EXECUTE');`),'f');

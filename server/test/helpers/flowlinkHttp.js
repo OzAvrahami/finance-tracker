@@ -34,7 +34,9 @@ async function harness(t, options = {}) {
   const send = async (path, body, opts = {}) => {
     const method = opts.method || (body === undefined ? 'GET' : 'POST');
     const r = await fetch(base + path, { method,
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-owner-session', ...opts.headers },
+      // Disposable DB fixtures can block the loopback event loop past keepalive.
+      // Do not reuse an expired socket between independent synthetic requests.
+      headers: { Connection: 'close', 'Content-Type': 'application/json', Authorization: 'Bearer test-owner-session', ...opts.headers },
       ...(method === 'GET' || method === 'OPTIONS' ? {} : { body: opts.raw ?? JSON.stringify(body) }) });
     const raw = await r.text();return { status: r.status, body: raw ? JSON.parse(raw) : null, headers: r.headers };
   };

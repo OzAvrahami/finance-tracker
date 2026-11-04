@@ -2,172 +2,49 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-
-const {
-  createMockResponse,
-  loadControllerWithFake,
-} = require('./helpers/fakeSupabase');
-
-function createExternalApiFake({ existingExternalIds = {} } = {}) {
-  const state = { insertedRows: [], externalIdLookups: [] };
-
-  return {
-    state,
-    from(table) {
-      assert.equal(table, 'transactions');
-      return {
-        select() {
-          return {
-            eq(column, value) {
-              assert.equal(column, 'external_id');
-              state.externalIdLookups.push(value);
-              return {
-                maybeSingle: async () => ({
-                  data: existingExternalIds[value] ?? null,
-                  error: null,
-                }),
-              };
-            },
-          };
-        },
-        insert(row) {
-          state.insertedRows.push(row);
-          return {
-            select() {
-              return {
-                single: async () => ({
-                  data: {
-                    id: 701,
-                    external_id: row.external_id ?? null,
-                    created_at: '2026-08-15T09:00:00Z',
-                  },
-                  error: null,
-                }),
-              };
-            },
-          };
-        },
-      };
-    },
-  };
+const { loadControllerWithFake, createMockResponse } = require('./helpers/fakeSupabase');
+const { serializeTags } = require('../controllers/v1/transactionController');
+const { submitExternal } = require('../services/unifiedTransactionIngestion');
+const request = extra => ({ type: 'expense', amount: 42.5, date: '2026-11-04', payment_source_id: 6, external_id: 'synthetic', ...extra });
+function fake(result) {
+ const calls=[];
+ return { calls, from() { throw Error('no direct financial table access'); }, rpc: async(name,args)=>{
+  calls.push({name,args});return {data:result || {outcome:'created',transaction_id:'701',replayed:false,created_at:'2026-11-04T00:00:00Z'}};
+ } };
 }
-
-function request(overrides = {}) {
-  return {
-    body: {
-      type: 'expense',
-      amount: 42.5,
-      date: '2026-08-15',
-      ...overrides,
-    },
-  };
-}
-
-async function invoke(bodyOverrides = {}, fakeOptions = {}) {
-  const fake = createExternalApiFake(fakeOptions);
-  const controller = loadControllerWithFake(
-    '../../controllers/v1/transactionController',
-    fake,
-  );
-  const res = createMockResponse();
-  const originalLog = console.log;
-  console.log = () => {};
-  try {
-    await controller.createTransaction(request(bodyOverrides), res);
-  } finally {
-    console.log = originalLog;
-  }
-  return { fake, res };
-}
-
-test('external legacy caller cannot bypass a deliberately registered general account', async () => {
-  const fake = { from: () => ({ insert: () => ({ select: () => ({ single: async () => ({ error: { code: 'PGEN1' } }) }) }) }) };
-  const controller = loadControllerWithFake('../../controllers/v1/transactionController', fake);
-  const res = createMockResponse();
-  await controller.createTransaction(request({ payment_source_id: 1 }), res);
-  assert.equal(res.statusCode, 503);
-  assert.equal(res.body.error, 'general_adapter_required');
+test('single v1 forwards established fields to one atomic command, preserving JSON-number FX semantics',async()=>{
+ const db=fake(), controller=loadControllerWithFake('../../controllers/v1/transactionController',db),res=createMockResponse();
+ await controller.createTransaction({body:request({currency:'USD',original_amount:12,exchange_rate:3.5,notes:'note',tags:['  food  ']})},res);
+ assert.equal(res.statusCode,201);assert.equal(res.body.id,701);assert.equal(db.calls[0].name,'ingest_external_transaction');
+ assert.equal(db.calls[0].args.p_request.original_amount,12);assert.deepEqual(db.calls[0].args.p_request.tags,['food']);
 });
-
-test('external v1 omits the TEXT tags column when tags are absent', async () => {
-  const { fake, res } = await invoke();
-
-  assert.equal(res.statusCode, 201);
-  assert.equal(fake.state.insertedRows.length, 1);
-  assert.equal(Object.hasOwn(fake.state.insertedRows[0], 'tags'), false);
+test('tag TEXT compatibility and invalid comma validation',async()=>{
+ assert.equal(serializeTags(),null);assert.equal(serializeTags([]),null);assert.equal(serializeTags(['food','weekly']),'food,weekly');
+ const db=fake();assert.equal((await submitExternal(db,request({tags:['food,weekly']}))).status,400);assert.equal(db.calls.length,0);
 });
-
-test('external v1 reserves cancelled identity and returns an actionable conflict without inserting', async () => {
-  const { fake, res } = await invoke({ external_id: 'cancelled-1' }, { existingExternalIds: { 'cancelled-1': { id: 901, voided_at: '2026-09-12T00:00:00Z' } } });
-  assert.equal(res.statusCode, 409);
-  assert.equal(res.body.error, 'cancelled_record_exists');
-  assert.match(res.body.message, /בוטלה/);
-  assert.equal(fake.state.insertedRows.length, 0);
-  assert.deepEqual(fake.state.externalIdLookups, ['cancelled-1']);
+test('exact replay is 409; changed content is conflict; cancelled identity is never a success',async()=>{
+ const replay=await submitExternal(fake({outcome:'already_observed',transaction_id:'88',replayed:true,disposition:'created'}),request());
+ assert.equal(replay.status,409);assert.equal(replay.body.error,'already_exists');
+ const changed=await submitExternal(fake({outcome:'conflict',reason_code:'idempotency_key_conflict',transaction_id:'88'}),request());
+ assert.equal(changed.status,409);assert.equal(changed.body.error,'idempotency_key_conflict');
+ const cancelled=await submitExternal(fake({outcome:'already_observed',transaction_id:'88',replayed:true,disposition:'cancelled'}),request());
+ assert.equal(cancelled.body.error,'cancelled_record_exists');
 });
-
-test('external v1 omits the TEXT tags column for an empty array', async () => {
-  const { fake, res } = await invoke({ tags: [] });
-
-  assert.equal(res.statusCode, 201);
-  assert.equal(Object.hasOwn(fake.state.insertedRows[0], 'tags'), false);
+test('dry-run stays a preview command and pending review never claims financial success',async()=>{
+ const db=fake({dry_run:true,would_insert:{tags:'a,b'}}),r=await submitExternal(db,request({dry_run:true}));
+ assert.equal(r.status,200);assert.equal(db.calls[0].args.p_dry_run,true);assert.equal('dry_run' in db.calls[0].args.p_request,false);
+ const held=await submitExternal(fake({outcome:'ambiguous',reason_code:'competing_candidates',transaction_id:null}),request());
+ assert.equal(held.status,202);assert.equal(held.body.financial_posted,false);
 });
-
-test('external v1 serializes one tag to the canonical TEXT value', async () => {
-  const { fake, res } = await invoke({ tags: ['  groceries  '] });
-
-  assert.equal(res.statusCode, 201);
-  assert.equal(fake.state.insertedRows[0].tags, 'groceries');
-  assert.equal(Array.isArray(fake.state.insertedRows[0].tags), false);
+test('uncertain timeout is bounded, sanitized and never reported as rollback',async()=>{
+ const r=await submitExternal({rpc:()=>new Promise(()=>{})},request(),{commandMs:5});
+ assert.equal(r.status,503);assert.equal(r.body.commit_state,'unknown');assert.equal(r.body.financial_posted,null);
 });
-
-test('external v1 serializes multiple tags as comma-separated TEXT', async () => {
-  const { fake, res } = await invoke({ tags: ['groceries', 'weekly', 'cash'] });
-
-  assert.equal(res.statusCode, 201);
-  assert.equal(fake.state.insertedRows[0].tags, 'groceries,weekly,cash');
+test('unsafe precision, invalid dates and new public fields fail before persistence',async()=>{
+ for(const changes of [{amount:1.001},{amount:1e18},{date:'2026-02-30'},{purchase_key:'not approved'}]){
+  const db=fake();assert.equal((await submitExternal(db,request(changes))).status,400);assert.equal(db.calls.length,0);
+ }
 });
-
-test('external v1 dry-run reports the same serialized TEXT without writing', async () => {
-  const { fake, res } = await invoke({ tags: ['groceries', 'weekly'], dry_run: true });
-
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.dry_run, true);
-  assert.equal(res.body.would_insert.tags, 'groceries,weekly');
-  assert.equal(fake.state.insertedRows.length, 0);
-});
-
-test('external v1 rejects comma-containing tags because TEXT storage has no escaping', async () => {
-  const { fake, res } = await invoke({ tags: ['food,weekly'] });
-
-  assert.equal(res.statusCode, 400);
-  assert.equal(res.body.error, 'validation_error');
-  assert.equal(fake.state.insertedRows.length, 0);
-});
-
-test('external ID persistence and duplicate detection remain unchanged', async (t) => {
-  await t.test('persists the supplied external ID', async () => {
-    const { fake, res } = await invoke({ external_id: 'pos-2026-001' });
-
-    assert.equal(res.statusCode, 201);
-    assert.deepEqual(fake.state.externalIdLookups, ['pos-2026-001']);
-    assert.equal(fake.state.insertedRows[0].external_id, 'pos-2026-001');
-    assert.equal(res.body.external_id, 'pos-2026-001');
-  });
-
-  await t.test('returns 409 without inserting an existing external ID', async () => {
-    const { fake, res } = await invoke(
-      { external_id: 'pos-2026-duplicate' },
-      { existingExternalIds: { 'pos-2026-duplicate': { id: 88 } } },
-    );
-
-    assert.equal(res.statusCode, 409);
-    assert.equal(res.body.error, 'already_exists');
-    assert.equal(res.body.id, 88);
-    assert.equal(fake.state.insertedRows.length, 0);
-  });
-});
-
 test('Migration 016 and full_schema canonicalize the external transaction contract', () => {
   const migrationPath = path.join(
     __dirname,
