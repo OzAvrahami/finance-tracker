@@ -17,6 +17,18 @@ beforeEach(()=>{
  getReconciliationDetail.mockResolvedValue({data:detail()});resolveReconciliation.mockResolvedValue({data:{outcome:'reconciled'}});
 });
 describe('owner reconciliation workflow',()=>{
+ it('labels held bank account evidence in Hebrew without offering a financial post',async()=>{
+  const bank = {...evidence,source:'external_api',payment_context:'bank_account •••• 5297'};
+  getReconciliationPending.mockResolvedValue({data:{items:[bank],next_cursor:null}});
+  getReconciliationDetail.mockResolvedValue({data:{...detail(),observation:bank,can_separate:false,candidates:[]}});
+  const user=userEvent.setup();mount();await user.click(await screen.findByRole('button',{name:/התאמת עסקאות/}));
+  expect(await screen.findByText('חשבון בנק •••• 5297')).toBeVisible();
+  await user.click(screen.getByRole('button',{name:/בדיקה:/}));
+  await waitFor(()=>expect(getReconciliationDetail).toHaveBeenCalled());
+  expect(screen.queryByRole('radio',{name:/זו קנייה נפרדת/})).not.toBeInTheDocument();
+  expect(screen.queryByText(/bank_account/)).not.toBeInTheDocument();
+  expect(resolveReconciliation).not.toHaveBeenCalled();
+ });
  it('shows server-derived compact status and distinct pending evidence without another expense',async()=>{
   const user=userEvent.setup();mount();expect(await screen.findByRole('button',{name:/פרטי התאמה: Apple Pay/})).toBeVisible();
   expect(screen.getByRole('button',{name:/פרטי התאמה: אושרה/})).toBeVisible();await user.click(screen.getByRole('button',{name:/התאמת עסקאות/}));

@@ -214,7 +214,7 @@ exports.deleteCategory = async (req, res) => {
 
 // ========== Payment Sources ==========
 
-const VALID_METHODS = ['credit_card', 'debit_card', 'cash', 'bank_transfer', 'digital_wallet', 'check'];
+const VALID_METHODS = ['credit_card', 'debit_card', 'cash', 'bank_transfer', 'bank_account', 'digital_wallet', 'check'];
 
 function toSlug(name) {
   return name.trim().toLowerCase()

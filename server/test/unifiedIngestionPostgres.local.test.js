@@ -10,6 +10,7 @@ const { runBulk } = require('../services/externalTransactionBulk');
 const container = `finance-unified-${process.pid}`;
 const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 054:')[0];
 const migration = fs.readFileSync(path.join(__dirname, '../migrations/054_unified_transaction_ingestion.sql'), 'utf8');
+const bankMigration = fs.readFileSync(path.join(__dirname, '../migrations/055_bank_account_payment_sources.sql'), 'utf8');
 let started = false, sequence = 0;
 const run = (args, input, allow = false) => {
   const r = spawnSync('docker', args, { input, encoding: 'utf8', timeout: 60000, maxBuffer: 32e6 });
@@ -56,9 +57,87 @@ before(async () => {
   for (let i = 0; i < 60; i++) { if (run(['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status === 0) break; await new Promise(r => setTimeout(r, 200)); }
   sql('postgres', 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE DATABASE unified_clean; CREATE DATABASE unified_old;');
   sql('unified_old', full); sql('unified_old', sources);
-  sql('unified_clean', full); sql('unified_clean', migration); sql('unified_clean', sources);
+  sql('unified_clean', full); sql('unified_clean', migration); sql('unified_clean', bankMigration); sql('unified_clean', sources);
 });
 after(() => { if (started) run(['rm', '-f', container]); });
+
+const createBank = db => Number(scalar(db, `INSERT INTO payment_sources(name,slug,method,issuer,last4,owner)
+ VALUES('בנק דיסקונט - 5297','synthetic-discount','bank_account','Discount','5297','Synthetic owner') RETURNING id;`));
+test('055 atomically extends methods, preserving IDs 8/9 and all existing payment sources and transactions', () => {
+  const db = 'bank_upgrade'; sql('postgres', `CREATE DATABASE ${db};`);
+  sql(db, full); sql(db, migration);
+  sql(db, `INSERT INTO payment_sources(id,name,slug,method,is_active) VALUES
+   (8,'Cash','cash','cash',true),(9,'Bank transfer','transfer','bank_transfer',false);
+   INSERT INTO payment_sources(name,slug,method) SELECT method,method,method FROM unnest(ARRAY['credit_card','debit_card','digital_wallet','check']) method;
+   INSERT INTO transactions(description,total_amount,movement_type,transaction_date,charge_date,payment_source_id)
+    VALUES('Synthetic historical expense',25,'expense','2026-10-01','2026-10-01',8);`);
+  const snapshot = () => scalar(db, `SELECT jsonb_build_array(
+   (SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM payment_sources p),
+   (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM transactions t));`);
+  const original = snapshot();
+  assert.notEqual(sql(db, bankMigration.replace(/COMMIT;\s*$/, 'SELECT 1/0; COMMIT;'), true).status, 0);
+  assert.equal(snapshot(), original);
+  assert.notEqual(sql(db, "INSERT INTO payment_sources(name,slug,method) VALUES('Reject','reject','bank_account');", true).status, 0);
+  sql(db, bankMigration); assert.equal(snapshot(), original);
+  const id = createBank(db); assert.notEqual(id, 8); assert.notEqual(id, 9);
+  assert.deepEqual(json(db, `SELECT jsonb_build_object('name',name,'method',method,'issuer',issuer,'last4',last4) FROM payment_sources WHERE id=${id};`),
+    { name: 'בנק דיסקונט - 5297', method: 'bank_account', issuer: 'Discount', last4: '5297' });
+  sql(db, `UPDATE payment_sources SET owner='Edited owner',is_active=false WHERE id=${id};`);
+  assert.equal(scalar(db, `SELECT is_active FROM payment_sources WHERE id=${id};`), 'f');
+  assert.notEqual(sql(db, `UPDATE payment_sources SET method='invalid' WHERE id=${id};`, true).status, 0);
+  assert.deepEqual(json(db, 'SELECT jsonb_object_agg(id,method) FROM payment_sources WHERE id IN (8,9);'), { 8: 'cash', 9: 'bank_transfer' });
+});
+
+test('bank-account external and CSV observations stay actionable and cannot post or bypass review', () => {
+  for (const channel of ['external', 'csv']) {
+    const db = createCase(), id = createBank(db);
+    const send = (key, extra = {}) => channel === 'external'
+      ? ingest(db, item(key, { payment_source_id: id, ...extra }))
+      : owned(db, 'csv', key, { payment_source_id: id, ...extra });
+    const first = send('bank-event');
+    assert.equal(first.reason_code, 'bank_event_semantics_required');
+    assert.equal(first.transaction_id, null); assert.equal(first.review_required, true);
+    assert.equal(send('bank-event').replayed, true);
+    assert.equal(send('bank-event', channel === 'external' ? { amount: 151 } : { total_amount: 151 }).reason_code, 'idempotency_key_conflict');
+    const income = send('income', channel === 'external' ? { type: 'income' } : { movement_type: 'income' });
+    assert.equal(income.reason_code, 'bank_event_semantics_required');
+    const detail = call(db, 'read_reconciliation', ['observation', '{}', first.observation_id]);
+    assert.equal(detail.can_separate, false);
+    const command = { observation_id: first.observation_id,
+      expected_revision: first.decision_revision, expected_candidate_fingerprints: detail.candidate_fingerprints,
+      action: 'separate', actor: 'synthetic-owner', reason: 'Attempt cannot supply missing semantics' };
+    const review = sql(db, `SET ROLE service_role; SELECT review_reconciliation(${quote(randomUUID())},${quote(command)});`, true);
+    assert.notEqual(review.status, 0); assert.match(review.stderr, /evidence_correction_required/);
+    assert.equal(count(db), 0);
+    assert.equal(Number(scalar(db, 'SELECT count(*) FROM transaction_source_observations;')), 2);
+    assert.match(detail.observation.payment_context, /bank_account.*5297/);
+  }
+});
+
+test('bank-account manual entry uses the existing domain writer and inactive accounts cannot post externally', () => {
+  const db = createCase(), id = createBank(db);
+  assert.equal(owned(db, 'manual', 'manual-bank', { payment_source_id: id }).outcome, 'created');
+  assert.equal(count(db), 1);
+  sql(db, `UPDATE payment_sources SET is_active=false WHERE id=${id};`);
+  assert.equal(ingest(db, item('inactive-bank', { payment_source_id: id })).reason_code, 'payment_source_not_found');
+  assert.equal(count(db), 1);
+});
+
+test('055 full schema parity, posting protections and function privilege boundaries remain intact', () => {
+  const db = 'bank_fresh'; sql('postgres', `CREATE DATABASE ${db};`);
+  sql(db, fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8'));
+  const definitions = database => scalar(database, `SELECT jsonb_agg(jsonb_build_array(p.oid::regprocedure::text,
+   replace(pg_get_functiondef(p.oid),chr(13),''),p.prosecdef,p.proacl::text) ORDER BY p.proname)
+   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
+   AND p.proname IN ('ingest_external_transaction','ingest_owned_transaction','unified_ingest','unified_external_guard');`);
+  assert.equal(definitions(db), definitions('unified_clean'));
+  for (const name of ['ingest_external_transaction(jsonb,boolean)', 'ingest_owned_transaction(text,text,jsonb,jsonb,jsonb)']) {
+    for (const role of ['anon', 'authenticated']) assert.equal(scalar(db, `SELECT has_function_privilege('${role}','${name}','EXECUTE');`), 'f');
+    assert.equal(scalar(db, `SELECT has_function_privilege('service_role','${name}','EXECUTE');`), 't');
+  }
+  assert.equal(scalar(db, "SELECT relrowsecurity FROM pg_class WHERE oid='public.payment_sources'::regclass;"), 't');
+  assert.ok(fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').replaceAll('\r\n', '\n').endsWith(bankMigration.replaceAll('\r\n', '\n')));
+});
 
 test('all card issuers use existing payment source records; bank events are retained without guessed cash', () => {
   const db = createCase();
@@ -209,5 +288,6 @@ test('forward upgrade preserves 38 CAL receipts and history byte-for-byte; rollb
   assert.equal(snapshot(), original);
   assert.equal(scalar(db, "SELECT count(*) FROM pg_trigger WHERE tgname='cal_external_identity';"), '1');
   sql(db, migration); assert.equal(snapshot(), original);
+  sql(db, bankMigration); assert.equal(snapshot(), original);
   const r = ingest(db, item('historical-0')); assert.equal(r.reason_code, 'historical_identity_reserved'); assert.equal(count(db), 38);
 });

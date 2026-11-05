@@ -101,6 +101,20 @@ const tableText = (text) => within(transactionsTable()).getByText(text);
 const findTableText = async (text) => within(await screen.findByRole('table')).findByText(text);
 const summary = () => screen.getByRole('region', { name: 'סיכום מלא של התוצאות המסוננות' });
 
+it('displays historical bank account and legacy cash/transfer transactions without reclassifying them', async () => {
+  const sources = [
+    { id: 123, name: 'בנק דיסקונט - 5297', method: 'bank_account', last4: '5297' },
+    { id: 8, name: 'מזומן', method: 'cash' },
+    { id: 9, name: 'העברה בנקאית', method: 'bank_transfer' },
+  ];
+  getTransactions.mockResolvedValue(page(sources.map((source, i) => row(i + 1, '2026-11-05', {
+    payment_source_id: source.id, payment_sources: source,
+  }))));
+  await renderAndSettle();
+  for (const source of sources) expect(tableText(source.name)).toBeVisible();
+  expect(deleteTransaction).not.toHaveBeenCalled();
+});
+
 function bodyRowIds() {
   const rows = screen.getAllByRole('row');
   // Skip the header row; each data row starts with a date cell.

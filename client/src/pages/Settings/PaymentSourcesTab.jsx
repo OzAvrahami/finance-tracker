@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, Landmark } from 'lucide-react';
 import {
   Alert,
   ConfirmDialog,
@@ -29,6 +29,7 @@ const METHODS = [
   { value: 'debit_card', label: 'כרטיס חיוב' },
   { value: 'cash', label: 'מזומן' },
   { value: 'bank_transfer', label: 'העברה בנקאית' },
+  { value: 'bank_account', label: 'חשבון בנק' },
   { value: 'digital_wallet', label: 'ארנק דיגיטלי' },
   { value: 'check', label: 'המחאה' },
 ];
@@ -206,7 +207,7 @@ const PaymentSourcesTab = () => {
           {displayedSources.map((source) => (
             <SettingsRecord
               key={source.id}
-              icon={<CreditCard size={18} />}
+              icon={source.method === 'bank_account' ? <Landmark size={18} /> : <CreditCard size={18} />}
               title={source.name}
               active={source.is_active}
               metadata={(
@@ -268,13 +269,13 @@ const PaymentSourcesTab = () => {
               label="מנפיק או בנק"
               value={form.issuer}
               onValueChange={updateForm('issuer')}
-              placeholder="למשל: Visa Cal"
+              placeholder={form.method === 'bank_account' ? 'למשל: Discount' : 'למשל: Visa Cal'}
               technicalLtr
             />
           </div>
           <div className="settings-form-grid settings-form-grid--two">
             <TextField
-              label="ארבע ספרות אחרונות"
+              label={form.method === 'bank_account' ? 'ארבע ספרות אחרונות של החשבון' : 'ארבע ספרות אחרונות'}
               value={form.last4}
               onValueChange={(value) => updateForm('last4')(value.replace(/\D/g, '').slice(0, 4))}
               inputMode="numeric"

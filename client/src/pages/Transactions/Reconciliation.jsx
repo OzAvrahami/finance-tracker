@@ -12,7 +12,7 @@ const stored = id => { try { return JSON.parse(sessionStorage.getItem(`apy-revie
 const remember = (id, command) => { sessionStorage.setItem(`apy-review:${id}`, JSON.stringify(command)); };
 const forget = id => sessionStorage.removeItem(`apy-review:${id}`);
 
-const methodLabels = { credit_card: 'כרטיס אשראי', debit_card: 'כרטיס חיוב', cash: 'מזומן', bank_transfer: 'העברה בנקאית', digital_wallet: 'ארנק דיגיטלי', check: 'המחאה' };
+const methodLabels = { credit_card: 'כרטיס אשראי', debit_card: 'כרטיס חיוב', cash: 'מזומן', bank_transfer: 'העברה בנקאית', bank_account: 'חשבון בנק', digital_wallet: 'ארנק דיגיטלי', check: 'המחאה' };
 const cardLabel = value => {
   const text = value || '';
   const last4 = text.match(/•••• (\d{4})$/)?.[1];

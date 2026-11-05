@@ -29,6 +29,8 @@ The private core serializes decisions under the existing transaction-table lock.
 
 Existing `payment_sources` identify cards and accounts. Issuer names do not select a writer. Three internal channel records replace card registrations: external v1, manual entry and CSV. These are not account aliases or per-card registrations. Existing device bindings remain necessary for FlowLink authentication and compatibility.
 
+Forward migration 055 adds the distinct `bank_account` payment-source method without reclassifying existing cash or bank-transfer sources. External and CSV observations using it remain held with `bank_event_semantics_required`, just like bank transfers and checks; this method does not enable automatic bank-event posting. Settings stores only the existing display metadata and last-four field, not a full account identifier. See [implementation, verification and release prerequisites](../history/BANK_ACCOUNT_PAYMENT_SOURCES.md).
+
 ## Identity and reconciliation
 
 - The existing global `external_id` namespace remains. Producers must use stable, namespaced IDs; a different producer's equal ID is not proof of the same purchase. No public producer field was added.

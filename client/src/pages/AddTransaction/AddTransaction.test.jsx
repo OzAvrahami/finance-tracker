@@ -74,6 +74,22 @@ const settleInitialData = async () => {
   await waitFor(() => expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('10'));
 };
 
+it('selects a bank account in the existing transaction form and submits its server-provided ID', async () => {
+  const bank = { id: 123, name: 'בנק דיסקונט - 5297', method: 'bank_account', issuer: 'Discount', last4: '5297' };
+  getPaymentSources.mockResolvedValue({ data: [...paymentSources, bank] });
+  renderForm(); await settleInitialData();
+  const select = screen.getByLabelText(/^אמצעי תשלום/);
+  expect(within(select).getByRole('option', { name: /בנק דיסקונט - 5297/ })).toBeVisible();
+  await userEvent.selectOptions(select, String(bank.id));
+  await userEvent.type(screen.getByRole('textbox', { name: /^תיאור/ }), 'Synthetic manual purchase');
+  fireEvent.change(screen.getByLabelText(/^קטגוריה/), { target: { value: '1' } });
+  fireEvent.change(screen.getByRole('spinbutton', { name: /^סכום$/ }), { target: { value: '25' } });
+  await userEvent.click(screen.getByRole('button', { name: 'שמור תנועה' }));
+  await waitFor(() => expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({
+    transaction: expect.objectContaining({ payment_source_id: bank.id, movement_type: 'expense', total_amount: '25' }),
+  })));
+});
+
 it('shows cancelled history without an editable form or save action', async () => {
   getTransactionById.mockResolvedValue({ data: { id: 400, description: 'רישום שבוטל', total_amount: '100.00', transaction_date: '2026-09-01', voided_at: '2026-09-12T00:00:00Z', void_reason: 'בוטלה לבקשת הבעלים' } });
   renderForm('/edit-transaction/400');

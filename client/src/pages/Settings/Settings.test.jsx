@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PageHeaderContext } from '../../context/PageHeaderContext';
 import {
   createAdminShoppingCatalogCategory,
@@ -100,6 +100,50 @@ const HeaderHarness = ({ children }) => {
 };
 
 const renderSettings = () => render(<Settings />, { wrapper: HeaderHarness });
+const originalDirection = document.documentElement.getAttribute('dir');
+// Match client/index.html, including dialogs rendered through a body portal.
+beforeEach(() => document.documentElement.setAttribute('dir', 'rtl'));
+afterEach(() => {
+  if (originalDirection === null) document.documentElement.removeAttribute('dir');
+  else document.documentElement.setAttribute('dir', originalDirection);
+});
+
+it('creates and edits a bank account in the existing RTL settings and preserves its returned identity', async () => {
+  const user = userEvent.setup();
+  const fixture = { name: 'בנק דיסקונט - 5297', method: 'bank_account', issuer: 'Discount', last4: '5297', owner: 'Synthetic owner' };
+  // Mock the server-assigned identity; the PostgreSQL suite exercises GENERATED IDENTITY.
+  const assigned = paymentSources.length + 100;
+  let saved;
+  createSettingsPaymentSource.mockImplementation(async payload => {
+    saved = { ...payload, id: assigned, is_active: true };
+    getSettingsPaymentSources.mockResolvedValue({ data: [...paymentSources, saved] });
+    return { data: saved };
+  });
+  renderSettings(); await screen.findByText('מזון');
+  await user.click(screen.getByRole('tab', { name: 'אמצעי תשלום' }));
+  await user.click(await screen.findByRole('button', { name: 'אמצעי תשלום חדש' }));
+  let dialog = screen.getByRole('dialog');
+  expect(dialog.closest('[dir]')).toHaveAttribute('dir', 'rtl');
+  await user.selectOptions(within(dialog).getByLabelText('אמצעי'), 'bank_account');
+  await user.type(within(dialog).getByLabelText(/שם התצוגה/), fixture.name);
+  await user.type(within(dialog).getByLabelText('מנפיק או בנק'), fixture.issuer);
+  const last4 = within(dialog).getByLabelText('ארבע ספרות אחרונות של החשבון');
+  expect(last4).toHaveAttribute('maxLength', '4'); expect(last4).toHaveAttribute('dir', 'ltr');
+  await user.type(last4, fixture.last4);
+  await user.type(within(dialog).getByLabelText('בעלים'), fixture.owner);
+  await user.click(within(dialog).getByRole('button', { name: 'שמירה' }));
+  await waitFor(() => expect(createSettingsPaymentSource).toHaveBeenCalledWith(fixture));
+  expect(await screen.findByText(fixture.name)).toBeVisible();
+  expect(screen.getByText('חשבון בנק')).toHaveClass('is-bank_account');
+  expect(screen.getByText('•••• 5297')).toHaveAttribute('dir', 'ltr');
+  await user.click(screen.getByRole('button', { name: `עריכת אמצעי התשלום ${fixture.name}` }));
+  dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByLabelText('אמצעי')).toHaveValue('bank_account');
+  expect(within(dialog).getByLabelText('ארבע ספרות אחרונות של החשבון')).toHaveValue('5297');
+  await user.click(within(dialog).getByLabelText('אמצעי תשלום פעיל'));
+  await user.click(within(dialog).getByRole('button', { name: 'שמירה' }));
+  await waitFor(() => expect(updateSettingsPaymentSource).toHaveBeenCalledWith(assigned, { ...fixture, is_active: false }));
+});
 
 beforeEach(() => {
   vi.resetAllMocks();
