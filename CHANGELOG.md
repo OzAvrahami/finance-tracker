@@ -12,13 +12,15 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
-- Bank account payment sources: add `bank_account` (חשבון בנק) in the existing payment-source settings, with bank/issuer, last four digits, owner and active status. Forward migration 055 extends the method constraint without changing existing source IDs or historical transactions. External and CSV bank-account observations remain held with `bank_event_semantics_required`; no bank synchronization or automatic financial posting is enabled. Requires migration 054 and its unified backend. See [implementation and release prerequisites](docs/history/BANK_ACCOUNT_PAYMENT_SOURCES.md). Owner acceptance pending.
+- Bank account payment sources: add `bank_account` (חשבון בנק) in the existing payment-source settings, with bank/issuer, last four digits, owner and active status. Forward migration 055 extends the method constraint without changing existing source IDs or historical transactions. CSV bank-account observations remain held with `bank_event_semantics_required`; migration 056 below permits ordinary external expenses through existing reconciliation. No bank synchronization is enabled. Requires migration 054 and its unified backend. See [implementation and release prerequisites](docs/history/BANK_ACCOUNT_PAYMENT_SOURCES.md). Owner acceptance pending.
 
 ### Changed
 
 - Unified ingestion: retain the existing single/Bulk transaction endpoint while moving external, manual and CSV intake decisions onto the observation/reconciliation foundation. Add atomic replay/conflict and historical identity reservations, issuer-independent payment-source resolution, conservative cross-source review, exact charged/original currency values and observed-installment protection. Preserve manual domain writers and paused FlowLink compatibility. Forward migration 054 replaces card-specific posting guards without deleting historical receipts or financial data. Retire CAL/general-envelope intake (related #96); those obsolete envelopes are incompatible and require a coordinated upgrade. Missing refund, transfer and purchase-series semantics remain review-only. See [design, limitations and migration boundary](docs/architecture/UNIFIED_TRANSACTION_INGESTION.md). Local implementation only; owner acceptance and production authorization pending.
 
 ### Fixed
+
+- External ingestion: migration 056 removes the method-only hold for ordinary `bank_account` expenses through the existing unified pipeline (related #96). Preserve CSV behavior, income/refund and bank-transfer/check holds, identity conflicts, historical reservations and reconciliation review. No historical rows are rewritten; existing held observations retain their outcome on replay. Production migration and owner acceptance remain pending.
 
 - FlowLink: show the installed bundle's actual version/build and compiled Debug/Release configuration in Diagnostics instead of the hard-coded `0.1.0 (1)`. Release build 4 is installed and verified on the owner's iPhone. Authenticated credential replacement restored the original device connection and binding after the Debug-origin namespace change; original captures remain preserved but isolated in their previous namespace, with no delivery attempted.
 
