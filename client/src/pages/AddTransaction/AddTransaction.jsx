@@ -68,6 +68,7 @@ const AddTransaction = () => {
     loanPaymentError,
     legoThemes,
     isEditMode,
+    isExistingRefund,
     returnTo,
     showNewCategoryModal,
     setShowNewCategoryModal,
@@ -189,6 +190,7 @@ const AddTransaction = () => {
               labelledBy="movement-type-label"
               value={transaction.movement_type}
               options={movementOptions}
+              disabled={isExistingRefund}
               fullWidth
               onValueChange={(value) => handleTransactionChange({ target: { name: 'movement_type', value } })}
             />
@@ -278,7 +280,9 @@ const AddTransaction = () => {
               value={transaction.total_amount}
               onChange={handleTransactionChange}
               placeholder="0.00"
-              min="0"
+              min={isExistingRefund ? undefined : '0'}
+              max={isExistingRefund ? '-0.01' : undefined}
+              helperText={isExistingRefund ? 'זיכוי בנקאי נשמר כהוצאה שלילית.' : undefined}
               step="0.01"
               suffix="₪"
               required

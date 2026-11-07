@@ -42,6 +42,9 @@ const useTransactionForm = () => {
   const [savingsAccounts, setSavingsAccounts] = useState([]);
   const [savingsAccountId, setSavingsAccountId] = useState(searchParams.get('savingsAccountId') || '');
   const [savedCash, setSavedCash] = useState(null);
+  // Only an existing, server-classified refund may retain a negative expense.
+  const isExistingRefund = isEditMode && savedCash?.bank_movement === 'refund'
+    && savedCash.movement_type === 'expense' && Number(savedCash.total_amount) < 0;
   const [repurchaseCandidates, setRepurchaseCandidates] = useState([]);
   const [repurchaseUnavailable, setRepurchaseUnavailable] = useState(false);
   const [savingsReason, setSavingsReason] = useState('');
@@ -398,7 +401,10 @@ const useTransactionForm = () => {
             category_id: transaction.category_id ? parseInt(transaction.category_id) : null,
             loan_id: transaction.loan_id ? parseInt(transaction.loan_id) : null,
             payment_source_id: transaction.payment_source_id ? parseInt(transaction.payment_source_id) : null,
-            installment_count: parseInt(transaction.installment_count) || 1,
+            // Refunds are not installments; keep their persisted null rather than
+            // sending the new-transaction form's default count of one.
+            installment_count: isExistingRefund ? (savedCash.installment_count ?? null)
+              : parseInt(transaction.installment_count) || 1,
         },
         items: items.map(withoutItemKey),
         ...(transaction.loan_id ? {
@@ -528,6 +534,7 @@ const useTransactionForm = () => {
     legoThemes,
     availableTags,
     isEditMode,
+    isExistingRefund,
     returnTo,
     showNewCategoryModal,
     setShowNewCategoryModal,

@@ -435,6 +435,46 @@ test('057 credits do not bypass nonbank, unknown-source, identity, installment o
   assert.equal(count(db),1);
 });
 
+test('refund metadata edit preserves classification, signed cash and immutable ingestion evidence on reload', () => {
+  const db = createCase(); sql(db, bankMovementsMigration);
+  const bank = createBank(db);
+  const date = scalar(db, "SELECT timezone('Asia/Jerusalem',statement_timestamp())::date;");
+  const body = item('synthetic-refund-edit', { type: 'refund', amount: 149,
+    payment_source_id: bank, date, charge_date: date });
+  const first = ingest(db, body);
+  assert.equal(first.outcome, 'created');
+  const id = first.transaction_id;
+  const evidence = () => scalar(db, `SELECT jsonb_build_array(
+    (SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM transaction_source_observations o),
+    (SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM cal_ingestion_receipts r),
+    (SELECT jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text) FROM transaction_api_receipts r));`);
+  const before = evidence();
+  const edit = { description: 'Reviewed refund', movement_type: 'expense', total_amount: -149,
+    payment_source_id: bank, transaction_date: date, charge_date: date, category_id: 100,
+    currency: 'ILS', notes: 'Reviewed metadata', installment_count: null };
+  call(db, 'update_transaction_with_manual_loan_payment', [id, edit, null]);
+  const row = json(db, `SELECT row_json FROM transactions_filtered(p_transaction_id=>${id});`);
+  assert.equal(Number(row.total_amount), -149);
+  assert.equal(row.bank_movement, 'refund');
+  assert.equal(row.movement_type, 'expense');
+  assert.equal(Number(row.payment_source_id), bank);
+  assert.equal(Number(row.category_id), 100);
+  assert.equal(row.notes, 'Reviewed metadata');
+  assert.equal(row.installment_count, null);
+  assert.equal(row.external_id, body.external_id);
+  assert.equal(evidence(), before);
+  const replay = ingest(db, body);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.transaction_id, id);
+  assert.equal(count(db), 1);
+  assert.equal(scalar(db, `SELECT total_amount::numeric(14,2) FROM transactions WHERE id=${id};`), '-149.00');
+  for (const invalid of [{ ...edit, movement_type: 'income' }, { ...edit, total_amount: 149 }]) {
+    assert.notEqual(sql(db, `SET ROLE service_role; SELECT update_transaction_with_manual_loan_payment(${id},${quote(invalid)},NULL);`, true).status, 0);
+  }
+  assert.equal(evidence(), before);
+  assert.equal(scalar(db, `SELECT bank_movement||':'||movement_type||':'||total_amount::numeric(14,2) FROM transactions WHERE id=${id};`), 'refund:expense:-149.00');
+});
+
 test('057 migration rollback/repeat preserves old cash and evidence; fresh schema agrees',()=>{
   const db=createCase();ingest(db,item('unchanged-cal'));
   const before=()=>scalar(db,"SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(t)-'bank_movement' ORDER BY id) FROM transactions t),(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM transaction_source_observations o),(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM transaction_reconciliation_events e));");

@@ -140,6 +140,75 @@ beforeEach(() => {
   updateTransaction.mockResolvedValue({ data: { id: 42 } });
 });
 
+describe('existing bank refund editing', () => {
+  const refund = {
+    id: 42, description: 'Synthetic bank refund', movement_type: 'expense',
+    bank_movement: 'refund', total_amount: '-149.00', payment_source_id: 14,
+    category_id: 1, transaction_date: '2026-11-07', charge_date: '2026-11-07',
+    currency: 'ILS', external_id: 'synthetic-refund-edit', transaction_items: [],
+  };
+
+  it('saves category and notes, then reloads the same signed classified refund', async () => {
+    let stored = { ...refund };
+    getPaymentSources.mockResolvedValue({ data: [...paymentSources,
+      { id: 14, name: 'Synthetic bank', method: 'bank_account' }] });
+    getCategories.mockResolvedValue({ data: [...categories, { id: 3, name: 'תחבורה' }] });
+    getTransactionById.mockImplementation(async () => ({ data: { ...stored } }));
+    updateTransaction.mockImplementation(async (_id, payload) => {
+      stored = { ...stored, ...payload.transaction };
+      return { data: stored };
+    });
+    const user = userEvent.setup();
+    const view = renderForm('/edit-transaction/42');
+    const amount = await screen.findByRole('spinbutton', { name: /^סכום$/ });
+    await waitFor(() => expect(amount).toHaveValue(-149));
+    expect(amount).toBeValid();
+    expect(amount).not.toHaveAttribute('min');
+    expect(screen.getByRole('radio', { name: 'הכנסה' })).toBeDisabled();
+    fireEvent.change(amount, { target: { value: '0' } });
+    expect(amount.validity.rangeOverflow).toBe(true);
+    fireEvent.change(amount, { target: { value: '-149.00' } });
+    const category = screen.getByRole('combobox', { name: /^קטגוריה/ });
+    await user.clear(category);
+    await user.type(category, 'תחבורה');
+    await user.click(await screen.findByRole('option', { name: /תחבורה/ }));
+    await user.type(screen.getByRole('textbox', { name: /^הערות/ }), 'Reviewed metadata');
+    await user.click(screen.getByRole('button', { name: 'עדכן תנועה' }));
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1));
+    const payload = updateTransaction.mock.calls[0][1].transaction;
+    expect(payload).toMatchObject({ total_amount: '-149.00', movement_type: 'expense',
+      payment_source_id: 14, category_id: 3, notes: 'Reviewed metadata', installment_count: null });
+    expect(payload).not.toHaveProperty('bank_movement');
+    expect(payload).not.toHaveProperty('external_id');
+    expect(stored.bank_movement).toBe('refund');
+    expect(stored.external_id).toBe(refund.external_id);
+    view.unmount();
+    renderForm('/edit-transaction/42');
+    await waitFor(() => expect(screen.getByRole('spinbutton', { name: /^סכום$/ })).toHaveValue(-149));
+    expect(screen.getByRole('spinbutton', { name: /^סכום$/ })).toBeValid();
+    expect(screen.getByRole('radio', { name: 'הכנסה' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /^קטגוריה/ })).toHaveValue('תחבורה');
+    expect(screen.getByRole('textbox', { name: /^הערות/ })).toHaveValue('Reviewed metadata');
+  });
+
+  it.each(['/add', '/edit-transaction/42'])('retains nonnegative expense validation at %s', async (route) => {
+    getTransactionById.mockResolvedValue({ data: { ...refund, bank_movement: null,
+      total_amount: '149.00', payment_source_id: 10 } });
+    renderForm(route);
+    await waitFor(() => expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('10'));
+    const amount = screen.getByRole('spinbutton', { name: /^סכום$/ });
+    expect(amount).toHaveAttribute('min', '0');
+    expect(screen.getByRole('radio', { name: 'הכנסה' })).not.toBeDisabled();
+    fireEvent.change(amount, { target: { value: '-149' } });
+    expect(amount.validity.rangeUnderflow).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: route === '/add' ? 'שמור תנועה' : 'עדכן תנועה' }));
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(updateTransaction).not.toHaveBeenCalled();
+    fireEvent.change(amount, { target: { value: '149' } });
+    expect(amount).toBeValid();
+  });
+});
+
 describe('AddTransaction characterization', () => {
   it('renders the approved numbered Finance v3 hierarchy with notes in the core and a compact footer', async () => {
     const { container } = renderForm();

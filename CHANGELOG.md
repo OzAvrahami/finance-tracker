@@ -22,6 +22,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- Transaction editing: allow an existing classified bank refund to retain its negative amount when saving category or other metadata changes. Preserve its null installment count instead of submitting the form's default of one. Keep its expense classification fixed in the form and preserve normal expense/new-transaction validation, source identity and ingestion evidence. No database migration required.
+
 - External ingestion: migration 056 removes the method-only hold for ordinary `bank_account` expenses through the existing unified pipeline (related #96). Preserve CSV behavior, income/refund and bank-transfer/check holds, identity conflicts, historical reservations and reconciliation review. No historical rows are rewritten; existing held observations retain their outcome on replay. Production migration and owner acceptance remain pending.
 
 - FlowLink: show the installed bundle's actual version/build and compiled Debug/Release configuration in Diagnostics instead of the hard-coded `0.1.0 (1)`. Release build 4 is installed and verified on the owner's iPhone. Authenticated credential replacement restored the original device connection and binding after the Debug-origin namespace change; original captures remain preserved but isolated in their previous namespace, with no delivery attempted.
