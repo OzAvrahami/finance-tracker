@@ -29,7 +29,7 @@ The private core serializes decisions under the existing transaction-table lock.
 
 Existing `payment_sources` identify cards and accounts. Issuer names do not select a writer. Three internal channel records replace card registrations: external v1, manual entry and CSV. These are not account aliases or per-card registrations. Existing device bindings remain necessary for FlowLink authentication and compatibility.
 
-Forward migration 055 adds the distinct `bank_account` payment-source method without reclassifying existing cash or bank-transfer sources. Forward migration 056 permits ordinary external expenses from any active `bank_account` source through the existing reconciliation pipeline. CSV bank-account observations, bank transfers and checks remain held with `bank_event_semantics_required`; external income remains held with `refund_semantics_required`. All identity, historical reservation, installment and cross-source review rules still apply. Existing held observations are not reprocessed: exact replay returns their retained outcome. Settings stores only the existing display metadata and last-four field, not a full account identifier. See [implementation, verification and release prerequisites](../history/BANK_ACCOUNT_PAYMENT_SOURCES.md).
+Forward migration 055 adds the distinct `bank_account` payment-source method without reclassifying existing cash or bank-transfer sources. Forward migration 056 permits ordinary external expenses from any active `bank_account` source through the existing reconciliation pipeline. CSV bank-account observations, bank transfers and checks remain held with `bank_event_semantics_required`; migration 057 permits explicitly classified bank-account income and ILS refunds while retaining `refund_semantics_required` for credits from other methods. All identity, historical reservation, installment and cross-source review rules still apply. Existing held observations are not reprocessed: exact replay returns their retained outcome. Settings stores only the existing display metadata and last-four field, not a full account identifier. See [implementation, verification and release prerequisites](../history/BANK_ACCOUNT_PAYMENT_SOURCES.md).
 
 ## Identity and reconciliation
 
@@ -44,7 +44,7 @@ Forward migration 055 adds the distinct `bank_account` payment-source method wit
 
 The endpoint, API-key authentication, legacy single request and `{ "items": [...] }` Bulk shape remain. Bulk retains 1–50 items, per-item payment source, partial success, actionable indexed failures, existing optional fields, and its concise summary. `status: completed` remains a Bulk transport convenience; pending delivery does not post. No request field was added.
 
-`amount` remains the actual ILS accounting charge. `currency` and `original_amount` preserve the original-currency evidence under the established ledger convention; no exchange rate or fee is invented. Purchase `date` and `charge_date` stay separate. Unsupported precision is rejected, not rounded.
+`amount` remains the positive ILS accounting magnitude; `type` specifies expense, ordinary income or refund direction. `currency` and `original_amount` preserve the original-currency evidence under the established ledger convention; no exchange rate or fee is invented. Purchase `date` and `charge_date` stay separate. Unsupported precision is rejected, not rounded.
 
 The existing fields **do not cover every required economic distinction**:
 
@@ -52,7 +52,7 @@ The existing fields **do not cover every required economic distinction**:
 | --- | --- |
 | Shared independent cross-source identity / verified time | Retain plausible matches for owner review; never infer equality from the tuple |
 | Purchase-series reference and whole-versus-installment basis | Hold imported installment evidence; explicit separate approval can post only that observed ordinal, never future siblings |
-| Refund relationship and transfer / loan repayment semantics | Imported income and bank-transfer/check sources remain held; use explicit domain workflows for authoritative classification |
+| Credit classification and transfer / loan repayment semantics | Migration 057 supports explicitly classified bank-account income and separate ILS refunds without requiring a debit link. Unknown credits, bank-transfer/check sources and loan semantics remain held |
 | Original amount for a foreign purchase | Hold until evidence is corrected; generic separate review cannot invent it |
 | Missing, inactive or ambiguous payment source | Retain unresolved observation; no guessed mapping |
 
@@ -161,3 +161,52 @@ Release / Version gate: Release impact **Yes**; SemVer **Major** (retired envelo
 - `server/test/unifiedIngestionPostgres.local.test.js` ? added.
 
 The pre-existing APY operations document, multi-user documents and operations `__pycache__` are excluded from this inventory and were preserved. No staging, commits, pushes, tags or deployment were performed.
+
+## Classified bank movements and coordinated release (057)
+
+Migration 057 extends the existing external writer for classified ordinary
+`bank_account` income and separate ILS refunds. Expense behavior from 056 stays
+unchanged. Refunds use positive public request amounts, negative internal expense
+amounts and an explicit nullable ledger `bank_movement=refund` marker. They reduce
+signed expense totals without inflating income. See the
+[public contract](EXTERNAL_TRANSACTION_BULK.md#classified-bank-credits-migration-057).
+The existing source observation, immutable request, atomic writer and reconciliation
+identity remain authoritative; no new ledger or endpoint is introduced.
+
+The migration adds the nullable marker and constrained negative refund observation
+support, and replaces only the affected ingestion/fingerprint functions. Legacy
+rows, payloads and receipts are not rewritten. Null markers retain old identity
+and review/void fingerprint representations. Non-external sources cannot inject
+refund metadata through the unified writer. No CSV, loan or transfer semantics
+are enabled. Review candidates and historical reservations still stop automatic
+posting.
+
+Coordinated owner-controlled release procedure:
+
+1. Keep Bank Data Sync IDLE and scheduling disabled. Preserve consistent private
+   backups of Finance Tracker and the shared producer SQLite journal. Verify
+   current migrations through 056 and run the local regression gates.
+2. Apply forward migration 057 transactionally to Finance Tracker during the
+   approved deployment window; deploy its matching backend and client. Confirm
+   schema/function/privilege readback before enabling producer credit batches.
+   The full-schema snapshot contains the same definitions for clean installations.
+3. Deploy Bank Data Sync's v3 movement support without changing SQLite or any
+   prior frozen approvals/requests/receipts/baselines. Existing v1/v2 expense
+   approvals retain their original scope and cannot authorize credits.
+4. Use the existing `deliver:discount:once -- --prepare` command with the
+   owner-reviewed provider policy and runtime selection, decision
+   `APPROVE_EXACT_BANK_MOVEMENT_BATCH`, explicit expense/income/refund treatments
+   and exact signed cents. Pin the immutable approval hash. This is the existing
+   approval workflow, not general automatic identity verification.
+5. Supply fresh complete read-only consumer history and run the same operator's
+   `--check` against the existing persistent journal. Stop on reservations,
+   historical matches, changed evidence or any other hold. Only after owner
+   authorization and GO may the same operator's `--deliver` make one request.
+6. Independently reconcile actual posted transaction IDs, type-specific totals
+   and durable per-item receipts. Do not count review/uncertain as posted; never
+   resend an uncertain request or change its identity without investigation.
+
+No production migration, deployment, delivery, schedule or historical correction
+is part of the local implementation. Existing pre-057 review observations do not
+automatically become cash on replay. Downgrading after refund records exist is
+not a safe schema rollback; stop intake and use a reviewed forward fix.

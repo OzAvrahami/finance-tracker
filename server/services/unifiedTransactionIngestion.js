@@ -11,7 +11,7 @@ const money = z.number().positive().refine(v => /^\d+(?:\.\d{1,2})?$/.test(Strin
 const evidenceNumber = z.number().positive().refine(v => v <= Number.MAX_SAFE_INTEGER
   && /^\d+(?:\.\d+)?$/.test(String(v)), 'invalid_numeric_evidence');
 const schema = z.object({
-  type: z.enum(['expense', 'income']), amount: money, date,
+  type: z.enum(['expense', 'income', 'refund']), amount: money, date,
   charge_date: date.optional(), description: z.string().max(200).optional(),
   category_id: z.number().int().positive().safe().optional(),
   payment_source_id: z.number().int().positive().safe().optional(),

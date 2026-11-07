@@ -11,6 +11,13 @@ const examples = [
   [null, 'expense', '—'], [undefined, 'expense', '—'], ['', 'expense', '—'], ['invalid', 'expense', '—'],
 ];
 for (const [name, View] of [['desktop', TransactionsTable], ['mobile', TransactionsMobileList]]) describe(`${name} transaction money presentation`, () => {
+  it('shows an explicitly marked refund as a separate positive credit, not income', () => {
+    const row={id:2,total_amount:'-12.34',movement_type:'expense',bank_movement:'refund',description:'Invented refund',transaction_date:'2026-11-07'};
+    render(<MemoryRouter><View rows={[row]} sortConfig={{key:'transaction_date',direction:'desc'}} onSort={vi.fn()} onRequestDelete={vi.fn()} /></MemoryRouter>);
+    expect(screen.getByText('+₪12.34')).toBeInTheDocument();
+    expect(screen.getByText('החזר')).toBeInTheDocument();
+    expect(row.total_amount).toBe('-12.34');
+  });
   it.each(examples)('renders %s / %s without changing the financial value', (value, movement, expected) => {
     const row = {id:1, total_amount:value, movement_type:movement, description:'Test purchase',transaction_date:'2026-09-30', category_id:1, categories:{name:'Test'}, payment_sources:{name:'Test'}};
     render(<MemoryRouter><View rows={[row]} sortConfig={{key:'transaction_date',direction:'desc'}} onSort={vi.fn()} onRequestDelete={vi.fn()} /></MemoryRouter>);

@@ -12,6 +12,7 @@ const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8')
 const migration = fs.readFileSync(path.join(__dirname, '../migrations/054_unified_transaction_ingestion.sql'), 'utf8');
 const bankMigration = fs.readFileSync(path.join(__dirname, '../migrations/055_bank_account_payment_sources.sql'), 'utf8');
 const bankExpenseMigration = fs.readFileSync(path.join(__dirname, '../migrations/056_external_bank_account_expenses.sql'), 'utf8');
+const bankMovementsMigration = fs.readFileSync(path.join(__dirname, '../migrations/057_classified_bank_movements.sql'), 'utf8');
 let started = false, sequence = 0;
 const run = (args, input, allow = false) => {
   const r = spawnSync('docker', args, { input, encoding: 'utf8', timeout: 60000, maxBuffer: 32e6 });
@@ -189,7 +190,7 @@ test('bank-account income, transfers, checks and unsupported expense evidence re
     const held = ingest(db, item(key, extra));
     assert.equal(held.reason_code, reason); assert.equal(held.transaction_id, null); assert.equal(held.review_required, true);
   }
-  for (const extra of [{ loan_id: 1 }, { type: 'refund' }, { amount: -10 }]) {
+  for (const extra of [{ loan_id: 1 }, { amount: -10 }]) {
     assert.equal((await submitExternal(dbClient(db), item('unsupported', { payment_source_id: id, ...extra }))).status, 400);
   }
   assert.equal(count(db), 0);
@@ -213,7 +214,7 @@ test('bank-account unresolved payment sources, malformed identities and cross-so
 
 test('056 full schema parity, posting protections and function privilege boundaries remain intact', () => {
   const db = 'bank_fresh'; sql('postgres', `CREATE DATABASE ${db};`);
-  sql(db, fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8'));
+  sql(db, fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 057:')[0]);
   const definitions = database => scalar(database, `SELECT jsonb_agg(jsonb_build_array(p.oid::regprocedure::text,
    replace(pg_get_functiondef(p.oid),chr(13),''),p.prosecdef,p.proacl::text) ORDER BY p.proname)
    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
@@ -224,7 +225,7 @@ test('056 full schema parity, posting protections and function privilege boundar
     assert.equal(scalar(db, `SELECT has_function_privilege('service_role','${name}','EXECUTE');`), 't');
   }
   assert.equal(scalar(db, "SELECT relrowsecurity FROM pg_class WHERE oid='public.payment_sources'::regclass;"), 't');
-  assert.ok(fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').replaceAll('\r\n', '\n').endsWith(bankExpenseMigration.replaceAll('\r\n', '\n')));
+  assert.ok(fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 057:')[0].trim().replaceAll('\r\n', '\n').endsWith(bankExpenseMigration.trim().replaceAll('\r\n', '\n')));
 });
 
 test('all card issuers use existing payment source records; bank events are retained without guessed cash', () => {
@@ -351,6 +352,7 @@ test('8 successful / 2 failed summary and 50-item batches use the real database'
     await runBulk({ body }, res, async (req, out) => { const r = await submitExternal(dbClient(db), req.body); out.status(r.status).json(r.body); });
     return res;
   };
+  sql(db, bankMovementsMigration);
   const ten = Array.from({ length: 10 }, (_, i) => item(`ten-${i}`, i > 7 ? { amount: -1 } : {}));
   const r = await send({ items: ten }); assert.equal(r.body.succeeded, 8); assert.equal(r.body.failed, 2); assert.equal(count(db), 8);
   const fifty = await send({ items: Array.from({ length: 50 }, (_, i) => item(`fifty-${i}`)) });
@@ -370,7 +372,7 @@ test('forward upgrade preserves 38 CAL receipts and history byte-for-byte; rollb
     const r = wallet(db, '3', `historical-${i}`, { accounting_amount: String(10 + i) });
     sql(db, `INSERT INTO cal_ingestion_receipts(external_id,source_id,observation_id,request_hash,creation_fields) VALUES('historical-${i}',3,${r.observation_id},repeat('a',64),'{}');`);
   }
-  const snapshot = () => scalar(db, "SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM transactions t),(SELECT jsonb_agg(to_jsonb(r) ORDER BY external_id) FROM cal_ingestion_receipts r),(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM transaction_source_observations o),(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM transaction_reconciliation_events e))::text;");
+  const snapshot = () => scalar(db, "SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(t)-'bank_movement' ORDER BY id) FROM transactions t),(SELECT jsonb_agg(to_jsonb(r) ORDER BY external_id) FROM cal_ingestion_receipts r),(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM transaction_source_observations o),(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM transaction_reconciliation_events e))::text;");
   const original = snapshot();
   assert.notEqual(sql(db, migration.replace(/COMMIT;\s*$/, 'SELECT 1/0; COMMIT;'), true).status, 0);
   assert.equal(snapshot(), original);
@@ -378,5 +380,185 @@ test('forward upgrade preserves 38 CAL receipts and history byte-for-byte; rollb
   sql(db, migration); assert.equal(snapshot(), original);
   sql(db, bankMigration); assert.equal(snapshot(), original);
   sql(db, bankExpenseMigration); assert.equal(snapshot(), original);
+  sql(db, bankMovementsMigration); assert.equal(snapshot(), original);
+  assert.equal(scalar(db, 'SELECT count(*) FROM transactions WHERE bank_movement IS NOT NULL;'), '0');
   const r = ingest(db, item('historical-0')); assert.equal(r.reason_code, 'historical_identity_reserved'); assert.equal(count(db), 38);
+});
+
+test('057 classified bank movements preserve all fourteen independent operations and ordinary-income totals', async () => {
+  const db=createCase();sql(db,bankMovementsMigration);
+  sql(db,"INSERT INTO payment_sources(id,name,slug,method) VALUES(14,'Invented bank','acceptance-bank','bank_account');");
+  const expenses=[[1481,1523],[1488,4.5],[1493,0.68],[1501,149]], incomes=[[1508,276],[1510,500],[1514,150],[1515,3100],[1516,290.95]], refunds=[[1486,1523],[1491,4.5],[1490,0.68],[1505,149],[1489,797.2]];
+  // Acceptance numbers are synthetic test data only. No production record is read.
+  sql(db,"INSERT INTO transactions(id,description,movement_type,total_amount,transaction_date,charge_date,payment_source_id) VALUES(4454,'Invented historical interest','expense',797.20,'2026-10-01','2026-10-01',9);");
+  const original=scalar(db,'SELECT to_jsonb(t) FROM transactions t WHERE id=4454;');
+  const bodies=[...expenses.map(([id,amount])=>item(`bank:account:date:${id}`,{type:'expense',amount})),...incomes.map(([id,amount])=>item(`bank:account:date:${id}`,{type:'income',amount})),...refunds.map(([id,amount])=>item(`bank:account:date:${id}`,{type:'refund',amount}))].map(v=>({...v,payment_source_id:14}));
+  const send=async()=>{const res={status(n){this.statusCode=n;return this;},json(v){this.body=v;return this;}};
+    await runBulk({body:{items:bodies}},res,async(req,out)=>{const r=await submitExternal(dbClient(db),req.body);out.status(r.status).json(r.body);});return res;};
+  const first=await send();assert.equal(first.statusCode,200);assert.equal(first.body.succeeded,14);assert.equal(first.body.created,14);assert.equal(first.body.review_required,0);
+  assert.equal(count(db),15);
+  const replay=await send();assert.equal(replay.body.succeeded,14);assert.equal(replay.body.already_exists,14);assert.equal(replay.body.created,0);
+  assert.equal(count(db),15);assert.equal(scalar(db,'SELECT to_jsonb(t) FROM transactions t WHERE id=4454;'),original);
+  const totals=json(db,"SELECT dashboard_summary('2026-11-01','2026-11-30');");
+  assert.equal(Number(totals.income),4316.95);assert.equal(Number(totals.expenses),-797.2);assert.equal(Number(totals.balance),5114.15);
+  assert.equal(scalar(db,"SELECT sum(total_amount) FROM transactions WHERE external_id IN ('bank:account:date:1481','bank:account:date:1486','bank:account:date:1488','bank:account:date:1491','bank:account:date:1493','bank:account:date:1490','bank:account:date:1501','bank:account:date:1505');"),'0.00000000000000000000');
+  assert.equal(Number(scalar(db,"SELECT count(*) FROM transactions WHERE bank_movement='refund' AND movement_type='expense' AND total_amount<0 AND parent_transaction_id IS NULL;")),5);
+  assert.equal(Number(scalar(db,"SELECT count(*) FROM transaction_source_observations WHERE accepted_payload#>>'{_request,type}'='refund' AND (accepted_payload#>>'{_request,amount}')::numeric>0 AND amount_minor<0;")),5);
+  const posted = json(db, "SELECT jsonb_object_agg(external_id,jsonb_build_object('type',movement_type,'amount',total_amount,'bank_movement',bank_movement)) FROM transactions WHERE external_id IS NOT NULL;");
+  for (const body of bodies) assert.deepEqual(posted[body.external_id], { type: body.type === 'refund' ? 'expense' : body.type,
+    amount: body.type === 'refund' ? -body.amount : body.amount, bank_movement: body.type === 'refund' ? 'refund' : null });
+  assert.equal(Number(scalar(db, "SELECT sum(total_amount) FROM budget_actual_transactions('2026-11-01','2026-11-30');")), -797.2);
+  const refundId = scalar(db, "SELECT id FROM transactions WHERE bank_movement='refund' ORDER BY id LIMIT 1;");
+  assert.equal(scalar(db, `SELECT row_json->>'transaction_fingerprint' FROM transactions_filtered(p_transaction_id=>${refundId});`),
+    scalar(db, `SELECT md5((to_jsonb(t)-ARRAY['updated_at','voided_at','void_request_key','void_fingerprint','void_reason'])::text) FROM transactions t WHERE id=${refundId};`));
+  assert.equal(ingest(db,{...bodies[0],type:'refund'}).reason_code,'idempotency_key_conflict');
+  const future=item('unlisted-future-credit',{type:'income',payment_source_id:14,amount:43.21});
+  assert.equal(ingest(db,future).outcome,'created');assert.equal(ingest(db,{...future,external_id:'distinct-equal-credit'}).outcome,'created');
+  assert.equal(ingest(db,{...future,type:'refund',external_id:'unlisted-future-refund'}).outcome,'created');
+});
+
+test('057 credits do not bypass nonbank, unknown-source, identity, installment or cross-source guards', () => {
+  const db=createCase();sql(db,bankMovementsMigration);const bank=createBank(db);
+  const checkSource=Number(scalar(db,"INSERT INTO payment_sources(name,slug,method) VALUES('Invented check','check-guard','check') RETURNING id;"));
+  for(const type of ['income','refund']){
+    for(const id of [6,7,8,9,checkSource]){const r=ingest(db,item(`${type}-${id}`,{type,payment_source_id:id}));assert.equal(r.transaction_id,null);assert.equal(r.review_required,true);}
+    assert.equal(ingest(db,item(`no-key-${type}`,{type,payment_source_id:bank,external_id:undefined})).reason_code,'identity_evidence_required');
+    assert.equal(ingest(db,item(`missing-${type}`,{type,payment_source_id:999999})).reason_code,'payment_source_not_found');
+    assert.equal(ingest(db,item(`part-${type}`,{type,payment_source_id:bank,installment_number:1,installment_count:2})).outcome,'rejected');
+  }
+  assert.equal(ingest(db,item('unknown',{type:'unknown',payment_source_id:bank})).outcome,'rejected');
+  const sid=configure(db);
+  assert.equal(wallet(db,sid,'spoof-refund',{accounting_amount:'-25.00',source_metadata:{bank_movement:'refund'}}).reason_code,'refund_source_unsupported');
+  assert.equal(count(db),0);
+  sql(db,`INSERT INTO transactions(description,movement_type,total_amount,transaction_date,charge_date,payment_source_id) VALUES('Unverified old refund','expense',-25,'2026-11-04','2026-11-04',${bank});`);
+  assert.equal(ingest(db,item('competing',{type:'refund',amount:25,payment_source_id:bank})).review_required,true);
+  assert.equal(count(db),1);
+});
+
+test('057 migration rollback/repeat preserves old cash and evidence; fresh schema agrees',()=>{
+  const db=createCase();ingest(db,item('unchanged-cal'));
+  const before=()=>scalar(db,"SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(t)-'bank_movement' ORDER BY id) FROM transactions t),(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM transaction_source_observations o),(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM transaction_reconciliation_events e));");
+  const cashFingerprint=scalar(db,"SELECT apy_cash_fingerprint(id) FROM transactions WHERE external_id='unchanged-cal';");
+  const original=before();assert.notEqual(sql(db,bankMovementsMigration.replace(/COMMIT;\s*$/,'SELECT 1/0; COMMIT;'),true).status,0);assert.equal(before(),original);
+  sql(db,bankMovementsMigration);sql(db,bankMovementsMigration);assert.equal(before(),original);
+  assert.equal(scalar(db,"SELECT apy_cash_fingerprint(id) FROM transactions WHERE external_id='unchanged-cal';"),cashFingerprint);
+  assert.equal(ingest(db,item('unchanged-cal')).replayed,true);
+  sql('postgres','CREATE DATABASE movements_fresh;');sql('movements_fresh',fs.readFileSync(path.join(__dirname,'../full_schema.sql'),'utf8'));
+  const definitions=d=>scalar(d,"SELECT jsonb_agg(jsonb_build_array(p.proname,replace(pg_get_functiondef(p.oid),chr(13),''),p.proacl::text) ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('apy_identity','apy_cash_fingerprint','apy_review_fingerprints','apy_normalize','apy_create_cash','unified_ingest','ingest_external_transaction','transactions_filtered','savings_post_event_locked','get_savings_surplus_preview','savings_apply_surplus_locked');");
+  assert.equal(definitions(db),definitions('movements_fresh'));
+  assert.equal(scalar(db,"SELECT has_function_privilege('service_role','unified_ingest(bigint,jsonb,jsonb,jsonb,text,jsonb)','EXECUTE');"),'f');
+});
+
+test('057 preserves every legacy row fingerprint and the Dashboard, Budget, Savings and Loan read models', () => {
+  const db = createCase(), bank = createBank(db);
+  const date = scalar(db, "SELECT timezone('Asia/Jerusalem',statement_timestamp())::date;");
+  const month = date.slice(0, 7);
+  const cal = ingest(db, item('legacy-cal', { date, charge_date: date, category_id: 100 }));
+  const cancelled = ingest(db, item('legacy-cancelled', { date, charge_date: date, amount: 18, category_id: 100 }));
+  assert.equal(cancelled.outcome, 'created');
+  call(db, 'delete_transaction_with_loan_payment', [cancelled.transaction_id]);
+  const discount = ingest(db, item('legacy-discount', { date, charge_date: date, payment_source_id: bank, amount: 27, category_id: 100 }));
+  const held = owned(db, 'csv', 'csv:legacy:0', { transaction_date: date, charge_date: date, category_id: 100 });
+  assert.equal(held.review_required, true);
+  sql(db, `INSERT INTO transactions(description,movement_type,total_amount,transaction_date,charge_date,payment_source_id,category_id,currency,original_amount,exchange_rate,notes,installment_number,installment_count,voided_at)
+   VALUES ('Legacy income','income',5000,'${date}','${date}',9,101,'ILS',NULL,NULL,NULL,NULL,NULL,NULL),
+    ('Legacy FX','expense',275.82,'${date}','${date}',6,100,'USD',87,NULL,'Owner note',NULL,NULL,NULL),
+    ('Legacy installment','expense',30,'${date}','${date}',6,100,'ILS',NULL,NULL,NULL,2,6,NULL),
+    ('Legacy negative','expense',-3,'${date}','${date}',9,100,'ILS',NULL,NULL,NULL,NULL,NULL,NULL);
+   INSERT INTO loans(id,name,original_amount,current_balance,monthly_payment,total_installments,remaining_installments,start_date,next_payment_date,calculation_mode,payment_source_id)
+    VALUES(1,'Synthetic loan',1000,1000,150,10,10,'${date}','${date}','loan_payments',9);`);
+  const loanRow = { description: 'Loan payment', movement_type: 'expense', total_amount: 150,
+    transaction_date: date, charge_date: date, payment_source_id: 9, category_id: 100, loan_id: 1, currency: 'ILS' };
+  const loan = call(db, 'ingest_owned_transaction', ['manual', 'legacy-loan', loanRow, loanRow,
+    { loan_payment: { principal_amount: 140, interest_amount: 10, other_amount: 0,
+      next_scheduled_due_date: scalar(db, `SELECT ('${date}'::date+interval '1 month')::date;`) } }]);
+  assert.equal(loan.outcome, 'created');
+  call(db, 'create_savings_account', [randomUUID(), { name: 'Synthetic Savings', opened_on: '2020-01-01', tracking_start_date: '2020-01-01' }, '0', '0', null]);
+  const savings = () => call(db, 'get_savings_account', ['1']);
+  const deposit = { action: 'create_cash', account_id: '1', expected_revision: savings().account.revision, event_kind: 'deposit', amount: '75',
+    effective_date: date, charge_date: date, description: 'Synthetic deposit', payment_source_id: '9',
+    category_id: scalar(db, "SELECT id FROM categories WHERE savings_role='deposit';") };
+  call(db, 'post_savings_event', [randomUUID(), deposit]);
+  const fingerprints = () => json(db, `SELECT jsonb_object_agg(t.id,jsonb_build_object(
+   'filtered',(SELECT row_json->>'transaction_fingerprint' FROM transactions_filtered(p_transaction_id=>t.id)),
+   'cash',apy_cash_fingerprint(t.id),'identity',apy_identity(t))) FROM transactions t;`);
+  const financial = () => json(db, `SELECT jsonb_build_object(
+   'rows',(SELECT jsonb_agg(to_jsonb(t)-'bank_movement' ORDER BY id) FROM transactions t),
+   'observations',(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM transaction_source_observations o),
+   'events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM transaction_reconciliation_events e),
+   'loans',(SELECT jsonb_agg(to_jsonb(l) ORDER BY id) FROM loans l),
+   'payments',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM loan_payments p),
+   'entries',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM savings_entries e));`);
+  const access = () => scalar(db, "SELECT jsonb_agg(jsonb_build_array(oid::regprocedure::text,proowner,proacl,prosecdef,proconfig) ORDER BY oid::regprocedure::text) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('transactions_filtered','savings_post_event_locked','get_savings_surplus_preview','savings_apply_surplus_locked');");
+  const readModels = () => ({ dashboard: json(db, `SELECT dashboard_summary('${month}-01','${date}');`),
+    budget: call(db, 'get_funded_budget_month', [month]), savings: savings(),
+    review: call(db, 'read_reconciliation', ['observation', '{}', held.observation_id]) });
+  const before = { fingerprints: fingerprints(), financial: financial(), readers: readModels(), access: access() };
+  assert.ok(Object.keys(before.fingerprints).length >= 9);
+  // Reproduce the original 057 defect before installing its corrected reader definitions.
+  const compatibilityMarker = '-- The nullable marker must not invalidate';
+  assert.ok(bankMovementsMigration.includes(compatibilityMarker));
+  sql(db, bankMovementsMigration.split(compatibilityMarker)[0] + 'COMMIT;');
+  assert.notEqual(fingerprints()[cal.transaction_id].filtered, before.fingerprints[cal.transaction_id].filtered);
+  assert.deepEqual(financial(), before.financial);
+  sql(db, bankMovementsMigration);
+  assert.deepEqual(fingerprints(), before.fingerprints);
+  assert.deepEqual(financial(), before.financial);
+  assert.deepEqual(readModels(), before.readers);
+  assert.equal(access(), before.access);
+  assert.equal(ingest(db, item('legacy-cal', { date, charge_date: date, category_id: 100 })).transaction_id, cal.transaction_id);
+  assert.equal(ingest(db, item('legacy-discount', { date, charge_date: date, payment_source_id: bank, amount: 27, category_id: 100 })).transaction_id, discount.transaction_id);
+  // A pre-upgrade owner preview remains valid for the Savings writer, not only its reader.
+  call(db, 'post_savings_event', [randomUUID(), { ...deposit, action: 'link_cash', expected_revision: savings().account.revision,
+    transaction_id: String(cal.transaction_id), amount: '150.00', payment_source_id: '6',
+    expected_transaction_fingerprint: before.fingerprints[cal.transaction_id].filtered }]);
+  assert.equal(savings().summary.current_balance, '225.00');
+  call(db, 'delete_transaction_with_loan_payment', [loan.transaction_id]);
+  assert.equal(scalar(db, 'SELECT count(*) FROM loan_payments;'), '0');
+});
+
+test('057 preserves funded Savings preview and reversal fingerprints across upgrade', () => {
+  for (const alreadyPosted of [false, true]) {
+    const db = createCase();
+    const date = scalar(db, "SELECT timezone('Asia/Jerusalem',statement_timestamp())::date;"), month = date.slice(0, 7);
+    call(db, 'create_savings_account', [randomUUID(), { name: 'Synthetic surplus', opened_on: '2020-01-01', tracking_start_date: '2020-01-01' }, '0', '0', null]);
+    call(db, 'add_manual_budget_funding', [month, '1000', 'Synthetic funds', randomUUID()]);
+    call(db, 'establish_funded_budget', [month, '100', '1000', 'manual', randomUUID()]);
+    sql(db, `INSERT INTO transactions(description,total_amount,movement_type,transaction_date,charge_date,category_id,payment_source_id)
+      VALUES('Synthetic expense',700,'expense','${date}','${date}',100,9);`);
+    const command = { source_month: month, category_id: '100', account_id: '1', amount: '300', payment_source_id: '9', cash_date: date };
+    const preview = () => call(db, 'get_savings_surplus_preview', Object.values(command));
+    const state = () => call(db, 'get_funded_budget_month', [month]);
+    const before = preview();
+    if (alreadyPosted) call(db, 'apply_savings_surplus', [randomUUID(), before.fingerprint, command]);
+    const previousState = state();
+    sql(db, bankMovementsMigration);
+    assert.deepEqual(state(), previousState);
+    if (alreadyPosted) {
+      const history = previousState.savings_transfer_history[0];
+      call(db, 'reverse_savings_surplus', [randomUUID(), history.operation_id, history.fingerprint, 'Synthetic reversal']);
+      assert.equal(call(db, 'get_savings_account', ['1']).summary.current_balance, '0.00');
+    } else {
+      assert.deepEqual(preview(), before);
+      call(db, 'apply_savings_surplus', [randomUUID(), before.fingerprint, command]);
+      assert.equal(call(db, 'get_savings_account', ['1']).summary.current_balance, '300.00');
+    }
+  }
+});
+
+test('057 lock timeout aborts blocked migration atomically and stays transaction-local', async () => {
+  const db = createCase();
+  const blocker = asyncSql(db, "SET application_name='migration057blocker'; BEGIN; LOCK TABLE transactions IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(8); COMMIT;");
+  let ready = false;
+  for (let i = 0; i < 30; i++) {
+    ready = scalar(db, "SELECT EXISTS(SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE a.application_name='migration057blocker' AND l.relation='transactions'::regclass AND l.mode='AccessExclusiveLock' AND l.granted);") === 't';
+    if (ready) break;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.equal(ready, true);
+  const result = sql(db, bankMovementsMigration, true);
+  assert.notEqual(result.status, 0); assert.match(result.stderr, /lock timeout/);
+  assert.equal((await blocker).status, 0);
+  assert.equal(scalar(db, "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='transactions' AND column_name='bank_movement';"), '0');
+  assert.equal(scalar(db, 'SHOW lock_timeout;'), '0');
 });

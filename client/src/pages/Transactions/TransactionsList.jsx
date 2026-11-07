@@ -41,7 +41,7 @@ const signedAmount = (transaction) => {
   const value = transaction.total_amount;
   if (value == null || !['string', 'number', 'bigint'].includes(typeof value)) return null;
   const raw = String(value).trim().replace(/^[+-]/, '');
-  return transaction.movement_type === 'income' ? raw : `-${raw}`;
+  return transaction.movement_type === 'income' || transaction.bank_movement === 'refund' ? raw : `-${raw}`;
 };
 
 // Both list presentations share the ILS display policy; stored/transport money is untouched.
@@ -167,7 +167,9 @@ export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete, e
       <tbody>
         {rows.map((transaction) => {
           const isUncategorized = transaction.category_id == null;
+          const isRefund = transaction.bank_movement === 'refund';
           const isIncome = transaction.movement_type === 'income';
+          const isCredit = isIncome || isRefund;
           return (
             <tr key={transaction.id} className={isUncategorized ? 'is-uncategorized' : ''}>
               <td className="transactions-table__date"><TechnicalValue>{formatDate(transaction.transaction_date)}</TechnicalValue></td>
@@ -178,9 +180,9 @@ export const TransactionsTable = ({ rows, sortConfig, onSort, onRequestDelete, e
                   {transaction.payment_sources?.name || <span aria-label="לא צוין">—</span>}
                 </span>
               </td>
-              <td className={`transactions-table__amount ${isIncome ? 'is-income' : 'is-expense'}`} dir="ltr">
+              <td className={`transactions-table__amount ${isCredit ? 'is-income' : 'is-expense'}`} dir="ltr">
                 <span className="transactions-table__amount-content">
-                  <span className="transactions-amount-kind">{isIncome ? <TrendingUp size={14} /> : <TrendingDown size={14} />}<span className="transactions-visually-hidden">{isIncome ? 'הכנסה' : 'הוצאה'}</span></span>
+                  <span className="transactions-amount-kind">{isCredit ? <TrendingUp size={14} /> : <TrendingDown size={14} />}<span className="transactions-visually-hidden">{isRefund ? 'החזר' : isIncome ? 'הכנסה' : 'הוצאה'}</span></span>
                   <TransactionAmount transaction={transaction} />
                 </span>
               </td>
@@ -232,14 +234,16 @@ export const TransactionsMobileList = ({ rows, onRequestDelete, editReturnTo }) 
       <ul>
         {rows.map((transaction) => {
           const isUncategorized = transaction.category_id == null;
+          const isRefund = transaction.bank_movement === 'refund';
           const isIncome = transaction.movement_type === 'income';
+          const isCredit = isIncome || isRefund;
           return (
             <li key={transaction.id} className={isUncategorized ? 'is-uncategorized' : ''}>
               <article aria-label={`תנועה: ${transactionContext(transaction)}`}>
                 <div className="transactions-mobile-card__top">
                   <CategoryBadge transaction={transaction} />
-                  <div className={`transactions-mobile-card__amount ${isIncome ? 'is-income' : 'is-expense'}`}>
-                    <span>{isIncome ? <TrendingUp size={15} /> : <TrendingDown size={15} />}{isIncome ? 'הכנסה' : 'הוצאה'}</span>
+                  <div className={`transactions-mobile-card__amount ${isCredit ? 'is-income' : 'is-expense'}`}>
+                    <span>{isCredit ? <TrendingUp size={15} /> : <TrendingDown size={15} />}{isRefund ? 'החזר' : isIncome ? 'הכנסה' : 'הוצאה'}</span>
                     <TransactionAmount transaction={transaction} />
                   </div>
                 </div>

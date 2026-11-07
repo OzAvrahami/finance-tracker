@@ -108,3 +108,33 @@ review. Refunds, uncertain bank events and ambiguous cross-source observations
 also remain unposted. A review outcome is not an ingestion failure or permission
 to retry with a new ID. This local implementation does not authorize migration,
 deployment, new bank delivery or FlowLink activation.
+
+## Classified bank credits (migration 057)
+
+The same single/Bulk endpoint accepts `type: expense|income|refund`, with a
+positive, exact-cent accounting `amount`. Ordinary income and refunds can post
+only to an active `bank_account` source, with a stable `external_id`. An
+authenticated producer must explicitly classify the movement; do not guess that
+an unknown credit is income. This is not an income/refund bypass for cards, checks
+or transfers. Existing identity, duplicate, reconciliation, installment and
+source-resolution guards remain in force. CSV ingestion is unchanged.
+
+An ILS refund is a separate positive bank movement. The immutable request retains
+its positive amount and `type: refund`. Its ledger row is explicitly marked
+`bank_movement: refund`, with `movement_type: expense` and negative
+`total_amount` (contra-expense). Existing signed expense totals therefore net
+the refund against spending; ordinary-income totals do not increase. The
+transaction list displays this marked row as a refund credit. No artificial debit
+link is required. This does not edit the original debit or reconcile any manual
+amount discrepancy. Foreign-currency refunds remain unsupported in this increment.
+
+Example synthetic item (use an actually approved active bank source):
+
+```json
+{"type":"refund","amount":12.34,"date":"2026-11-07","description":"Invented reversal","payment_source_id":14,"currency":"ILS","external_id":"bank:approved-account:2026-11-07:example"}
+```
+
+The bulk response format, partial-success semantics and limits are unchanged.
+Review-required observations are not posted cash. Exact replay preserves the
+original recorded outcome, including observations held before this migration;
+changed content under the same key conflicts. Never change a key to escape a hold.
