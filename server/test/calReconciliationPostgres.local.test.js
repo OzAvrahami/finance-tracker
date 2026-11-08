@@ -6,6 +6,9 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('../config/flowlink');
+// These tests assert historical CAL RPCs and 045/046/047 migration behavior.
+const legacyServicePath = require.resolve('../services/transactionIngestionService');
+require.cache[legacyServicePath] = { id: legacyServicePath, filename: legacyServicePath, loaded: true, exports: require('./fixtures/transactionIngestionService057') };
 const { harness, claim, token, ownerId, otherOwnerId } = require('./helpers/flowlinkHttp');
 // Historical protocol boundary. Active cutover is tested in unifiedIngestionPostgres.
 const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 054:')[0];
@@ -23,6 +26,7 @@ const scalar = (db, text) => sql(db, text).stdout.trim();
 const json = (db, text) => JSON.parse(scalar(db, text));
 const quote = v => v === null ? 'NULL' : `'${String(typeof v === 'object' ? JSON.stringify(v) : v).replaceAll("'", "''")}'`;
 const signatures = {
+  ingestion_core_snapshot: ['p_scope'], ingestion_core_commit: ['p_scope','p_token','p_decision'],
   ingest_cal_v1: ['p_request_key','p_source','p_observation','p_request'],
   resolve_observation: ['p_request_key','p_command'], get_ingestion_observation: ['p_observation_id'],
   cancel_ingested_transaction: ['p_request_key','p_command'],
@@ -44,7 +48,7 @@ const parallelSql = (db, text) => new Promise((resolve, reject) => {
   let out = '', err = '';child.stdout.on('data', b => { out += b; });child.stderr.on('data', b => { err += b; });
   child.on('error', reject);child.on('close', status => resolve({ status, out, err }));child.stdin.end(text);
 });
-const client = db => ({ rpc: async (name, args) => {
+const client = db => ({ coreProtocol: true, rpc: async (name, args) => {
   const r = await parallelSql(db, `SET lock_timeout='10s';${statement(name, args)}`);
   if (r.status) throw new Error(`Disposable SQL failed: ${r.err}`);
   return { data: JSON.parse(r.out.trim()) };
@@ -267,8 +271,9 @@ test('CAL receipt failure rolls source registration, observation and canonical c
  assert.deepEqual(financialSnapshot(c.db),before);assert.equal(count(c.db,'cal_ingestion_receipts'),0);
 });
 
-test('actual v1 HTTP controller and external authentication use the atomic CAL RPC against PostgreSQL',async t=>{
- const {c,e,b}=await setup(t);const a=await send(c,e,purchase(b)),p=profile();
+test('current v1 HTTP upgrade preserves historical Wallet evidence and holds date-only CAL for review',async t=>{
+ const {c,e,b}=await setup(t);await send(c,e,purchase(b));const p=profile();
+ for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>=54).sort())sql(c.db,fs.readFileSync(path.join(__dirname,'../migrations',f),'utf8'));
  const old=process.env.CAL_INGESTION_SOURCES,oldKey=process.env.EXTERNAL_API_KEY;
  process.env.CAL_INGESTION_SOURCES=JSON.stringify([p]);process.env.EXTERNAL_API_KEY='isolated-cal-key';
  t.after(()=>{if(old===undefined)delete process.env.CAL_INGESTION_SOURCES;else process.env.CAL_INGESTION_SOURCES=old;
@@ -278,8 +283,8 @@ test('actual v1 HTTP controller and external authentication use the atomic CAL R
  const express=require('express'),app=express();app.use(express.json());app.post('/api/v1/transactions',require('../middleware/apiKeyAuth').apiKeyAuth,controller.createTransaction);
  const server=app.listen(0,'127.0.0.1');await require('node:events').once(server,'listening');t.after(()=>new Promise(r=>{server.close(r);server.closeAllConnections();}));
  const body=calBody();const callHttp=()=>fetch(`http://127.0.0.1:${server.address().port}/api/v1/transactions`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer isolated-cal-key'},body:JSON.stringify(body)});
- const first=await callHttp();assert.equal(first.status,200);assert.equal((await first.json()).transaction_id,a.body.transaction_id);
- assert.equal((await callHttp()).status,409);assert.equal(cash(c).count,1);assert.equal(sourceCount(c),2);
+ const first=await callHttp();assert.equal(first.status,202);assert.equal((await first.json()).transaction_id,null);
+ assert.equal((await callHttp()).status,202);assert.equal(cash(c).count,1);assert.equal(sourceCount(c),2);
 });
 
 

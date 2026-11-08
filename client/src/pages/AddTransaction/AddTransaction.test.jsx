@@ -209,6 +209,83 @@ describe('existing bank refund editing', () => {
   });
 });
 
+describe('monetary edit display', () => {
+  const row = {
+    id: 42, description: 'Synthetic CAL refund', movement_type: 'expense',
+    bank_movement: 'refund', total_amount: '-557.5500000000000000', payment_source_id: 10,
+    category_id: 1, transaction_date: '2026-11-08', charge_date: '2026-11-08',
+    currency: 'ILS', external_id: 'synthetic-cal-refund', installment_count: null,
+    transaction_items: [],
+  };
+  const summary = () => screen.getByText('סכום לשמירה').parentElement;
+
+  it.each([
+    ['-557.5500000000000000', '-557.55', '−₪557.55'],
+    ['149.0000000000000000', '149.00', '₪149.00'],
+    ['123.45', '123.45', '₪123.45'],
+    [25, '25.00', '₪25.00'],
+  ])('normalizes valid API amount %s in the input and save summary', async (value, input, display) => {
+    getTransactionById.mockResolvedValue({ data: { ...row, total_amount: value,
+      bank_movement: String(value).startsWith('-') ? 'refund' : null } });
+    renderForm('/edit-transaction/42');
+    const amount = await screen.findByRole('spinbutton', { name: /^סכום$/ });
+    expect(amount.value).toBe(input);
+    expect(within(summary()).getByText(display, { exact: true })).toBeVisible();
+    expect(summary()).not.toHaveTextContent('000000000000');
+    expect(amount).toBeValid();
+  });
+
+  it.each(['149.001', 149.001])('keeps extra precision %s invalid and leaves raw typing alone', async (value) => {
+    getTransactionById.mockResolvedValue({ data: { ...row, bank_movement: null, total_amount: value } });
+    renderForm('/edit-transaction/42');
+    const amount = await screen.findByRole('spinbutton', { name: /^סכום$/ });
+    expect(amount.value).toBe('149.001');
+    expect(within(summary()).getByText('₪149.001', { exact: true })).toBeVisible();
+    expect(amount.validity.stepMismatch).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'עדכן תנועה' }));
+    expect(updateTransaction).not.toHaveBeenCalled();
+    fireEvent.change(amount, { target: { value: '12.3000' } });
+    expect(amount.value).toBe('12.3000');
+    expect(within(summary()).getByText('₪12.30', { exact: true })).toBeVisible();
+    fireEvent.change(amount, { target: { value: '' } });
+    expect(amount.value).toBe('');
+    expect(amount).toBeInvalid();
+  });
+
+  it('saves category/notes and reloads a trailing-zero CAL refund without changing its value or identity', async () => {
+    let stored = { ...row };
+    getCategories.mockResolvedValue({ data: [...categories, { id: 3, name: 'תחבורה' }] });
+    getTransactionById.mockImplementation(async () => ({ data: { ...stored } }));
+    updateTransaction.mockImplementation(async (_id, payload) => {
+      stored = { ...stored, ...payload.transaction };
+      return { data: stored };
+    });
+    const view = renderForm('/edit-transaction/42');
+    expect((await screen.findByRole('spinbutton', { name: /^סכום$/ })).value).toBe('-557.55');
+    expect(screen.getByText('זיכוי נרשם כהוצאה שלילית')).toBeVisible();
+    const category = screen.getByRole('combobox', { name: /^קטגוריה/ });
+    await userEvent.clear(category);
+    await userEvent.type(category, 'תחבורה');
+    await userEvent.click(await screen.findByRole('option', { name: /תחבורה/ }));
+    await userEvent.type(screen.getByRole('textbox', { name: /^הערות/ }), 'CAL metadata reviewed');
+    await userEvent.click(screen.getByRole('button', { name: 'עדכן תנועה' }));
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1));
+    const sent = updateTransaction.mock.calls[0][1].transaction;
+    expect(sent).toMatchObject({ total_amount: '-557.55', movement_type: 'expense',
+      category_id: 3, notes: 'CAL metadata reviewed', payment_source_id: 10, installment_count: null });
+    expect(sent).not.toHaveProperty('bank_movement');
+    expect(sent).not.toHaveProperty('external_id');
+    expect(stored).toMatchObject({ bank_movement: 'refund', external_id: row.external_id, installment_count: null });
+    view.unmount();
+    renderForm('/edit-transaction/42');
+    expect((await screen.findByRole('spinbutton', { name: /^סכום$/ })).value).toBe('-557.55');
+    expect(summary()).toHaveTextContent('−₪557.55');
+    expect(screen.getByRole('combobox', { name: /^קטגוריה/ })).toHaveValue('תחבורה');
+    expect(screen.getByRole('textbox', { name: /^הערות/ })).toHaveValue('CAL metadata reviewed');
+    expect(screen.getByRole('radio', { name: 'הכנסה' })).toBeDisabled();
+  });
+});
+
 describe('AddTransaction characterization', () => {
   it('renders the approved numbered Finance v3 hierarchy with notes in the core and a compact footer', async () => {
     const { container } = renderForm();

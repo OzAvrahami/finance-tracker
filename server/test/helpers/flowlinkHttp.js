@@ -26,7 +26,7 @@ async function harness(t, options = {}) {
     ? { data: { user: { id: ownerId } } }
     : value === 'test-other-session' ? { data: { user: { id: otherOwnerId } } } : { error: true });
   const app = express();app.set('trust proxy', 'loopback');
-  app.use(PATH, createFlowlinkRouter({ db, env: () => env, verifyUser, limits: options.limits, log: row => logs.push(row) }));
+  app.use(PATH, createFlowlinkRouter({ db: require('./coreProtocol').withCoreProtocol(db), env: () => env, verifyUser, limits: options.limits, log: row => logs.push(row) }));
   app.use((req, res) => res.status(401).json({ error: { code: 'existing_user_auth' } }));
   const server = app.listen(0, '127.0.0.1');await once(server, 'listening');
   t.after(() => new Promise(resolve => { server.close(resolve);server.closeAllConnections(); }));

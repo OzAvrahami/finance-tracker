@@ -423,7 +423,7 @@ function loadControllerWithFake(controllerRelPath, fakeSupabase) {
       if (result.error) return result;
       return { data: { outcome: 'created', transaction_id: String(result.data.transaction.id), accounting: args.p_row.loan_id ? result.data : null } };
     } }) : fakeSupabase;
-  require.cache[supabasePath].exports = client;
+  require.cache[supabasePath].exports = require('./coreProtocol').withCoreProtocol(client);
 
   const controller = require(controllerPath);
 

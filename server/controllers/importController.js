@@ -4,6 +4,7 @@ const xlsx = require('xlsx');
 const supabase = require('../config/supabase');
 const profiles = require('../config/importProfiles');
 const { rejectUnsupported } = require('../services/savingsTransactionService');
+const { importDate } = require('../utils/importDate');
 
 exports.previewImport = async (req, res) => {
   try {
@@ -15,9 +16,13 @@ exports.previewImport = async (req, res) => {
 
     const profile = profiles[profileKey];
 
-    const workbook = xlsx.read(file.buffer, { type: 'buffer' });
+    // Preserve CSV text, especially ambiguous DD/MM dates. Excel auto-inference
+    // can reinterpret them as MM/DD serials before profile normalization.
+    // Typed XLSX cells remain typed; raw applies to plain-text parsing only.
+    const workbook = xlsx.read(file.buffer, { type: 'buffer', raw: true });
     const firstSheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[firstSheetName];
+    const date1904 = Boolean(workbook.Workbook?.WBProps?.date1904);
 
     const rawRows = xlsx.utils.sheet_to_json(sheet, { range: profile.startRow });
 
@@ -35,17 +40,8 @@ exports.previewImport = async (req, res) => {
         const chargeDateStr = row[mapping.charge_date];
         const amount = typeof row[mapping.amount] === 'number' ? row[mapping.amount] : parseFloat(row[mapping.amount].replace(/[₪,]/g, ''));
         
-        let formattedDate = dateStr;
-        if (dateStr && dateStr.includes('/')) {
-            const [d, m, y] = dateStr.split('/');
-            formattedDate = `20${y.length === 2 ? y : y.slice(-2)}-${m}-${d}`;
-        }
-
-        let chargeDate = chargeDateStr;
-        if (chargeDateStr && chargeDateStr.includes('/')) {
-          const [d, m, y] = chargeDateStr.split('/');
-          chargeDate = `20${y.length === 2 ? y : y.slice(-2)}-${m}-${d}`;
-        }
+        const formattedDate = importDate(dateStr, { date1904 });
+        const chargeDate = importDate(chargeDateStr, { date1904, optional: true, field: 'charge_date' });
 
         let suggestedCategory = null; 
         const match = categories.find(cat => !cat.savings_role &&
@@ -82,7 +78,7 @@ exports.previewImport = async (req, res) => {
 
   } catch (error) {
     console.error('Import Error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(error.status === 400 ? 400 : 500).json({ error: error.message });
   }
 };
 

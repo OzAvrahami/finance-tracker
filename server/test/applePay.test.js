@@ -1,3 +1,4 @@
+const { withCoreProtocol } = require('./helpers/coreProtocol');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
@@ -170,7 +171,7 @@ test('Actual application mounts Apple before generic parser/logger/JWT and prese
   const credential=token(),env=environment(credential);
   Object.assign(process.env,env,{SUPABASE_URL:'http://127.0.0.1:1',SUPABASE_KEY:'test-only',EXTERNAL_API_KEY:'external-only',LOAN_JOB_SECRET:'test-only'});
   const db={rpc:async name=>({data:name==='configure_ingestion_source'?{source_id:'1'}:created()}),auth:{getUser:async()=>({error:{message:'unauthorized'}})}};
-  for(const [p,exports]of [[paths[0],db],[paths[1],{config:()=>({})}],[paths[3],{createClient:()=>db}]]){require.cache[p]=new Module(p);require.cache[p].loaded=true;require.cache[p].exports=exports;}
+  for(const [p,exports]of [[paths[0],withCoreProtocol(db)],[paths[1],{config:()=>({})}],[paths[3],{createClient:()=>withCoreProtocol(db)}]]){require.cache[p]=new Module(p);require.cache[p].loaded=true;require.cache[p].exports=exports;}
   delete require.cache[paths[2]];console.info=record=>logs.push(record);
   t.after(()=>{console.info=oldLog;for(const k of Object.keys(process.env))if(!(k in originalEnv))delete process.env[k];Object.assign(process.env,originalEnv);paths.forEach((p,i)=>{if(previous[i])require.cache[p]=previous[i];else delete require.cache[p];});});
   const app=require('../index'),base=await listen(t,app);

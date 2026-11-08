@@ -32,6 +32,7 @@ import TransactionFormSection from './TransactionFormSection';
 import TransactionFormSkeleton from './TransactionFormSkeleton';
 import TransactionTotals from './TransactionTotals';
 import { getTransactionPricingPreview } from '../../utils/transactionPricing';
+import { normalizeMoneyForDisplay } from '../../utils/money';
 import './TransactionForm.css';
 
 const movementOptions = [
@@ -282,7 +283,7 @@ const AddTransaction = () => {
               placeholder="0.00"
               min={isExistingRefund ? undefined : '0'}
               max={isExistingRefund ? '-0.01' : undefined}
-              helperText={isExistingRefund ? 'זיכוי בנקאי נשמר כהוצאה שלילית.' : undefined}
+              helperText={isExistingRefund ? 'זיכוי נרשם כהוצאה שלילית' : undefined}
               step="0.01"
               suffix="₪"
               required
@@ -511,7 +512,7 @@ const AddTransaction = () => {
         <div className="transaction-form-actions">
           <div className="transaction-form-actions__total">
             <span>סכום לשמירה</span>
-            <MoneyAmount value={transaction.total_amount} />
+            <MoneyAmount value={normalizeMoneyForDisplay(transaction.total_amount)} />
           </div>
           <div className="transaction-form-actions__submit">
             <Link className="transaction-form-cancel" to={returnTo}>ביטול</Link>

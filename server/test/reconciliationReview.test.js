@@ -1,3 +1,4 @@
+const { withCoreProtocol } = require('./helpers/coreProtocol');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const express=require('express');
@@ -8,7 +9,7 @@ const owner='11111111-1111-4111-8111-111111111111';
 async function fixture(t, result={}, environment={FLOWLINK_OWNER_USER_IDS:JSON.stringify([owner])}) {
  const calls=[],app=express();app.use(express.json());
  app.use((req,res,next)=>{if(req.headers.authorization==='Bearer owner-session')req.user={id:owner};else if(req.headers.authorization==='Bearer ordinary-session')req.user={id:'other'};next();});
- app.use('/review',createReconciliationRouter({db:{rpc:async(name,args)=>{calls.push({name,args});return {data:result};}},env:()=>environment}));
+ app.use('/review',createReconciliationRouter({db:withCoreProtocol({rpc:async(name,args)=>{calls.push({name,args});return {data:result};}}),env:()=>environment}));
  const server=app.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise(r=>{server.close(r);server.closeAllConnections();}));
  return {calls,send:async(path,body,authorization='Bearer owner-session')=>{
   const r=await fetch(`http://127.0.0.1:${server.address().port}/review${path}`,{method:body?'POST':'GET',headers:{authorization,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});

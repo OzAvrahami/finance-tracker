@@ -1,5 +1,12 @@
 # Unified transaction ingestion
 
+Current local successor: [Issue #99 Package 1](INGESTION_PACKAGE_1.md) prepares
+migration **058**, moves the ingestion/reconciliation decisions below into
+JavaScript and retires their SQL engines. Its ownership matrix, tests and
+coordinated cutover requirements govern that candidate. The 054 design below is
+retained as historical context; it does not describe the final 058 call path or
+establish production deployment/acceptance. FlowLink remains paused.
+
 Local implementation, 2026-11-04. Requires forward migration **054** and a coordinated backend upgrade. Neither migration nor deployment is authorized by this document. FlowLink remains paused. Financial Data Bridge is retired; its repository is not a dependency.
 
 ## Request to database

@@ -1,5 +1,12 @@
 # FLI-03 multi-card bindings and authorized ingestion
 
+> Local 058 candidate: [Issue #99 Package 1](../architecture/INGESTION_PACKAGE_1.md) replaces the
+> ingestion/reconciliation SQL decision path described below with JavaScript
+> services and atomic persistence. Treat the older RPC commands and SQL-only
+> fixture instructions here as historical, not 058 cutover commands. Existing
+> public contracts/authentication remain; producer activation is not authorized.
+
+
 > Contract/technical reference. Dated implementation and verification notes are historical checkpoints; use the [documentation index](../README.md) for current release/acceptance boundaries and GitHub for live workflow state.
 
 Implementation for [#88](https://github.com/OzAvrahami/finance-tracker/issues/88),

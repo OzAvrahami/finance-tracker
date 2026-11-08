@@ -22,6 +22,7 @@ const scalar = (db, text) => sql(db, text).stdout.trim();
 const json = (db, text) => JSON.parse(scalar(db, text));
 const quote = v => v === null ? 'NULL' : `'${String(typeof v === 'object' ? JSON.stringify(v) : v).replaceAll("'", "''")}'`;
 const signatures = {
+  ingestion_core_snapshot: ['p_scope'], ingestion_core_commit: ['p_scope','p_token','p_decision'],
   create_flowlink_pairing: ['p_owner_id', 'p_pairing_id', 'p_secret_sha256', 'p_command'],
   redeem_flowlink_pairing: ['p_pairing_id', 'p_secret_sha256', 'p_redemption_id', 'p_credential_sha256'],
   cancel_flowlink_pairing: ['p_owner_id', 'p_pairing_id'], revoke_flowlink_device: ['p_owner_id', 'p_device_id'],
@@ -35,7 +36,7 @@ const parallelSql = (db, text) => new Promise((resolve, reject) => {
   let out = '', err = '';child.stdout.on('data', b => { out += b; });child.stderr.on('data', b => { err += b; });
   child.on('error', reject);child.on('close', status => resolve({ status, out, err }));child.stdin.end(text);
 });
-const client = db => ({ rpc: async (name, args) => {
+const client = db => ({ coreProtocol: true, rpc: async (name, args) => {
   const r = await parallelSql(db, `SET lock_timeout='10s';${statement(name, args)}`);
   if (r.status) throw new Error(`Disposable SQL failed: ${r.err}`);
   return { data: JSON.parse(r.out.trim()) };
@@ -88,10 +89,15 @@ test('036 upgrade, clean installation, rerun and rollback preserve financial sch
   const broken = migration.replace('COMMIT;', "SELECT 1/0; COMMIT;");
   assert.notEqual(sql(db, broken, true).status, 0);assert.equal(scalar(db, "SELECT to_regclass('public.flowlink_devices') IS NULL;"), 't');
   sql(db, migration);sql(db, migration);
+  assert.deepEqual(financialSnapshot(db), snapshot);
   const existing = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'apy_%' OR proname LIKE 'savings_%' OR proname='ingest_observation');");
   assert.deepEqual(existing(db), existing('flowlink_baseline'));
   for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).filter(f => /^\d{3}_.*\.sql$/.test(f) && Number(f.slice(0, 3)) > 37).sort()) sql(db, fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
-  assert.deepEqual(financialSnapshot(db), snapshot);
+  const upgraded = financialSnapshot(db), oldIds = new Set(snapshot.sources.map(s => s.id));
+  const originalRows = upgraded.transactions.map(({bank_movement,...row})=>{assert.equal(bank_movement,null);return row;});
+  assert.deepEqual({...upgraded,transactions:originalRows,sources:upgraded.sources.filter(s=>oldIds.has(s.id))}, snapshot);
+  assert.deepEqual(upgraded.sources.filter(s=>!oldIds.has(s.id)).map(s=>[s.source_kind,s.instance_key,s.configuration,s.is_active]),
+    [['external_api','unified:v1',{},true],['manual','unified:manual',{},true],['file_import','unified:csv',{},true]]);
   const definitions = d => json(d, "SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE '%flowlink%';");
   assert.deepEqual(definitions(db), definitions('flowlink_clean'));
 

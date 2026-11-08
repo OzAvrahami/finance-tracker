@@ -1,5 +1,16 @@
 # Database files, migrations and checks
 
+## Current ingestion cutover candidate
+
+Issue #99 Package 1 prepares forward migration **058**, after 057, and synchronizes
+`server/full_schema.sql`. It moves ingestion/reconciliation policy into JavaScript
+and removes obsolete active RPCs without rewriting historical rows or migrations.
+A coordinated pause of writers is required; old/new backend versions cannot overlap
+for writes. Production applied state and recovery availability are unverified.
+See [ownership matrix, atomic boundary, verification and cutover runbook](../architecture/INGESTION_PACKAGE_1.md).
+The older inventory below records the #46 documentation scope; it is not a current
+production migration ledger. #97/#98 database-management work remains separate.
+
 ## Three different authorities
 
 | Location | Meaning | Not evidence of |

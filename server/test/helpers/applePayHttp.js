@@ -23,7 +23,7 @@ async function harness(t, options = {}) {
   const db = options.db || { rpc: async (name, args) => { calls.push({ name, args });
     return { data: name === 'configure_ingestion_source' ? { source_id: '1', revision: '1' } : created() }; } };
   const app = express();app.use(helmet());
-  app.use(PATH, createApplePayRouter({ db, env: () => env, log: record => logs.push(record), limits: options.limits }));
+  app.use(PATH, createApplePayRouter({ db: require('./coreProtocol').withCoreProtocol(db), env: () => env, log: record => logs.push(record), limits: options.limits }));
   app.use((req, res) => res.status(401).json({ error: 'owner_jwt_required' }));
   const base = await listen(t, app);
   const send = async (body = purchase(), opts = {}) => {

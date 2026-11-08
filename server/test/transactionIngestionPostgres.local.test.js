@@ -6,7 +6,9 @@ const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 const container = `finance-apy02-${process.pid}`;
 const read = f => fs.readFileSync(path.join(__dirname, '../..', f), 'utf8');
-const full = read('server/full_schema.sql');
+// Historical 036 SQL decision-engine oracle; later policies/Loan definitions
+// must not be compared to the 035 baseline. 058 is tested by ingestionCorePostgres.
+const full = read('server/full_schema.sql').split('-- Migration 037:')[0];
 const baseline = full.split('-- Migration 036:')[0];
 const migration = read('server/migrations/036_transaction_ingestion_foundation.sql');
 let created = false, sequence = 0, commandSequence = 0;
@@ -62,8 +64,7 @@ test('035 upgrade and clean 036 install agree; backfill/rerun preserve historica
   sql(db,migration);sql(db,migration);
   assert.equal(scalar(db,'SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM transactions t;'),cash);
   assert.deepEqual(json(db,"SELECT jsonb_build_object('count',count(*),'origin',min(evidence_origin),'occurred',count(occurred_at),'minor',count(amount_minor)) FROM transaction_source_observations;"),{count:1,origin:'legacy_backfill',occurred:0,minor:0});
-  // Compare the same current schema boundary after proving 036 backfill/rerun above.
-  for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>36).sort())sql(db,read('server/migrations/'+f));
+  // Both sides now represent exactly the 036 boundary this test specifies.
   const definitions = d => json(d,"SELECT jsonb_object_agg(proname,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'apy_%' OR proname IN ('ingest_observation','savings_guard_transaction'));");
   assert.deepEqual(definitions(db),definitions('apy_clean'));
 });
@@ -207,11 +208,11 @@ test('domain-protected Loan and itemized cash cannot use generic APY cancellatio
   sql(c.db,`UPDATE transactions SET loan_id=NULL WHERE id=${a.transaction_id};INSERT INTO transaction_items(transaction_id,item_name) VALUES(${a.transaction_id},'item');`);
   const item=detail(c,a.observation_id);assert.equal(call(c.db,'cancel_ingested_transaction',[key(),{transaction_id:a.transaction_id,expected_revision:item.decision_revision,expected_transaction_fingerprint:item.expected_transaction_fingerprint,reason:'attempt',actor:'owner'}]).reason_code,'protected_transaction');
 });
-test('ordered 029 foundation through current migrations equals clean installation; failed 036 upgrade rolls back', () => {
+test('ordered 029 foundation through 036 equals clean 036 installation; failed 036 upgrade rolls back', () => {
   const db='ordered',broken='interrupted';sql('postgres',`CREATE DATABASE ${db}; CREATE DATABASE ${broken} TEMPLATE apy_baseline;`);
   sql(db,full.split('-- Migration 030: Savings foundation')[0]);
   // full_schema includes later additive migrations; compare the same schema boundary.
-  for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>=30).sort())sql(db,read('server/migrations/'+f));
+  for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>=30&&Number(f.slice(0,3))<=36).sort())sql(db,read('server/migrations/'+f));
   const inventory=d=>json(d,"SELECT jsonb_build_object('functions',(SELECT jsonb_object_agg(oid::regprocedure::text,pg_get_functiondef(oid)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND prokind='f'),'indexes',(SELECT jsonb_object_agg(indexname,indexdef) FROM pg_indexes WHERE schemaname='public'),'constraints',(SELECT jsonb_object_agg(conrelid::regclass::text||'.'||conname,pg_get_constraintdef(oid)) FROM pg_constraint WHERE connamespace='public'::regnamespace),'triggers',(SELECT jsonb_object_agg(tgname||tgrelid::regclass::text,pg_get_triggerdef(oid)) FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN (SELECT oid FROM pg_class WHERE relnamespace='public'::regnamespace)));");
   assert.deepEqual(inventory(db),inventory('apy_clean'));
   assert.notEqual(sql(broken,migration.replace(/COMMIT;\s*$/,'SELECT 1/0;\nCOMMIT;'),true).status,0);
@@ -222,7 +223,7 @@ test('observed_at/input are immutable and supplied date/instant discrepancy is r
   assert.notEqual(sql(c.db,`UPDATE transaction_source_observations SET observed_at=observed_at-interval '1 minute' WHERE id=${r.observation_id};`,true).status,0);
   assert.notEqual(sql(c.db,`UPDATE transaction_source_observations SET accepted_payload='{}' WHERE id=${r.observation_id};`,true).status,0);
 });
-test('v1 controller uses real persistence: 201/409/dry-run/missing IDs and mirrored deletion remain compatible', async () => {
+test('historical 036 v1 controller uses real persistence: 201/409/dry-run/missing IDs and mirrored deletion remain compatible', async () => {
   const c=make(),{loadControllerWithFake,createMockResponse}=require('./helpers/fakeSupabase');
   // Only the Supabase transport is replaced; every lookup/INSERT goes to PostgreSQL.
   const db={from:table=>{assert.equal(table,'transactions');return {
@@ -234,7 +235,7 @@ test('v1 controller uses real persistence: 201/409/dry-run/missing IDs and mirro
       return {data:JSON.parse(r.stdout.trim()),error:null};
     }})})
   };}};
-  const controller=loadControllerWithFake('../../controllers/v1/transactionController',db);
+  const controller=loadControllerWithFake('../fixtures/transactionController036',db);
   const invoke=async extra=>{const res=createMockResponse();await controller.createTransaction({body:{type:'expense',amount:1.234,date:'2026-09-22',...extra}},res);return res;};
   assert.equal((await invoke({external_id:'real-v1'})).statusCode,201);const duplicate=await invoke({external_id:'real-v1'});assert.equal(duplicate.statusCode,409);assert.equal(duplicate.body.error,'already_exists');
   const count=totals(c.db).count;const dry=await invoke({external_id:'dry',dry_run:true});assert.equal(dry.statusCode,200);assert.equal(dry.body.dry_run,true);assert.equal(totals(c.db).count,count);
@@ -258,7 +259,7 @@ test('Savings-linked legacy cash backfills unchanged and cancelled legacy API id
   assert.equal(a.account.id,'1');
   const {loadControllerWithFake,createMockResponse}=require('./helpers/fakeSupabase');
   const transport={from:table=>{assert.equal(table,'transactions');return {select:()=>({eq:(column,value)=>({maybeSingle:async()=>({data:json(db,`SELECT jsonb_build_object('id',id,'voided_at',voided_at) FROM transactions WHERE ${column}=${quote(value)};`)})})})};}};
-  const controller=loadControllerWithFake('../../controllers/v1/transactionController',transport),response=createMockResponse();
+  const controller=loadControllerWithFake('../fixtures/transactionController036',transport),response=createMockResponse();
   await controller.createTransaction({body:{type:'expense',amount:50,date:'2020-01-02',external_id:'saved-history'}},response);
   assert.equal(response.statusCode,409);assert.equal(response.body.error,'cancelled_record_exists');
 });

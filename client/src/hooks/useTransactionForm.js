@@ -8,6 +8,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getTransactionTotalValue } from '../utils/transactionPricing';
 import { invalidateLegoCollection } from '../utils/legoCollectionInvalidation';
 import { addCalendarMonthIso, validateManualLoanPayment } from '../utils/manualLoanPayment';
+import { normalizeMoneyForDisplay } from '../utils/money';
 
 let nextItemKey = 0;
 
@@ -157,7 +158,7 @@ const useTransactionForm = () => {
             movement_type: data.movement_type || 'expense',
             category_id: data.category_id || '',
             payment_source_id: data.payment_source_id || '',
-            total_amount: data.total_amount || 0,
+            total_amount: normalizeMoneyForDisplay(data.total_amount ?? 0),
             global_discount: data.global_discount || 0,
             global_discount_source: data.global_discount_source || '',
             tags: data.tags || '',

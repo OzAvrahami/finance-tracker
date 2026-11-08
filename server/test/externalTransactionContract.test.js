@@ -1,3 +1,4 @@
+const { withCoreProtocol } = require('./helpers/coreProtocol');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -8,9 +9,9 @@ const { submitExternal } = require('../services/unifiedTransactionIngestion');
 const request = extra => ({ type: 'expense', amount: 42.5, date: '2026-11-04', payment_source_id: 6, external_id: 'synthetic', ...extra });
 function fake(result) {
  const calls=[];
- return { calls, from() { throw Error('no direct financial table access'); }, rpc: async(name,args)=>{
+ return withCoreProtocol({ calls, from() { throw Error('no direct financial table access'); }, rpc: async(name,args)=>{
   calls.push({name,args});return {data:result || {outcome:'created',transaction_id:'701',replayed:false,created_at:'2026-11-04T00:00:00Z'}};
- } };
+ } });
 }
 test('single v1 forwards established fields to one atomic command, preserving JSON-number FX semantics',async()=>{
  const db=fake(), controller=loadControllerWithFake('../../controllers/v1/transactionController',db),res=createMockResponse();

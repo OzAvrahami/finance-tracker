@@ -1,5 +1,12 @@
 > Historical #96 protocol. New intake is retired by the local [unified ingestion implementation](UNIFIED_TRANSACTION_INGESTION.md), pending migration 054 and separately authorized deployment. Receipts, resolution history and the original migration specifications remain preserved. This document is not an activation instruction.
 
+> Local 058 candidate: [Issue #99 Package 1](INGESTION_PACKAGE_1.md) replaces the
+> ingestion/reconciliation SQL decision path described below with JavaScript
+> services and atomic persistence. Treat the older RPC commands and SQL-only
+> fixture instructions here as historical, not 058 cutover commands. Existing
+> public contracts/authentication remain; producer activation is not authorized.
+
+
 # General transaction evidence API (#96)
 
 Local implementation against v1.7.0 `1da80871f57354f6429358d37e97b0517d1efaf3`.

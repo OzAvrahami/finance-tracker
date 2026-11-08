@@ -1,5 +1,12 @@
 # General transaction API: local review and migrations 052 / 053
 
+> Local 058 candidate: [Issue #99 Package 1](../architecture/INGESTION_PACKAGE_1.md) replaces the
+> ingestion/reconciliation SQL decision path described below with JavaScript
+> services and atomic persistence. Treat the older RPC commands and SQL-only
+> fixture instructions here as historical, not 058 cutover commands. Existing
+> public contracts/authentication remain; producer activation is not authorized.
+
+
 [Contract, compatibility and synthetic examples](../architecture/GENERAL_TRANSACTION_API.md).
 Issue [#96](https://github.com/OzAvrahami/finance-tracker/issues/96), local implementation
 on `main` at `1da80871f57354f6429358d37e97b0517d1efaf3`. No staging/commit/push,

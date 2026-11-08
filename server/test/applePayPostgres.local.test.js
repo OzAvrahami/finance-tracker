@@ -15,19 +15,20 @@ const run = (args, input, allow = false) => {
   if (!allow) assert.equal(r.status, 0, r.stderr || r.error?.message);
   return r;
 };
-const quote = x => `'${String(typeof x === 'object' ? JSON.stringify(x) : x).replaceAll("'", "''")}'`;
+const quote = x => x == null ? 'NULL' : `'${String(Array.isArray(x) ? '{'+x.join(',')+'}' : typeof x === 'object' ? JSON.stringify(x) : x).replaceAll("'", "''")}'`;
 const sql = (db, input) => run(['exec', '-i', container, 'psql', '-U', 'postgres', '-d', db, '-v', 'ON_ERROR_STOP=1', '-Atq'], input).stdout.trim();
 const json = (db, input) => JSON.parse(sql(db, input));
 const signatures = {
+  ingestion_core_snapshot: ['p_scope'], ingestion_core_commit: ['p_scope','p_token','p_decision'],
   configure_ingestion_source: ['p_request_key', 'p_command'], ingest_observation: ['p_source_id', 'p_observation'],
-  cancel_ingested_transaction: ['p_request_key', 'p_command'],
+  cancel_ingested_transaction: ['p_request_key', 'p_command'], read_reconciliation:['p_mode','p_ids','p_id'],
 };
-const dbClient = db => ({ rpc: (name, args) => new Promise(resolve => {
+const dbClient = db => ({ coreProtocol: true, rpc: (name, args) => new Promise(resolve => {
   assert.ok(signatures[name]);
   const child = spawn('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', db, '-v', 'ON_ERROR_STOP=1', '-Atq']);
-  let out = '';child.stdout.on('data', chunk => { out += chunk; });child.stderr.resume();
+  let out = '';child.stdout.on('data', chunk => { out += chunk; });let err='';child.stderr.on('data', chunk => { err += chunk; });
   child.on('error', () => resolve({ error: { code: 'TEST_TRANSPORT' } }));
-  child.on('close', code => resolve(code === 0 ? { data: JSON.parse(out.trim()) } : { error: { code: 'TEST_SQL' } }));
+  child.on('close', code => resolve(code === 0 ? { data: JSON.parse(out.trim()) } : { error: { code: err.includes('stale_ingestion_snapshot') ? '40001' : 'TEST_SQL' } }));
   child.stdin.end(`SET ROLE service_role; SET lock_timeout='10s'; SELECT ${name}(${signatures[name].map(k => quote(args[k])).join(',')});`);
 }) });
 const make = async (t, extra = {}) => {
@@ -67,7 +68,7 @@ test('Apple actual HTTP replay and changed-key payload return stable IDs / deter
 
 test('Apple lost response after committed RPC can retry same invocation UUID without second cash', async t => {
   const c=await make(t),original=c.client.rpc;let lose=true;
-  c.client.rpc=async(name,args)=>{const result=await original(name,args);if(name==='ingest_observation'&&lose){lose=false;throw new Error('simulated lost response');}return result;};
+  c.client.rpc=async(name,args)=>{const result=await original(name,args);if(name==='ingestion_core_commit'&&lose){lose=false;throw new Error('simulated lost response');}return result;};
   const p=purchase();assert.equal((await c.send(p)).status,503);assert.equal(totals(c).count,1);
   const retried=await c.send(p);assert.equal(retried.status,200);assert.equal(retried.body.replayed,true);assert.equal(totals(c).count,1);
 });
@@ -81,9 +82,13 @@ test('Apple independent invocation UUIDs for equal purchases remain separate', a
   const c=await make(t);assert.equal((await c.send()).status,201);assert.equal((await c.send()).status,201);assert.deepEqual(totals(c),{count:2,amount:'169.80'});
 });
 
-test('Apple strong CAL-first candidate attaches with zero new cash and preserves user category/description', async t => {
+test('Apple date-only CAL candidate requires owner linkage and preserves category/description', async t => {
   const c=await make(t),[prior]=await cal(c);sql(c.db,`UPDATE transactions SET description='owner correction',notes='keep' WHERE id=${prior.transaction_id};`);
-  const r=await c.send();assert.equal(r.status,200);assert.equal(r.body.outcome,'reconciled');assert.equal(r.body.transaction_id,prior.transaction_id);assert.equal(totals(c).count,1);
+  const r=await c.send();assert.equal(r.status,202);assert.equal(r.body.outcome,'ambiguous');assert.equal(totals(c).count,1);
+  const view=await ingestion.readReconciliation(c.client,'observation',[],r.body.observation_id), target=view.candidates[0];
+  const linked=await ingestion.reviewReconciliation(c.client,randomUUID(),{observation_id:r.body.observation_id,expected_revision:view.observation.revision,
+    expected_candidate_fingerprints:view.candidate_fingerprints,action:'link',transaction_id:target.id,expected_transaction_fingerprint:target.fingerprint,actor:'owner:synthetic',reason:'Verified independent evidence'});
+  assert.equal(linked.outcome,'reconciled');assert.equal(linked.transaction_id,prior.transaction_id);assert.equal(totals(c).count,1);
   assert.deepEqual(json(c.db,'SELECT jsonb_build_object(\'description\',description,\'notes\',notes,\'category\',category_id::text) FROM transactions;'),{description:'owner correction',notes:'keep',category:'100'});
 });
 

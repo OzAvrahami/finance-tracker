@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const service = require('../services/transactionIngestionService');
+const runtime = require('../services/transactionIngestionService');
+const { withCoreProtocol } = require('./helpers/coreProtocol');
+const service = { ...runtime, ...Object.fromEntries(['ingestObservation','amendObservation','resolveObservation','cancelIngestedTransaction'].map(name => [name, (db,...args) => runtime[name](withCoreProtocol(db),...args)])) };
 const input = extra => ({ idempotency_key: 'capture-A', merchant: 'AROMA', accounting_amount: '84.90', currency: 'ILS', movement_type: 'expense', transaction_date: '2026-09-22', ...extra });
 
 test('APY exact decimal amounts preserve cents beyond JS precision without rounding', () => {
@@ -44,12 +46,13 @@ test('APY database domain outcomes pass through without exposing exception paylo
 });
 test('APY transient locks retry at most twice using identical command arguments', async () => {
   const calls=[];const db={rpc:async(name,args)=>{calls.push(args);return calls.length===1?{error:{code:'40P01'}}:{data:{outcome:'already_observed'}};}};
-  assert.equal((await service.ingestObservation(db,'1',input())).outcome,'already_observed');assert.equal(calls.length,2);assert.strictEqual(calls[0],calls[1]);
+  assert.equal((await service.ingestObservation(db,'1',input())).outcome,'already_observed');assert.equal(calls.length,2);assert.deepEqual(calls[0],calls[1]);
   let attempts=0;await assert.rejects(service.ingestObservation({rpc:async()=>{attempts++;return {error:{code:'55P03'}};}},'1',input()),e=>e.retryable===true);assert.equal(attempts,2);
 });
 test('APY command service preserves request key for amendment/review/cancellation', async () => {
-  const key='00000000-0000-4000-8000-000000000001',command={observation_id:'2',expected_revision:'3'};
+  const key='00000000-0000-4000-8000-000000000001',base={observation_id:'2',expected_revision:'3',actor:'synthetic'};
   for(const [method,name] of [['amendObservation','amend_observation'],['resolveObservation','resolve_observation'],['cancelIngestedTransaction','cancel_ingested_transaction']]){
+    const command = method === 'amendObservation' ? {...base,source_id:'1',charge_date:'2026-11-08'} : method === 'resolveObservation' ? {...base,action:'separate',reason:'Synthetic review',expected_candidate_fingerprints:{}} : {transaction_id:'2',expected_revision:'3',actor:'synthetic',reason:'Synthetic cancel',expected_transaction_fingerprint:'a'.repeat(32)};
     await service[method]({rpc:async(n,args)=>{assert.equal(n,name);assert.equal(args.p_request_key,key);assert.strictEqual(args.p_command,command);return {data:{}};}},key,command);
   }
 });

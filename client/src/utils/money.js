@@ -39,6 +39,19 @@ export const moneyFromMinorUnits = (minorUnits) => {
   return `${negative ? '-' : ''}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`;
 };
 
+// Normalize loaded money and derived summaries, never an in-progress input.
+// String conversion avoids the legacy numeric helper's presentation rounding.
+// Invalid precision stays visible so existing validation can reject it.
+export const normalizeMoneyForDisplay = (value) => {
+  try {
+    return moneyFromMinorUnits(moneyToMinorUnits(String(value)));
+  } catch {
+    // Keep invalid numeric inputs textual too: downstream presentation must not
+    // use a Number/toFixed compatibility path to hide their extra precision.
+    return typeof value === 'number' ? String(value) : value;
+  }
+};
+
 export const addMoney = (first, second) => (
   moneyFromMinorUnits(moneyToMinorUnits(first) + moneyToMinorUnits(second))
 );

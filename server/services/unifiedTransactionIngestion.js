@@ -1,6 +1,6 @@
 'use strict';
 const { z } = require('zod');
-const { boundedCommand } = require('./ingestionCommand');
+const core = require('./ingestion/core');
 const { randomUUID } = require('node:crypto');
 
 const date = z.string().refine(v => /^\d{4}-\d{2}-\d{2}$/.test(v)
@@ -35,9 +35,7 @@ async function submitExternal(db, body, options = {}) {
   if (!parsed.success) return { status: 400, body: { error: 'validation_error',
     details: parsed.error.issues.map(i => ({ path: i.path.join('.'), message: i.message })) } };
   const { dry_run = false, ...request } = parsed.data;
-  const result = await boundedCommand(db, 'ingest_external_transaction', {
-    p_request: request, p_dry_run: dry_run,
-  }, options.commandMs);
+  const result = await core.external(db, request, dry_run, options);
   return externalResponse(result, request.external_id);
 }
 
@@ -56,9 +54,7 @@ function externalResponse(result, externalId) {
 }
 
 async function submitOwned(db, channel, row, { key = randomUUID(), evidence = row, domain = null } = {}) {
-  const result = await boundedCommand(db, 'ingest_owned_transaction', {
-    p_channel: channel, p_key: key, p_row: row, p_evidence: evidence, p_domain: domain,
-  });
+  const result = await core.owned(db, channel, row, key, evidence, domain);
   if (result.outcome === 'retryable_failure') throw Object.assign(new Error('Ingestion result is uncertain; check transaction history before retrying.'), { code: 'INGESTION_UNCERTAIN' });
   if (result.outcome === 'rejected') throw Object.assign(new Error(result.reason_code), { code: result.reason_code });
   return result;

@@ -5,7 +5,7 @@ const { spawnSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { submitExternal } = require('../services/unifiedTransactionIngestion');
+const { submitExternal } = require('./fixtures/unifiedTransactionIngestion057');
 const { runBulk } = require('../services/externalTransactionBulk');
 const container = `finance-unified-${process.pid}`;
 const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 054:')[0];
@@ -483,7 +483,7 @@ test('057 migration rollback/repeat preserves old cash and evidence; fresh schem
   sql(db,bankMovementsMigration);sql(db,bankMovementsMigration);assert.equal(before(),original);
   assert.equal(scalar(db,"SELECT apy_cash_fingerprint(id) FROM transactions WHERE external_id='unchanged-cal';"),cashFingerprint);
   assert.equal(ingest(db,item('unchanged-cal')).replayed,true);
-  sql('postgres','CREATE DATABASE movements_fresh;');sql('movements_fresh',fs.readFileSync(path.join(__dirname,'../full_schema.sql'),'utf8'));
+  sql('postgres','CREATE DATABASE movements_fresh;');sql('movements_fresh',fs.readFileSync(path.join(__dirname,'../full_schema.sql'),'utf8').split('-- Migration 058:')[0]);
   const definitions=d=>scalar(d,"SELECT jsonb_agg(jsonb_build_array(p.proname,replace(pg_get_functiondef(p.oid),chr(13),''),p.proacl::text) ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('apy_identity','apy_cash_fingerprint','apy_review_fingerprints','apy_normalize','apy_create_cash','unified_ingest','ingest_external_transaction','transactions_filtered','savings_post_event_locked','get_savings_surplus_preview','savings_apply_surplus_locked');");
   assert.equal(definitions(db),definitions('movements_fresh'));
   assert.equal(scalar(db,"SELECT has_function_privilege('service_role','unified_ingest(bigint,jsonb,jsonb,jsonb,text,jsonb)','EXECUTE');"),'f');

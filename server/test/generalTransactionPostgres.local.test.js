@@ -31,9 +31,9 @@ const asyncSql = (db, text) => new Promise((resolve, reject) => {
   let out = '', err = ''; p.stdout.on('data', b => { out += b; }); p.stderr.on('data', b => { err += b; });
   p.on('error', reject); p.on('close', status => resolve({ status, out, err })); p.stdin.end(text);
 });
-const client = db => ({ rpc: async (name, args) => {
-  assert.ok(['ingest_general_transaction','get_general_receipt','resolve_general_receipt'].includes(name));
-  const values=name==='ingest_general_transaction'?[args.p_account,args.p_item]:name==='get_general_receipt'?[args.p_receipt]:[args.p_request_key,args.p_command];
+const client = db => ({ coreProtocol: true, rpc: async (name, args) => {
+  assert.ok(['ingest_general_transaction','get_general_receipt','resolve_general_receipt','ingestion_core_snapshot','ingestion_core_commit'].includes(name));
+  const values=name.startsWith('ingestion_core_')?Object.values(args):name==='ingest_general_transaction'?[args.p_account,args.p_item]:name==='get_general_receipt'?[args.p_receipt]:[args.p_request_key,args.p_command];
   const r = await asyncSql(db, `SET ROLE service_role; SELECT ${name}(${values.map(quote).join(',')});`);
   return r.status ? { error: { code: '23514' } } : { data: JSON.parse(r.out.trim()) };
 } });
@@ -66,7 +66,10 @@ before(async () => {
   run(['run', '-d', '--rm', '--name', container, '--label', 'finance.disposable=general96', '-e', 'POSTGRES_PASSWORD=local_test_only', 'postgres:16-alpine']); started = true;
   const info = JSON.parse(run(['inspect', container]).stdout)[0];
   assert.equal(info.Config.Labels['finance.disposable'], 'general96'); assert.deepEqual(info.HostConfig.PortBindings || {}, {});
-  for (let i = 0; i < 60; i++) { if (run(['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status === 0) break; await new Promise(r => setTimeout(r, 200)); }
+  let ready=false;
+  for (let i = 0; i < 150; i++) { if (run(['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status === 0
+    && sql('postgres','SELECT 1;',true).status===0) {ready=true;break;} await new Promise(r => setTimeout(r, 200)); }
+  assert.equal(ready,true,'disposable PostgreSQL did not become ready');
   sql('postgres', 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE DATABASE general_clean; CREATE DATABASE general_before;');
   sql('general_clean', full); sql('general_before', full.split('-- Migration 052:')[0]);
 });
@@ -305,9 +308,9 @@ test('ordinary evidence still reconciles through APY and preserves owner edits a
   const cmd = { observation_id: pending.observation_id, expected_revision: '1', expected_candidate_fingerprints: {}, action: 'separate', actor: 'synthetic', reason: 'Test stale' };
   assert.equal(json(db, `SELECT review_reconciliation(${quote(randomUUID())},${quote(cmd)});`).reason_code, 'stale_review'); assert.equal(count(db), 1);
 });
-test('actual controller/auth over loopback HTTP processes PostgreSQL-backed mixed batch', async t => {
+test('historical #96 HTTP adapter/auth processes its PostgreSQL-backed mixed batch at the 053 boundary', async t => {
   const { db } = make(); const express = require('express');
-  const controller = require('./helpers/fakeSupabase').loadControllerWithFake('../../controllers/v1/transactionController', client(db));
+  const controller = {createTransaction:async(req,res)=>{const r=await processSubmission(client(db),req.body);res.status(r.status).json(r.body);}};
   const prior = process.env.EXTERNAL_API_KEY; process.env.EXTERNAL_API_KEY = 'synthetic-http-key';
   t.after(() => { if (prior === undefined) delete process.env.EXTERNAL_API_KEY; else process.env.EXTERNAL_API_KEY = prior; });
   const app = express(); app.use(express.json({ limit: '2mb' }));
@@ -323,6 +326,7 @@ test('actual controller/auth over loopback HTTP processes PostgreSQL-backed mixe
 test('owner receipt HTTP procedure validates, reads, resolves and retries against PostgreSQL',async t=>{
  const {db}=make(),express=require('express'),owner='11111111-1111-4111-8111-111111111111';
  const pending=item({event:{...item().event,status:'pending'}}),r=call(db,pending),app=express();
+ for(const f of fs.readdirSync(path.join(__dirname,'../migrations')).filter(f=>/^\d{3}_.*\.sql$/.test(f)&&Number(f.slice(0,3))>=54).sort())sql(db,fs.readFileSync(path.join(__dirname,'../migrations',f),'utf8'));
  app.use(express.json());app.use((req,res,next)=>{if(req.headers.authorization==='Bearer synthetic-owner')req.user={id:owner};next();});
  app.use('/api/reconciliation',require('../routes/reconciliationRoutes').createReconciliationRouter({db:client(db),env:()=>({FLOWLINK_OWNER_USER_IDS:JSON.stringify([owner])})}));
  const server=app.listen(0,'127.0.0.1');await require('node:events').once(server,'listening');

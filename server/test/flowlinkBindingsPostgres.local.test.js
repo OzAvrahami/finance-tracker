@@ -6,6 +6,8 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('../config/flowlink');
+const core = require('../services/ingestion/core');
+const { normalize } = require('../services/ingestion/normalization');
 const { harness, claim, token, ownerId, otherOwnerId } = require('./helpers/flowlinkHttp');
 const full = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8');
 const migration = fs.readFileSync(path.join(__dirname, '../migrations/038_flowlink_card_bindings.sql'), 'utf8');
@@ -22,6 +24,7 @@ const scalar = (db, text) => sql(db, text).stdout.trim();
 const json = (db, text) => JSON.parse(scalar(db, text));
 const quote = v => v === null ? 'NULL' : `'${String(typeof v === 'object' ? JSON.stringify(v) : v).replaceAll("'", "''")}'`;
 const signatures = {
+  ingestion_core_snapshot: ['p_scope'], ingestion_core_commit: ['p_scope','p_token','p_decision'],
   create_flowlink_binding: ['p_owner_id', 'p_request_key', 'p_command'],
   update_flowlink_binding: ['p_owner_id', 'p_request_key', 'p_command'],
   list_flowlink_owner_bindings: ['p_device_id', 'p_cursor'], list_flowlink_payment_sources: ['p_cursor'],
@@ -40,9 +43,9 @@ const parallelSql = (db, text) => new Promise((resolve, reject) => {
   let out = '', err = '';child.stdout.on('data', b => { out += b; });child.stderr.on('data', b => { err += b; });
   child.on('error', reject);child.on('close', status => resolve({ status, out, err }));child.stdin.end(text);
 });
-const client = db => ({ rpc: async (name, args) => {
+const client = db => ({ coreProtocol: true, rpc: async (name, args) => {
   const r = await parallelSql(db, `SET lock_timeout='10s';${statement(name, args)}`);
-  if (r.status) throw new Error(`Disposable SQL failed: ${r.err}`);
+  if (r.status) return { error: { code: r.err.includes('stale_ingestion_snapshot') ? '40001' : 'TEST_SQL' } };
   return { data: JSON.parse(r.out.trim()) };
 } });
 const call = (db, name, args) => json(db, statement(name, args));
@@ -175,20 +178,20 @@ test('same-key financial replay and changed-payload conflict preserve exactly on
   assert.equal(replay.body.transaction_id, a.body.transaction_id);assert.equal(conflict.status, 409);
   assert.equal(cash(c).count, 1);assert.match(cash(c).amount, /^4\.0+$/); // NUMERIC scale is not money identity.
 });
-function cal(c, times = 1) {
+async function cal(c, times = 1) {
   const source = call(c.db, 'configure_ingestion_source', { p_request_key: randomUUID(), p_command: {
     source_kind: 'cal', instance_key: 'test', actor: 'synthetic', configuration: { payment_source_ids: ['1'] } } });
-  for (let i = 0; i < times; i++) call(c.db, 'ingest_observation', { p_source_id: source.source_id, p_observation: {
+  for (let i = 0; i < times; i++) await core.observation(c.client, source.source_id, {
     idempotency_key: randomUUID(), merchant: 'Israel Post', accounting_amount: '4.00', currency: 'ILS', movement_type: 'expense',
-    transaction_date: '2026-09-26', payment_source_id: '1' } });
+    transaction_date: '2026-09-26', payment_source_id: '1' });
   return source;
 }
 test('date-only CAL candidate stays pending without extra cash', async t => {
-  const { c, e, b } = await setup(t);cal(c);
+  const { c, e, b } = await setup(t);await cal(c);
   const r = await send(c, e, purchase(b));assert.equal(r.status, 202);assert.equal(r.body.outcome, 'ambiguous');assert.equal(cash(c).count, 1);
 });
 test('ambiguous CAL candidates retain pending evidence and create zero avoidable cash', async t => {
-  const { c, e, b } = await setup(t);cal(c, 2);
+  const { c, e, b } = await setup(t);await cal(c, 2);
   const r = await send(c, e, purchase(b));assert.equal(r.status, 202);assert.equal(r.body.disposition, 'pending');assert.equal(cash(c).count, 2);
   assert.equal(JSON.stringify(r.body).includes('candidate_ids'), false);
 });
@@ -216,12 +219,12 @@ test('duplicate mapping, inactive payment source/device and quota are rejected b
   assert.equal((await send(c, e, purchase(b))).status, 401);
   assert.equal(scalar(c.db, `SELECT is_active FROM transaction_ingestion_sources WHERE id=${b.source_id};`), 't');
 });
-test('SQL boundary independently rejects protocol escalation, noncanonical scalars and invalid Gregorian dates', async t => {
+test('JavaScript boundary rejects protocol escalation, noncanonical scalars and invalid Gregorian dates', async t => {
   const { c, e, b } = await setup(t), base = purchase(b);
   for (const extra of [{ payment_source_id: '2' }, { source_id: '1' }, { amount: 4 }, { amount: '04.00' }, { amount: '0.00' },
     { merchant: 'Attachment.txt' }, { merchant: '\n' }, { merchant: '!!!' }, { currency: 'USD' }, { transaction_date: '2026-02-30' },
     { transaction_date: '0000-01-01' }, { idempotency_key: 'bad' }, { binding_id: b.id.toUpperCase() }]) {
-    const r = call(c.db, 'ingest_flowlink_observation', nativeArgs(e, { ...base, ...extra }));
+    let r; try { r = await core.flowlink(c.client, config.digest(e.body.device_credential), { ...base, ...extra }); } catch (error) { r = { error }; }
     assert.ok(r.error || r.outcome === 'rejected', JSON.stringify(extra));
   }
   assert.equal(cash(c).count, 0);
@@ -241,9 +244,13 @@ for (const mode of ['revoke', 'disable', 'rotate']) for (const firstMoney of [fa
     if (mode === 'revoke') operation = statement('revoke_flowlink_device', { p_owner_id: ownerId, p_device_id: e.result.device_id });
     if (mode === 'disable') operation = statement('update_flowlink_binding', { p_owner_id: ownerId, p_request_key: randomUUID(), p_command: { binding_id: b.id, expected_revision: '1', status: 'disabled' } });
     if (mode === 'rotate') operation = statement('redeem_flowlink_pairing', config.redemption(claim(await pair(c, { purpose: 'replace_credential', device_id: e.result.device_id }))));
-    const money = statement('ingest_flowlink_observation', nativeArgs(e, p));
+    const hash_input = normalize({ idempotency_key:p.idempotency_key, accounting_amount:p.amount, currency:'ILS', movement_type:'expense', merchant:p.merchant, transaction_date:p.transaction_date }).input;
+    const scope = { channel:'flowlink', credential:config.digest(e.body.device_credential), request:p, hash_input, key:p.idempotency_key, date:p.transaction_date };
+    const snapshot = call(c.db, 'ingestion_core_snapshot', { p_scope:scope });
+    const money = statement('ingestion_core_commit', { p_scope:scope, p_token:snapshot.token, p_decision:core.decideIngestion(snapshot.facts,scope) });
     const first = parallelSql(c.db, `BEGIN;${firstMoney ? money : operation} SELECT pg_sleep(0.5);COMMIT;`);await waitLock(c);
-    const second = await parallelSql(c.db, firstMoney ? operation : money);assert.equal((await first).status, 0);assert.equal(second.status, 0, second.err);
+    const second = firstMoney ? await parallelSql(c.db, operation) : {status:0,out:JSON.stringify(await core.flowlink(c.client,config.digest(e.body.device_credential),p))};
+    assert.equal((await first).status, 0);assert.equal(second.status, 0, second.err);
     assert.equal(cash(c).count, firstMoney ? 1 : 0);
     if (!firstMoney) assert.equal(JSON.parse(second.out.trim()).error.code, mode === 'disable' ? 'binding_unavailable' : 'unauthorized');
   });
@@ -261,8 +268,8 @@ test('payment-source deactivation commits first: waiting authorized ingest reche
 test('concurrent native and existing APY ingestion share the same financial lock and one cash row', async t => {
   const { c, e, b } = await setup(t);
   const source = call(c.db, 'configure_ingestion_source', { p_request_key: randomUUID(), p_command: { source_kind: 'cal', instance_key: 'race', actor: 'test', configuration: { payment_source_ids: ['1'] } } });
-  const results = await Promise.all([send(c, e, purchase(b)), c.client.rpc('ingest_observation', { p_source_id: source.source_id, p_observation: {
-    idempotency_key: randomUUID(), merchant: 'Israel Post', accounting_amount: '4.00', currency: 'ILS', movement_type: 'expense', transaction_date: '2026-09-26', payment_source_id: '1' } })]);
+  const results = await Promise.all([send(c, e, purchase(b)), core.observation(c.client, source.source_id, {
+    idempotency_key: randomUUID(), merchant: 'Israel Post', accounting_amount: '4.00', currency: 'ILS', movement_type: 'expense', transaction_date: '2026-09-26', payment_source_id: '1' }).then(data=>({data}))]);
   assert.ok(results[0].status < 300);assert.ok(['created', 'ambiguous'].includes(results[1].data.outcome));assert.equal(cash(c).count, 1);
 });
 test('bindings/history immutable; RLS and private helper/RPC grants deny browser and direct service access', async t => {
@@ -272,7 +279,7 @@ test('bindings/history immutable; RLS and private helper/RPC grants deny browser
     assert.notEqual(sql(c.db, `SET ROLE ${role};SELECT * FROM ${table};`, true).status, 0);
   }
   assert.equal(scalar(c.db, "SELECT count(*) FROM pg_class WHERE relname IN ('flowlink_card_bindings','flowlink_binding_commands') AND relrowsecurity;"), '2');
-  for (const role of ['anon', 'authenticated']) assert.equal(scalar(c.db, `SELECT has_function_privilege('${role}','ingest_flowlink_observation(bytea,jsonb)','EXECUTE');`), 'f');
+  for (const role of ['anon', 'authenticated']) assert.equal(scalar(c.db, `SELECT has_function_privilege('${role}','ingestion_core_commit(jsonb,text,jsonb)','EXECUTE');`), 'f');
   assert.equal(scalar(c.db, "SELECT has_function_privilege('service_role','flowlink_owner_binding(uuid)','EXECUTE');"), 'f');
   assert.equal(scalar(c.db, `SELECT source_id::text FROM flowlink_card_bindings WHERE id=${quote(b.id)};`), b.source_id);
 });
@@ -293,7 +300,7 @@ test('lost HTTP responses recover binding and financial receipts without remutat
   const url = `/owner/devices/${e.result.device_id}/bindings`, body = { request_id: randomUUID(), label: 'A', payment_source_id: '1' };
   assert.equal((await c.send(url, body)).status, 503);
   const b = (await c.send(url, body)).body;assert.equal(b.replayed, true);assert.equal(count(c.db, 'flowlink_card_bindings'), 1);
-  lose = 'ingest_flowlink_observation';const p = purchase(b);
+  lose = 'ingestion_core_commit';const p = purchase(b);
   assert.equal((await send(c, e, p)).status, 503);
   const r = await send(c, e, p);assert.equal(r.status, 200);assert.equal(r.body.replayed, true);assert.equal(cash(c).count, 1);
 });
@@ -333,9 +340,9 @@ test('each source identity/configuration invariant independently fails closed wi
   const original = json(c.db, `SELECT to_jsonb(s) FROM transaction_ingestion_sources s WHERE id=${b.source_id};`);
   for (const change of ["source_kind='cal'", "instance_key='wrong'", 'is_active=false', "configuration=jsonb_set(configuration,'{payment_source_ids}','[\"2\"]')"]) {
     sql(c.db, `UPDATE transaction_ingestion_sources SET ${change} WHERE id=${b.source_id};`);
-    const r = call(c.db, 'ingest_flowlink_observation', nativeArgs(e, purchase(b)));assert.equal(r.error.code, 'flowlink_configuration_invalid');
+    const r = await core.flowlink(c.client, config.digest(e.body.device_credential), purchase(b));assert.equal(r.error.code, 'flowlink_configuration_invalid');
     sql(c.db, `UPDATE transaction_ingestion_sources SET source_kind='apple_pay',instance_key=${quote(original.instance_key)},is_active=true,configuration=${quote(original.configuration)} WHERE id=${b.source_id};`);
   }
-  assert.equal(call(c.db, 'ingest_flowlink_observation', { p_credential_sha256: config.digest(token()), p_request: purchase(b) }).error.code, 'unauthorized');
+  assert.equal((await core.flowlink(c.client, config.digest(token()), purchase(b))).error.code, 'unauthorized');
   assert.equal(cash(c).count, 0);
 });

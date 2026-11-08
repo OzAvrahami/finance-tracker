@@ -4,7 +4,7 @@ const config = require('../config/flowlink');
 const ingestion = require('../services/transactionIngestionService');
 const { safeResult } = require('../services/applePayIngestionService');
 const { validateItem } = require('../services/generalTransactionContract');
-const { boundedCommand } = require('../services/ingestionCommand');
+const ingestionCore = require('../services/ingestion/core');
 const id = value => typeof value === 'string' && /^[1-9][0-9]{0,18}$/.test(value) && BigInt(value)<=9223372036854775807n;
 const invalid = () => { throw Object.assign(new Error('invalid_input'), { status: 400 }); };
 function createReconciliationRouter({ db, env = () => process.env }) {
@@ -43,8 +43,8 @@ function createReconciliationRouter({ db, env = () => process.env }) {
   if(!parsed.item)return res.status(400).json({error:parsed.reason});
   const {client_id,...item}=parsed.item;
   const {request_key,...command}=b;
-  const data=await boundedCommand(db,'resolve_general_receipt',{p_request_key:request_key,
-   p_command:{...command,item,receipt_id:req.params.id,actor:`owner:${req.user.id}`}});
+  const data=await ingestionCore.general(db,request_key,
+   {...command,item,receipt_id:req.params.id,actor:`owner:${req.user.id}`});
   if(data.outcome==='retryable_failure')return res.status(503).json({error:'resolution_unavailable',commit_state:data.commit_state,retry_with_same_request_key:true});
   if(['stale_review','command_key_conflict'].includes(data.reason_code))return res.status(409).json({error:data.reason_code});
   if(data.outcome==='rejected'||data.outcome==='conflict')return res.status(422).json({error:data.reason_code});

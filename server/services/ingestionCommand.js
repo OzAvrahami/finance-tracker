@@ -12,9 +12,12 @@ async function boundedCommand(db, name, args, commandMs = 5000) {
       timer = setTimeout(() => { abort.abort(); resolve({ error: true }); }, commandMs);
     })]);
     if (!result.error && result.data) return result.data;
-    return { outcome: 'retryable_failure', accepted: false, financial_posted: null, retryable: true,
+    const failure = { outcome: 'retryable_failure', accepted: false, financial_posted: null, retryable: true,
       reason_code: 'persistence_unavailable', commit_state:
         ['40P01', '40001', '55P03', '57014', '23514', '22023'].includes(result.error?.code) ? 'rolled_back' : 'unknown' };
+    // Internal retry signal; never add database details to the public contract.
+    Object.defineProperty(failure, 'database_code', { value: result.error?.code });
+    return failure;
   } catch {
     return { outcome: 'retryable_failure', accepted: false, financial_posted: null, retryable: true,
       reason_code: 'persistence_unavailable', commit_state: 'unknown' };

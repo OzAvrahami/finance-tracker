@@ -5,10 +5,21 @@ import {
   formatDecimalMoney,
   moneyFromMinorUnits,
   moneyToMinorUnits,
+  normalizeMoneyForDisplay,
   subtractMoney,
 } from './money';
 
 describe('exact money transport helpers', () => {
+  it('normalizes display scale exactly without rounding invalid precision', () => {
+    expect(normalizeMoneyForDisplay('-557.5500000000000000')).toBe('-557.55');
+    expect(normalizeMoneyForDisplay('9007199254740993.010000')).toBe('9007199254740993.01');
+    expect(normalizeMoneyForDisplay(25)).toBe('25.00');
+    expect(normalizeMoneyForDisplay('149.001')).toBe('149.001');
+    expect(normalizeMoneyForDisplay(149.001)).toBe('149.001');
+    expect(normalizeMoneyForDisplay('')).toBe('');
+    expect(normalizeMoneyForDisplay('invalid')).toBe('invalid');
+  });
+
   it('preserves values above JavaScript safe integer range', () => {
     const value = '9007199254740993.01';
     expect(moneyToMinorUnits(value)).toBe(900719925474099301n);

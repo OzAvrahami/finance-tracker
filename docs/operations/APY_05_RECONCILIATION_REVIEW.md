@@ -1,5 +1,12 @@
 # Transaction source review (#83)
 
+> Local 058 candidate: [Issue #99 Package 1](../architecture/INGESTION_PACKAGE_1.md) replaces the
+> ingestion/reconciliation SQL decision path described below with JavaScript
+> services and atomic persistence. Treat the older RPC commands and SQL-only
+> fixture instructions here as historical, not 058 cutover commands. Existing
+> public contracts/authentication remain; producer activation is not authorized.
+
+
 Local implementation on top of #82 commit `e4dbf0118987d1ecee105a74f724e9e1074eb2f4`.
 Owner acceptance and deployment remain pending. This UI does not enable ingestion,
 retry phone captures, register CAL accounts or change the producer contract.
