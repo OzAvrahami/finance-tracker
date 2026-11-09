@@ -739,3 +739,164 @@ operations/__pycache__/ is excluded and its content hashes were verified unchang
 - `docs/operations/FLI_03_CARD_BINDINGS.md`
 - `docs/operations/GENERAL_TRANSACTION_API.md`
 
+
+## Manual refund entry correction (2026-11-09)
+
+This correction starts at deployed Package 1 commit
+`43dc936600038da07a808a8b52627491ca722987`; the owner confirms production migration
+058 is already applied. Earlier candidate/cutover statements above describe their
+historical checkpoint. Package 1 architecture review and its completed 058 rollout
+rehearsal are reused, not reopened.
+
+### Root cause and behavior
+
+The old form allowed a negative amount only when the persisted expense was already
+negative **and** marked `bank_movement=refund`. Chromium reproduced the exact owner
+failure on an ordinary expense: entering `-557.55` yielded `rangeUnderflow=true`,
+`checkValidity()=false`, and “Value must be greater than or equal to 0.” The existing
+frontend tests actually asserted that blocked behavior. Manual ingestion then
+rejected signed input, and the atomic writer/observation constraint restricted
+negative posting to the external refund envelope.
+
+The ordinary direct expense form now accepts negative owner input, explains that
+it reduces expenses rather than adding income, and serializes refunds without
+inventing an installment count. Existing negative expenses are recognized without
+requiring a saved marker. Income stays nonnegative; existing refund edits retain
+their expense direction and negative-only range. Explicit native custom validity
+preserves cent precision when removing `min=0` changes HTML's step base.
+
+JavaScript derives the refund marker from the authenticated owner's signed expense
+command, ignoring any submitted marker. New refunds use the existing manual
+observation/reconciliation path. Refund edits use a small `owner_refund_edit`
+decision inside the existing locked snapshot/commit boundary, then the existing
+transaction/Loan writer. Amount and marker change together; immutable accepted
+source evidence, external IDs, row IDs and references are retained. The existing
+transaction trigger records identity overrides and audit events. Refund edits do
+not run the subsequent item-delete/reinsert path.
+
+Credit/debit cards, bank accounts, cash, transfers and checks use this same path.
+Unrelated installments on the payment source do not imply that an explicit manual
+refund belongs to a purchase series. Actual installment rows, itemized purchases,
+Loan/Savings links, shopping/LEGO links, cancelled transactions and captured Budget
+history remain guarded, with a Hebrew application message directing the owner to
+the linked domain correction or a separate new refund. Duplicate candidates still
+use the existing reconciliation review and explicit separate-transaction approval;
+resuming an approved refund retains the observation rather than creating duplicate
+evidence. External v1 retains positive magnitudes plus explicit `type=refund`;
+negative external expense input, negative income and CSV negative intake are not
+newly accepted. Zero creation remains rejected; existing positive/zero domain
+behavior is unchanged.
+
+Direct refund money stays decimal text through the controller; BigInt cents handle
+normalization. FX original amount and exchange-rate text pass through without a
+JavaScript Number conversion. Refund installments persist as null. No production
+financial data or historical batch was changed.
+
+### Focused verification
+
+All resources are synthetic and disposable. The new local harness starts its own
+PostgreSQL, Auth and PostgREST containers, dynamically allocated loopback ports,
+local gateway and the normal application frontend/backend. It does not load a
+private `.env` or access existing task databases. Browser saves use real Supabase
+Auth and real HTTP requests; they are not fulfilled by mocked success responses.
+
+- Before change: the real Chromium form reproduced the exact browser validation
+  message above. The old two form regression cases also reproduced blocked submit.
+- Frontend: 46 AddTransaction tests, 8 Savings form tests and 24 transaction amount
+  tests passed. New cases cover creation on card/debit/bank sources, positive-to-
+  negative edits, unmarked negative rows, native validity and serialized nulls.
+- Server: 69 focused policy, ingestion, external-contract, Loan-controller and
+  pricing tests passed. The prior mocked refund controller round trip is replaced
+  by the stronger real Auth/HTTP/PostgreSQL coverage.
+- Client lint and production build passed. Build retains the existing large-chunk
+  warning; no dependency or version changes were made.
+- Local integration results and final diff checks are recorded in the owner
+  handoff below after completion.
+
+Reproduce the focused checks from the isolated checkout:
+
+```powershell
+npm ci --prefix client
+npm ci --prefix server
+node --require ./server/test/setup.js --test server/test/manualRefund.test.js server/test/ingestionCore.test.js server/test/transactionLoanPayments.test.js server/test/externalTransactionContract.test.js server/test/transactionPricing.test.js
+$env:VITE_SUPABASE_URL = 'http://127.0.0.1:1'
+$env:VITE_SUPABASE_ANON_KEY = 'synthetic-test-key'
+npm test --prefix client -- src/pages/AddTransaction/AddTransaction.test.jsx src/pages/AddTransaction/SavingsTransaction.test.jsx src/pages/Transactions/TransactionsAmounts.test.jsx
+npm install --prefix .refund-tools --no-save --package-lock=false playwright
+$env:REFUND_PLAYWRIGHT = Join-Path $PWD '.refund-tools/node_modules/playwright'
+node --test server/test/manualRefundPostgres.local.test.js
+npm run lint --prefix client
+npm run build --prefix client
+git diff --check
+```
+
+The optional browser portion requires an installed Chrome. Without
+`REFUND_PLAYWRIGHT`, the local test runs the HTTP/database checks only; that is not
+claimed as browser verification. Its containers and child processes are removed
+in `finally`, including on assertion failures. `.refund-tools` contains only task
+artifacts and temporary dependencies and is excluded from the commit manifest.
+
+### Deployment and integration
+
+Apply forward migration **059** to the verified target before deploying the
+corrected backend, then frontend. Migration 058 and all earlier migrations remain
+unchanged. 059 is backward compatible with Package 1; no repeated 058 cutover or
+producer activation is required. Preserve the existing service/private function
+grants. No automatic migration, production deployment, staging, commit or push is
+authorized by this handoff.
+
+The isolated branch is `fix/manual-refund-entry` in
+`D:\code\finance-tracker-refund-fix`. The original checkout/branch and all its
+services/databases remain untouched. Latest checked `origin/main` is still the
+base commit above. The concurrent shopping branch must be integrated separately;
+check for migration-number and shared-schema collisions when its work arrives.
+Do not assume a future fast-forward and do not force-push. The owner commits on
+this fix branch first; keep it and its commits when removing the temporary worktree.
+
+Exact source manifest: [MANUAL_REFUND_COMMIT_FILES.txt](MANUAL_REFUND_COMMIT_FILES.txt).
+Only the listed files should be staged for this correction. After the owner reports
+the commit, verify its contents and a clean source working tree, remove verified
+task-generated artifacts and use `git worktree remove` without force. Until then,
+retain this worktree as the only working copy of the correction.
+
+### Release / Version gate
+
+- Release impact: Yes — fixes legitimate owner refund creation/editing through the normal application.
+- SemVer impact: Patch — backward-compatible correction to the existing refund behavior and persistence boundary.
+- Candidate release: Pending (TBD) — owner selection tracked with the correction on #99.
+- Grouping / included release candidate: Pending (TBD) — owner to coordinate with #99 and other unreleased changes; no version reserved.
+- CHANGELOG status: Updated under Unreleased / Fixed — #99 manual refund entry correction.
+- Version-bump status: Deferred — owner-led candidate preparation tracked on #99; all seven existing version fields remain unchanged.
+- Publication status: Out of scope — no tag, push, release publication or production execution performed.
+- Owner verification / acceptance status: Pending review — automated checks do not establish owner acceptance.
+
+### Completed local handoff evidence
+
+The final local run passed **10/10 tests (9 focused subtests plus their parent)**,
+including Chromium creation on credit-card and bank-account sources, edits of
+ordinary positive and unmarked negative expenses, and actual HTTP/database reloads.
+All six applicable payment-source methods passed authenticated creation. Net totals
+remained negative expenses with zero added income. Existing classified-refund
+category/notes changes retained IDs, references, dates, immutable source payloads
+and previous reconciliation events; the normal override audit event was added.
+Exact large decimal amounts and FX fields, null installments, duplicate-review
+approval/resumption, altered-decision rollback, stale protected facts and persisted
+item/installment/Loan guards passed. External positive-magnitude refunds remained
+compatible, and negative external expense/CSV/income inputs remained rejected.
+The migration preserved existing function grants and the consolidated suffix
+matches 059 exactly. The stale SQLSTATE assertion runs directly against PostgreSQL
+to avoid transport retries; ordinary form saves use the real HTTP path.
+
+Combined focused evidence: **69 server tests, 78 frontend tests, 10 local integration
+tests**, client lint, client production build, server syntax checks and
+`git diff --check` passed. The build reports its existing large-chunk warning.
+There was no broad-suite rerun or repeat of the completed 058 rollout rehearsal.
+Task-labelled containers, Docker networks and application/Vite child processes
+were removed after verification. Temporary dependencies/logs in `.refund-tools`
+and the worktree itself remain until the owner's commit/cleanup step.
+
+Issue #99 stays open: this correction's handoff is Verify, not acceptance or
+completion of the remaining domain packages. Priority and unrelated metadata are
+preserved. Owner acceptance, commit, integration and production deployment remain
+pending. At the final remote readback, `origin/main` is still
+`43dc936600038da07a808a8b52627491ca722987`; recheck it at integration time.

@@ -1,6 +1,26 @@
 # Database files, migrations and checks
 
-## Current ingestion cutover candidate
+## Manual refund correction after deployed 058
+
+The owner confirms Package 1 commit `43dc936600038da07a808a8b52627491ca722987`
+and migration **058** are deployed. The manual refund correction adds
+[`059_manual_owner_refunds.sql`](../../server/migrations/059_manual_owner_refunds.sql).
+Apply **only 059**, then deploy the corrected backend, then the frontend. It is
+backward compatible with the deployed Package 1 application; do not rerun 058.
+It changes one observation integrity constraint and replaces three existing
+functions, preserving their grants. The existing locked snapshot/commit boundary
+and transaction update triggers remain authoritative for atomicity and audit.
+JavaScript derives refund intent and validates owner commands. No financial rows
+are reclassified by the migration. `full_schema.sql` includes the same suffix for
+disposable reference builds; it is not a production reset script.
+
+Use the existing owner-operated migration procedure, with a verified target and
+recovery point. The migration sets a three-second lock timeout and a sixty-second
+statement timeout; a timeout rolls back the whole migration. Production execution
+and deployment remain separate owner actions. See the [focused verification and
+handoff](../architecture/INGESTION_PACKAGE_1.md#manual-refund-entry-correction-2026-11-09).
+
+## Historical Package 1 cutover candidate
 
 Issue #99 Package 1 prepares forward migration **058**, after 057, and synchronizes
 `server/full_schema.sql`. It moves ingestion/reconciliation policy into JavaScript

@@ -1,4 +1,5 @@
-const { submitOwned } = require('../services/unifiedTransactionIngestion');
+const { submitOwned, updateOwnedRefund } = require('../services/unifiedTransactionIngestion');
+const manualRefund = require('../services/ingestion/manualRefund');
 const supabase = require('../config/supabase');
 const axios = require('axios');
 const savingsCash = require('../services/savingsTransactionService');
@@ -123,9 +124,9 @@ const getTransactionPayload = ({
   charge_date: transaction.charge_date || transaction.transaction_date,
   tags: transaction.tags,
   loan_id: transaction.loan_id || null,
-  original_amount: transaction.original_amount ? Number(transaction.original_amount) : null,
+  original_amount: transaction.original_amount || null,
   currency: transaction.currency || 'ILS',
-  exchange_rate: transaction.exchange_rate ? Number(transaction.exchange_rate) : null,
+  exchange_rate: transaction.exchange_rate || null,
   installments_info: createsInstallmentSiblings
     ? `1/${installmentCount}`
     : (transaction.installments_info || null),
@@ -214,6 +215,7 @@ const synchronizeTransactionLegoSets = async ({
 exports.createTransaction = async (req, res) => {
   const creationStartedAt = Date.now();
   try {
+    manualRefund.assertRequest(req.body);
     const savingsResult = await savingsCash.saveCash(supabase, req.body);
     if (savingsResult) return res.status(201).json(savingsResult);
     const { transaction, items, loan_handling: loanHandling } = req.body;
@@ -234,7 +236,8 @@ exports.createTransaction = async (req, res) => {
       && transaction.loan_id !== '';
     const createsInstallmentSiblings = installmentCount > 1 && !isLoanLinked;
     const normalizedLoanHandling = normalizeLoanHandling({ transaction, loanHandling });
-    const fullAmount = Number(transaction.total_amount);
+    const fullAmount = manualRefund.isNegative(transaction.total_amount)
+      ? transaction.total_amount : Number(transaction.total_amount);
     const perAmount = createsInstallmentSiblings
       ? Math.round((fullAmount / installmentCount) * 100) / 100
       : fullAmount;
@@ -531,6 +534,7 @@ exports.getTransactionById = async (req, res) => {
 // 2. Update transaction
 exports.updateTransaction = async (req, res) => {
   try {
+    manualRefund.assertRequest(req.body);
     const { id } = req.params;
     const savingsResult = await savingsCash.saveCash(supabase, req.body, id);
     if (savingsResult) return res.status(200).json(savingsResult);
@@ -548,7 +552,8 @@ exports.updateTransaction = async (req, res) => {
 
     const updatedTransaction = getTransactionPayload({
       transaction,
-      totalAmount: Number(transaction.total_amount),
+      totalAmount: manualRefund.isNegative(transaction.total_amount)
+        ? transaction.total_amount : Number(transaction.total_amount),
       globalDiscountCents: pricing.globalDiscountCents,
       globalDiscountSource,
       installmentCount: Math.max(1, parseInt(transaction.installment_count) || 1),
@@ -565,6 +570,11 @@ exports.updateTransaction = async (req, res) => {
       delete updatedTransaction.installment_count;
     }
     const normalizedLoanHandling = normalizeLoanHandling({ transaction, loanHandling });
+
+    if (manualRefund.isNegative(transaction.total_amount)) {
+      const accountingResult = await updateOwnedRefund(supabase, id, updatedTransaction);
+      return res.status(200).json({ message: 'Transaction updated successfully', ...accountingResult });
+    }
 
     // The ledger mutation and any authoritative existing_transaction payment
     // are owned by one PostgreSQL function invocation. This also covers moves

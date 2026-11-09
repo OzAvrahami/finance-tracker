@@ -24,9 +24,10 @@ const canPost = (facts, o) => {
   if (!facts.payments.some(p => sameId(p.id, o.payment_source_id) && p.is_active)) return 'payment_source_not_found';
   if (o.accepted_payload.category_id != null && !facts.categories.some(c => sameId(c.id, o.accepted_payload.category_id)
     && c.is_active && c.savings_role == null && c.type === o.movement_type)) return 'invalid_category';
-  if (BigInt(o.amount_minor) < 0n && !(o.movement_type === 'expense' && o.accepted_payload._request?.type === 'refund'
+  if (BigInt(o.amount_minor) < 0n && !(o.movement_type === 'expense'
     && o.accepted_payload._creation?.bank_movement === 'refund' && facts.sources.some(s => sameId(s.id, o.source_id)
-      && s.source_kind === 'external_api' && s.instance_key === 'unified:v1'))) return 'refund_source_unsupported';
+      && ((s.source_kind === 'external_api' && s.instance_key === 'unified:v1' && o.accepted_payload._request?.type === 'refund')
+        || (s.source_kind === 'manual' && s.instance_key === 'unified:manual'))))) return 'refund_source_unsupported';
   return null;
 };
 const returned = result => ({ action: 'return', result });
@@ -100,6 +101,7 @@ function decideIngestion(facts, scope) {
 
 const conflict = (o, reason) => returned({ ...o.result, outcome: 'conflict', reason_code: reason, review_required: true });
 function decideCommand(facts, scope) {
+  if (scope.command_kind === 'owner_refund_edit') return require('./manualRefund').decideEdit(facts, scope);
   if (facts.command_receipt) return returned(facts.command_receipt);
   const c = scope.command, kind = scope.command_kind;
   let o = facts.observations.find(o => kind === 'cancel' ? sameId(o.transaction_id, c.transaction_id) && o.evidence_origin === 'source'
@@ -170,7 +172,8 @@ const external = (db, request, dryRun = false, options = {}) => execute(db, {
   channel: 'external', request, hash_input: request, dry_run: dryRun, key: request.external_id || randomUUID(), date: request.date,
 }, options);
 const owned = (db, channel, row, key, evidence, domain) => execute(db, {
-  channel, row, key, evidence, domain, hash_input: evidence, date: row.transaction_date,
+  channel, row: channel === 'manual' ? require('./manualRefund').manualRow(row) : row,
+  key, evidence, domain, hash_input: evidence, date: row.transaction_date,
 });
 const observation = (db, sourceId, input) => {
   const n = normalize(input);

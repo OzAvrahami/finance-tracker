@@ -191,21 +191,45 @@ describe('existing bank refund editing', () => {
     expect(screen.getByRole('textbox', { name: /^הערות/ })).toHaveValue('Reviewed metadata');
   });
 
-  it.each(['/add', '/edit-transaction/42'])('retains nonnegative expense validation at %s', async (route) => {
+  it.each([
+    ['/add', '0', 10], ['/add', '0', 14], ['/add', '0', 15],
+    ['/edit-transaction/42', '149.00', 10], ['/edit-transaction/42', '-557.5500000000000000', 14],
+  ])('saves owner refund intent without a persisted marker at %s (%s, source %s)', async (route, initial, payment) => {
+    getPaymentSources.mockResolvedValue({ data: [...paymentSources,
+      { id: 14, name: 'Synthetic bank', method: 'bank_account' },
+      { id: 15, name: 'Synthetic debit', method: 'debit_card' }] });
     getTransactionById.mockResolvedValue({ data: { ...refund, bank_movement: null,
-      total_amount: '149.00', payment_source_id: 10 } });
+      total_amount: initial, payment_source_id: payment, installment_count: null } });
     renderForm(route);
-    await waitFor(() => expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue('10'));
+    await waitFor(() => expect(screen.getByLabelText(/^אמצעי תשלום/)).toHaveValue(String(route === '/add' ? 10 : payment)));
+    if (route === '/add') {
+      fireEvent.change(screen.getByRole('textbox', { name: /^תיאור/ }), { target: { value: 'Synthetic refund' } });
+      fireEvent.change(screen.getByLabelText(/^קטגוריה/), { target: { value: '1' } });
+      await userEvent.selectOptions(screen.getByLabelText(/^אמצעי תשלום/), String(payment));
+    }
     const amount = screen.getByRole('spinbutton', { name: /^סכום$/ });
-    expect(amount).toHaveAttribute('min', '0');
-    expect(screen.getByRole('radio', { name: 'הכנסה' })).not.toBeDisabled();
-    fireEvent.change(amount, { target: { value: '-149' } });
-    expect(amount.validity.rangeUnderflow).toBe(true);
+    fireEvent.change(amount, { target: { value: '-557.55' } });
+    expect(amount).not.toHaveAttribute('min');
+    expect(amount.validity.rangeUnderflow).toBe(false);
+    expect(amount).toBeValid();
+    expect(screen.getByText(/זיכוי נרשם כהוצאה שלילית/)).toBeVisible();
     await userEvent.click(screen.getByRole('button', { name: route === '/add' ? 'שמור תנועה' : 'עדכן תנועה' }));
-    expect(createTransaction).not.toHaveBeenCalled();
-    expect(updateTransaction).not.toHaveBeenCalled();
+    const save = route === '/add' ? createTransaction : updateTransaction;
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const payload = save.mock.calls[0][route === '/add' ? 0 : 1].transaction;
+    expect(payload).toMatchObject({ total_amount: '-557.55', movement_type: 'expense', payment_source_id: payment, installment_count: null });
+    expect(payload).not.toHaveProperty('bank_movement');
+  });
+
+  it('keeps negative income invalid and ordinary positive expenses valid', async () => {
+    renderForm(); await settleInitialData();
+    const amount = screen.getByRole('spinbutton', { name: /^סכום$/ });
     fireEvent.change(amount, { target: { value: '149' } });
     expect(amount).toBeValid();
+    await userEvent.click(screen.getByRole('radio', { name: 'הכנסה' }));
+    fireEvent.change(amount, { target: { value: '-557.55' } });
+    expect(amount.validity.rangeUnderflow).toBe(true);
+    expect(amount).toBeInvalid();
   });
 });
 
@@ -241,7 +265,7 @@ describe('monetary edit display', () => {
     const amount = await screen.findByRole('spinbutton', { name: /^סכום$/ });
     expect(amount.value).toBe('149.001');
     expect(within(summary()).getByText('₪149.001', { exact: true })).toBeVisible();
-    expect(amount.validity.stepMismatch).toBe(true);
+    expect(amount.validity.customError).toBe(true);
     await userEvent.click(screen.getByRole('button', { name: 'עדכן תנועה' }));
     expect(updateTransaction).not.toHaveBeenCalled();
     fireEvent.change(amount, { target: { value: '12.3000' } });
@@ -262,7 +286,7 @@ describe('monetary edit display', () => {
     });
     const view = renderForm('/edit-transaction/42');
     expect((await screen.findByRole('spinbutton', { name: /^סכום$/ })).value).toBe('-557.55');
-    expect(screen.getByText('זיכוי נרשם כהוצאה שלילית')).toBeVisible();
+    expect(screen.getByText(/זיכוי נרשם כהוצאה שלילית/)).toBeVisible();
     const category = screen.getByRole('combobox', { name: /^קטגוריה/ });
     await userEvent.clear(category);
     await userEvent.type(category, 'תחבורה');

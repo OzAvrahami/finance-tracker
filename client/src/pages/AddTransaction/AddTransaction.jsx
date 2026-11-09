@@ -70,6 +70,8 @@ const AddTransaction = () => {
     legoThemes,
     isEditMode,
     isExistingRefund,
+    allowsRefund,
+    isRefund,
     returnTo,
     showNewCategoryModal,
     setShowNewCategoryModal,
@@ -277,13 +279,18 @@ const AddTransaction = () => {
             <NumberField
               className="transaction-direct-amount"
               name="total_amount"
+              ref={input => input?.setCustomValidity(
+                transaction.total_amount !== '' && !/^-?\d+(?:\.\d{1,2}0*)?$/.test(String(transaction.total_amount))
+                  ? 'יש להזין סכום מדויק עם עד שתי ספרות אחרי הנקודה.' : '',
+              )}
               label="סכום"
               value={transaction.total_amount}
               onChange={handleTransactionChange}
               placeholder="0.00"
-              min={isExistingRefund ? undefined : '0'}
+              min={allowsRefund ? undefined : '0'}
               max={isExistingRefund ? '-0.01' : undefined}
-              helperText={isExistingRefund ? 'זיכוי נרשם כהוצאה שלילית' : undefined}
+              helperText={isRefund ? 'זיכוי נרשם כהוצאה שלילית ומקטין את סך ההוצאות, ללא תוספת הכנסה.'
+                : allowsRefund ? 'להחזר כספי יש להזין סכום שלילי. הזיכוי יפחית את ההוצאות.' : undefined}
               step="0.01"
               suffix="₪"
               required
@@ -336,7 +343,7 @@ const AddTransaction = () => {
 
         {!savingsContext && <div className="transaction-form-split">
           <TransactionFormSection step="3" title="תשלומים" className="transaction-form-section--secondary">
-            {!isEditMode ? (
+            {isRefund ? <p>זיכוי נרשם כתנועה אחת, ללא תשלומים.</p> : !isEditMode ? (
               <div className="transaction-installments-layout">
                 <NumberField
                   className="transaction-installment-count"
