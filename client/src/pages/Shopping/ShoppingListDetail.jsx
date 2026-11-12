@@ -1,4 +1,5 @@
 import ShoppingQuickEntry from './ShoppingQuickEntry';
+import { workflowErrorMessage } from '../../features/shopping/services/workflowTransport';
 import ShoppingUnitSelect from './ShoppingUnitSelect';
 import { planningUnit, planningUnitLabel } from '../../../../shared/shoppingEntryOptions.mjs';
 import ReceiptDuplicateWarning from "./ReceiptDuplicateWarning";
@@ -88,6 +89,7 @@ const ShoppingDetailSkeleton = ({ onBack }) => (
 
 const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) => {
   const [editing,setEditing] = useState(false);
+  const editTokens = useRef(item._mutation_tokens);
   const [editQuantity,setEditQuantity] = useState(String(item.quantity || 1));
   const [editUnit,setEditUnit] = useState(planningUnit(item.unit));
   const [editPrice,setEditPrice] = useState(item.price ?? '');
@@ -127,10 +129,10 @@ const ShoppingItem = ({ item, editable, pending, onToggle, onRemove, onEdit }) =
       </div>
 
       {editable && <SecondaryButton aria-label={`עריכת ${name}`} disabled={pending || saving} onClick={()=>{
-        setEditName(getItemName(item)); setEditNotes(item.notes || ''); setEditQuantity(String(item.quantity || 1));
+        editTokens.current = item._mutation_tokens;setEditName(getItemName(item)); setEditNotes(item.notes || ''); setEditQuantity(String(item.quantity || 1));
         setEditUnit(planningUnit(item.unit)); setEditPrice(item.price ?? ''); setEditing(!editing);
       }}>עריכה</SecondaryButton>}
-      {editing && <form className="shopping-smart-grid" onSubmit={async e=>{e.preventDefault();if(saving)return;setSaving(true);setEditError('');try{await onEdit(item,{planned_name:editName.trim(),notes:editNotes.trim() || null,quantity:editQuantity,unit:editUnit,unit_mode:'controlled',price:editPrice===''?null:editPrice});setEditing(false);}catch{setEditError('השינוי לא נשמר. נסו שוב.');}finally{setSaving(false);}}}>
+      {editing && <form className="shopping-smart-grid" onSubmit={async e=>{e.preventDefault();if(saving)return;setSaving(true);setEditError('');try{await onEdit({...item,_mutation_tokens:editTokens.current},{planned_name:editName.trim(),notes:editNotes.trim() || null,quantity:editQuantity,unit:editUnit,unit_mode:'controlled',price:editPrice===''?null:editPrice});setEditing(false);}catch(error){setEditError(workflowErrorMessage(error, 'שמירת השינוי נכשלה. נסו שוב.'));}finally{setSaving(false);}}}>
        <TextField label="שם ברשימה" value={editName} onValueChange={setEditName} required maxLength={300} dir="auto" disabled={saving}
          helperText={item.catalog_item_id ? 'השם משתנה ברשימה זו בלבד; הפריט השמור והמיפויים נשארים.' : undefined}/>
        <TextField label="הערות ודרישות" value={editNotes} onValueChange={setEditNotes} maxLength={2000} dir="auto" disabled={saving}/>
@@ -361,7 +363,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   const isEditable = list?.status === 'draft' || list?.status === 'active';
 
   const saveListDetails = async (payload) => {
-    const response = await updateShoppingList(listId, payload);
+    const response = await updateShoppingList(listId, payload, ...(list._mutation_tokens ? [list] : []));
     setList((current) => ({ ...current, ...response.data, shopping_list_items: current.shopping_list_items }));
     setShowEditList(false);
   };
@@ -389,16 +391,18 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   const groupedItems = useMemo(() => {
     const groups = new Map();
     items.forEach((item) => {
-      const name = item.shopping_catalog_categories?.name || 'כללי';
-      if (!groups.has(name)) {
-        groups.set(name, {
+      const categoryPath = item.shopping_catalog_categories?.path?.map(p=>p.name).join(' / ');
+      const groupId = String(item.category_id ?? 'neutral');
+      const name = categoryPath || item.shopping_catalog_categories?.name || 'כללי';
+      if (!groups.has(groupId)) {
+        groups.set(groupId, {
           key: String(item.category_id || name).replace(/\s+/g, '-'),
           name,
           icon: item.shopping_catalog_categories?.icon || '',
           items: [],
         });
       }
-      groups.get(name).items.push(item);
+      groups.get(groupId).items.push(item);
     });
     return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'he'));
   }, [items]);
@@ -408,10 +412,10 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     setPendingItemId(item.id);
     setMutationError('');
     try {
-      await toggleShoppingItemPurchased(listId, item.id);
+      await toggleShoppingItemPurchased(listId, item.id, ...(item._mutation_tokens ? [item] : []));
       await fetchList({ showLoading: false });
-    } catch {
-      setMutationError(`עדכון מצב הפריט „${getItemName(item)}” נכשל. הפריט נשאר ללא שינוי.`);
+    } catch (error) {
+      setMutationError(workflowErrorMessage(error, `עדכון מצב הפריט „${getItemName(item)}“ נכשל. רעננו את הרשימה לבדיקת המצב.`));
     } finally {
       setPendingItemId(null);
     }
@@ -423,7 +427,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   };
 
   const confirmRemoveItem = async () => {
-    await removeShoppingListItem(listId, itemDeleteTarget.id);
+    await removeShoppingListItem(listId, itemDeleteTarget.id, ...(itemDeleteTarget._mutation_tokens ? [itemDeleteTarget] : []));
     await fetchList({ showLoading: false });
   };
 
@@ -437,7 +441,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     setActivating(true);
     setMutationError('');
     try {
-      await updateShoppingList(listId, { status: 'active' });
+      await updateShoppingList(listId, { status: 'active' }, ...(list._mutation_tokens ? [list] : []));
       await fetchList({ showLoading: false });
       return true;
     } catch {
@@ -482,7 +486,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
         payment_source_id: checkoutPaymentSourceId || null,
         category_id: checkoutCategoryId || null,
         ...(checkoutDuplicates.length ? {duplicate_reviewed_ids: checkoutDuplicates.map(c=>c.receipt_id)} : {}),
-      });
+      }, ...(list._mutation_tokens ? [list] : []));
       const refreshedList = await fetchList({ showLoading: false });
       if (refreshedList?.status !== 'checked_out') {
         setCheckoutError(true);
@@ -660,7 +664,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
               pendingItemId={pendingItemId}
               onToggle={handleToggle}
               onRemove={requestRemoveItem}
-              onEdit={async (item,values)=>{await updateShoppingListItem(listId,item.id,values);await fetchList({showLoading:false});}}
+              onEdit={async (item,values)=>{await updateShoppingListItem(listId,item.id,values,...(item._mutation_tokens ? [item] : []));await fetchList({showLoading:false});}}
             />
           ))}
         </div>

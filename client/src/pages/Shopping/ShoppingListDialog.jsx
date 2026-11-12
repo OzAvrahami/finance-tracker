@@ -5,6 +5,7 @@ import { shoppingListFieldErrors } from './shoppingListFields';
 const EMPTY_TYPES = [];
 const ShoppingListDialog = ({ open, initialList, listTypes = EMPTY_TYPES, onClose, onSave, returnFocusRef }) => {
   const titleRef = useRef(null);
+  const hydrated = useRef(null);
   const [form, setForm] = useState({ title: '', list_type_id: '', store: '', link: '', target_date: '' });
   const [touched, setTouched] = useState(false);
   const [pending, setPending] = useState(false);
@@ -12,7 +13,14 @@ const ShoppingListDialog = ({ open, initialList, listTypes = EMPTY_TYPES, onClos
   const editing = Boolean(initialList);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { hydrated.current = null; return; }
+    const identity = initialList?.id ?? 'create';
+    if (hydrated.current === identity) {
+      // Late reference-data loading must not erase a draft already being typed.
+      if (!initialList && listTypes.length) setForm(current => current.list_type_id ? current : { ...current, list_type_id: String(listTypes[0].id) });
+      return;
+    }
+    hydrated.current = identity;
     setForm({
       title: initialList?.title || '',
       list_type_id: String(initialList?.list_type_id || listTypes[0]?.id || ''),

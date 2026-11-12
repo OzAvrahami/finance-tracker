@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, GlassCard, IconButton, NumberField, PrimaryButton, SecondaryButton, TextField } from '../../components/ui';
+import { Alert, GlassCard, IconButton, NumberField, PrimaryButton, SecondaryButton, Select, TextField } from '../../components/ui';
 import { addShoppingListItem, getShoppingCatalogCategories, getShoppingCatalogItems } from '../../services/api';
 import ShoppingUnitSelect from './ShoppingUnitSelect';
 import ShoppingCategoryInput from './ShoppingCategoryInput';
@@ -8,10 +8,12 @@ import { createSuggestionCache, CATALOG_SUGGESTIONS_CHANGED } from './shoppingSu
 import { useAuth } from '../../context/auth-context';
 import { defaultPlanningUnit, planningUnit, planningUnitLabel, stepPlanningQuantity, categoryDisplayName } from '../../../../shared/shoppingEntryOptions.mjs';
 
-const blank = () => ({ name: '', quantity: '1', unit: defaultPlanningUnit, price: '', notes: '', category: '', categoryId: '', reusable: true });
+const blank = () => ({ name: '', quantity: '1', unit: defaultPlanningUnit, price: '', notes: '', category: '', categoryId: '', parentId: '', reusable: true });
 
 export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
   const [form, setForm] = useState(blank);
+  const draftContext = useRef(list);
+  useEffect(() => { if (!form.name) draftContext.current = list; }, [list,form.name]);
   const [selected, setSelected] = useState(null);
   const [details, setDetails] = useState(false);
   const [categories, setCategories] = useState([]);
@@ -133,7 +135,8 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
         quantity: form.quantity, unit: form.unit, unit_mode: 'controlled',
         price: form.price === '' ? null : form.price, notes: form.notes.trim() || null,
         save_to_catalog: !selected && form.reusable,
-      });
+        ...(form.parentId ? { parent_id: form.parentId } : {}),
+      }, ...(draftContext.current._mutation_tokens ? [draftContext.current] : []));
       if (saved?.shopping_catalog_categories) {
         const canonical = saved.shopping_catalog_categories;
         setCategories(current => [...current.filter(c => String(c.id)!==String(canonical.id)),canonical].sort((a,b)=>a.name.localeCompare(b.name,'he')));
@@ -195,6 +198,9 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
         <ShoppingCategoryInput value={form.category} categoryId={form.categoryId} categories={categories}
           loading={categoryState==='loading'} failed={categoryState==='failed'} derived={!!selected} disabled={pending || !!selected}
           onChange={(category,categoryId) => setForm(current=>({...current,category,categoryId}))}/>
+        {!selected && form.category && !form.categoryId && categories.some(c=>Object.hasOwn(c,'parent_id')) && <Select label="קטגוריית אב לקטגוריה חדשה" value={form.parentId} onValueChange={v=>update('parentId',v)} disabled={pending}>
+          <option value="">בחרו ענף קיים</option>{categories.filter(c=>!c.is_neutral).map(c=><option key={c.id} value={c.id}>{c.path?.map(p=>p.name).join(' / ') || c.name}</option>)}
+        </Select>}
         <NumberField label="מחיר משוער ליחידה" min="0" max="100000000" step="0.01" prefix="₪" value={form.price}
           disabled={pending} onValueChange={v => update('price',v)} />
         <TextField label="הערות והעדפות" dir={form.notes ? 'auto' : 'rtl'} style={{ textAlign: form.notes ? 'start' : 'right' }}

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { createWorkflowTransport } from '../features/shopping/services/workflowTransport';
 import { supabase } from '../config/supabase';
 
 export const mapShoppingProduct = data => api.post('/shopping/products/map',data);
@@ -33,13 +34,15 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !error.config?.preserveAuthDraft) {
       await supabase.auth.signOut();
       window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
+
+const workflowWrite = createWorkflowTransport(api);
 
 // Categories
 export const getSavingsReport = (params) => api.get('/savings/report', { params });
@@ -206,14 +209,14 @@ export const createShoppingCatalogCategory = (data) => api.post('/shopping/catal
 export const getShoppingCatalogItems = (params, options = {}) => api.get('/shopping/catalog-items', { ...options, params });
 export const getShoppingLists = (status) => api.get('/shopping/lists', { params: status ? { status } : {} });
 export const getShoppingListById = (id) => api.get(`/shopping/lists/${id}`);
-export const createShoppingList = (data) => api.post('/shopping/lists', data);
-export const updateShoppingList = (id, data) => api.put(`/shopping/lists/${id}`, data);
-export const deleteShoppingList = (id) => api.delete(`/shopping/lists/${id}`);
-export const addShoppingListItem = (listId, data) => api.post(`/shopping/lists/${listId}/items`, data);
-export const updateShoppingListItem = (listId, itemId, data) => api.put(`/shopping/lists/${listId}/items/${itemId}`, data);
-export const removeShoppingListItem = (listId, itemId) => api.delete(`/shopping/lists/${listId}/items/${itemId}`);
-export const toggleShoppingItemPurchased = (listId, itemId) => api.patch(`/shopping/lists/${listId}/items/${itemId}/toggle`);
-export const checkoutShoppingList = (listId, data) => api.post(`/shopping/lists/${listId}/checkout`, data);
+export const createShoppingList = (data) => workflowWrite('post', '/shopping/lists', data);
+export const updateShoppingList = (id, data, context) => workflowWrite('put', `/shopping/lists/${id}`, data, context?._mutation_tokens?.['list.edit']);
+export const deleteShoppingList = (id, context) => workflowWrite('delete', `/shopping/lists/${id}`, {}, context?._mutation_tokens?.['list.delete']);
+export const addShoppingListItem = (listId, data, context) => workflowWrite('post', `/shopping/lists/${listId}/items`, data, context?._mutation_tokens?.['item.append']);
+export const updateShoppingListItem = (listId, itemId, data, context) => workflowWrite('put', `/shopping/lists/${listId}/items/${itemId}`, data, context?._mutation_tokens?.['item.edit:'+itemId]);
+export const removeShoppingListItem = (listId, itemId, context) => workflowWrite('delete', `/shopping/lists/${listId}/items/${itemId}`, {}, context?._mutation_tokens?.['item.remove:'+itemId]);
+export const toggleShoppingItemPurchased = (listId, itemId, context) => workflowWrite('patch', `/shopping/lists/${listId}/items/${itemId}/toggle`, {}, context?._mutation_tokens?.['item.toggle:'+itemId]);
+export const checkoutShoppingList = (listId, data, context) => workflowWrite('post', `/shopping/lists/${listId}/checkout`, data, context?._mutation_tokens?.checkout);
 
 // Annual Summary
 export const getAnnualBudgetSummary = (year) => api.get('/budgets/annual-summary', { params: { year } });
@@ -235,9 +238,9 @@ export const deleteSettingsPaymentSource = (id)      => api.delete(`/settings/pa
 
 // Settings — Shopping List Types
 export const getAdminShoppingListTypes         = ()        => api.get('/settings/shopping/list-types');
-export const createAdminShoppingListType       = (data)    => api.post('/settings/shopping/list-types', data);
-export const updateAdminShoppingListType       = (id, data) => api.put(`/settings/shopping/list-types/${id}`, data);
-export const deleteAdminShoppingListType       = (id)      => api.delete(`/settings/shopping/list-types/${id}`);
+export const createAdminShoppingListType       = (data)    => workflowWrite('post','/settings/shopping/list-types',data);
+export const updateAdminShoppingListType       = (id, data, context) => workflowWrite('put',`/settings/shopping/list-types/${id}`,data,context?._mutation_tokens?.['type.edit']);
+export const deleteAdminShoppingListType       = (id, context) => workflowWrite('delete',`/settings/shopping/list-types/${id}`,undefined,context?._mutation_tokens?.['type.deactivate']);
 
 // Settings — Shopping Catalog Categories
 export const getAdminShoppingCatalogCategories    = ()        => api.get('/settings/shopping/catalog-categories');
@@ -270,8 +273,8 @@ export const cancelFlowlinkPairing = id => api.post(`/flowlink/v1/owner/pairings
 
 // Shopping planning / receipt review (#92). Upload never posts financial cash.
 export const getShoppingIntelligence = id => api.get(`/shopping/lists/${id}/intelligence`);
-export const saveShoppingRegular = (id,data) => api.put(`/shopping/regular-products/${id}`,data);
-export const removeShoppingRegular = id => api.delete(`/shopping/regular-products/${id}`);
+export const saveShoppingRegular = (id,data,context) => workflowWrite('put', `/shopping/regular-products/${id}`,data,context?._mutation_tokens?.['regular.set:'+id]);
+export const removeShoppingRegular = (id,context) => workflowWrite('delete', `/shopping/regular-products/${id}`,{},context?._mutation_tokens?.['regular.remove:'+id]);
 export const acceptShoppingSuggestion = (id,data) => api.post(`/shopping/lists/${id}/suggestions`,data);
 export const uploadShoppingReceipt = (id,files,attempt = 0, options = {}) => { const form=new FormData(); for(const file of (Array.isArray(files) ? files : [files])) form.append('receipt',file); form.append('expected_attempt',String(attempt)); if(options.reprocess_key){form.append('reprocess','true');form.append('reprocess_key',options.reprocess_key);} if(options.draft_revision != null) form.append('draft_revision',String(options.draft_revision)); if(options.review_draft) form.append('review_draft',JSON.stringify(options.review_draft)); return api.post(`/shopping/lists/${id}/receipt`,form); };
 export const confirmShoppingReceipt = (id,data) => api.post(`/shopping/lists/${id}/receipt/confirm`,data);
@@ -280,7 +283,7 @@ export const getShoppingReceiptDuplicates = (id, data = {}) => api.post(`/shoppi
 
 export const saveShoppingReceiptDraft = (id,data) => api.put(`/shopping/lists/${id}/receipt/draft`,data);
 export const lookupShoppingProduct = data => api.post('/shopping/products/lookup',data,{timeout:12000});
-export const approveShoppingProduct = data => api.post('/shopping/products/approve',data);
+export const approveShoppingProduct = (data,context) => workflowWrite('post','/shopping/products/approve',data,context?._mutation_tokens?.['commercial.approve']);
 
 // Owner-only safe reconciliation projections and atomic review commands.
 export const getReconciliationSummary = ids => api.get("/reconciliation/summary", { params: { ids: ids.join(",") } });

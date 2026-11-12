@@ -4,10 +4,15 @@ const unwrap=async q=>{const {data,error}=await q;if(error)throw error;return da
 const snapshot=m=>m ? {commercial_product_id:m.commercial_product_id,revision:m.revision,
  personal_item_id:m.personal_item_id==null?null:String(m.personal_item_id),personal_name:m.personal_name,
  planning_unit:m.planning_unit,receipt_unit:m.receipt_unit,factor:m.factor==null?null:String(m.factor)} : null;
+// Isolated hierarchy orchestration supplies one complete immutable fact set.
+// The legacy live adapter remains unchanged until the separately approved cutover.
+const loadCommercial=(db,id)=>db.shoppingFacts
+ ? Promise.resolve(require('../modules/shopping/catalog/commercialService').detail(db.shoppingFacts,id))
+ : unwrap(db.rpc('shopping_commercial_detail',{p_id:id}));
 async function findCommercial(db,key) {
  if(!key)return null;
  const i=await unwrap(db.from('shopping_product_identifiers').select('commercial_product_id').eq('kind',key.kind).eq('retailer_scope',key.retailer_scope).eq('code',key.code).maybeSingle());
- return i?unwrap(db.rpc('shopping_commercial_detail',{p_id:i.commercial_product_id})):null;
+ return i?loadCommercial(db,i.commercial_product_id):null;
 }
 function commercialProduct(p,key) {
  return {...key,commercial_product_id:p.id,full_name:p.approved_name??p.receipt_name,brand:p.brand??'',
@@ -26,7 +31,7 @@ async function hydrateCommercialRows(items,db) {
  const codes=[...new Set(keys.map(k=>k.code))];
  const identifiers=await unwrap(db.from('shopping_product_identifiers').select('kind,retailer_scope,code,commercial_product_id').in('code',codes));
  const products=new Map();
- for(const i of identifiers)if(!products.has(i.commercial_product_id))products.set(i.commercial_product_id,await unwrap(db.rpc('shopping_commercial_detail',{p_id:i.commercial_product_id})));
+ for(const i of identifiers)if(!products.has(i.commercial_product_id))products.set(i.commercial_product_id,await loadCommercial(db,i.commercial_product_id));
  return items.map(row=>{
   const k=identifier(row.lookup_code??row.product_code,row.identifier_kind??'gtin',row.retailer_scope??'');
   const i=k&&identifiers.find(i=>i.kind===k.kind&&i.retailer_scope===k.retailer_scope&&i.code===k.code);

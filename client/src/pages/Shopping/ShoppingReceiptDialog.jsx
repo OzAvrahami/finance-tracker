@@ -276,7 +276,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
     getShoppingIntelligence(activeListId).then(({data:next})=>setData(previous=>({...previous,catalog:next.catalog}))).catch(()=>{});
   };
   const approveName=index=>run(async()=>{
-    const row=rows[index],{data:product}=await approveShoppingProduct(productInput(row,identity.merchant,row.resolved_product.full_name));
+    const row=rows[index],{data:product}=await approveShoppingProduct(productInput(row,identity.merchant,row.resolved_product.full_name),...(data._mutation_tokens ? [data] : []));
     resolveProduct(index,product);
   });
   async function lookupNames() {
@@ -794,10 +794,11 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                   conflict={data.receipt?.extracted?.identity_conflict} conflictReviewed={identityConflictReviewed} onConflictReview={setIdentityConflictReviewed}
                   acknowledgment={merchantAck} onAcknowledge={setMerchantAck} onCancel={close} lists={targetLists}
                   onLists={()=>run(async()=>{const {data:lists}=await getShoppingLists();setTargetLists(lists.filter(l=>l.item_count>0&&['draft','active'].includes(l.status)&&String(l.id)!==String(activeListId)));})}
-                  onStore={store=>run(async()=>{await saveDraft();await updateShoppingList(activeListId,{store});const {data:next}=await getShoppingIntelligence(activeListId);setData(next);setMerchantAck('');await onChanged();})}
+                  onStore={store=>run(async()=>{await saveDraft();await updateShoppingList(activeListId,{store},...(data._mutation_tokens ? [data] : []));const {data:next}=await getShoppingIntelligence(activeListId);setData(next);setMerchantAck('');await onChanged();})}
                   onMove={target=>run(async()=>{await saveDraft();const {data:latest}=await getShoppingIntelligence(activeListId);await moveShoppingReceipt(activeListId,{target_list_id:target,context_token:latest.context_token});setActiveListId(target);setTargetLists(null);setMerchantAck('');await onChanged();})}/>}
                 <ReceiptPlanComparison fulfillment={fulfillment}/>
                 <ReceiptReviewTable
+                  mutationContext={data}
                   rows={rows}
                   plan={data.plan ?? []}
                   catalog={data.catalog ?? []}

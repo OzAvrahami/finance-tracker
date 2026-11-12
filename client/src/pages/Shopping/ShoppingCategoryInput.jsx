@@ -42,7 +42,7 @@ export default function ShoppingCategoryInput({ value, categoryId, onChange, cat
         {options.map((option,index) => <li key={option.id} id={`${id}-${index}`} role="option" dir="auto"
           aria-selected={String(option.id)===String(categoryId)} className={active===index ? 'is-active' : ''}
           onPointerDown={e => e.preventDefault()}
-          onMouseDown={e => e.preventDefault()} onClick={() => select(option)}>{option.name}</li>)}
+          onMouseDown={e => e.preventDefault()} onClick={() => select(option)}>{option.path?.map(p=>p.name).join(' / ') || option.name}</li>)}
       </ul>
     </ShoppingSuggestionPopup>}
     {!derived && display && !categoryId && !exact && !loading && !failed &&

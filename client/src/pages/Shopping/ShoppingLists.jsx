@@ -205,7 +205,7 @@ const ShoppingLists = () => {
   };
 
   const confirmDelete = async () => {
-    await deleteShoppingList(deleteTarget.id);
+    await deleteShoppingList(deleteTarget.id, ...(deleteTarget._mutation_tokens ? [deleteTarget] : []));
     await refreshLists();
   };
 

@@ -94,7 +94,7 @@ export default function ShoppingIntelligence({ list, onChanged }) {
                     onSubmit={(e) => {
                       e.preventDefault();
                       run(async () => {
-                        await saveShoppingRegular(product, { quantity, unit });
+                        await saveShoppingRegular(product, { quantity, unit }, ...(data._mutation_tokens ? [data] : []));
                         await load();
                       });
                     }}
@@ -154,7 +154,7 @@ export default function ShoppingIntelligence({ list, onChanged }) {
                           disabled={busy}
                           onClick={() =>
                             run(async () => {
-                              await removeShoppingRegular(s.catalog_item_id);
+                              await removeShoppingRegular(s.catalog_item_id, ...(data._mutation_tokens ? [data] : []));
                               await load();
                             })
                           }

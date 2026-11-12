@@ -7,20 +7,21 @@ const statusText = {
  unavailable:"מאגר המוצרים אינו זמין; שם הקבלה נשמר.",timeout:"החיפוש לא השיב בזמן; אפשר לנסות שוב.",
  identifier_mismatch:"הקוד בתשובה אינו תואם; לא הוחלף שם.",invalid_response:"תשובת המאגר אינה תקינה; לא הוחלף שם."
 };
-export default function ReceiptProductDetails({row,index,merchant,readOnly,onChange,onResolved}) {
- const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[provider,setProvider]=useState('open_food_facts');
+export default function ReceiptProductDetails({row,index,merchant,readOnly,onChange,onResolved,mutationContext}) {
+ const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[provider,setProvider]=useState('open_food_facts'),[context,setContext]=useState(null);
  const code=row.lookup_code??row.product_code??'',kind=row.identifier_kind??'gtin',scope=row.retailer_scope??merchant??'';
  async function lookup() {
   setBusy(true);setMessage('');
   try { const {data}=await lookupShoppingProduct({code,kind,retailer_scope:kind==='retailer'?scope:'',provider});
-   if(data.status==='found') { onResolved(data.product);setMessage(data.product.source==='owner_catalog'?'נמצא בקטלוג המאושר.':'נמצא קוד תואם; בדקו שהמוצר והאריזה נכונים.'); }
+   setContext(data);if(data.status==='found') { onResolved(data.product);setMessage(data.product.source==='owner_catalog'?'נמצא בקטלוג המאושר.':'נמצא קוד תואם; בדקו שהמוצר והאריזה נכונים.'); }
    else setMessage(statusText[data.status]??statusText.unavailable);
   } catch {setMessage(statusText.unavailable);} finally {setBusy(false);}
  }
  async function approve() {
   setBusy(true);setMessage('');
   try {
-   const {data}=await approveShoppingProduct(productInput(row,merchant));
+   const captured=context??mutationContext;
+   const {data}=await approveShoppingProduct(productInput(row,merchant),...(captured?._mutation_tokens ? [captured] : []));
    onResolved(data);setMessage('שם המוצר אושר; פריט אישי וקנייה לא נוצרו.');
   } catch {setMessage('שמירת המוצר לא הושלמה. בדקו קוד, קטגוריה או התאמה קיימת; לא תיווצר התאמה כפולה.');} finally {setBusy(false);}
  }

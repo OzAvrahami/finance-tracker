@@ -24,6 +24,7 @@ const comparison = (row, plan, rows) => {
     : `בתוכנית: ${p.purchased_quantity} מתוך ${p.quantity} ${p.unit}`;
 };
 export default function ReceiptReviewTable({
+  mutationContext,
   rows,
   plan,
   catalog,
@@ -162,7 +163,7 @@ export default function ReceiptReviewTable({
                       <div className="receipt-row-detail-content">
                       <span>שורה {i+1}</span>
                       <bdi>{row.row_id}</bdi>
-                      <ReceiptProductDetails row={row} index={i} merchant={merchant} listTypeId={listTypeId} readOnly={readOnly} catalog={catalog}
+                      <ReceiptProductDetails row={row} index={i} merchant={merchant} listTypeId={listTypeId} readOnly={readOnly} catalog={catalog} mutationContext={mutationContext}
                         onChange={(key,value)=>onChange(i,key,value)} onResolved={product=>onResolved?.(row.row_id??i,product)} onMapped={product=>onMapped?.(row.row_id??i,product)}/>
                       {!!row.mapping_snapshot?.personal_item_id&&<span>{mappedQuantity(row)?`${mappedQuantity(row).quantity} ${mappedQuantity(row).unit} עבור ${row.mapping_snapshot.personal_name}`:'המרת הכמות לפריט האישי אינה ידועה; כמויות הקבלה נשמרות.'}</span>}
                       {row.price_basis==='line_discount' && priceBreakdown(row).net_unit_price==null && priceBreakdown(row).final!=null && <span>מחיר נטו ליחידה אינו מדויק בשתי ספרות; סכום השורה מחושב מהברוטו פחות ההנחה.</span>}

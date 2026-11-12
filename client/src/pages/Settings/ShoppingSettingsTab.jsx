@@ -113,7 +113,7 @@ const ListTypesSection = () => {
     setSaving(true);
     setFormError('');
     try {
-      if (editing) await updateAdminShoppingListType(editing.id, payload);
+      if (editing) await updateAdminShoppingListType(editing.id, payload, ...(editing._mutation_tokens ? [editing] : []));
       else await createAdminShoppingListType(payload);
       setDialogOpen(false);
       setEditing(null);
@@ -126,7 +126,7 @@ const ListTypesSection = () => {
   };
 
   const handleDeactivate = async () => {
-    await deleteAdminShoppingListType(deactivateTarget.id);
+    await deleteAdminShoppingListType(deactivateTarget.id, ...(deactivateTarget._mutation_tokens ? [deactivateTarget] : []));
     setDeactivateTarget(null);
     await loadListTypes();
   };
@@ -134,7 +134,7 @@ const ListTypesSection = () => {
   const handleReactivate = async (item) => {
     setMutationError('');
     try {
-      await updateAdminShoppingListType(item.id, { is_active: true });
+      await updateAdminShoppingListType(item.id, { is_active: true }, ...(item._mutation_tokens ? [item] : []));
       await loadListTypes();
     } catch (error) {
       setMutationError(error.response?.data?.error || 'הפעלת סוג הרשימה מחדש נכשלה.');
@@ -647,8 +647,18 @@ const SHOPPING_TABS = [
 const ShoppingSettingsTab = () => {
   const [activeSection, setActiveSection] = useState('list-types');
 
+  // Isolated integration uses the hierarchy editor; the legacy flat editor
+  // cannot safely create an implicit root or replace inherited branches.
+  if (import.meta.env.DEV && import.meta.env.VITE_SHOPPING_ADMIN_INTEGRATION === '1') return (
+    <section className="settings-shopping" aria-label="הגדרות קניות">
+      <a href="/__shopping-integration">ניהול עץ הקטגוריות, המוצרים ומיפוי הענפים</a>
+      <ListTypesSection />
+    </section>
+  );
+
   return (
     <section className="settings-shopping" aria-label="הגדרות קניות">
+      {import.meta.env.DEV && import.meta.env.VITE_SHOPPING_ADMIN_PREVIEW === '1' && <a href="/__shopping-preview">פתיחת הדגמת ניהול הקטלוג המקומית</a>}
       <div className="settings-shopping__intro">
         <ShoppingBasket size={18} aria-hidden="true" />
         <div>
