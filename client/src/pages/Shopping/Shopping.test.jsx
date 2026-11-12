@@ -293,6 +293,22 @@ describe('Shopping overview', () => {
 });
 
 describe('Shopping in-page detail and item lifecycle', () => {
+  it('shows rootless category group headings without merging identities or losing historical/neutral fallbacks', async () => {
+    const items = [
+      { id: 11, category_id: 3, custom_name: 'פריט א', shopping_catalog_categories: { id: 3, name: 'עלה', path: [{ id: 1, name: 'שורש ראשון' }, { id: 2, name: 'ענף' }, { id: 3, name: 'עלה' }] } },
+      { id: 12, category_id: 6, custom_name: 'פריט ב', shopping_catalog_categories: { id: 6, name: 'עלה', path: [{ id: 4, name: 'שורש שני' }, { id: 5, name: 'ענף' }, { id: 6, name: 'עלה' }] } },
+      { id: 13, category_id: -1, custom_name: 'פריט ניטרלי', shopping_catalog_categories: { id: -1, name: 'כללי' } },
+      { id: 14, category_id: 9, custom_name: 'פריט היסטורי', shopping_catalog_categories: { id: 9, name: 'היסטורי', is_active: false } },
+      { id: 15, category_id: 10, custom_name: 'פריט ללא מידע', shopping_catalog_categories: null },
+    ].map(i => ({ ...i, list_id: 1, quantity: 1, price: 0, is_purchased: false }));
+    getShoppingListById.mockResolvedValue({ data: detailList({ shopping_list_items: items }) });
+    await openList();
+    expect(screen.getAllByRole('heading', { name: 'ענף / עלה', level: 3 })).toHaveLength(2);
+    for (const name of ['ללא קטגוריה', 'היסטורי', 'כללי']) expect(screen.getByRole('heading', { name, level: 3 })).toBeInTheDocument();
+    expect(screen.queryByText(/שורש ראשון|שורש שני/)).not.toBeInTheDocument();
+    expect(items[0].shopping_catalog_categories.path[0].name).toBe('שורש ראשון');
+    expect(updateShoppingListItem).not.toHaveBeenCalled();
+  });
   it('opens detail without routing, preserves mapped categories, grouping, totals, and floating-point formatting', async () => {
     await openList();
 

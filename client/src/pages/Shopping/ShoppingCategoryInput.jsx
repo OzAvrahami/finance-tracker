@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { TextField } from '../../components/ui';
 import ShoppingSuggestionPopup from './ShoppingSuggestionPopup';
 import { categoryDisplayName, categoryNameKey, categoryNameLimit } from '../../../../shared/shoppingEntryOptions.mjs';
+import { shopperCategoryLabel } from '../../features/shopping/presentation/shopperCategoryLabel';
 
 export default function ShoppingCategoryInput({ value, categoryId, onChange, categories, loading, failed, disabled, derived = false }) {
   const [open, setOpen] = useState(false), [active, setActive] = useState(-1);
@@ -10,6 +11,9 @@ export default function ShoppingCategoryInput({ value, categoryId, onChange, cat
   const options = categories.filter(c => categoryNameKey(c.name).includes(key));
   const exact = categories.some(c => categoryNameKey(c.name) === key);
   const expanded = open && !disabled;
+  const selectedCategory = categories.find(c => String(c.id) === String(categoryId));
+  const selectedLabel = shopperCategoryLabel(selectedCategory);
+  const neutral = selectedCategory?.is_neutral === true || String(categoryId) === '-1';
   useEffect(() => {
     if (expanded && active >= 0) document.getElementById(`${id}-${active}`)?.scrollIntoView?.({block:'nearest'});
   }, [active, expanded, id]);
@@ -19,11 +23,12 @@ export default function ShoppingCategoryInput({ value, categoryId, onChange, cat
     if (!event.currentTarget.contains(event.relatedTarget)) close();
   }}>
     <TextField ref={input} label="קטגוריה" role="combobox" dir={value ? 'auto' : 'rtl'}
-      style={{ textAlign: value ? 'start' : 'right' }} value={value} maxLength={categoryNameLimit}
+      style={{ textAlign: value ? 'start' : 'right' }} value={neutral ? shopperCategoryLabel({ ...selectedCategory, id: categoryId }) : value} maxLength={categoryNameLimit}
       disabled={disabled} placeholder="ללא קטגוריה" autoComplete="off" aria-autocomplete="list"
       aria-expanded={expanded} aria-controls={expanded ? id : undefined}
       aria-activedescendant={expanded && active >= 0 && options[active] ? `${id}-${active}` : undefined}
-      helperText={derived ? 'הקטגוריה נגזרת מהפריט השמור; זהותו אינה משתנה.' : 'רשות — בחרו קטגוריה או כתבו שם חדש.'}
+      helperText={<>{derived ? 'הקטגוריה נגזרת מהפריט השמור; זהותו אינה משתנה.' : 'רשות — בחרו קטגוריה או כתבו שם חדש.'}
+        {selectedLabel && selectedLabel !== value && !neutral && <> <bdi>{selectedLabel}</bdi></>}</>}
       onFocus={() => { setOpen(true); setActive(-1); }}
       onValueChange={text => { onChange(text,''); setOpen(true); setActive(-1); }}
       onKeyDown={event => {
@@ -42,7 +47,7 @@ export default function ShoppingCategoryInput({ value, categoryId, onChange, cat
         {options.map((option,index) => <li key={option.id} id={`${id}-${index}`} role="option" dir="auto"
           aria-selected={String(option.id)===String(categoryId)} className={active===index ? 'is-active' : ''}
           onPointerDown={e => e.preventDefault()}
-          onMouseDown={e => e.preventDefault()} onClick={() => select(option)}>{option.path?.map(p=>p.name).join(' / ') || option.name}</li>)}
+          onMouseDown={e => e.preventDefault()} onClick={() => select(option)}>{shopperCategoryLabel(option)}</li>)}
       </ul>
     </ShoppingSuggestionPopup>}
     {!derived && display && !categoryId && !exact && !loading && !failed &&

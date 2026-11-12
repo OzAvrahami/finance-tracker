@@ -31,11 +31,11 @@ it('link selection is explicit, uses package evidence and retains payload/key on
  expect(row.quantity).toBe('2');expect(row.price).toBe('7.50');
 });
 it('creating a personal item requires explicit name/unit/category; regular status is never sent',async()=>{
- api.getShoppingCatalogCategories.mockResolvedValue({data:[{id:7,name:'מזון'}]});
+ api.getShoppingCatalogCategories.mockResolvedValue({data:[{id:7,name:'חלב',path:[{id:1,name:'מזון'},{id:2,name:'מוצרי חלב'},{id:7,name:'חלב'}]}]});
  render(<ProductPersonalLink row={row} catalog={[]} listTypeId={1} onMapped={()=>{}}/>);
  fireEvent.click(screen.getByText('שיוך לפריט אישי'));
  fireEvent.change(screen.getByLabelText('פריט אישי לשיוך'),{target:{value:'new'}});
- await screen.findByRole('option',{name:'מזון'});
+ await screen.findByRole('option',{name:'מוצרי חלב / חלב'});
  expect(screen.getByRole('button',{name:'יצירה ושיוך בלבד'})).toBeDisabled();
  fireEvent.change(screen.getByLabelText('שם הפריט האישי החדש'),{target:{value:'חלב 3%'}});
  fireEvent.change(screen.getByLabelText('יחידת תכנון לשיוך'),{target:{value:'ליטר'}});

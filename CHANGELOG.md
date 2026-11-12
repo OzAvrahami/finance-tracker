@@ -26,6 +26,8 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
+- Shopping category labels omit only the top-level root in shopper-facing paths, while keeping intermediate categories, neutral labels and full administration paths intact ([#102](https://github.com/OzAvrahami/finance-tracker/issues/102)). Hierarchy identities and stored values are unchanged.
+
 - #99 Package 1 CSV acceptance: preserve day/month date text during CSV parsing instead of allowing spreadsheet auto-inference to turn it into a numeric serial. Normalize typed spreadsheet dates using the workbook epoch, validate purchase and billing dates without rollover, and reject invalid date cells. Existing import profiles, source-byte identities and save/ingestion behavior remain unchanged.
 
 - Transaction editing: allow an existing classified refund to retain its negative amount when saving category or other metadata changes. Normalize valid loaded monetary values and the save summary with exact minor-unit utilities, so trailing-zero API strings such as `-557.5500000000000000` display as `-557.55`. Preserve raw typing and reject nonzero extra precision rather than rounding it. Use payment-method-neutral refund guidance. Preserve the null installment count instead of submitting the form's default of one. Keep its expense classification fixed in the form and preserve normal expense/new-transaction validation, source identity and ingestion evidence. No database migration required.

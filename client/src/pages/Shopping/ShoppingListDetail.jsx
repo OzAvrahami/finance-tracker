@@ -1,4 +1,5 @@
 import ShoppingQuickEntry from './ShoppingQuickEntry';
+import { shopperCategoryLabel } from '../../features/shopping/presentation/shopperCategoryLabel';
 import { workflowErrorMessage } from '../../features/shopping/services/workflowTransport';
 import ShoppingUnitSelect from './ShoppingUnitSelect';
 import { planningUnit, planningUnitLabel } from '../../../../shared/shoppingEntryOptions.mjs';
@@ -391,9 +392,8 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   const groupedItems = useMemo(() => {
     const groups = new Map();
     items.forEach((item) => {
-      const categoryPath = item.shopping_catalog_categories?.path?.map(p=>p.name).join(' / ');
       const groupId = String(item.category_id ?? 'neutral');
-      const name = categoryPath || item.shopping_catalog_categories?.name || 'כללי';
+      const name = shopperCategoryLabel({ ...item.shopping_catalog_categories, id: item.category_id }, 'כללי');
       if (!groups.has(groupId)) {
         groups.set(groupId, {
           key: String(item.category_id || name).replace(/\s+/g, '-'),

@@ -3,12 +3,15 @@ import { Alert, GlassCard, IconButton, NumberField, PrimaryButton, SecondaryButt
 import { addShoppingListItem, getShoppingCatalogCategories, getShoppingCatalogItems } from '../../services/api';
 import ShoppingUnitSelect from './ShoppingUnitSelect';
 import ShoppingCategoryInput from './ShoppingCategoryInput';
+import { shopperCategoryLabel } from '../../features/shopping/presentation/shopperCategoryLabel';
 import ShoppingSuggestionPopup from './ShoppingSuggestionPopup';
 import { createSuggestionCache, CATALOG_SUGGESTIONS_CHANGED } from './shoppingSuggestionCache';
 import { useAuth } from '../../context/auth-context';
 import { defaultPlanningUnit, planningUnit, planningUnitLabel, stepPlanningQuantity, categoryDisplayName } from '../../../../shared/shoppingEntryOptions.mjs';
 
 const blank = () => ({ name: '', quantity: '1', unit: defaultPlanningUnit, price: '', notes: '', category: '', categoryId: '', parentId: '', reusable: true });
+const productCategoryLabel = item => shopperCategoryLabel({ ...item.shopping_catalog_categories,
+  id: item.category_id, path: item.path ?? item.shopping_catalog_categories?.path }, 'פריט שמור');
 
 export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
   const [form, setForm] = useState(blank);
@@ -168,9 +171,9 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
             {searchState === 'failed' && <p role="status">טעינת הצעות נוספות נכשלה. אפשר להוסיף את השם כפריט חדש.</p>}
             <ul id="shopping-name-options" role="listbox" aria-label="הצעות לפריט">
               {suggestions.map((item,index) => <li key={item.id} role="option" id={`shopping-option-${index}`}
-                aria-label={`${item.name} · ${item.shopping_catalog_categories?.name || 'פריט שמור'}${item.default_unit ? ` · ${planningUnitLabel(item.default_unit)}` : ''}`}
+                aria-label={`${item.name} · ${productCategoryLabel(item)}${item.default_unit ? ` · ${planningUnitLabel(item.default_unit)}` : ''}`}
                 aria-selected={active === index} onPointerDown={e => e.preventDefault()} onMouseDown={e => e.preventDefault()} onClick={() => choose(item)}>
-                <strong dir="auto">{item.name}</strong><small>{item.shopping_catalog_categories?.name || 'פריט שמור'}{item.default_unit ? ` · ${planningUnitLabel(item.default_unit)}` : ''}</small>
+                <strong dir="auto">{item.name}</strong><small><bdi>{productCategoryLabel(item)}</bdi>{item.default_unit ? ` · ${planningUnitLabel(item.default_unit)}` : ''}</small>
               </li>)}
               <li role="option" id={`shopping-option-${suggestions.length}`} aria-selected={active === suggestions.length}
                 className="shopping-new-option" onPointerDown={e => e.preventDefault()} onMouseDown={e => e.preventDefault()} onClick={() => choose(null)}>
@@ -199,7 +202,7 @@ export default function ShoppingQuickEntry({ list, onAdded, inputRef }) {
           loading={categoryState==='loading'} failed={categoryState==='failed'} derived={!!selected} disabled={pending || !!selected}
           onChange={(category,categoryId) => setForm(current=>({...current,category,categoryId}))}/>
         {!selected && form.category && !form.categoryId && categories.some(c=>Object.hasOwn(c,'parent_id')) && <Select label="קטגוריית אב לקטגוריה חדשה" value={form.parentId} onValueChange={v=>update('parentId',v)} disabled={pending}>
-          <option value="">בחרו ענף קיים</option>{categories.filter(c=>!c.is_neutral).map(c=><option key={c.id} value={c.id}>{c.path?.map(p=>p.name).join(' / ') || c.name}</option>)}
+          <option value="">בחרו ענף קיים</option>{categories.filter(c=>!c.is_neutral).map(c=><option key={c.id} value={c.id}>{shopperCategoryLabel(c)}</option>)}
         </Select>}
         <NumberField label="מחיר משוער ליחידה" min="0" max="100000000" step="0.01" prefix="₪" value={form.price}
           disabled={pending} onValueChange={v => update('price',v)} />

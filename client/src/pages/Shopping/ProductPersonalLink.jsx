@@ -1,5 +1,6 @@
 import {useRef,useState} from 'react';
 import {mapShoppingProduct,getShoppingCatalogCategories} from '../../services/api';
+import {shopperCategoryLabel} from '../../features/shopping/presentation/shopperCategoryLabel';
 
 import {productInput} from './receiptProductInput';
 export default function ProductPersonalLink({row,catalog,listTypeId,merchant,onMapped}) {
@@ -26,7 +27,7 @@ export default function ProductPersonalLink({row,catalog,listTypeId,merchant,onM
   <div className="receipt-product-details">
    {!!row.suggested_personal_items?.length&&<span>לפי שם בלבד: {row.suggested_personal_items.map(p=><button key={p.id} type="button" disabled={busy} onClick={()=>choose(String(p.id))}>{p.name}</button>)}</span>}
    <label>פריט אישי <select aria-label="פריט אישי לשיוך" disabled={busy} value={selected} onChange={e=>choose(e.target.value)}><option value="">ללא שיוך</option>{catalog.map(c=><option key={c.id} value={String(c.id)}>{c.name}</option>)}<option value="new">יצירת פריט אישי…</option></select></label>
-   {selected==='new'&&<><label>שם אישי <input aria-label="שם הפריט האישי החדש" value={name} maxLength={200} onChange={e=>setName(e.target.value)}/></label><label>קטגוריה <select aria-label="קטגוריית הפריט האישי" value={category} onChange={e=>setCategory(e.target.value)}><option value="">בחירה</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label></>}
+   {selected==='new'&&<><label>שם אישי <input aria-label="שם הפריט האישי החדש" value={name} maxLength={200} onChange={e=>setName(e.target.value)}/></label><label>קטגוריה <select aria-label="קטגוריית הפריט האישי" value={category} onChange={e=>setCategory(e.target.value)}><option value="">בחירה</option>{categories.map(c=><option key={c.id} value={c.id}>{shopperCategoryLabel(c)}</option>)}</select></label></>}
    {!!selected&&<><label>יחידת קבלה <input aria-label="יחידת הכמות בקבלה" value={receiptUnit} onChange={e=>setReceiptUnit(e.target.value)}/></label><label>יחידת תכנון <input aria-label="יחידת תכנון לשיוך" value={unit} onChange={e=>setUnit(e.target.value)}/></label>
    <label>כמות תכנון לכל יחידת קבלה <input aria-label="מקדם המרה מאושר" type="number" step="0.000001" min="0.000001" placeholder="לפי יחידות או אריזה ידועה" value={factor} onChange={e=>setFactor(e.target.value)}/></label></>}
    <button type="button" disabled={busy||(selected==='new'&&(!name.trim()||!category||!unit.trim()))} onClick={save}>{selected==='new'?'יצירה ושיוך בלבד':'שמירת שיוך בלבד'}</button>

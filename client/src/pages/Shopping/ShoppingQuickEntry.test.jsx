@@ -23,6 +23,23 @@ beforeEach(()=>{vi.resetAllMocks();getShoppingCatalogCategories.mockResolvedValu
 // Synthetic geometry for portal behavior; this does NOT verify browser layout.
 beforeEach(()=>vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockReturnValue({left:20,right:320,top:100,bottom:144,width:300,height:44}));
 
+it('uses structured shopper paths in product suggestions and parent choices without changing IDs or request names', async () => {
+ const path=[{id:'1',name:'מזון ומשקאות'},{id:'2',name:'מוצרי חלב וביצים'},{id:'3',name:'חלב'}];
+ const c={id:3,parent_id:2,name:'חלב',path};
+ getShoppingCatalogCategories.mockResolvedValue({data:[c]});
+ getShoppingCatalogItems.mockResolvedValue({data:[{...milk,path,shopping_catalog_categories:{id:3,name:'חלב'}}]});
+ setup();await type('חל');
+ const option=await screen.findByRole('option',{name:/חלב · מוצרי חלב וביצים \/ חלב/});
+ expect(option).not.toHaveTextContent('מזון ומשקאות');await userEvent.click(option);await details();
+ expect(category()).toHaveValue('חלב');expect(screen.getByText('מוצרי חלב וביצים / חלב')).toBeInTheDocument();
+ await add();expect(addShoppingListItem).toHaveBeenCalledWith(1,expect.objectContaining({catalog_item_id:42,category_name:null}));
+ await type('מוצר חדש');await details();await userEvent.type(category(),'קטגוריה חדשה');
+ const parent=screen.getByRole('combobox',{name:'קטגוריית אב לקטגוריה חדשה'});
+ expect([...parent.options].map(o=>o.textContent)).toContain('מוצרי חלב וביצים / חלב');
+ await userEvent.selectOptions(parent,'3');await add();
+ expect(addShoppingListItem).toHaveBeenLastCalledWith(1,expect.objectContaining({category_name:'קטגוריה חדשה',parent_id:'3'}));
+});
+
 it('defaults new names to reusable with empty catalog/categories, resets and restores focus',async()=>{
  const {ref}=setup();expect(screen.queryByLabelText('קטגוריה')).not.toBeInTheDocument();
  await type('מתנה לדנה');await screen.findByRole('option',{name:'הוספת “מתנה לדנה” כפריט חדש'});
