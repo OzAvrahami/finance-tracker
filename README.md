@@ -8,15 +8,18 @@ SwiftUI FlowLink companion in the same repository.
 **Start with the [documentation index](docs/README.md)** for setup, architecture,
 database guidance, operator instructions and historical evidence.
 
-[v1.7.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.7.0).
-[v1.8.0 is prepared locally and unpublished](docs/history/RELEASE_1_8_0.md).
-The seven application-version fields now read 1.8.0. The candidate includes accepted
-LEGO Sold/Repurchase and reviewed Shopping/Auth corrections, plus deployed #96 with
-full owner acceptance and live producer activation still pending. #96 remains open.
-Backup unavailable — owner elected to proceed with release preparation despite the risk.
-This decision does not authorize migrations, production changes or publication.
-Deployment does not authorize CAL/phone activation or imply complete device acceptance.
-This is not a tenant-isolated SaaS product; multi-user work is deferred to v2.0.0.
+[v1.8.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.8.0).
+[v2.0.0 is prepared locally and unpublished](docs/history/RELEASE_2_0_0.md).
+All seven application-version fields read 2.0.0. The candidate covers #102 Shopping
+hierarchy, catalog administration and JavaScript workflows, plus the integrated #99
+manual-refund entry correction. Other Unreleased work retains its existing status.
+Shopping production activation was verified on 2026-11-14; final owner production
+acceptance remains pending. This version preparation does not redeploy that code.
+The owner waived a pre-migration backup; hosted recovery remains unverified.
+Real-provider/OCR flows and irreversible financial transactions were not production
+smoke-tested. See the release notes for evidence and coordinated upgrade requirements.
+This privately controlled application is not a tenant-isolated SaaS product; v2.0.0
+does not introduce multi-user isolation. FlowLink version/build numbers are independent.
 
 ## Local development
 

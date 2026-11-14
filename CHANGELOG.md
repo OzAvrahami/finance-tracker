@@ -6,13 +6,11 @@ Formal release tracking begins with **v0.9.0**, the first formally tracked Finan
 
 This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and will use semantic-version-style tracking for formal releases.
 
-> Publication readback (2026-10-29): [v1.7.0 is published and Latest](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.7.0) at `1da80871f57354f6429358d37e97b0517d1efaf3`. v1.8.0 is prepared locally and unpublished. Prepared/unpublished labels in older dated records describe their preparation checkpoint. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) remains authoritative.
+> Publication readback (2026-11-14): [v1.8.0 is published and Latest](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.8.0), published on 2026-10-30. v2.0.0 is prepared locally and unpublished. Prepared/unpublished labels in older dated records describe their preparation checkpoint. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) remains authoritative.
 
 ## [Unreleased]
 
 ### Added
-
-- Shopping hierarchy and catalog administration foundations for [#102](https://github.com/OzAvrahami/finance-tracker/issues/102), with JavaScript-owned visibility and isolated HTTP/UI integration. Local workflow replacements cover lists, items, purchase marking, receipts, commercial mappings and checkout through scoped atomic persistence. Migrations 060–063 retire the legacy SQL business engines and require coordinated writer, permission and application cutover. Owner-authorized production activation uses a pinned, bounded migration bundle, a temporary Shopping-only write fence, backend-only owner authorization, and matching Railway/Vercel deployments. Original product identities, historical list rows, purchase states and financial evidence are preserved. The owner waived a pre-migration backup; final production acceptance and formal release preparation remain pending.
 
 - Classified bank-account credits through the existing single/Bulk API: migration 057 supports verified ordinary income and separate ILS refund credits. Refunds retain positive source evidence and post as explicitly marked contra-expenses, preserving net cash without inflating income or requiring a debit link. Preserve replay/conflict, historical reservations, review guards and legacy evidence fingerprints. Update refund display and coordinated producer release guidance. Local verification only; production migration, deployment and owner acceptance pending.
 
@@ -26,9 +24,6 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Fixed
 
-- Shopping category labels omit only the top-level root in shopper-facing paths, while keeping intermediate categories, neutral labels and full administration paths intact ([#102](https://github.com/OzAvrahami/finance-tracker/issues/102)). Hierarchy identities and stored values are unchanged.
-- #99 manual refund entry: the ordinary expense form accepts negative amounts for new refunds and owner-editable existing expenses, including rows without a prior refund marker. Authenticated JavaScript commands derive the classification, retain exact negative expense amounts and null installments, and save through the existing atomic boundary without changing imported evidence or inflating income. Unrelated card installment schedules no longer block manual refunds; protected linked history and duplicate-review rules remain guarded. Requires forward migration 059 before the backend/frontend update; deployed 058 is unchanged. See [verification and owner handoff](docs/architecture/INGESTION_PACKAGE_1.md#manual-refund-entry-correction-2026-11-09).
-
 - #99 Package 1 CSV acceptance: preserve day/month date text during CSV parsing instead of allowing spreadsheet auto-inference to turn it into a numeric serial. Normalize typed spreadsheet dates using the workbook epoch, validate purchase and billing dates without rollover, and reject invalid date cells. Existing import profiles, source-byte identities and save/ingestion behavior remain unchanged.
 
 - Transaction editing: allow an existing classified refund to retain its negative amount when saving category or other metadata changes. Normalize valid loaded monetary values and the save summary with exact minor-unit utilities, so trailing-zero API strings such as `-557.5500000000000000` display as `-557.55`. Preserve raw typing and reject nonzero extra precision rather than rounding it. Use payment-method-neutral refund guidance. Preserve the null installment count instead of submitting the form's default of one. Keep its expense classification fixed in the form and preserve normal expense/new-transaction validation, source identity and ingestion evidence. No database migration required.
@@ -40,6 +35,26 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - #90: Replace the Wallet Amount App Intent boundary with directly mapped String and strict, explicit ILS parsing. Unsupported formats produce bounded local structural diagnostics without retaining monetary text. Remove temporary probes; preserve local-first capture and disabled-ingestion holds. Owner configuration mapping is confirmed; permanent-action synthetic and real Wallet runtime verification remain pending.
 
 - #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
+
+## [2.0.0] - Prepared (unpublished)
+
+Prepared on 2026-11-14 from production-activation checkpoint `a8691382e98704ed470f678f7f8181234c06fa74`. Published baseline: v1.8.0. Candidate scope is #102 plus the integrated #99 manual-refund entry correction; other Unreleased entries retain their existing scope and acceptance status. All seven application-version fields are synchronized to 2.0.0 locally. This preparation is not a commit, deployment, tag or publication. See [release notes, verification and publication prerequisites](docs/history/RELEASE_2_0_0.md).
+
+### Added
+
+- Shopping hierarchy and catalog administration for [#102](https://github.com/OzAvrahami/finance-tracker/issues/102), with JavaScript-owned visibility and isolated HTTP/UI integration. JavaScript workflow replacements cover lists, items, purchase marking, receipts, commercial mappings and checkout through scoped atomic persistence. Migrations 060–063 retire the legacy SQL business engines and require coordinated writer, permission and application cutover. Owner-authorized production activation uses a pinned, bounded migration bundle, a temporary Shopping-only write fence, backend-only owner authorization, and matching Railway/Vercel deployments. Original product identities, historical list rows, purchase states and financial evidence are preserved. The owner waived a pre-migration backup; final owner production acceptance remains pending.
+
+### Fixed
+
+- Shopping category labels omit only the top-level root in shopper-facing paths, while keeping intermediate categories, neutral labels and full administration paths intact ([#102](https://github.com/OzAvrahami/finance-tracker/issues/102)). Hierarchy identities and stored values are unchanged.
+- #99 manual refund entry: the ordinary expense form accepts negative amounts for new refunds and owner-editable existing expenses, including rows without a prior refund marker. Authenticated JavaScript commands derive the classification, retain exact negative expense amounts and null installments, and save through the existing atomic boundary without changing imported evidence or inflating income. Unrelated card installment schedules no longer block manual refunds; protected linked history and duplicate-review rules remain guarded. Requires forward migration 059 before the backend/frontend update; deployed 058 is unchanged. See [verification and owner handoff](docs/architecture/INGESTION_PACKAGE_1.md#manual-refund-entry-correction-2026-11-09).
+
+### Breaking changes and operational limitations
+
+- Shopping hierarchy schema, retired SQL functions, direct-table permissions and HTTP contracts require a coordinated database/backend/frontend upgrade. Use the production-compatible execution bundle and Shopping-only writer fence; never run disposable-only migration guards unchanged on a hosted database or roll back to an incompatible legacy backend. Production migration and application verification were recorded on 2026-11-14; this metadata preparation performs no migrations or deployment.
+- Production retained 173 product identities, 85 historical list rows and purchase states, with 99 categories (74 active / 25 historical inactive), 21 list-type links, and unchanged receipt, purchase-plan and financial evidence. Initial ordinary Shopping and administrative access uses the configured owner account.
+- The owner waived a verified pre-migration backup; hosted backup/restore remains unverified. No real-provider/OCR flow or irreversible real financial checkout/refund was performed for production smoke testing. Final owner production acceptance is pending.
+- Settings/About will show v2.0.0 only in a frontend rebuilt and separately deployed from these metadata changes. The previously verified production artifacts still carry 1.8.0 metadata.
 
 ## [1.8.0] - Prepared (unpublished)
 
