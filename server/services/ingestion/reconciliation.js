@@ -66,7 +66,10 @@ function match(facts, draft) {
   else if (ids.length) { outcome = 'ambiguous'; reason = 'competing_candidates'; }
   if (target != null) outcome = 'reconciled';
   let hold = draft.hold;
-  if (facts.installments.some(i => sameId(i.payment_source_id, payment) && (i.idempotency_key == null || i.idempotency_key !== p.idempotency_key))
+  // A signed owner refund is explicitly one new credit, not an installment.
+  // Unrelated purchase schedules on its card must not block this operation.
+  const manualRefund = source.source_kind === 'manual' && draft.row?.bank_movement === 'refund' && BigInt(n.amount_minor) < 0n;
+  if ((!manualRefund && facts.installments.some(i => sameId(i.payment_source_id, payment) && (i.idempotency_key == null || i.idempotency_key !== p.idempotency_key)))
     || (source.source_kind === 'manual' && Number(draft.row?.installment_count) > 1
       && facts.transactions.some(t => sameId(t.payment_source_id, payment) && near(t.transaction_date, n.date)))) hold ||= 'installment_series_review';
   if (observations.some(o => o.transaction_id == null && !sameId(o.source_id, source.id) && sameId(o.payment_source_id, payment)

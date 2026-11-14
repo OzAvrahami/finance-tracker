@@ -18,7 +18,11 @@ const scalar = (db, input) => sql(db, input).stdout.trim();
 const json = (db, input) => JSON.parse(scalar(db, input));
 const quote = value => value == null ? 'NULL' : `'${String(Array.isArray(value) ? '{'+value.join(',')+'}' : typeof value === 'object' ? JSON.stringify(value) : value).replaceAll("'", "''")}'`;
 const migration = fs.readFileSync(path.join(__dirname, '../migrations/058_ingestion_application_boundary.sql'), 'utf8');
-const baseline = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 058:')[0];
+// Compare fresh and upgraded schemas at 058, excluding later migrations.
+const schemaSections = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').split('-- Migration 059:');
+assert.equal(schemaSections.length, 2, 'Historical 058 fixture requires exactly one "-- Migration 059:" marker');
+const schema058 = schemaSections[0];
+const baseline = schema058.split('-- Migration 058:')[0];
 const call = (db, name, args) => json(db, `SET ROLE service_role; SELECT ${name}(${args.map(quote).join(',')});`);
 const dbClient = db => ({ coreProtocol: true, rpc: async (name, args) => new Promise((resolve, reject) => {
   const p = spawn('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', db, '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose', '-Atq']);
@@ -61,7 +65,7 @@ test('058 fresh schema and upgrade agree; failed migration rolls back and existi
   sql(db,migration); assert.equal(snapshot(),before);
   assert.equal((await ingest(db,item('historical-refund',{type:'refund',payment_source_id:14}))).transaction_id,old.transaction_id);
   const fresh = 'fresh_058'; sql('postgres',`CREATE DATABASE ${fresh};`);
-  sql(fresh,fs.readFileSync(path.join(__dirname,'../full_schema.sql'),'utf8'));
+  sql(fresh,schema058);
   const definitions = d => scalar(d,"SELECT jsonb_object_agg(oid::regprocedure::text,replace(pg_get_functiondef(oid),chr(13),'')) FROM pg_proc WHERE pronamespace='public'::regnamespace;");
   assert.equal(definitions(db),definitions(fresh));
   const catalog = d => json(d, `SELECT jsonb_build_object(

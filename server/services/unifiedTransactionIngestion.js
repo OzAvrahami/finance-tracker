@@ -60,4 +60,13 @@ async function submitOwned(db, channel, row, { key = randomUUID(), evidence = ro
   return result;
 }
 
-module.exports = { schema, submitExternal, submitOwned, externalResponse };
+async function updateOwnedRefund(db, id, row) {
+  const transaction = require('./ingestion/manualRefund').manualRow(row);
+  const result = await core.execute(db, { command_kind: 'owner_refund_edit',
+    command: { transaction_id: String(id), transaction } });
+  if (result.outcome === 'rejected') throw new Error(result.reason_code);
+  if (result.outcome !== 'updated') throw new Error('לא ניתן לאשר שהעדכון נשמר. יש לרענן את התנועה לפני ניסיון נוסף.');
+  return result.accounting;
+}
+
+module.exports = { schema, submitExternal, submitOwned, externalResponse, updateOwnedRefund };

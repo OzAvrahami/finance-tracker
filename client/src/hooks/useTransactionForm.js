@@ -43,9 +43,8 @@ const useTransactionForm = () => {
   const [savingsAccounts, setSavingsAccounts] = useState([]);
   const [savingsAccountId, setSavingsAccountId] = useState(searchParams.get('savingsAccountId') || '');
   const [savedCash, setSavedCash] = useState(null);
-  // Only an existing, server-classified refund may retain a negative expense.
-  const isExistingRefund = isEditMode && savedCash?.bank_movement === 'refund'
-    && savedCash.movement_type === 'expense' && Number(savedCash.total_amount) < 0;
+  const isExistingRefund = isEditMode && savedCash?.movement_type === 'expense'
+    && Number(savedCash.total_amount) < 0;
   const [repurchaseCandidates, setRepurchaseCandidates] = useState([]);
   const [repurchaseUnavailable, setRepurchaseUnavailable] = useState(false);
   const [savingsReason, setSavingsReason] = useState('');
@@ -220,6 +219,9 @@ const useTransactionForm = () => {
   };
   const savingsRole = categories.find(c => String(c.id) === String(transaction.category_id))?.savings_role;
   const savingsContext = Boolean(savingsRole || savedCash?.savings);
+  const allowsRefund = transaction.movement_type === 'expense' && !items.length
+    && !savingsContext && !isLoanCategory() && !transaction.loan_id;
+  const isRefund = allowsRefund && Number(transaction.total_amount) < 0;
 
   // Keep the complete loan records available for form/accounting behavior,
   // while preventing new activity from being linked to a paid loan. An edit
@@ -404,7 +406,7 @@ const useTransactionForm = () => {
             payment_source_id: transaction.payment_source_id ? parseInt(transaction.payment_source_id) : null,
             // Refunds are not installments; keep their persisted null rather than
             // sending the new-transaction form's default count of one.
-            installment_count: isExistingRefund ? (savedCash.installment_count ?? null)
+            installment_count: isRefund ? (savedCash?.installment_count ?? null)
               : parseInt(transaction.installment_count) || 1,
         },
         items: items.map(withoutItemKey),
@@ -536,6 +538,8 @@ const useTransactionForm = () => {
     availableTags,
     isEditMode,
     isExistingRefund,
+    allowsRefund,
+    isRefund,
     returnTo,
     showNewCategoryModal,
     setShowNewCategoryModal,

@@ -27,6 +27,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ### Fixed
 
 - Shopping category labels omit only the top-level root in shopper-facing paths, while keeping intermediate categories, neutral labels and full administration paths intact ([#102](https://github.com/OzAvrahami/finance-tracker/issues/102)). Hierarchy identities and stored values are unchanged.
+- #99 manual refund entry: the ordinary expense form accepts negative amounts for new refunds and owner-editable existing expenses, including rows without a prior refund marker. Authenticated JavaScript commands derive the classification, retain exact negative expense amounts and null installments, and save through the existing atomic boundary without changing imported evidence or inflating income. Unrelated card installment schedules no longer block manual refunds; protected linked history and duplicate-review rules remain guarded. Requires forward migration 059 before the backend/frontend update; deployed 058 is unchanged. See [verification and owner handoff](docs/architecture/INGESTION_PACKAGE_1.md#manual-refund-entry-correction-2026-11-09).
 
 - #99 Package 1 CSV acceptance: preserve day/month date text during CSV parsing instead of allowing spreadsheet auto-inference to turn it into a numeric serial. Normalize typed spreadsheet dates using the workbook epoch, validate purchase and billing dates without rollover, and reject invalid date cells. Existing import profiles, source-byte identities and save/ingestion behavior remain unchanged.
 

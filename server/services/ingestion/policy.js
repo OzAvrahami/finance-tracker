@@ -71,7 +71,7 @@ function external(facts, scope) {
 
 const ownedFields = ['description', 'movement_type', 'total_amount', 'transaction_date', 'charge_date', 'payment_source_id', 'category_id',
   'currency', 'original_amount', 'exchange_rate', 'notes', 'tags', 'installment_number', 'installment_count', 'installments_info',
-  'global_discount', 'global_discount_source', 'parent_transaction_id', 'loan_id'];
+  'global_discount', 'global_discount_source', 'parent_transaction_id', 'loan_id', 'bank_movement'];
 function owned(facts, scope) {
   const row = scope.row; object(row, ownedFields);
   if (scope.domain != null) object(scope.domain, ['loan_payment']);
@@ -88,7 +88,8 @@ function owned(facts, scope) {
     merchant: row.description || '(description not supplied)', accounting_amount: String(row.total_amount), currency: 'ILS', movement_type: row.movement_type,
     transaction_date: row.transaction_date, charge_date: row.charge_date,
     payment_source_id: row.payment_source_id == null ? null : String(row.payment_source_id), category_id: row.category_id == null ? null : String(row.category_id),
-    source_metadata: { channel: scope.channel, terminal_reference: scope.channel === 'csv' ? key.split(':')[1] || '' : '' } }) };
+    source_metadata: { channel: scope.channel, terminal_reference: scope.channel === 'csv' ? key.split(':')[1] || '' : '',
+      ...(row.bank_movement === 'refund' ? { bank_movement: 'refund' } : {}) } }) };
 }
 
 function prepare(facts, scope) {
@@ -96,9 +97,12 @@ function prepare(facts, scope) {
   if (!source || !source.is_active || source.source_kind === 'legacy_api') fail('source_unavailable');
   const draft = scope.channel === 'external' ? external(facts, scope)
     : ['manual', 'csv'].includes(scope.channel) ? owned(facts, scope) : { observation: scope.observation, row: null, hold: null };
-  const n = normalize(draft.observation, { refund: scope.channel === 'external' && scope.request.type === 'refund' });
-  if (n.input.source_metadata.bank_movement === 'refund' && !(source.source_kind === 'external_api'
-    && source.instance_key === 'unified:v1' && scope.request?.type === 'refund')) fail('refund_source_unsupported');
+  const manualRefund = scope.channel === 'manual' && source.source_kind === 'manual'
+    && source.instance_key === 'unified:manual' && draft.row?.bank_movement === 'refund';
+  const externalRefund = scope.channel === 'external' && source.source_kind === 'external_api'
+    && source.instance_key === 'unified:v1' && scope.request?.type === 'refund';
+  const n = normalize(draft.observation, { refund: manualRefund || externalRefund });
+  if (n.input.source_metadata.bank_movement === 'refund' && !(manualRefund || externalRefund)) fail('refund_source_unsupported');
   const unified = ['unified:v1', 'unified:manual', 'unified:csv'].includes(source.instance_key);
   const payment = mapPayment(facts, source, n.input, unified);
   if (unified && payment == null) draft.hold ||= 'payment_source_not_found';

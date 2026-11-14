@@ -175,36 +175,8 @@ const request = (overrides = {}, loanHandling) => {
   });
 };
 
-test('editing refund metadata preserves its negative amount, classification and source identity on reload', async () => {
-  const fake = createTransactionFake();
-  fake.state.transactions.push({ id: 42, movement_type: 'expense', bank_movement: 'refund',
-    total_amount: -149, external_id: 'synthetic-refund-edit', payment_source_id: 14, category_id: 1 });
-  const controller = loadControllerWithFake('../../controllers/transactionController', fake);
-  const req = request({ description: 'Reviewed refund', category_id: 100, total_amount: '-149.00',
-    payment_source_id: 14, loan_id: null, installment_count: null, notes: 'Reviewed metadata' });
-  req.params = { id: '42' };
-  const res = createMockResponse();
-  await controller.updateTransaction(req, res);
-  assert.equal(res.statusCode, 200);
-  const write = fake.state.rpcCalls.find(entry => entry.name === 'update_transaction_with_manual_loan_payment');
-  assert.equal(write.params.p_transaction.total_amount, -149);
-  assert.equal(write.params.p_transaction.installment_count, null);
-  assert.equal(Object.hasOwn(write.params.p_transaction, 'bank_movement'), false);
-  assert.equal(Object.hasOwn(write.params.p_transaction, 'external_id'), false);
-  assert.equal(write.params.p_loan_payment, null);
-  const read = createMockResponse();
-  await controller.getTransactionById({ params: { id: '42' } }, read);
-  assert.equal(read.statusCode, 200);
-  assert.equal(read.body.total_amount, -149);
-  assert.equal(read.body.bank_movement, 'refund');
-  assert.equal(read.body.movement_type, 'expense');
-  assert.equal(read.body.external_id, 'synthetic-refund-edit');
-  assert.equal(read.body.payment_source_id, 14);
-  assert.equal(read.body.category_id, 100);
-  assert.equal(read.body.notes, 'Reviewed metadata');
-  assert.equal(fake.state.transactions.length, 1);
-  assert.equal(fake.state.loanPayments.length, 0);
-});
+// Refund save/reload coverage now uses real Auth, HTTP and PostgreSQL in
+// manualRefundPostgres.local.test.js (including unclassified input).
 
 test('loan-linked transaction defaults to link-only and creates no future siblings', async () => {
   const fake = createTransactionFake();
