@@ -1,15 +1,17 @@
 import api from '../../../services/api';
 import { CatalogError, commandRoute } from './catalogApi';
 
-export function createHttpCatalogApi({ transport = api, enabled = import.meta.env.DEV, location = globalThis.location } = {}) {
+export function createHttpCatalogApi({ transport = api, enabled = import.meta.env.DEV, location = globalThis.location, mode = 'isolated' } = {}) {
   const base = new URL(transport.defaults.baseURL, location.origin);
-  if (!enabled || !['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname) || base.origin !== location.origin || base.pathname !== '/api') {
+  const production = mode === 'production';
+  if (production ? base.href.replace(/\/$/, '') !== 'https://finance-tracker-production-d34c.up.railway.app/api'
+    : (!enabled || !['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname) || base.origin !== location.origin || base.pathname !== '/api')) {
     throw new Error('Shopping HTTP integration requires the isolated same-origin development gateway');
   }
   async function request(path, options = {}) {
     try {
-      const r = await transport.request({ url: path, ...options, preserveAuthDraft: true });
-      if (!r.headers['x-shopping-isolated']?.startsWith('shopping102-')) throw new CatalogError('shopping_network_unknown');
+      const r = await transport.request({ url: path, ...options, headers: { ...options.headers, ...(production ? { 'X-Shopping-Contract':'hierarchy-v1' } : {}) }, preserveAuthDraft: true });
+      if (production ? r.headers['x-shopping-contract'] !== 'hierarchy-v1' : !r.headers['x-shopping-isolated']?.startsWith('shopping102-')) throw new CatalogError('shopping_network_unknown');
       return { body: r.data, etag: r.headers.etag, revision: r.headers['x-shopping-catalog-revision'] };
     } catch (error) {
       if (error.name === 'CanceledError' || error.name === 'AbortError') throw error;
@@ -19,7 +21,7 @@ export function createHttpCatalogApi({ transport = api, enabled = import.meta.en
   }
   const categories = '/settings/shopping/catalog-categories', products = '/settings/shopping/catalog-items', types = '/settings/shopping/list-types';
   return Object.freeze({
-    mode: 'isolated',
+    mode,
     async read(signal) {
       // These approved endpoints preserve array response shapes. Do not combine
       // responses from different revisions into a seemingly coherent edit draft.
@@ -32,7 +34,7 @@ export function createHttpCatalogApi({ transport = api, enabled = import.meta.en
           links: await request(`${types}/${type.id}/categories`, { signal }), visible: await request(`${types}/${type.id}/visibility`, { signal }),
         })));
         if ([p,t,d,...details.flatMap(v=>[v.links,v.visible])].some(r=>r.revision !== c.revision)) continue;
-        return { mode:'isolated', etag:c.revision, categories:c.body, products:p.body, listTypes:t.body,
+        return { mode, etag:c.revision, categories:c.body, products:p.body, listTypes:t.body,
           duplicateCandidates:d.body, links:details.flatMap(v=>v.links.body.filter(c=>c.linked).map(c=>({list_type_id:v.type.id,category_id:c.id}))),
           visibility:Object.fromEntries(details.map(v=>[v.type.id,v.visible.body])) };
       }

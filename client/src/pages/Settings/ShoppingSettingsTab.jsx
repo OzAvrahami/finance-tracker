@@ -647,6 +647,13 @@ const SHOPPING_TABS = [
 const ShoppingSettingsTab = () => {
   const [activeSection, setActiveSection] = useState('list-types');
 
+  if (import.meta.env.PROD) return (
+    <section className="settings-shopping" aria-label="הגדרות קניות">
+      <a href="/settings/shopping/catalog">ניהול עץ הקטגוריות, המוצרים ומיפוי הענפים</a>
+      <ListTypesSection />
+    </section>
+  );
+
   // Isolated integration uses the hierarchy editor; the legacy flat editor
   // cannot safely create an implicit root or replace inherited branches.
   if (import.meta.env.DEV && import.meta.env.VITE_SHOPPING_ADMIN_INTEGRATION === '1') return (

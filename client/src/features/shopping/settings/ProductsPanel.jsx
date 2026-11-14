@@ -54,7 +54,7 @@ export default function ProductsPanel({ data, api, refresh }) {
       title={edit.kind === 'bulk' ? `שיוך ${edit.ids.length} מוצרים` : edit.kind === 'deactivate' ? 'השבתת מוצר' : edit.kind === 'create' ? 'מוצר חדש' : 'עריכת מוצר'}
       onClose={() => setEdit(null)} operation={{ bulk: 'product.bulk-category', create: 'product.create', edit: 'product.edit', deactivate: 'product.deactivate' }[edit.kind]}
       onSaved={() => { if (edit.kind === 'bulk') setSelected([]); }}
-      confirmation={['bulk', 'deactivate'].includes(edit.kind) ? `לאשר את השינוי ${api.mode === 'isolated' ? 'במסד המקומי' : 'בהדגמה'}? מזהי המוצרים וההיסטוריה יישמרו.` : undefined}
+      confirmation={['bulk', 'deactivate'].includes(edit.kind) ? `לאשר את השינוי ${api.mode === 'production' ? 'בקטלוג הקניות' : api.mode === 'isolated' ? 'במסד המקומי' : 'בהדגמה'}? מזהי המוצרים וההיסטוריה יישמרו.` : undefined}
       body={values => {
         if (edit.kind === 'bulk') return { category_id: values.category_id, product_ids: edit.ids };
         if (edit.kind === 'deactivate') return {};

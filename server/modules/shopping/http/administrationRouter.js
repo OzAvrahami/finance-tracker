@@ -10,19 +10,23 @@ const { requireRule } = require('../shared/errors');
 const { identity } = require('../shared/contracts');
 const { administrationView } = require('./administrationReads');
 const { bulkIds } = require('../catalog/catalogService');
+const { isProductionAccess } = require('./productionAccess');
 
-// Not registered in server/index.js. Only the verified isolated launcher mounts
-// this router. A client preview flag cannot enable it, even in a production build.
-function createAdministrationRouter({ supabase, isolation, adminIds, historicalCategoryIds = [], environment = process.env }) {
-  requireRule(environment.NODE_ENV !== 'production' && isolation?.identity?.startsWith('shopping102-')
-    && new URL(isolation.endpoint).hostname === '127.0.0.1' && typeof isolation.assert === 'function', 'shopping_forbidden');
-  isolation.assert();
+// Mounted only by the isolated launcher or the explicit server production gate.
+// A client preview flag cannot create the required production capability.
+function createAdministrationRouter({ supabase, isolation, adminIds, historicalCategoryIds = [], environment = process.env, productionAccess }) {
+  const production = isProductionAccess(productionAccess);
+  requireRule(production || (environment.NODE_ENV !== 'production' && isolation?.identity?.startsWith('shopping102-')
+    && new URL(isolation.endpoint).hostname === '127.0.0.1' && typeof isolation.assert === 'function'), 'shopping_forbidden');
+  if (!production) isolation.assert();
+  if (production) { adminIds = productionAccess.adminIds; historicalCategoryIds = productionAccess.historicalCategoryIds; }
   const admins = new Set(adminIds);
   requireRule(admins.size > 0, 'shopping_authorizer_required');
   const repository = createRepository(supabase), authorize = async ({ actor }) => admins.has(actor);
   const commands = createCatalogCommands({ repository, persistence: createPersistence(supabase), authorize });
   const router = express.Router();
   router.use((req, res, next) => {
+    if (production) return productionAccess.middleware(req, res, next);
     if (environment.NODE_ENV === 'production') return res.status(404).end();
     if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return res.status(403).end();
     const host = req.headers.host || '';

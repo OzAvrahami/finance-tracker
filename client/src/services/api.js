@@ -14,6 +14,9 @@ const api = axios.create({
 
 // Attach Supabase auth token to every request
 api.interceptors.request.use(async (config) => {
+  if (/^\/(shopping(?:\/|$)|settings\/shopping(?:\/|$))/.test(config.url || '')) {
+    config.headers['X-Shopping-Contract'] = 'hierarchy-v1';
+  }
   const { data: { session } } = await supabase.auth.getSession();
 
   if (session?.access_token) {

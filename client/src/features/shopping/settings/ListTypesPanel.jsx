@@ -34,7 +34,7 @@ function BranchEditor({ type, data, api, refresh }) {
       <h2>זמינות עבור {type.name}</h2>
       {error ? <><Alert variant="error">{error.message}</Alert><SecondaryButton onClick={() => setRetry(n => n + 1)}>ניסיון חוזר לתצוגה</SecondaryButton></> : !currentPreview ? <p role="status">מחשב תצוגה…</p> : <>
         <p role="status">{preview.category_ids.length} קטגוריות · {preview.product_ids.length} מוצרים</p>
-        <p>{dirty ? 'תצוגה של הטיוטה — טרם נשמרה' : api.mode === 'isolated' ? 'המיפוי השמור במסד המקומי' : 'המיפוי השמור בהדגמה'}</p>
+        <p>{dirty ? 'תצוגה של הטיוטה — טרם נשמרה' : api.mode === 'production' ? 'המיפוי השמור' : api.mode === 'isolated' ? 'המיפוי השמור במסד המקומי' : 'המיפוי השמור בהדגמה'}</p>
         <details><summary>מוצרים זמינים</summary><ul>{data.products.filter(p => preview.product_ids.includes(p.id)).map(p => <li key={p.id}>{p.name} <small>({p.id})</small></li>)}</ul></details>
       </>}
     </aside>

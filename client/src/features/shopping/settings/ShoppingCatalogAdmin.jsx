@@ -7,7 +7,7 @@ import ListTypesPanel from './ListTypesPanel';
 import './shoppingAdmin.css';
 
 export default function ShoppingCatalogAdmin({ adapter }) {
-  const [api] = useState(() => adapter || createPreviewApi({ enabled: import.meta.env.DEV && import.meta.env.VITE_SHOPPING_ADMIN_PREVIEW === '1' }));
+  const [api] = useState(() => adapter || (import.meta.env.DEV ? createPreviewApi({ enabled: import.meta.env.VITE_SHOPPING_ADMIN_PREVIEW === '1' }) : null));
   const [data, setData] = useState(null), [error, setError] = useState(null), [tab, setTab] = useState('categories');
   const [visited, setVisited] = useState(['categories']);
   const generation = useRef(0);
@@ -25,10 +25,10 @@ export default function ShoppingCatalogAdmin({ adapter }) {
   }, [refresh, invalidate]);
   return <main className="shopping-admin" dir="rtl">
     <header><a href="/settings">הגדרות Finance Tracker</a><h1>ניהול קטלוג הקניות</h1><p>קטגוריות, מוצרים וזמינות לפי סוג רשימה</p></header>
-    <Alert variant="warning">{api.mode === 'isolated' ? 'סביבת בדיקה מקומית מבודדת · נתונים מלאכותיים · השינויים נשמרים במסד המקומי. אין חיבור לייצור.' : 'הדגמה מקומית בלבד · נתונים מלאכותיים · השינויים נשמרים בזיכרון ונמחקים בהפעלה מחדש של שרת הפיתוח. אין חיבור לנתוני הקניות האמיתיים.'}</Alert>
-    {data && api.mode === 'isolated' && <p aria-label="גרסת קטלוג">גרסת קטלוג: {data.etag}</p>}
+    {api.mode !== 'production' && <Alert variant="warning">{api.mode === 'isolated' ? 'סביבת בדיקה מקומית מבודדת · נתונים מלאכותיים · השינויים נשמרים במסד המקומי. אין חיבור לייצור.' : 'הדגמה מקומית בלבד · נתונים מלאכותיים · השינויים נשמרים בזיכרון ונמחקים בהפעלה מחדש של שרת הפיתוח. אין חיבור לנתוני הקניות האמיתיים.'}</Alert>}
+    {data && api.mode !== 'preview' && <p aria-label="גרסת קטלוג">גרסת קטלוג: {data.etag}</p>}
     {error && <Alert variant="error" urgent>{error.message}<SecondaryButton onClick={() => refresh().catch(() => {})}>ניסיון חוזר לטעינה</SecondaryButton></Alert>}
-    {!data && !error && <p role="status">טוען קטלוג הדגמה…</p>}
+    {!data && !error && <p role="status">{api.mode === 'production' ? 'טוען קטלוג…' : 'טוען קטלוג הדגמה…'}</p>}
     {data && <GlassCard><Tabs value={tab} onValueChange={value => { setTab(value); setVisited(previous => previous.includes(value) ? previous : [...previous, value]); }}>
       <TabList aria-label="ניהול קטלוג"><Tab value="categories">קטגוריות</Tab><Tab value="products">מוצרים</Tab><Tab value="types">סוגי רשימות</Tab></TabList>
       <TabPanel value="categories"><CategoriesPanel {...{ data, api, refresh }} /></TabPanel>

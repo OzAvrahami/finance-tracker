@@ -5,7 +5,7 @@ import ShoppingCatalogAdmin from './ShoppingCatalogAdmin';
 import { createCatalogPreview } from '../preview/catalogPreview';
 import { CatalogError, createPreviewApi } from '../services/catalogApi';
 
-function setup() {
+function setup(mode = 'preview') {
   const model = createCatalogPreview();
   const api = createPreviewApi({ enabled: true, location: { hostname: 'localhost' }, transport: async (url, options) => {
     let status = 200, result;
@@ -13,7 +13,7 @@ function setup() {
     catch (error) { status = 409; result = { code: error.code }; }
     return { ok: status === 200, status, headers: new Headers({ 'X-Shopping-Preview': 'synthetic-only' }), json: async () => JSON.parse(JSON.stringify(result)) };
   } });
-  const adapter = { ...api, send: vi.fn(api.send), read: vi.fn(api.read) };
+  const adapter = { ...api, mode, send: vi.fn(api.send), read: vi.fn(api.read) };
   render(<ShoppingCatalogAdmin adapter={adapter} />);
   return { model, adapter, user: userEvent.setup() };
 }
@@ -23,6 +23,15 @@ const tab = name => fireEvent.click(screen.getByRole('tab', { name }));
 beforeEach(() => { vi.spyOn(window, 'confirm').mockReturnValue(true); });
 
 describe('Shopping catalog administration', () => {
+  it('labels production saves truthfully and exposes connected category fields', async () => {
+    const { user } = setup('production');
+    await user.click(await ready());
+    expect(dialog().getByLabelText('סמל הקטגוריה')).toBeVisible();
+    expect(dialog().getByLabelText('שיוך ראשוני לסוג רשימה (רשות)')).toBeVisible();
+    expect(dialog().getByRole('button', { name: 'שמירה', exact: true })).toBeVisible();
+    expect(dialog().queryByText(/ההדגמה המקומית/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/נתונים מלאכותיים/)).not.toBeInTheDocument();
+  });
   it('shows an explicit synthetic banner, RTL layout and shared keyboard tabs', async () => {
     setup(); await ready();
     expect(screen.getByRole('main')).toHaveAttribute('dir', 'rtl');

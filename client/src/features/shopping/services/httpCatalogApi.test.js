@@ -5,6 +5,16 @@ const location={origin:'http://127.0.0.1:5123',hostname:'127.0.0.1'};
 const response=(data=[],revision='1')=>({data,headers:{etag:'"scope"','x-shopping-catalog-revision':revision,'x-shopping-isolated':'shopping102-test'}});
 const setup=()=>{const transport={defaults:{baseURL:'/api'},request:vi.fn().mockResolvedValue(response())};return{transport,api:createHttpCatalogApi({transport,enabled:true,location})};};
 describe('isolated authenticated administration adapter',()=>{
+ it('production mode requires the pinned backend and its contract marker',async()=>{
+  const transport={defaults:{baseURL:'https://finance-tracker-production-d34c.up.railway.app/api'},request:vi.fn().mockResolvedValue({data:[],headers:{etag:'"scope"','x-shopping-catalog-revision':'1','x-shopping-contract':'hierarchy-v1'}})};
+  const api=createHttpCatalogApi({transport,mode:'production',location:{origin:'https://finance-tracker-sigma-ten-19.vercel.app',hostname:'finance-tracker-sigma-ten-19.vercel.app'}});
+  expect(api.mode).toBe('production');
+  transport.defaults.baseURL += '/';
+  expect(createHttpCatalogApi({transport,mode:'production',location}).mode).toBe('production');
+  await api.read();expect(transport.request.mock.calls[0][0].headers['X-Shopping-Contract']).toBe('hierarchy-v1');
+  transport.request.mockResolvedValue(response());await expect(api.read()).rejects.toMatchObject({code:'shopping_network_unknown'});
+  expect(()=>createHttpCatalogApi({transport:{defaults:{baseURL:'https://foreign.example/api'}},mode:'production',location})).toThrow();
+ });
  it('fails closed for hosted API or disabled integration',()=>{
   for(const baseURL of ['https://hosted.example/api','http://localhost:5050/api'])expect(()=>createHttpCatalogApi({transport:{defaults:{baseURL}},enabled:true,location})).toThrow();
   expect(()=>createHttpCatalogApi({transport:{defaults:{baseURL:'/api'}},enabled:false,location})).toThrow();

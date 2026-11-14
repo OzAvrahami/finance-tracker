@@ -14,6 +14,7 @@ import AnnualSummary from './pages/AnnualSummary';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import Savings from './pages/Savings/Savings';
+import ShoppingAdministration from './features/shopping/settings/ShoppingAdministration';
 
 
 function App() {
@@ -36,6 +37,7 @@ function App() {
           <Route path="/budget" element={<Budget />} />
           <Route path="/import" element={<Import />} />
           <Route path="/shopping" element={<ShoppingLists />} />
+          <Route path="/settings/shopping/catalog" element={<ShoppingAdministration />} />
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/edit-transaction/:id" element={<AddTransaction />} />
           <Route path="/annual-summary" element={<AnnualSummary />} />

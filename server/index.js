@@ -83,7 +83,8 @@ app.use(cors({
 
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization", "If-Match", "Idempotency-Key", "X-Shopping-Contract"],
+    exposedHeaders: ["ETag", "X-Shopping-Catalog-Revision", "X-Shopping-Contract", "Retry-After"]
 }));
 
 // Hard limit:
@@ -119,6 +120,10 @@ app.use('/api/internal/jobs', internalJobRoutes);
 // Auth middleware - protect all /api/* routes
 app.use('/api', requireAuth);
 
+if (process.env.SHOPPING_PRODUCTION_MODE) {
+    app.use('/api', require('./modules/shopping/http/productionRouter').createProductionRouter({ supabase: require('./config/supabase') }));
+}
+
 app.use('/api/import', importRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/transactions', transactionRoutes);
@@ -127,7 +132,7 @@ app.use('/api/lego', legoRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/savings', require('./routes/savingsRoutes'));
 app.use('/api/budgets', budgetRoutes);
-app.use('/api/shopping', shoppingRoutes);
+if (!process.env.SHOPPING_PRODUCTION_MODE) app.use('/api/shopping', shoppingRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/dashboard', dashboardRoutes);

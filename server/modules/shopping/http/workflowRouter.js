@@ -7,16 +7,20 @@ const { requireRule } = require('../shared/errors');
 const { httpError } = require('../shared/persistenceErrors');
 const { createWorkflowCommands } = require('../shared/workflowCommands');
 const { createWorkflowIntelligenceRouter } = require('./workflowIntelligenceRouter');
+const { isProductionAccess } = require('./productionAccess');
 
-// Deliberately not registered in server/index.js or the deployed legacy router.
-// The caller must prove disposable isolation before constructing this composition.
-function createWorkflowRouter({ supabase, authorize, isolation, environment = process.env, extract, lookupOptions, settingsOnly = false }) {
-  requireRule(environment.NODE_ENV !== 'production' && isolation?.identity?.startsWith('shopping102-') &&
-    new URL(isolation.endpoint).hostname === '127.0.0.1' && typeof isolation.assert === 'function', 'shopping_forbidden');
-  isolation.assert();
+// The caller must prove disposable isolation or hold the server-created
+// production capability; this composition never falls back to legacy writers.
+function createWorkflowRouter({ supabase, authorize, isolation, environment = process.env, extract, lookupOptions, settingsOnly = false, productionAccess }) {
+  const production = isProductionAccess(productionAccess);
+  requireRule(production || (environment.NODE_ENV !== 'production' && isolation?.identity?.startsWith('shopping102-') &&
+    new URL(isolation.endpoint).hostname === '127.0.0.1' && typeof isolation.assert === 'function'), 'shopping_forbidden');
+  if (!production) isolation.assert();
+  if (production) authorize = productionAccess.authorize;
   const commands = createListCommands({ supabase, authorize }), router = express.Router();
   const workflows = createWorkflowCommands({ supabase, authorize });
   router.use((req, res, next) => {
+    if (production) return productionAccess.middleware(req, res, next);
     const host = req.headers.host || '';
     if (environment.NODE_ENV === 'production') return res.status(404).end();
     if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) ||

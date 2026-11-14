@@ -31,7 +31,7 @@ export default function EditDialog({ title, initial, children, operation, id, bo
     finally { setSaving(false); }
   };
   const stale = error?.code === 'shopping_revision_stale';
-  return <Dialog open onClose={close} closeDisabled={saving} title={title} description={api.mode === 'isolated' ? 'השינויים יישמרו במסד הבדיקה המקומי המבודד בלבד.' : 'השינויים נשמרים בזיכרון ההדגמה המקומית בלבד.'}>
+  return <Dialog open onClose={close} closeDisabled={saving} title={title} description={api.mode === 'production' ? 'השינויים יישמרו בקטלוג הקניות שלך.' : api.mode === 'isolated' ? 'השינויים יישמרו במסד הבדיקה המקומי המבודד בלבד.' : 'השינויים נשמרים בזיכרון ההדגמה המקומית בלבד.'}>
     <form onSubmit={submit} className="shopping-admin-form">
       {dirty && <p role="status">שינויים ממתינים לשמירה</p>}
       {error && <Alert variant="error" urgent>{error.message}</Alert>}
@@ -43,7 +43,7 @@ export default function EditDialog({ title, initial, children, operation, id, bo
         {children(values, (key, value) => { setValues(v => ({ ...v, [key]: value })); setRequest(null); }, data)}
       </fieldset>
       <div className="shopping-admin-actions">
-        <PrimaryButton type="submit" loading={saving} disabled={stale && !reviewed}>{error?.uncertain ? 'ניסיון חוזר לאותה בקשה' : api.mode === 'isolated' ? 'שמירה במסד המקומי' : 'שמירה בהדגמה'}</PrimaryButton>
+        <PrimaryButton type="submit" loading={saving} disabled={stale && !reviewed}>{error?.uncertain ? 'ניסיון חוזר לאותה בקשה' : api.mode === 'production' ? 'שמירה' : api.mode === 'isolated' ? 'שמירה במסד המקומי' : 'שמירה בהדגמה'}</PrimaryButton>
         <SecondaryButton type="button" disabled={saving} onClick={close}>ביטול</SecondaryButton>
       </div>
     </form>
