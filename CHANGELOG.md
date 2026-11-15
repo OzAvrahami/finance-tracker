@@ -10,6 +10,11 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### FX ingestion and explicit reconciliation (#99 follow-up)
+
+- Support foreign-currency refunds through the existing Single/Bulk API: a positive actual ILS credit posts as a negative expense with `bank_movement: refund`, preserving positive original money and an optional provider rate independently. No conversion, fee inference, historical recovery or JSON-number contract change. Missing required original evidence stays under review.
+- Allow an explicit owner-confirmed link to an otherwise eligible FX transaction without changing any financial row fields, including owner descriptions, notes and billing dates. Supplied original currency/amount/rate conflicts stay under review; accounting-only observations may link without replacing FX evidence. Automatic matching, generic cancellation, source exclusivity, stale-review and linked-domain/closed-budget protections remain. Requires forward migration **064** and the matching backend; production activation and owner acceptance are pending. See [contract and follow-up plan](docs/operations/FX_INGESTION_OWNER_LINKS.md). This does not complete #99 or authorize changes to the 13 reviewed real transactions.
+
 ### Added
 
 - Classified bank-account credits through the existing single/Bulk API: migration 057 supports verified ordinary income and separate ILS refund credits. Refunds retain positive source evidence and post as explicitly marked contra-expenses, preserving net cash without inflating income or requiring a debit link. Preserve replay/conflict, historical reservations, review guards and legacy evidence fingerprints. Update refund display and coordinated producer release guidance. Local verification only; production migration, deployment and owner acceptance pending.

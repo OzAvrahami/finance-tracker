@@ -47,10 +47,10 @@ for(const method of ['bank_account','credit_card','debit_card','cash','bank_tran
     const income=core.decideIngestion(f,scope({type:'income'}));assert.equal(income.outcome,method==='bank_account'?'created':'ambiguous');
   });
 
-test('refund missing identity, unmapped payment and unsupported FX do not acquire posting authority',()=>{
+test('refund missing identity, unmapped payment and missing original FX evidence do not acquire posting authority',()=>{
   assert.equal(core.decideIngestion(facts(),scope({type:'refund',external_id:undefined})).reason,'identity_evidence_required');
   assert.equal(core.decideIngestion(facts(),scope({type:'refund',payment_source_id:999})).reason,'payment_source_not_found');
-  assert.throws(()=>core.decideIngestion(facts(),scope({type:'refund',currency:'USD',original_amount:10})),e=>e.reason==='refund_currency_unsupported');
+  assert.equal(core.decideIngestion(facts(),scope({type:'refund',currency:'USD'})).reason,'original_amount_required');
 });
 test('payment selection handles new records without issuer routing and rejects ambiguous last4',()=>{
   const f=facts();f.payments.push({id:'20',name:'New MAX',method:'credit_card',issuer:'MAX',last4:'2755',is_active:true});

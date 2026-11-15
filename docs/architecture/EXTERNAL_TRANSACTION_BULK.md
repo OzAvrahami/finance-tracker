@@ -39,6 +39,50 @@ unchanged from the existing single-item API; this bulk wrapper performs no
 conversion. `amount`, `original_amount` and `exchange_rate` retain the existing
 v1 **JSON number** type, not a new decimal-string contract.
 
+## Current FX expense/refund contract (064 follow-up)
+
+The implementation for the #99 FX follow-up supports both `expense` and `refund`
+through this same Single/Bulk endpoint. This section supersedes the historical
+057 refund restrictions below; activation and owner acceptance remain separate.
+
+| Field | Meaning |
+| --- | --- |
+| `type` | `expense` or `refund`; refund is explicit source evidence, not inferred from a negative input. |
+| `amount` | Positive JSON number: actual ILS accounting debit/credit, exact to cents under the existing safe numeric limits. |
+| `currency` | Original transaction currency; defaults to `ILS`. |
+| `original_amount` | Positive JSON-number original amount; required to post a non-ILS transaction. |
+| `exchange_rate` | Optional positive JSON-number provider evidence. Omit when absent. |
+| `external_id` | Stable source identity; required for refunds and every Bulk item. |
+
+```json
+{"type":"refund","amount":137.29,"date":"2026-04-03","charge_date":"2026-04-10","description":"Synthetic FX refund","payment_source_id":6,"currency":"USD","original_amount":35.12,"exchange_rate":3.8,"external_id":"synthetic:fx-refund:1"}
+```
+
+This records `total_amount: -137.29`, `movement_type: expense`,
+`bank_movement: refund`, `currency: USD`, `original_amount: 35.12` and
+`exchange_rate: 3.8`. The ILS amount is **not** `35.12 × 3.8`. The API never
+recalculates ILS, infers fees or requires this product to equal the billed amount.
+Omitting `exchange_rate` leaves the stored rate null, not an inferred number.
+Wrap the exact same object in `items` for Bulk; JSON numeric fields do not become
+strings. Refund eligibility uses explicit evidence and an active payment source,
+not a bank-account-only restriction. Income policy and CSV rules are unchanged.
+
+Missing original FX evidence yields a held observation (`original_amount_required`)
+without new cash, and owner separate-post approval cannot bypass that omission.
+Exact same-key replay retains the recorded decision and original evidence; changed
+content conflicts. Historical holds are not automatically reprocessed by deploying
+this change. Do not change `external_id` or alter frozen content to bypass a hold.
+
+An authenticated owner can explicitly link an eligible existing FX transaction
+through the existing reconciliation review endpoint. An accounting-only ILS
+observation need not contain the original FX fields. If original currency, amount
+or rate is supplied, conflicting evidence stays in review. A link writes provenance
+and its audit event only: the transaction's amount, currency, original amount,
+rate, description, notes, transaction date and charge date remain unchanged.
+Billing-date correction is a separate operation requiring a fresh review afterward.
+Automatic FX matching and generic FX cancellation remain protected. See the
+[migration, verification and 13-transaction follow-up plan](../operations/FX_INGESTION_OWNER_LINKS.md).
+
 **Exactly the existing v1 fields:** `type`, `amount`, `date`, `description`,
 `charge_date`, `category_id`, `payment_source_id`, `payment_source_name`,
 `currency`, `original_amount`, `exchange_rate`, `notes`, `tags`, `external_id`,

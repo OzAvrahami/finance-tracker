@@ -1,5 +1,12 @@
 # Issue #99 - Package 1: ingestion and reconciliation
 
+**FX follow-up (2026-11-15):** [FX ingestion and explicit owner links](../operations/FX_INGESTION_OWNER_LINKS.md)
+adds forward migration 064 after the deployed 059 function boundary. It permits
+eligible owner-confirmed FX links and Single/Bulk FX refunds. Explicit links no
+longer request CAL charge-date enrichment; billing corrections are separate owner
+operations. The 058/059 records below remain historical evidence. This follow-up
+is local and does not complete #99 or authorize production data correction.
+
 **Final local acceptance complete (2026-11-08):** owner-reported frontend checks
 and the remaining authenticated stale-decision check passed. **Production cutover
 remains NO-GO.** This package does **not** complete #99, change a release version,

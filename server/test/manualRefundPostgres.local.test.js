@@ -26,7 +26,8 @@ test('manual owner refunds: real authenticated saves, reloads, evidence, guards 
     env.sql(migration);
     assert.equal(env.sql('SELECT count(*) FROM transactions;'),before);
     assert.equal(grants(),oldGrants);
-    assert.ok(fs.readFileSync(path.join(__dirname,'../full_schema.sql'),'utf8').endsWith(migration));
+    const schema059 = fs.readFileSync(path.join(__dirname,'../full_schema.sql'),'utf8').split('-- Migration 064:')[0].trimEnd();
+    assert.ok(schema059.endsWith(migration.trimEnd()));
     const db = createClient(env.url,env.service);
     const read = async id => { const r=await env.api(`/transactions/${id}`); assert.equal(r.status,200,JSON.stringify(r)); return r.body; };
     const check = async id => {

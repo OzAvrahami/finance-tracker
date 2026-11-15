@@ -48,7 +48,8 @@ function external(facts, scope) {
   // Income is independent and retains the bank-account-only policy.
   if (r.type !== 'refund' && ['bank_transfer', 'check'].includes(method)) hold ||= 'bank_event_semantics_required';
   if (r.type === 'income' && method !== 'bank_account') hold ||= 'refund_semantics_required';
-  if (r.type === 'refund' && (r.currency || 'ILS') !== 'ILS') fail('refund_currency_unsupported');
+  // amount is the actual ILS credit/debit; original money and any provider
+  // rate are independent evidence, never a formula for the accounting amount.
   if (['income', 'refund'].includes(r.type) && r.external_id == null) hold ||= 'identity_evidence_required';
   if (r.installment_number != null) hold ||= 'installment_series_required';
   if ((r.currency || 'ILS') !== 'ILS' && r.original_amount == null) hold ||= 'original_amount_required';

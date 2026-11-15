@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '../../..');
 const pause = ms => new Promise(r => setTimeout(r, ms));
 
-async function start({ baseline = false, browser = false } = {}) {
+async function start({ baseline = false, browser = false, schemaBoundary = null, postgresImage = 'postgres:16-alpine' } = {}) {
   const prefix = `finance-refund-${process.pid}`;
   const containers = [], children = [], servers = [];
   const docker = (args, input, allow = false) => {
@@ -39,11 +39,13 @@ async function start({ baseline = false, browser = false } = {}) {
   };
   try {
     docker(['network', 'create', prefix]);
-    launch('db', 'postgres:16-alpine', { POSTGRES_PASSWORD: 'refund-test-only' });
+    launch('db', postgresImage, { POSTGRES_PASSWORD: 'refund-test-only' });
     for (let i = 0; i < 100; i++) { if (!docker(['exec', `${prefix}-db`, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status) break; await pause(200); }
     sql("CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE ROLE authenticator LOGIN PASSWORD 'refund-test-only' NOINHERIT; GRANT anon,authenticated,service_role TO authenticator; CREATE ROLE supabase_auth_admin LOGIN SUPERUSER PASSWORD 'refund-test-only'; CREATE SCHEMA auth AUTHORIZATION supabase_auth_admin;");
     const schema = fs.readFileSync(path.join(root, 'server/full_schema.sql'), 'utf8');
-    sql(baseline ? schema.split('-- Migration 059:')[0] : schema);
+    const boundary = baseline ? '-- Migration 059:' : schemaBoundary;
+    if (boundary) assert.equal(schema.split(boundary).length, 2, 'Expected exactly one historical schema boundary');
+    sql(boundary ? schema.split(boundary)[0] : schema);
     sql("GRANT USAGE ON SCHEMA public TO service_role; GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role; GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role; INSERT INTO payment_sources(id,name,slug,method) VALUES(6,'Synthetic debit','refund-debit','debit_card'),(7,'Synthetic credit','refund-credit','credit_card'),(14,'Synthetic bank','refund-bank','bank_account'),(15,'Synthetic cash','refund-cash','cash'),(16,'Synthetic transfer','refund-transfer','bank_transfer'),(17,'Synthetic check','refund-check','check'); INSERT INTO categories(id,name,type) VALUES(100,'Synthetic expense','expense'),(101,'Synthetic income','income'),(102,'Synthetic other expense','expense');");
     const secret = 'disposable-refund-jwt-secret-at-least-32-characters';
     const token = role => {

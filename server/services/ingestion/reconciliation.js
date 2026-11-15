@@ -3,11 +3,37 @@ const { isDeepStrictEqual } = require('node:util');
 const { instantMicros, storedMinor } = require('./normalization');
 const { sameId } = require('./policy');
 const near = (a, b) => a != null && b != null && Math.abs(Date.parse(a) - Date.parse(b)) <= 86400000;
-const protectedCash = t => Boolean(t.loan_id || t.parent_transaction_id || Number(t.installment_count) > 1
+const protectedDomain = t => Boolean(t.loan_id || t.parent_transaction_id || Number(t.installment_count) > 1
   || t.installment_number != null || t.installments_info != null || /[1-9]/.test(String(t.global_discount || '0'))
-  || t.currency !== 'ILS' || /[1-9]/.test(String(t.original_amount || '0')) || /[1-9]/.test(String(t.exchange_rate || '0'))
   || t.links?.length || t.savings_role != null);
+// Automatic matching, enrichment and generic cancellation retain FX protection.
+const protectedCash = t => protectedDomain(t) || t.currency !== 'ILS'
+  || /[1-9]/.test(String(t.original_amount || '0')) || /[1-9]/.test(String(t.exchange_rate || '0'));
 const capturedCash = t => t.budget_facts?.some(f => f.operation_type === 'month_close' || ['carryover', 'unused_disposition'].includes(f.item_kind)) || false;
+
+// Compare decimal evidence without rounding NUMERIC strings through Number.
+const decimalEvidence = value => {
+  if (value == null || !/^\d+(?:\.\d+)?$/.test(String(value))) return null;
+  const [whole, fraction = ''] = String(value).split('.');
+  return `${whole.replace(/^0+(?=\d)/, '')}.${fraction.replace(/0+$/, '')}`;
+};
+const sameDecimal = (a, b) => decimalEvidence(a) != null && decimalEvidence(a) === decimalEvidence(b);
+function conflictingOriginalEvidence(o, t) {
+  const p = o.accepted_payload || {}, row = p._creation;
+  // Accounting-only observations say ILS even when the existing purchase is FX.
+  // Compare each supplied original-evidence representation; do not erase or fill
+  // absent fields, including a missing rate on either side.
+  if (p.original_amount != null || p.original_currency != null) {
+    if (p.original_currency !== t.currency || !sameDecimal(p.original_amount, t.original_amount)) return true;
+  }
+  if (row) {
+    if ((row.currency || 'ILS') !== 'ILS' || row.original_amount != null) {
+      if ((row.currency || 'ILS') !== t.currency || !sameDecimal(row.original_amount, t.original_amount)) return true;
+    }
+    if (row.exchange_rate != null && !sameDecimal(row.exchange_rate, t.exchange_rate)) return true;
+  }
+  return false;
+}
 
 function match(facts, draft) {
   if (facts.overflow) return { outcome: 'ambiguous', reason: draft.hold || 'candidate_overflow', target: null, candidate_ids: [] };
@@ -87,4 +113,4 @@ function enrichment(facts, observation, charge) {
   if (creator.charge_date_origin !== 'provisional_purchase_date') return { ok: t.charge_date === charge };
   return { ok: true, transaction_id: String(t.id), creator_id: String(creator.id), charge_date: charge };
 }
-module.exports = { near, protectedCash, capturedCash, match, enrichment };
+module.exports = { near, protectedDomain, protectedCash, capturedCash, conflictingOriginalEvidence, match, enrichment };

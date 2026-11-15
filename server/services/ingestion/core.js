@@ -3,7 +3,7 @@ const { isDeepStrictEqual } = require('node:util');
 const { randomUUID } = require('node:crypto');
 const { normalize, date, object, fail, storedMinor } = require('./normalization');
 const { prepare, external: prepareExternal, sameId, rejected, stripNulls, sourceFor } = require('./policy');
-const { match, enrichment, near, protectedCash, capturedCash } = require('./reconciliation');
+const { match, enrichment, near, protectedDomain, protectedCash, capturedCash, conflictingOriginalEvidence } = require('./reconciliation');
 const { fromMinorUnits } = require('../../utils/money');
 
 const heldReasons = new Set(['payment_source_not_found', 'payment_source_ambiguous', 'historical_identity_reserved',
@@ -20,6 +20,9 @@ const priorDraft = (facts, o) => ({ n: { input: o.accepted_payload, date: o.sour
   row: o.accepted_payload._creation, source: facts.sources.find(s => sameId(s.id, o.source_id)), payment: o.payment_source_id });
 const canPost = (facts, o) => {
   if (heldReasons.has(o.reason_code)) return 'evidence_correction_required';
+  // Required FX evidence must not become postable via a different review reason.
+  const row = o.accepted_payload._creation;
+  if (row && (row.currency || 'ILS') !== 'ILS' && row.original_amount == null) return 'evidence_correction_required';
   if (!o.amount_minor || BigInt(o.amount_minor) === 0n || !o.source_transaction_date) return 'incomplete_accounting_evidence';
   if (!facts.payments.some(p => sameId(p.id, o.payment_source_id) && p.is_active)) return 'payment_source_not_found';
   if (o.accepted_payload.category_id != null && !facts.categories.some(c => sameId(c.id, o.accepted_payload.category_id)
@@ -32,9 +35,10 @@ const canPost = (facts, o) => {
 };
 const returned = result => ({ action: 'return', result });
 const linkReason = (facts, o, t) => {
-  if (!t || t.voided_at != null || protectedCash(t) || capturedCash(t)) return 'protected_transaction';
+  if (!t || t.voided_at != null || protectedDomain(t) || capturedCash(t)) return 'protected_transaction';
   if (String(storedMinor(t.total_amount)) !== o.amount_minor || t.movement_type !== o.movement_type
     || !sameId(t.payment_source_id, o.payment_source_id) || !near(t.transaction_date, o.source_transaction_date)
+    || conflictingOriginalEvidence(o, t)
     || facts.observations.some(x => sameId(x.transaction_id, t.id) && sameId(x.source_id, o.source_id))) return 'review_target_conflict';
   return null;
 };
@@ -130,7 +134,9 @@ function decideCommand(facts, scope) {
     if (invalid === 'protected_transaction') return returned(rejected(invalid));
     if (invalid || t.cash_fingerprint !== c.expected_transaction_fingerprint) return conflict(o, 'review_target_conflict');
     return { action: 'link', observation_id: o.id, revision: o.decision_revision, target: t.id,
-      enrichment: source.source_kind === 'cal' ? enrichment(facts, { ...o, transaction_id: t.id }, o.charge_evidence) : null,
+      // Explicit linking attaches provenance only. Billing-date correction is a
+      // separate owner operation, including for CAL with newer date evidence.
+      enrichment: null,
       reason: 'owner_link', event_evidence: { reason: c.reason, previous_candidates: o.candidate_ids } };
   }
   if (scope.review && source.source_kind === 'manual') {
