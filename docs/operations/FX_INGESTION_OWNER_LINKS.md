@@ -1,5 +1,11 @@
 # FX ingestion and explicit owner reconciliation
 
+**Current checkpoint:** local migration-first compatibility correction based on
+owner commit `9e9222fb5db8448c7460d967ea53b8a037c85bec`. Migration 064 remains
+unapplied in production. The original candidate failed deployed-backend
+compatibility; the revised candidate and recovery have been verified locally
+as described below. No new commit or production action is performed here.
+
 Local #99 follow-up, 2026-11-15, based on `71c29ce0cfb149ba15fee7096ff38da7b9962dd7`.
 Implementation worktree: `D:\code\finance-tracker-fx-links`, branch
 `fix/fx-ingestion-owner-links`. The existing dirty ingestion worktree and main
@@ -57,8 +63,16 @@ of the existing private `ingestion_core_apply(jsonb,jsonb,jsonb)` function. It
 retains independent structural/linked-domain restrictions while removing the
 blanket FX restriction only for this operation. It binds the target and revision
 to the owner command, verifies candidate membership/fingerprints for UI reviews,
-and forbids link enrichment. It does not classify, search for matches, choose
-targets or implement FX comparison policy in SQL.
+and permits only the deployed CAL writer's exact legacy enrichment shapes on
+non-FX targets during a migration-first transition. New-backend owner links send
+null enrichment and preserve the complete target row. Legacy provisional-date
+writes still pass through the unchanged creator, charge-evidence, owner-override
+and history checks below the link branch; conflict flags retain review-required
+behavior. No-op/conflict shapes are exact boolean objects, and the write shape
+binds the selected target and permits only the four existing fields. Non-CAL or
+FX enrichment, malformed shapes and extra fields fail closed. This is command
+shape/integrity handling: PostgreSQL does not classify, search for matches,
+choose targets or implement FX comparison policy.
 
 The unchanged commit function locks cash and related facts, recomputes the
 snapshot token, and rejects stale facts before writing. Immutable request/amount
@@ -75,7 +89,85 @@ preserves ownership and ACLs. `apy_protected`, automatic matching persistence,
 cancellation and existing RLS/grants are not changed. The same suffix appears in
 `full_schema.sql`; historical migrations remain byte-for-byte unchanged.
 
-## Local verification
+## Migration-first compatibility correction (2026-11-15)
+
+The activation preflight correctly stopped before applying 064. Deployed
+`71c29ce0cfb149ba15fee7096ff38da7b9962dd7` supplies non-null enrichment on every
+CAL owner link. The original 064 candidate rejected even `{ok:true}`, so it was
+not backward compatible despite passing updated-backend tests. The read-only
+production ledger was checked again before editing: no 064 was recorded. The
+actual function still has baseline MD5 `2af72eb0230b4f51594f21f6f50bafae`, the
+expected guarded metadata and private postgres ownership/ACL. No applied
+migration was edited.
+
+The smallest correction changes only 064's explicit-link persistence validation
+and its identical `full_schema.sql` suffix. Existing JavaScript is unchanged.
+For a CAL observation and a target passing the original full `apy_protected`
+restriction, the writer accepts exactly:
+
+- `{ok:true}`: legacy no-op, including absent charge evidence or an already
+  matching non-provisional date; the financial row is unchanged.
+- `{ok:false}`: legacy enrichment conflict, including owner overrides or a
+  conflicting fixed date. The provenance link persists but remains under review
+  with `enrichment_conflict`; the financial row is unchanged.
+- `{ok:true, transaction_id, creator_id, charge_date}`: legacy provisional-date
+  enrichment. The target is bound to the command; creator and source date remain
+  subject to the unchanged downstream guards. Sticky owner edits, protected
+  domains/history, invalid creator/target and conflicting charge evidence reject
+  the whole command. The existing date update and audit event remain atomic.
+
+No SQL eligibility or matching policy was added. New-backend explicit links
+always supply null, so they cannot enter the legacy financial-update path.
+The migration's exact baseline/metadata guards, locks, command and target
+binding, observation/candidate/target freshness, source exclusivity and
+non-FX domain/history protections remain intact.
+
+| Backend | Database | Verified result on disposable PostgreSQL 17.11 |
+| --- | --- | --- |
+| Deployed `71c29ce` | Existing 059 ingestion boundary | All legacy forms succeed through authenticated owner HTTP; provisional-date behavior and conflict-review outcomes preserved |
+| Deployed `71c29ce` | Corrected 064 | Same legacy outcomes and exact replay; FX refunds/links still rejected by old JavaScript with no writes |
+| Updated `9e9222f` ingestion code | Corrected 064 | FX Single/Bulk refunds and explicit links pass; complete target rows, including charge date, remain unchanged |
+| Updated `9e9222f` ingestion code | Existing database | **Unsupported rollout order.** FX refunds can already persist and ILS null-enrichment links preserve rows, but FX links return HTTP 503 with no observation/event/financial mutation or false success |
+
+The new `ingestionFxCompatibilityPostgres.local.test.js` loads the deployed
+commit's actual core/policy/reconciliation source from Git and asserts pinned
+SHA-256 hashes before execution. HTTP adapters are verified unchanged against
+that revision; both the read projection and command implementation switch
+together. The test reproduces the original candidate failure by its committed
+checksum, then verifies the corrected transition, forged shapes/evidence,
+non-CAL/FX enrichment rejection, stale reviews, owner override, protected items,
+failure after provisional date update but before review-event persistence,
+permissions and function-only recovery. All data and credentials are synthetic.
+
+Verification: the compatibility suite passes **8 results** (seven subtests plus
+parent), and the existing focused FX DB/Auth/HTTP suite passes **9 results**,
+with zero failures/skips. The latter was rerun because the migration changed;
+it covers fresh/forward schema parity, guard drift, rollback, all protected
+domains, refunds/replay/conflicts, concurrent identities and full-row FX link
+preservation. Prior unchanged JavaScript/unit and UI evidence was retained;
+unrelated suites were not rerun. Logs are `%TEMP%/finance-fx-064-transition.log`
+and `%TEMP%/finance-fx-064-compatibility-final.log`.
+
+Corrected 064 SHA-256, UTF-8/LF:
+`de4276644a48c6b23852797f5c62dd3752be5736910e4a993b5bea6fc95e0217`.
+Expected post-064 normalized function-body MD5:
+`75f960211c4d27d102e0b05290e4ef6d`.
+The old candidate checksum `5e1a14e...` and its recovery postcondition are
+superseded; do not use the old artifact for this corrected candidate.
+
+Refreshed private recovery evidence is in
+`C:/Users/ozavr/AppData/Local/FinanceTracker/recovery/064-compatible-20261115-212412`.
+It retains the actual saved production definition/owner/ACL, corrected candidate,
+strictly guarded function-only restore SQL, checksums and successful PostgreSQL
+17 rehearsal. The restore guard accepts only the corrected body and saved
+metadata/owner/ACL, restores only that function, preserves financial/evidence
+rows, rejects repeated/unexpected recovery and restores old-backend behavior.
+Use a separately authorized forward recovery entry; never delete activation
+history or automatically undo financial rows. This is not a full backup/PITR
+claim. Hosted extension/image parity, live-provider and owner acceptance remain
+unverified. Production checks in this correction were read-only.
+
+## Earlier implementation/pre-commit verification (before compatibility correction)
 
 | Executed check | Result |
 | --- | --- |
@@ -142,7 +234,8 @@ hash-certified reruns. No unrelated suite was rerun. A normalized SHA-256 manife
 (UTF-8, CRLF converted to LF) for the current 14 task files is retained at
 `%TEMP%/finance-fx-precommit-sha256.json` for subsequent local comparisons.
 
-Reviewed persistence and runtime hashes for these focused results:
+Historical persistence and runtime hashes for those focused results (the
+unapplied migration/schema candidate is superseded by the correction below):
 
 | File | SHA-256 (LF-normalized) |
 | --- | --- |
@@ -194,7 +287,11 @@ its shared environment helper; `CHANGELOG.md`, the Single/Bulk contract,
 3. Apply **only new migration 064** using the existing owner-operated procedure,
    then deploy the matching backend. Do not rerun 058/059 or Shopping migrations.
    If the definition guard fails, investigate drift; do not weaken the guard.
-   Coordinate writers to avoid mismatched backend behavior during the transition.
+   The corrected 064 preserves deployed-backend CAL behavior during the interval.
+   Then deploy the matching backend for FX links and full target-row preservation.
+   Do not deploy the updated backend first: old persistence rejects FX links.
+   Reverify the corrected candidate checksum, fresh target baseline/ledger and
+   private recovery guards immediately before any separately authorized apply.
 4. Read back definitions/permissions and verify normal authenticated owner review
    and producer contract behavior. No new producer activation is implicit.
 5. Obtain owner acceptance. Production fixes to existing data require the separate
@@ -261,7 +358,7 @@ That confirmation does not authorize this implementation step to mutate real dat
 ## Release / Version gate
 
 - Release impact: **Yes** — supported FX refund intake and explicit reconciliation behavior change.
-- SemVer impact: **Minor** — backward-compatible FX refund capability and scoped owner-link correction; existing API shapes remain unchanged.
+- SemVer impact: **Patch** for this compatibility correction; the combined unreleased FX capability remains **Minor** relative to v2.0.0. Existing public API shapes remain unchanged.
 - Candidate release: **Pending (TBD)** — owner to coordinate the next candidate under #99 after review.
 - Grouping / included release candidate: **Pending (TBD)** — this FX follow-up is tracked with #99; remaining #99 packages are not implicitly included or completed.
 - CHANGELOG status: **Updated under Unreleased** — FX ingestion and explicit reconciliation (#99 follow-up).

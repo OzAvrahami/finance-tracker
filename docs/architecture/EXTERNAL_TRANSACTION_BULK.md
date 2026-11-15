@@ -83,6 +83,16 @@ Billing-date correction is a separate operation requiring a fresh review afterwa
 Automatic FX matching and generic FX cancellation remain protected. See the
 [migration, verification and 13-transaction follow-up plan](../operations/FX_INGESTION_OWNER_LINKS.md).
 
+Roll out the corrected **064 migration before the updated backend**. During that
+interval the deployed backend retains its existing CAL behavior: guarded
+provisional billing-date enrichment or an enrichment-conflict review result on
+eligible non-FX links. The complete target-row preservation contract above applies
+to the updated backend, whose explicit links always send null enrichment. Old
+backend FX refunds/links remain unsupported. Updated backend against the old
+database is also an unsupported rollout combination: FX refunds can post through
+existing persistence, but explicit FX links fail without a financial write or a
+success response. Do not deploy that combination or retry by changing identities.
+
 **Exactly the existing v1 fields:** `type`, `amount`, `date`, `description`,
 `charge_date`, `category_id`, `payment_source_id`, `payment_source_name`,
 `currency`, `original_amount`, `exchange_rate`, `notes`, `tags`, `external_id`,

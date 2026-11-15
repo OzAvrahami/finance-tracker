@@ -38,10 +38,24 @@ BEGIN
     OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(f->'transactions') x WHERE x->>'id'=target::text)
     OR (coalesce((p_scope->>'review')::boolean,false) AND
       (cmd->'expected_candidate_fingerprints' IS DISTINCT FROM public.apy_review_fingerprints(o.id)
-       OR NOT coalesce(cmd->'expected_candidate_fingerprints' ? target::text,false)))
-    OR nullif(enrichment,'null'::jsonb) IS NOT NULL THEN
+       OR NOT coalesce(cmd->'expected_candidate_fingerprints' ? target::text,false))) THEN
     RAISE EXCEPTION 'inconsistent_owner_link' USING ERRCODE='23514'; END IF;
    SELECT * INTO STRICT t FROM public.transactions WHERE id=target;
+   -- Migration-first compatibility: the deployed CAL writer emits either an
+   -- exact no-op/conflict result or the existing provisional-date write shape.
+   -- Only that legacy, non-FX path may carry enrichment. The unchanged writer
+   -- below still binds creator, target and charge evidence, checks sticky owner
+   -- overrides and history, and persists the enrichment/event atomically.
+   -- New owner links send null and never enter that financial-write path.
+   IF nullif(enrichment,'null'::jsonb) IS NOT NULL AND (
+    (SELECT source_kind FROM public.transaction_ingestion_sources WHERE id=o.source_id) IS DISTINCT FROM 'cal'
+    OR public.apy_protected(t.id)
+    OR NOT coalesce(enrichment IN ('{"ok":true}'::jsonb,'{"ok":false}'::jsonb)
+     OR (enrichment=jsonb_build_object('ok',true,'transaction_id',target::text,
+          'creator_id',enrichment->>'creator_id','charge_date',enrichment->>'charge_date')
+      AND enrichment->>'creator_id' ~ '^[1-9][0-9]*$'
+      AND enrichment->>'charge_date' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),false)) THEN
+    RAISE EXCEPTION 'inconsistent_owner_link_enrichment' USING ERRCODE='23514'; END IF;
    -- Preserve every non-FX protection from apy_protected. Do not change that
    -- function: automatic links, enrichment and cancellation still protect FX.
    IF t.voided_at IS NOT NULL OR public.apy_captured(t.id)
