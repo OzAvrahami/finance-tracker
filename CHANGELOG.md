@@ -18,6 +18,15 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- External single/Bulk ingestion (related #99): preserve actual foreign settlement
+  amounts/currencies in immutable request evidence using optional `charged_amount`,
+  `charged_currency` and `accounting_reference`. Require evidenced ILS reporting
+  money, retain missing-evidence review holds, and validate currency/precision and
+  settlement consistency in JavaScript. Existing request shapes and replay identities
+  remain unchanged; no schema migration or exchange-rate calculation is added.
+  Synthetic producer-to-consumer persistence and ILS reporting verified locally;
+  deployment and owner acceptance remain pending.
+
 - Classified bank-account credits through the existing single/Bulk API: migration 057 supports verified ordinary income and separate ILS refund credits. Refunds retain positive source evidence and post as explicitly marked contra-expenses, preserving net cash without inflating income or requiring a debit link. Preserve replay/conflict, historical reservations, review guards and legacy evidence fingerprints. Update refund display and coordinated producer release guidance. Local verification only; production migration, deployment and owner acceptance pending.
 
 - Bank account payment sources: add `bank_account` (חשבון בנק) in the existing payment-source settings, with bank/issuer, last four digits, owner and active status. Forward migration 055 extends the method constraint without changing existing source IDs or historical transactions. CSV bank-account observations remain held with `bank_event_semantics_required`; migration 056 below permits ordinary external expenses through existing reconciliation. No bank synchronization is enabled. Requires migration 054 and its unified backend. See [implementation and release prerequisites](docs/history/BANK_ACCOUNT_PAYMENT_SOURCES.md). Owner acceptance pending.

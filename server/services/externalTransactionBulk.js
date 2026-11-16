@@ -10,6 +10,7 @@ const BULK_FIELDS = new Set([
   'payment_source_id', 'payment_source_name', 'currency', 'original_amount',
   'exchange_rate', 'notes', 'tags', 'external_id', 'dry_run', 'status',
   'installment_number', 'installment_count', 'cal_contract',
+  'charged_amount', 'charged_currency', 'accounting_reference',
 ]);
 
 function validateEnvelope(body, rawBytes) {

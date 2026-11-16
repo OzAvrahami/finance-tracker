@@ -16,8 +16,9 @@ const DEFAULT_SERIES_MONTHS = 6;
  * array it summed was silently truncated at 1000 rows, so any period reaching
  * before 2026-04-09 was understated with no warning.
  *
- * The income/expense rule itself is unchanged: total_amount is stored
- * non-negative and movement_type carries the sign.
+ * total_amount is the ILS reporting value. Refunds are signed negative expenses,
+ * so they reduce expenses without inflating income. Original/settlement currency
+ * evidence must never be summed as ILS.
  */
 exports.getSummary = async (req, res) => {
   const { from, to } = req.query;

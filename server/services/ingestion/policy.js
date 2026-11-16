@@ -50,9 +50,12 @@ function external(facts, scope) {
   if (r.type === 'income' && method !== 'bank_account') hold ||= 'refund_semantics_required';
   // amount is the actual ILS credit/debit; original money and any provider
   // rate are independent evidence, never a formula for the accounting amount.
+  // An actual foreign settlement also needs separately evidenced ILS valuation.
+  if (r.charged_currency && r.charged_currency !== 'ILS' && !r.accounting_reference) hold ||= 'accounting_evidence_required';
   if (['income', 'refund'].includes(r.type) && r.external_id == null) hold ||= 'identity_evidence_required';
+  if (((r.currency || 'ILS') !== 'ILS' || r.charged_currency && r.charged_currency !== 'ILS')
+    && r.original_amount == null) hold ||= 'original_amount_required';
   if (r.installment_number != null) hold ||= 'installment_series_required';
-  if ((r.currency || 'ILS') !== 'ILS' && r.original_amount == null) hold ||= 'original_amount_required';
   if (facts.historical_reserved) hold ||= 'historical_identity_reserved';
   const row = stripNulls({ description: r.description, movement_type: kind, bank_movement: r.type === 'refund' ? 'refund' : null,
     // Keep the JSON numeric scale of the public request in immutable _creation.

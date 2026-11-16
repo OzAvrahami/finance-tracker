@@ -49,9 +49,33 @@ Forward migration 055 adds the distinct `bank_account` payment-source method wit
 
 ## Preserved public contract and limits
 
-The endpoint, API-key authentication, legacy single request and `{ "items": [...] }` Bulk shape remain. Bulk retains 1–50 items, per-item payment source, partial success, actionable indexed failures, existing optional fields, and its concise summary. `status: completed` remains a Bulk transport convenience; pending delivery does not post. No request field was added.
+The endpoint, API-key authentication, legacy single request and `{ "items": [...] }` Bulk shape remain. Bulk retains 1–50 items, per-item payment source, partial success, actionable indexed failures, existing optional fields, and its concise summary. `status: completed` remains a Bulk transport convenience; pending delivery does not post.
 
 `amount` remains the positive ILS accounting magnitude; `type` specifies expense, ordinary income or refund direction. `currency` and `original_amount` preserve the original-currency evidence under the established ledger convention; no exchange rate or fee is invented. Purchase `date` and `charge_date` stay separate. Unsupported precision is rejected, not rounded.
+
+The refund/FX correction adds optional `charged_amount` and `charged_currency` as
+a pair for actual settlement evidence. A foreign settlement also requires explicit
+original currency/amount and `accounting_reference`, a bounded reference to the
+independently evidenced ILS valuation supplied in `amount`. The producer must not
+substitute the foreign settlement amount for ILS. Missing valuation evidence stays
+held with `accounting_evidence_required`; generic separate approval cannot release
+it. Currency codes and currency-specific precision are validated in application
+code. Same-currency single-occurrence settlement/original values must agree.
+
+These fields persist unchanged in `transaction_source_observations.accepted_payload._request`
+and participate in its existing hash/replay contract. They do not add ledger columns
+or a migration. `transactions.total_amount` remains ILS, while ledger `currency` and
+`original_amount` retain purchase evidence. Refunds post a negative ILS expense with
+`bank_movement=refund`, even when original/settlement currency is foreign. Dashboard
+and monthly sums therefore net refunds against expenses without treating foreign
+amounts as ILS or increasing income. Income retains the bank-account-only policy.
+
+Deploy the matching consumer before producers send settlement fields. Existing
+payloads need no changes. Held/replayed observations and historical reservations
+are not reclassified. CAL's current mapper has no separate ILS valuation for a
+foreign settlement: the remaining product/data decision is the approved valuation
+source and effective date (and a rounding policy only if conversion is introduced).
+This change performs no rate lookup or conversion.
 
 The existing fields **do not cover every required economic distinction**:
 

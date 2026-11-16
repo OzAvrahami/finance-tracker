@@ -7,7 +7,7 @@ const { match, enrichment, near, protectedDomain, protectedCash, capturedCash, c
 const { fromMinorUnits } = require('../../utils/money');
 
 const heldReasons = new Set(['payment_source_not_found', 'payment_source_ambiguous', 'historical_identity_reserved',
-  'bank_event_semantics_required', 'refund_semantics_required', 'original_amount_required', 'identity_evidence_required']);
+  'bank_event_semantics_required', 'refund_semantics_required', 'original_amount_required', 'identity_evidence_required', 'accounting_evidence_required']);
 const posting = (draft, old = null) => {
   const p = draft.n.input;
   const row = draft.row || stripNulls({ description: p.merchant, movement_type: p.movement_type,
