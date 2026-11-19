@@ -6,31 +6,11 @@ Formal release tracking begins with **v0.9.0**, the first formally tracked Finan
 
 This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and will use semantic-version-style tracking for formal releases.
 
-> Publication readback (2026-11-14): [v1.8.0 is published and Latest](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.8.0), published on 2026-10-30. v2.0.0 is prepared locally and unpublished. Prepared/unpublished labels in older dated records describe their preparation checkpoint. [GitHub Releases](https://github.com/OzAvrahami/finance-tracker/releases) remains authoritative.
+> [v2.0.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.0.0) is the latest published release as of 2026-11-19. Earlier preparation checkpoints record the status at the time.
 
 ## [Unreleased]
 
-### Shopping receipt review (related #95)
-
-- Review receipt issues, planned items and receipt lines in three views. Search replacement lines by name, product code or row number, with suggestions first. Approved matches stay visible on the list and receipt, and undoing approval makes the line available again.
-- Saved drafts retain match approvals and exact line-total edits. Approval into shopping history checks the sum against the printed total when available. Financial checkout remains a separate action.
-
-### FX ingestion and explicit reconciliation (#99 follow-up)
-
-- Correct the unapplied 064 candidate for a migration-first rollout: accept only the deployed CAL writer's legacy no-op/conflict or guarded provisional-date enrichment forms on non-FX targets. Preserve its existing integrity checks and atomic behavior. Updated-backend owner links still send no enrichment and preserve the complete target row. PostgreSQL 17 compatibility/recovery verification is local; production activation remains pending.
-- Support foreign-currency refunds through the existing Single/Bulk API: a positive actual ILS credit posts as a negative expense with `bank_movement: refund`, preserving positive original money and an optional provider rate independently. No conversion, fee inference, historical recovery or JSON-number contract change. Missing required original evidence stays under review.
-- Allow an explicit owner-confirmed link to an otherwise eligible FX transaction without changing any financial row fields, including owner descriptions, notes and billing dates. Supplied original currency/amount/rate conflicts stay under review; accounting-only observations may link without replacing FX evidence. Automatic matching, generic cancellation, source exclusivity, stale-review and linked-domain/closed-budget protections remain. Requires forward migration **064** and the matching backend; production activation and owner acceptance are pending. See [contract and follow-up plan](docs/operations/FX_INGESTION_OWNER_LINKS.md). This does not complete #99 or authorize changes to the 13 reviewed real transactions.
-
 ### Added
-
-- External single/Bulk ingestion (related #99): preserve actual foreign settlement
-  amounts/currencies in immutable request evidence using optional `charged_amount`,
-  `charged_currency` and `accounting_reference`. Require evidenced ILS reporting
-  money, retain missing-evidence review holds, and validate currency/precision and
-  settlement consistency in JavaScript. Existing request shapes and replay identities
-  remain unchanged; no schema migration or exchange-rate calculation is added.
-  Synthetic producer-to-consumer persistence and ILS reporting verified locally;
-  deployment and owner acceptance remain pending.
 
 - Classified bank-account credits through the existing single/Bulk API: migration 057 supports verified ordinary income and separate ILS refund credits. Refunds retain positive source evidence and post as explicitly marked contra-expenses, preserving net cash without inflating income or requiring a debit link. Preserve replay/conflict, historical reservations, review guards and legacy evidence fingerprints. Update refund display and coordinated producer release guidance. Local verification only; production migration, deployment and owner acceptance pending.
 
@@ -56,7 +36,25 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
 
-## [2.0.0] - Prepared (unpublished)
+## [2.1.0] - Prepared (unpublished)
+
+Prepared on 2026-11-19 against v2.0.0. The implementation scope is [Shopping receipt review (#95, PR #104)](https://github.com/OzAvrahami/finance-tracker/pull/104) and the FX changes from `9e9222f`, `ba3d6ac` and `53699f7` in [#99](https://github.com/OzAvrahami/finance-tracker/issues/99).
+
+### Added
+
+- Review Shopping receipts in three views: issues, planned items and receipt lines. Find replacement lines by name, product code or row number, with suggestions first. Approved matches stay visible in both item and receipt views. Undoing approval makes the line available for replacement again.
+- Receipt drafts retain match approvals and exact line-total edits. Approval into shopping history checks the sum against the printed total when available. Financial checkout remains a separate action.
+- Single and Bulk ingestion support FX refunds. The actual ILS credit posts as a negative expense, preserving the original foreign amount, currency and optional provider rate. Owners can explicitly link eligible FX transactions to source observations while preserving the transaction and its billing date. Conflicting currency evidence stays under review.
+- The external API accepts optional `charged_amount`, `charged_currency` and `accounting_reference` settlement evidence. It validates currency and precision, and holds foreign settlements for review when ILS reporting evidence is missing. Existing replay and conflict rules apply.
+
+### Compatibility and verification
+
+- Corrected migration 064 preserves existing CAL owner-link commands during the backend transition. It has already been applied in production and must not be rerun for this release. Receipt review and settlement validation require no additional migration.
+- Automated checks cover receipt replacement, draft reload, purchase approval and checkout separation. Owner visual review of the Osher Ad receipt, live-provider OCR and owner acceptance of the FX changes remain pending. Broader #99 work remains open.
+
+## [2.0.0] - 2026-11-14
+
+[Published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.0.0). The following notes describe its preparation checkpoint.
 
 Prepared on 2026-11-14 from production-activation checkpoint `a8691382e98704ed470f678f7f8181234c06fa74`. Published baseline: v1.8.0. Candidate scope is #102 plus the integrated #99 manual-refund entry correction; other Unreleased entries retain their existing scope and acceptance status. All seven application-version fields are synchronized to 2.0.0 locally. This preparation is not a commit, deployment, tag or publication. See [release notes, verification and publication prerequisites](docs/history/RELEASE_2_0_0.md).
 

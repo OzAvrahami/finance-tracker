@@ -8,18 +8,15 @@ SwiftUI FlowLink companion in the same repository.
 **Start with the [documentation index](docs/README.md)** for setup, architecture,
 database guidance, operator instructions and historical evidence.
 
-[v1.8.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v1.8.0).
-[v2.0.0 is prepared locally and unpublished](docs/history/RELEASE_2_0_0.md).
-All seven application-version fields read 2.0.0. The candidate covers #102 Shopping
-hierarchy, catalog administration and JavaScript workflows, plus the integrated #99
-manual-refund entry correction. Other Unreleased work retains its existing status.
-Shopping production activation was verified on 2026-11-14; final owner production
-acceptance remains pending. This version preparation does not redeploy that code.
-The owner waived a pre-migration backup; hosted recovery remains unverified.
-Real-provider/OCR flows and irreversible financial transactions were not production
-smoke-tested. See the release notes for evidence and coordinated upgrade requirements.
-This privately controlled application is not a tenant-isolated SaaS product; v2.0.0
-does not introduce multi-user isolation. FlowLink version/build numbers are independent.
+[v2.0.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.0.0).
+[v2.1.0 is prepared locally and unpublished](CHANGELOG.md#210---prepared-unpublished).
+It includes Shopping receipt review (#95, PR #104), FX refunds, explicit owner links
+and settlement validation (#99). Manual review of the Osher Ad receipt, live-provider
+OCR and owner acceptance of the FX changes remain pending.
+
+The application is privately controlled and does not provide multi-user tenant isolation.
+The [v2.0.0 preparation record](docs/history/RELEASE_2_0_0.md) documents the Shopping
+upgrade and its waived verified-backup limitation. FlowLink version/build numbers are independent.
 
 ## Local development
 
