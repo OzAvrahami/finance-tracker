@@ -57,7 +57,7 @@ it("weighted totals round exactly at the existing sum boundary and discrepancy n
       ],
       "0.01",
     ),
-  ).toEqual({ total: "0.01", discrepancy: null });
+  ).toEqual({ total: "0.01", difference: "0.00", discrepancy: null });
   expect(
     receiptTotals([{ quantity: "2", price: "9.00" }], "22.00").discrepancy,
   ).toContain("−₪4.00");

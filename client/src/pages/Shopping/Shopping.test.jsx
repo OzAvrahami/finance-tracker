@@ -358,7 +358,7 @@ describe('Shopping in-page detail and item lifecycle', () => {
 
   it('shows compact entry before the checklist, with receipt review as a separate secondary action',async()=>{
     await openList();
-    expect(screen.getByRole('button',{name:'קבלות'})).toBeInTheDocument();
+    expect(screen.getByRole('link',{name:'קבלות'})).toHaveAttribute('href','/shopping/1/receipt');
     expect(screen.queryByRole('radio',{name:'פריט חופשי'})).not.toBeInTheDocument();
     const input=screen.getByRole('combobox',{name:'מה צריך לקנות?'});
     await userEvent.click(screen.getByRole('button',{name:'הוספת פריט'}));expect(input).toHaveFocus();

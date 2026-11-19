@@ -29,7 +29,7 @@ export function receiptReplacementOptions(rows, item, query) {
   return { suggested, available };
 }
 
-export function changeReceiptLink(rows, plan, index, planId, listId) {
+export function changeReceiptLink(rows, plan, index, planId, listId, keepMatches = false) {
   const chosen = rows[index];
   const target = plan.find(item => String(item.list_item_id) === String(planId));
   if (!chosen || chosen.review_link?.confirmed || (planId != null && !target)) return rows;
@@ -37,7 +37,7 @@ export function changeReceiptLink(rows, plan, index, planId, listId) {
   const link = id => ({ list_id: String(listId), list_item_id: id, confirmed: false });
   return rows.map((row, i) => {
     if (i === index) return { ...row, review_link: link(target ? String(target.list_item_id) : null) };
-    if (target && receiptMatchesPlan(row, target)) return { ...row, review_link: link(null) };
+    if (!keepMatches && target && receiptMatchesPlan(row, target)) return { ...row, review_link: link(null) };
     return row;
   });
 }

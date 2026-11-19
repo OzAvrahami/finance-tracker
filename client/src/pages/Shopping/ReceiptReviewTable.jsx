@@ -110,7 +110,7 @@ export default function ReceiptReviewTable({
                         : <small>ללא שיוך</small>}
                       {row.review_link?.confirmed && <span className="receipt-link-confirmed">שיוך מאושר</span>}
                     </div>}
-                    {row.resolved_product&&!row.resolved_product.owner_approved&&!row.owner_edited_fields?.includes('name')&&<span className="receipt-name-proposal" title={row.resolved_product.full_name}>
+                    {!readOnly&&row.resolved_product&&!row.resolved_product.owner_approved&&!row.owner_edited_fields?.includes('name')&&<span className="receipt-name-proposal" title={row.resolved_product.full_name}>
                       <span>{row.resolved_product.full_name}</span><button type="button" onClick={()=>onApproveName?.(i)}>אישור שם</button>
                     </span>}
                     {(row.overlap_uncertain ||
@@ -349,7 +349,7 @@ export default function ReceiptReviewTable({
           </p>
         )}
       </div>
-      {!readOnly && (
+      {!readOnly && onAdd && (
         <button type="button" className="receipt-add-row" onClick={onAdd}>
           + הוספת שורה
         </button>

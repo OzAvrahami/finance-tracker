@@ -38,6 +38,7 @@ import {
 import {
   checkoutShoppingList,
   getShoppingReceiptDuplicates,
+  getShoppingIntelligence,
   getCategories,
   getPaymentSources,
   getShoppingListById,
@@ -49,9 +50,23 @@ import {
 import { SHOPPING_STATUS } from './shoppingConstants';
 import ShoppingListDialog from './ShoppingListDialog';
 import ShoppingIntelligence from './ShoppingIntelligence';
-import ShoppingReceiptDialog from './ShoppingReceiptDialog';
 import { safeShoppingLink } from './shoppingListFields';
 import { formatCalendarDate } from '../../utils/calendarDate';
+
+function ReceiptEntry({ listId }) {
+  const [receipt, setReceipt] = useState(null);
+  useEffect(() => {
+    let active = true;
+    getShoppingIntelligence(listId).then(({ data }) => {
+      if (active) setReceipt(data.receipt);
+    }).catch(() => { /* The page retries loading the receipt when opened. */ });
+    return () => { active = false; };
+  }, [listId]);
+  return <div className="shopping-receipt-summary--compact">
+    {receipt?.state === 'review' && <p>הסריקה מוכנה לבדיקה</p>}
+    <a className="rr-entry" href={`/shopping/${listId}/receipt`}>{receipt?.extracted ? 'בדיקת קבלה' : 'קבלות'}</a>
+  </div>;
+}
 
 const calculateStats = (items = []) => {
   const purchasedItems = items.filter((item) => item.is_purchased);
@@ -561,7 +576,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
               <span className={`shopping-badge shopping-status ${status.className}`}>{status.label}</span>
             </div>
           </div>
-          <ShoppingReceiptDialog key={list.id} list={list} compact onChanged={() => fetchList({ showLoading: false })} />
+          <ReceiptEntry key={list.id} listId={list.id} />
           {isEditable && (
             <div className="shopping-detail-primary-action">
               <div className="shopping-mobile-action-total">
