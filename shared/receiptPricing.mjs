@@ -24,6 +24,13 @@ export function projectPrice(input) {
 export function priceBreakdown(input) {
   const r=projectPrice(input),q=scaled(String(r.quantity??''),3),net=scaled(String(r.price??''),2);
   if(q===null || q<=0n) return {row:r,units:null,final:null,net_unit_price:r.price??null,conflict:false};
+  if (Object.hasOwn(r, 'reviewed_line_total')) {
+    const total=scaled(r.reviewed_line_total,2);
+    const printed=scaled(r.raw_price.gross_total,2), discount=scaled(r.raw_price.discount,2);
+    return {row:r,units:total===null?null:total*1000n,final:total===null?null:moneyText(total),
+      net_unit_price:total===null?null:divideUnit(total,q),conflict:false,
+      source_mismatch:total!==null&&printed!==null&&discount!==null&&total!==printed-discount};
+  }
   if(r.price_basis!=='line_discount') {
     const gross=scaled(r.printed_gross_total,2),discount=scaled(r.row_discount,2);
     const mismatch=net!==null && gross!==null && discount!==null && (q*net+500n)/1000n!==gross-discount;
@@ -43,8 +50,12 @@ export function editPrice(input,key,value) {
   const row=projectPrice(input);
   row[key]=value===''?null:value;
   row.owner_edited_fields=[...new Set([...(row.owner_edited_fields??[]),key])];
+  if (['price','original_unit_price','row_discount'].includes(key)) delete row.reviewed_line_total;
   if(['original_unit_price','row_discount'].includes(key)) row.price_basis='line_discount';
   if(key==='price') row.price_basis='legacy_net'; // explicit net correction wins; no second subtraction
-  if(row.price_basis==='line_discount') row.price=priceBreakdown(row).net_unit_price;
+  if(row.price_basis==='line_discount'||Object.hasOwn(row,'reviewed_line_total')) row.price=priceBreakdown(row).net_unit_price;
   return row;
 }
+
+export const receiptSum = rows =>
+  (rows.reduce((sum,row)=>sum+(priceBreakdown(row).units??0n),0n)+500n)/1000n;

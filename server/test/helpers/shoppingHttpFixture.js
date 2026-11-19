@@ -12,7 +12,11 @@ async function createShoppingHttpFixture() {
   const env=await createIsolatedDatabase();let server;
   try {
     const sql=text=>env.sql(text).stdout.trim(),read=file=>fs.readFileSync(path.join(__dirname,'../..',file),'utf8');
-    sql(read('full_schema.sql'));
+    // This upgrade fixture installs the hash-pinned 059 baseline immediately below.
+    const schema = read('full_schema.sql');
+    const start059 = schema.indexOf('-- Migration 059: manual owner refunds');
+    assert.ok(start059 > 0, 'Expected the pre-059 schema boundary');
+    sql(schema.slice(0, start059));
     const baseline=fs.readFileSync(process.env.SHOPPING_059_BASELINE,'utf8');
     assert.equal(createHash('sha256').update(baseline).digest('hex'),'600d47c9eafd0bc069a7aecef2f83f58632c5035dcb885e738967cb94b1bc257');
     sql(baseline);

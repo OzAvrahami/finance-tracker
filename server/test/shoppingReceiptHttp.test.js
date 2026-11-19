@@ -483,3 +483,34 @@ test("saved unconfirmed GET projects equivalent units without mutating raw or co
   assert.equal(confirmed.reconciliation.items[0].name, "Owner value");
   assert.equal(confirmed.receipt.extracted.items[0].price, null);
 });
+
+test('review links and exact line totals cross the draft and confirmation HTTP boundary', async t => {
+  const item = { list_item_id:'17', catalog_item_id:null, quantity:'0.333', unit:'kg', name:'Weighted' };
+  const identity = { merchant:'Market', receipt_number:null, purchase_date:null };
+  const context = { token:'a'.repeat(32), store:'Market', plan:[item], current_items:[item],
+    receipt:{ state:'review', extracted:{ identity, receipt_total:'5.37' } } };
+  const {url,calls} = await app(t, null, { contextRpc:true, rpc:async (name,args) => {
+    if(name==='shopping_receipt_context') return {data:context};
+    if(name==='shopping_save_receipt_draft') return {data:{revision:1}};
+    if(name==='shopping_receipt_command'&&args.p_action==='confirm') return {data:{state:'confirmed'}};
+    assert.fail('Unexpected write');
+  } });
+  const row = { name:'Weighted', quantity:'0.333', unit:'kg', price:null, catalog_item_id:null, row_id:'line-1',
+    reviewed_line_total:'5.37', review_link:{list_id:'1',list_item_id:'17',confirmed:true} };
+  const draft = { items:[row], identity, purchase_date:'2026-09-30' };
+  const putDraft = items => fetch(url+'/lists/1/receipt/draft',{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({attempt:1,revision:0,draft:{...draft,items}})});
+  assert.equal((await putDraft([row])).status,200);
+  assert.deepEqual(calls.find(call=>call.name==='shopping_save_receipt_draft').args.p_draft,draft);
+  assert.equal((await putDraft([{...row,review_link:{...row.review_link,list_item_id:'999'}}])).status,409);
+
+  const body={...draft,context_token:context.token,reviewed:true,extraction_attempt:1,draft_revision:1};
+  const mismatch=await post(url+'/lists/1/receipt/confirm',{...body,items:[{...row,reviewed_line_total:'5.36'}]});
+  assert.equal(mismatch.status,409);
+  assert.equal((await mismatch.json()).error,'receipt_total_mismatch');
+  assert.equal((await post(url+'/lists/1/receipt/confirm',body)).status,200);
+  const confirmations=calls.filter(call=>call.args.p_action==='confirm');
+  assert.equal(confirmations.length,1);
+  assert.equal(confirmations[0].args.p_data.items[0].final_total,'5.37');
+  assert.deepEqual(confirmations[0].args.p_data._fulfilled,['17']);
+});

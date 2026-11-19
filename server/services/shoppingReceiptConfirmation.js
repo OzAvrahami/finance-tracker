@@ -1,20 +1,26 @@
 const { identifier } = require('./shoppingProductIdentifiers');
 const { findCommercial, snapshot, validateMappingSnapshots } = require('./shoppingCommercialProducts');
 const { unitCode } = require('../../shared/shoppingQuantities.mjs');
-const { allocateReceipt, receiptPlanningQuantity } = require('../../shared/shoppingReceiptMatching.mjs');
+const { allocateReceipt, receiptPlanningQuantity, receiptMatchesPlan } = require('../../shared/shoppingReceiptMatching.mjs');
 const { merchantReview, merchantKey } = require('../../shared/shoppingMerchant.mjs');
-async function prepareConfirmation(base, context, db, owner) {
+const { validateReviewLinks } = require('./shoppingReceiptReview');
+const { scaled, receiptSum } = require('../../shared/receiptPricing.mjs');
+async function prepareConfirmation(base, context, db, owner, listId) {
   if (base.context_token !== context.token) throw Error('receipt_stale');
   const receipt = context.receipt;
   const review = merchantReview(context.store, base.identity ?? receipt.extracted?.identity,
     receipt.extracted?.identity_evidence?.merchant ?? [], context.token);
   if (review.state !== 'matched' && base.merchant_acknowledgment !== review.acknowledgment) throw Error('receipt_merchant_review_required');
   if (receipt.extracted?.identity_conflict && !base.identity_conflict_reviewed) throw Error('receipt_identity_review_required');
-  let items = await validateMappingSnapshots(base.items, db);
   const planned = context.plan ?? [];
+  const printed = scaled(String(receipt.extracted?.receipt_total ?? ''), 2);
+  if (printed !== null && receiptSum(base.items) !== printed) throw Error('receipt_total_mismatch');
+  let items = await validateMappingSnapshots(base.items, db);
+  validateReviewLinks(items, planned, listId);
   items = await Promise.all(items.map(async row => {
     if (row.mapping_snapshot || !row.catalog_item_id) return row;
-    const target = planned.find(p => String(p.catalog_item_id) === String(row.catalog_item_id));
+    const target = planned.find(p => String(p.catalog_item_id) === String(row.catalog_item_id) &&
+      (!row.review_link || receiptMatchesPlan(row,p)));
     const code = row.lookup_code ?? row.product_code;
     const kind = row.identifier_kind ?? (identifier(code,'gtin','') ? 'gtin' : /^\d{3,7}$/.test(code??'') ? 'retailer' : null);
     if (!kind) return row; // An unreadable/invalid GTIN is not automatically a retailer SKU.
