@@ -4,29 +4,39 @@ import {projectPrice,priceBreakdown} from '../../../../shared/receiptPricing.mjs
 
 import { rowTotal } from "./receiptReviewMoney";
 import {mappedQuantity} from '../../../../shared/shoppingQuantities.mjs';
-import {allocateReceipt} from '../../../../shared/shoppingReceiptMatching.mjs';
-const targetField = (field) =>
-  ["discount", "line_total"].includes(field) ? "price" : field;
-const unresolved = (row) =>
-  (row.field_conflicts ?? []).filter(
-    (c) => !row.owner_edited_fields?.includes(targetField(c.field)) &&
-      !(c.field==='discount' && row.owner_edited_fields?.includes('row_discount')) &&
-      !(['price','line_total'].includes(c.field) && row.owner_edited_fields?.includes('original_unit_price')),
-  );
-const comparison = (row, plan, rows) => {
-  const p = allocateReceipt(plan,rows).find(
-    (item) =>
-      row.catalog_item_id ? String(item.catalog_item_id) === String(row.catalog_item_id)
-        : row.planned_item_id && String(item.list_item_id) === String(row.planned_item_id),
-  );
+import {allocateReceipt, receiptMatchesPlan} from '../../../../shared/shoppingReceiptMatching.mjs';
+import { receiptRowConflicts } from './receiptReviewLinks';
+
+const comparison = (row, fulfillment) => {
+  const p = fulfillment.find(item => receiptMatchesPlan(row, item));
   if (!p) return "נוסף לתוכנית";
   return p.unresolved ? `תוכנן: ${p.quantity} ${p.unit} · התאמה או המרה חסרה`
     : `בתוכנית: ${p.purchased_quantity} מתוך ${p.quantity} ${p.unit}`;
 };
+
+function PlanLink({ row, index, plan, rows, onLink }) {
+  const matches = plan.filter(item => receiptMatchesPlan(row, item));
+  const current = matches.length === 1 && matches[0].list_item_id != null ? String(matches[0].list_item_id)
+    : matches.length ? 'catalog' : '';
+  return <label>פריט ברשימה<select aria-label={`פריט ברשימה ${index + 1}`} value={current}
+    onChange={event => onLink(index, event.target.value || null)}>
+    <option value="">ללא שיוך</option>
+    {current === 'catalog' && <option value="catalog" disabled>שיוך לפי קטלוג</option>}
+    {plan.filter(item => item.list_item_id != null).map(item => (
+      <option key={item.list_item_id} value={item.list_item_id}
+        disabled={rows.some(other => other.review_link?.confirmed && receiptMatchesPlan(other, item))}>
+        {item.name}
+      </option>
+    ))}
+  </select></label>;
+}
+
 export default function ReceiptReviewTable({
   mutationContext,
   rows,
+  indices,
   plan,
+  fulfillment = allocateReceipt(plan, rows),
   catalog,
   readOnly,
   onChange,
@@ -35,11 +45,17 @@ export default function ReceiptReviewTable({
   onResolved,
   onMapped,
   onApproveName,
+  onLinkRow,
+  onShowPlan,
+  rowPrefix,
+  initialExpanded = null,
   listTypeId,
   merchant,
 }) {
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded] = useState(initialExpanded);
   const toggle = (i) => setExpanded(expanded === i ? null : i);
+  const visibleIndices = indices ?? rows.map((_, index) => index);
+  const headings = ["מוצר", "כמות", "יחידה", "מחיר מקורי ליחידה", "הנחה לשורה", "מחיר לאחר הנחה ליחידה", "סה״כ", "פעולות"];
   const cell = (row, i, key, label, { numeric = false, step } = {}) => {
     const missing = !["original_unit_price","row_discount"].includes(key) && !(key==='price' && priceBreakdown(row).final!==null) && (row[key] == null || String(row[key]).trim() === "");
     return (
@@ -71,7 +87,7 @@ export default function ReceiptReviewTable({
         <table className="receipt-edit-table" dir="rtl">
           <thead>
             <tr>
-              {["מוצר", "כמות", "יחידה", "מחיר מקורי ליחידה", "הנחה לשורה", "מחיר לאחר הנחה ליחידה", "סה״כ", "פעולות"].map(
+              {headings.map(
                 (t) => (
                   <th scope="col" key={t} title={t === "הנחה לשורה" ? "ההנחה עבור כל השורה, לא ליחידה" : undefined}>
                     {t}
@@ -81,17 +97,25 @@ export default function ReceiptReviewTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map(projectPrice).map((row, i) => (
-              <Fragment key={row.row_id??i}>
-                <tr>
+            {visibleIndices.map(i => {
+              const row = projectPrice(rows[i]);
+              const linked = onShowPlan ? plan.filter(item => receiptMatchesPlan(row, item)) : [];
+              return <Fragment key={row.row_id??i}>
+                <tr id={rowPrefix ? `${rowPrefix}-${i}` : undefined} tabIndex={rowPrefix ? -1 : undefined}>
                   <td className="receipt-product-cell">
                     {cell(row, i, "name", "שם מוצר")}
+                    {onShowPlan && <div className="receipt-table-plan-link">
+                      {linked.length ? linked.map((item, index) => <button type="button"
+                        key={item.list_item_id ?? index} onClick={() => onShowPlan(item)}>{item.name}</button>)
+                        : <small>ללא שיוך</small>}
+                      {row.review_link?.confirmed && <span className="receipt-link-confirmed">שיוך מאושר</span>}
+                    </div>}
                     {row.resolved_product&&!row.resolved_product.owner_approved&&!row.owner_edited_fields?.includes('name')&&<span className="receipt-name-proposal" title={row.resolved_product.full_name}>
                       <span>{row.resolved_product.full_name}</span><button type="button" onClick={()=>onApproveName?.(i)}>אישור שם</button>
                     </span>}
                     {(row.overlap_uncertain ||
                       priceBreakdown(row).source_mismatch ||
-                      unresolved(row).length ||
+                      receiptRowConflicts(row).length ||
                       !row.catalog_item_id) && (
                       <button
                         className="receipt-row-marker"
@@ -108,29 +132,31 @@ export default function ReceiptReviewTable({
                         {row.overlap_uncertain
                           ? "חפיפה?"
                           : priceBreakdown(row).source_mismatch ? "פער מחיר"
-                          : unresolved(row).length
+                          : receiptRowConflicts(row).length
                             ? "סתירה"
                             : "התאמה"}
                       </button>
                     )}
                   </td>
-                  <td>
+                  <td data-label={headings[1]}>
                     {cell(row, i, "quantity", "כמות", {
                       numeric: true,
                       step: "0.001",
                     })}
                   </td>
-                  <td>{cell(row, i, "unit", "יחידה")}</td>
-                  <td>{cell(row,i,"original_unit_price","מחיר מקורי ליחידה",{numeric:true,step:"0.01"})}</td>
-                  <td>{cell(row,i,"row_discount","הנחה לכל השורה",{numeric:true,step:"0.01"})}</td>
-                  <td>
+                  <td data-label={headings[2]}>{cell(row, i, "unit", "יחידה")}</td>
+                  <td data-label={headings[3]}>{cell(row,i,"original_unit_price","מחיר מקורי ליחידה",{numeric:true,step:"0.01"})}</td>
+                  <td data-label={headings[4]}>{cell(row,i,"row_discount","הנחה לכל השורה",{numeric:true,step:"0.01"})}</td>
+                  <td data-label={headings[5]}>
                     {cell({...row,price:priceBreakdown(row).net_unit_price}, i, "price", "מחיר לאחר הנחה ליחידה", {
                       numeric: true,
                       step: "0.01",
                     })}
                   </td>
-                  <td className="receipt-line-total" dir="ltr">
+                  <td className="receipt-line-total" data-label={headings[6]}>
+                    <bdi dir="ltr">
                     {rowTotal(row)}
+                    </bdi>
                   </td>
                   <td className="receipt-row-actions">
                     <button
@@ -138,11 +164,11 @@ export default function ReceiptReviewTable({
                       onClick={() => toggle(i)}
                       aria-expanded={expanded === i}
                       aria-label={`פרטי שורה ${i + 1}`}
-                      title="פרטים"
+                      title={readOnly ? 'פרטי שורה' : 'עריכה ופרטי שורה'}
                     >
                       ⋯
                     </button>
-                    {!readOnly && (
+                    {!readOnly && !row.review_link?.confirmed && (
                       <button
                         type="button"
                         onClick={() => {
@@ -163,10 +189,18 @@ export default function ReceiptReviewTable({
                       <div className="receipt-row-detail-content">
                       <span>שורה {i+1}</span>
                       <bdi>{row.row_id}</bdi>
+                      {onLinkRow && !readOnly && !row.review_link?.confirmed && plan.some(item => item.list_item_id != null) &&
+                        <PlanLink row={row} index={i} plan={plan} rows={rows} onLink={onLinkRow}/>}
+                      {onLinkRow && !readOnly && <label>
+                        סה״כ לשורה אחרי הנחה
+                        {cell({ ...row, reviewed_line_total: Object.hasOwn(row, 'reviewed_line_total')
+                          ? row.reviewed_line_total : priceBreakdown(row).final }, i,
+                        'reviewed_line_total', 'סה״כ לשורה אחרי הנחה', { numeric: true, step: '0.01' })}
+                      </label>}
                       <ReceiptProductDetails row={row} index={i} merchant={merchant} listTypeId={listTypeId} readOnly={readOnly} catalog={catalog} mutationContext={mutationContext}
                         onChange={(key,value)=>onChange(i,key,value)} onResolved={product=>onResolved?.(row.row_id??i,product)} onMapped={product=>onMapped?.(row.row_id??i,product)}/>
                       {!!row.mapping_snapshot?.personal_item_id&&<span>{mappedQuantity(row)?`${mappedQuantity(row).quantity} ${mappedQuantity(row).unit} עבור ${row.mapping_snapshot.personal_name}`:'המרת הכמות לפריט האישי אינה ידועה; כמויות הקבלה נשמרות.'}</span>}
-                      {row.price_basis==='line_discount' && priceBreakdown(row).net_unit_price==null && priceBreakdown(row).final!=null && <span>מחיר נטו ליחידה אינו מדויק בשתי ספרות; סכום השורה מחושב מהברוטו פחות ההנחה.</span>}
+                      {!Object.hasOwn(row,'reviewed_line_total') && row.price_basis==='line_discount' && priceBreakdown(row).net_unit_price==null && priceBreakdown(row).final!=null && <span>מחיר נטו ליחידה אינו מדויק בשתי ספרות; סכום השורה מחושב מהברוטו פחות ההנחה.</span>}
                       {priceBreakdown(row).conflict && <span role="alert">ההנחה גדולה מסכום הברוטו; נדרש תיקון.</span>}
                       {priceBreakdown(row).source_mismatch && <span role="status">הכמות ומחיר הנטו שנבחרו אינם תואמים לברוטו פחות ההנחה המודפסת. התיקון שלך נשמר; בדקו את קריאות המקור.</span>}
                       {row.raw_price && <span>מקור מודפס — מחיר מקורי: {row.raw_price.original_unit_price??'לא ידוע'} · ברוטו: {row.raw_price.gross_total??'לא ידוע'} · הנחה: {row.raw_price.discount??'לא ידועה'}{row.raw_price.discount_percent!=null?` · ${row.raw_price.discount_percent}%`:''} {row.raw_price.promotion??''}</span>}
@@ -198,7 +232,7 @@ export default function ReceiptReviewTable({
                         </select>
                       </label>}
                       {!readOnly&&row.match_requires_review&&!row.mapping_snapshot&&<span>התאמה מוצעת — תישמר רק באישור הקבלה.</span>}
-                      <span>{comparison(row, plan, rows)}</span>
+                      <span>{comparison(row, fulfillment)}</span>
                       {!!row.possible_substitutions?.length && (
                         <span>
                           תחליף אפשרי: {row.possible_substitutions.join(", ")}
@@ -275,7 +309,8 @@ export default function ReceiptReviewTable({
                                   row_discount: "הנחה לשורה",
                                   unit: "יחידה",
                                   name: "שם מוצר",
-                                  catalog_item_id: "התאמה",
+                                  catalog_item_id: "התאמה לקטלוג",
+                                  reviewed_line_total: "סה״כ לשורה",
                                 })[f],
                             )
                             .join(", ")}
@@ -304,13 +339,13 @@ export default function ReceiptReviewTable({
                     </td>
                   </tr>
                 )}
-              </Fragment>
-            ))}
+              </Fragment>;
+            })}
           </tbody>
         </table>
-        {!rows.length && (
+        {!visibleIndices.length && (
           <p className="receipt-table-empty">
-            אין פריטים לבדיקה. הוסיפו תמונות לסריקה.
+            {rows.length ? 'אין שורות בתצוגה הזו.' : 'אין פריטים לבדיקה. הוסיפו תמונות לסריקה.'}
           </p>
         )}
       </div>

@@ -122,3 +122,33 @@ test('freeform plan matches without manufacturing a parallel catalog',()=>{
   assert.equal(rows[0].planned_item_id,'10');assert.equal(rows[0].catalog_item_id,null);assert.equal(allocateReceipt(custom,rows)[0].status,'partial');
 });
 module.exports={pdf};
+
+test('receipt review stores exact approved row links and line totals without changing legacy product mappings',async()=>{
+  const {confirmationItems,reviewProjection,validateReviewLinks}=require('../services/shoppingReceiptReview');
+  const lists=[
+    {list_item_id:'10',catalog_item_id:'1',name:'מיונז',quantity:'1',unit:'unit'},
+    {list_item_id:'11',catalog_item_id:'1',name:'מיונז',quantity:'1',unit:'unit'},
+  ];
+  const original={name:'מיונז',quantity:'1',unit:'unit',price:'10.90',catalog_item_id:'1'};
+  const detached={...original,review_link:{list_id:'7',list_item_id:null,confirmed:false}};
+  const assigned={...original,quantity:'0.987',unit:'ק״ג',reviewed_line_total:'7.89',
+    review_link:{list_id:'7',list_item_id:'11',confirmed:true}};
+  const combined=[detached,assigned];
+  validateReviewLinks(combined,lists,'7');
+  assert.throws(()=>validateReviewLinks([original,assigned],lists,'7'),/receipt_invalid/);
+  assert.throws(()=>validateReviewLinks(combined,lists,'8'),/receipt_invalid/);
+  assert.equal(suggestReceiptMatches([detached],lists)[0],detached);
+  assert.deepEqual(allocateReceipt(lists,combined).map(row=>row.status),['absent','unresolved']);
+  const weighted={...lists[1],quantity:'0.987',unit:'ק״ג'};
+  assert.equal(allocateReceipt([weighted],combined)[0].status,'full');
+  assert.deepEqual((await reviewProjection(combined,1,'8')).map(row=>row.review_link),[undefined,undefined]);
+
+  const [confirmedLine]=await confirmationItems([assigned]);
+  assert.equal(confirmedLine.final_total,'7.89');
+  assert.equal(confirmedLine.price_basis,'line_discount');
+  assert.equal(confirmedLine.price,null);
+  assert.equal(confirmedLine.catalog_item_id,'1');
+  const context={token:'t',store:identity.merchant,receipt:{extracted:{identity,receipt_total:'7.90'}},plan:[weighted],current_items:[weighted]};
+  const base={context_token:'t',identity,items:[confirmedLine]};
+  await assert.rejects(prepareConfirmation(base,context,{},'owner','7'),/receipt_total_mismatch/);
+});

@@ -41,7 +41,7 @@ function createWorkflowIntelligenceRouter({ commands, supabase, authorize, extra
     const duplicates = await supabase.rpc('shopping_receipt_duplicates', { p_list: req.params.id });if (duplicates.error) throw duplicates.error;
     let rows = null;
     if (receipt?.extracted) rows = receipt.state === 'confirmed' ? receipt.confirmed.items
-      : await enrichKnownProducts(await reviewProjection(receipt.review_draft?.items ?? receipt.extracted.items.map(normalizeReceiptRow), receipt.attempts), factsReader(facts));
+      : await enrichKnownProducts(await reviewProjection(receipt.review_draft?.items ?? receipt.extracted.items.map(normalizeReceiptRow), receipt.attempts, req.params.id), factsReader(facts));
     let etag = facts.etag;
     if (req.query.operation !== undefined) {
       requireRule(['regular.set', 'regular.remove', 'commercial.approve'].includes(req.query.operation), 'shopping_operation_invalid');

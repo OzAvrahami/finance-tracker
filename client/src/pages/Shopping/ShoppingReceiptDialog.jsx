@@ -1,7 +1,8 @@
 import ReceiptStoreReview from './ReceiptStoreReview';
-import ReceiptPlanComparison from './ReceiptPlanComparison';
+import ReceiptReviewWorkspace from './ReceiptReviewWorkspace';
+import { changeReceiptLink, confirmReceiptLink } from './receiptReviewLinks';
 import {merchantReview} from '../../../../shared/shoppingMerchant.mjs';
-import {allocateReceipt} from '../../../../shared/shoppingReceiptMatching.mjs';
+import {allocateReceipt, receiptMatchesPlan, receiptLinksForList} from '../../../../shared/shoppingReceiptMatching.mjs';
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -11,7 +12,6 @@ import {
   SecondaryButton,
   TextField,
 } from "../../components/ui";
-import ReceiptReviewTable from "./ReceiptReviewTable";
 import {productInput} from './receiptProductInput';
 import { receiptTotals } from "./receiptReviewMoney";
 import {editPrice,projectPrice,priceBreakdown} from '../../../../shared/receiptPricing.mjs';
@@ -32,6 +32,7 @@ const emptyIdentity = () => ({
 });
 const localDate = () => new Date().toLocaleDateString("en-CA");
 const messages = {
+  receipt_total_mismatch: 'סכום השורות אינו תואם לסכום המודפס בקבלה. בדקו את השורות לפני אישור להיסטוריה.',
   receipt_list_empty: 'הוסיפו לפחות פריט אחד לרשימת הקניות לפני העלאת קבלה. מוצרים בקטלוג בלבד אינם תוכנית קנייה.',
   receipt_file_invalid: 'בחרו JPEG, PNG או PDF תקין. פורמט זה אינו נתמך.',
   receipt_file_unreadable: 'פענוח הקובץ נכשל. ייצאו עותק תקין או הקטינו את הרזולוציה ונסו שוב.',
@@ -253,7 +254,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
     setRows((all) =>
       all.map((r, i) =>
         i === index
-          ? ['quantity','price','original_unit_price','row_discount'].includes(key)
+          ? ['quantity','price','original_unit_price','row_discount','reviewed_line_total'].includes(key)
             ? editPrice(r,key,value)
             : {...r,[key]:value,owner_edited_fields:[...new Set([...(r.owner_edited_fields??[]),key])],
               ...(key==='catalog_item_id'?{mapping_snapshot:null,planned_item_id:null}:{}),
@@ -263,6 +264,19 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
     );
     setReviewed(false);
     setDirty(true);
+  };
+  const editLinks = update => {
+    setRows(update);
+    setReviewed(false);
+    setDirty(true);
+  };
+  const linkRow = (index, planId) =>
+    editLinks(all => changeReceiptLink(all, data.plan ?? [], index, planId, activeListId));
+  const assignReceipt = (item, index) => {
+    if (index !== null) { linkRow(index, item.list_item_id); return; }
+    editLinks(all => all.map(row => !row.review_link?.confirmed && receiptMatchesPlan(row, item)
+      ? { ...row, review_link: { list_id: String(activeListId), list_item_id: null, confirmed: false } }
+      : row));
   };
   const resolveProduct = (index,product) => {
     setRows(all=>all.map((r,i)=>(typeof index==='string'?r.row_id!==index:i!==index)?r:{...r,original_name:r.original_name??r.name,
@@ -423,7 +437,10 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
     const timer=setInterval(()=>getShoppingReceiptProgress(activeListId).then(({data:p})=>{if(active)setProgress(p.progress);}).catch(()=>{}),1500);
     return ()=>{active=false;clearInterval(timer);};
   },[scanState,data?.receipt?.state,activeListId]);
+  const printedTotal = data?.receipt?.extracted?.receipt_total;
+  const { total, discrepancy } = receiptTotals(rows, printedTotal);
   const canConfirm =
+    !discrepancy &&
     (storeReview.state==='matched'||merchantAck===storeReview.acknowledgment) &&
     (!data?.receipt?.extracted?.identity_conflict||identityConflictReviewed) &&
     data?.receipt?.state === "review" &&
@@ -477,10 +494,6 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
       r.quantity == null ||
       r.quantity === "",
   );
-  const { total, discrepancy } = receiptTotals(
-    rows,
-    data?.receipt?.extracted?.receipt_total,
-  );
   return (
     <section className={`shopping-receipt-summary${compact ? ' shopping-receipt-summary--compact' : ''}`} dir="rtl" aria-label="קבלה">
       <div>
@@ -527,10 +540,10 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                       ? "סכום הקנייה השמורה"
                       : "סה״כ פריטים"}
                   : ₪{total}
-                  {!previousDraft && discrepancy && (
+                  {tab !== "review" && !previousDraft && discrepancy && (
                     <small className="receipt-discrepancy">{discrepancy}</small>
                   )}
-                  {incompleteTotal ? " · חלקי" : ""}
+                  {tab !== "review" && incompleteTotal ? " · חלקי" : ""}
                 </>
               )}
             </div>
@@ -796,11 +809,19 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                   onLists={()=>run(async()=>{const {data:lists}=await getShoppingLists();setTargetLists(lists.filter(l=>l.item_count>0&&['draft','active'].includes(l.status)&&String(l.id)!==String(activeListId)));})}
                   onStore={store=>run(async()=>{await saveDraft();await updateShoppingList(activeListId,{store},...(data._mutation_tokens ? [data] : []));const {data:next}=await getShoppingIntelligence(activeListId);setData(next);setMerchantAck('');await onChanged();})}
                   onMove={target=>run(async()=>{await saveDraft();const {data:latest}=await getShoppingIntelligence(activeListId);await moveShoppingReceipt(activeListId,{target_list_id:target,context_token:latest.context_token});setActiveListId(target);setTargetLists(null);setMerchantAck('');await onChanged();})}/>}
-                <ReceiptPlanComparison fulfillment={fulfillment}/>
-                <ReceiptReviewTable
+                <dl className="receipt-review-totals">
+                  <div><dt>סה״כ הטיוטה</dt><dd><bdi>₪{total}</bdi>{incompleteTotal && ' · חלקי'}</dd></div>
+                  <div><dt>סה״כ מודפס</dt><dd>{printedTotal == null ? '—' : <bdi>₪{printedTotal}</bdi>}</dd></div>
+                  {discrepancy && <div className="receipt-totals-gap"><dt>התאמת סכומים</dt><dd>{discrepancy}</dd></div>}
+                </dl>
+                <ReceiptReviewWorkspace
+                  key={`${activeListId}:${data.receipt?.attempts}`}
+                  fulfillment={fulfillment}
+                  onAssign={assignReceipt}
+                  onLinkRow={linkRow}
+                  onConfirmLink={(item, confirmed) => editLinks(all => confirmReceiptLink(all, item, confirmed, activeListId))}
                   mutationContext={data}
                   rows={rows}
-                  plan={data.plan ?? []}
                   catalog={data.catalog ?? []}
                   readOnly={data.receipt?.state === "confirmed"}
                   merchant={identity.merchant}
@@ -810,7 +831,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                   onApproveName={approveName}
                   onChange={change}
                   onRemove={(i) => {
-                    setRows(rows.filter((_, j) => j !== i));
+                    setRows(all => all.filter((row, j) => j !== i || row.review_link?.confirmed));
                     setReviewed(false);
                     setDirty(true);
                   }}
@@ -866,7 +887,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
         cancelLabel="ביטול"
         onConfirm={() => {
           const d = restoreDraft.review_draft;
-          setRows((d?.items ?? restoreDraft.extracted?.items ?? []).map(projectPrice));
+          setRows(receiptLinksForList(d?.items ?? restoreDraft.extracted?.items ?? [], activeListId).map(projectPrice));
           setIdentity(
             d?.identity ?? restoreDraft.extracted?.identity ?? emptyIdentity(),
           );

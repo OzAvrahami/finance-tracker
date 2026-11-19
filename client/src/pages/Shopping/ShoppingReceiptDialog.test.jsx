@@ -369,6 +369,10 @@ it("products lead the review and extracted date is autofilled without conflating
   fireEvent.click(screen.getByRole("button", { name: "פרטי קבלה" }));
   expect(screen.getByLabelText("תאריך מודפס בקבלה")).toHaveValue("2026-09-29");
   fireEvent.click(screen.getByLabelText(/בדקתי את השורות/));
+  expect(screen.getByRole("button", { name: "אישור להיסטוריה" })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', {name:'פרטי שורה 1'}));
+  fireEvent.change(screen.getByLabelText('סה״כ לשורה אחרי הנחה 1'), {target:{value:'12.00'}});
+  fireEvent.click(screen.getByLabelText(/בדקתי את השורות/));
   fireEvent.click(screen.getByRole("button", { name: "אישור להיסטוריה" }));
   await waitFor(() =>
     expect(api.confirmShoppingReceipt).toHaveBeenCalledWith(
@@ -490,4 +494,64 @@ it('receipt-wide lookup proposes names only; inline approval does not link or co
  expect(screen.getByLabelText('כמות 1')).toHaveValue(2);
  expect(screen.getByLabelText('מחיר לאחר הנחה ליחידה 1')).toHaveValue(5);
  expect(api.mapShoppingProduct).not.toHaveBeenCalled();expect(api.confirmShoppingReceipt).not.toHaveBeenCalled();
+});
+
+it('shows all unconfirmed replacement rows, preserves approved links in both views and saves the review draft', async () => {
+  const planned = [
+    {list_item_id:'20',catalog_item_id:'1',name:'מלפפון',quantity:'1',unit:'ק״ג'},
+    {list_item_id:'21',catalog_item_id:'2',name:'עגבנייה',quantity:'1',unit:'ק״ג'},
+  ];
+  const lines = [
+    {row_id:'r1',name:'מלפפון חמוץ',quantity:'1',unit:'יח׳',price:'8.00',catalog_item_id:'1'},
+    {row_id:'r2',name:'מלפפון טרי',quantity:'1',unit:'ק״ג',price:'5.90',product_code:'9000207',catalog_item_id:null},
+    {row_id:'r3',name:'זיהוי לא מלא',quantity:'1',unit:'ק״ג',price:'7.10',catalog_item_id:null,
+      suggested_personal_items:[{id:'2',name:'עגבנייה'}]},
+  ];
+  await open({...review,plan:planned,current_items:planned,reconciliation:{items:lines}});
+  fireEvent.click(screen.getByRole('button',{name:'פריטי הרשימה'}));
+  const cucumber = screen.getByText('מלפפון', {selector:'strong'}).closest('article');
+  const tomato = screen.getByText('עגבנייה', {selector:'strong'}).closest('article');
+  fireEvent.click(within(cucumber).getByRole('button',{name:'עריכה'}));
+  const replacement = within(cucumber).getByRole('combobox',{name:'שורה מחליפה'});
+  expect(within(replacement).getAllByRole('option')).toHaveLength(4);
+  expect(within(replacement).getByRole('option',{name:/זיהוי לא מלא/})).toBeInTheDocument();
+  expect(Array.from(replacement.querySelectorAll('optgroup'), group => group.label))
+    .toEqual(['התאמות מוצעות','שורות זמינות']);
+  const search = within(cucumber).getByLabelText('חיפוש שורת קבלה');
+  for (const [query, name] of [['חמוץ', 'מלפפון חמוץ'], ['9000207','מלפפון טרי'], ['3','זיהוי לא מלא']]) {
+    fireEvent.change(search, {target:{value:query}});
+    expect(Array.from(replacement.options).slice(1).map(option => option.textContent.trim().split(' · ')[0])).toEqual([name]);
+  }
+  fireEvent.change(search, {target:{value:''}});
+  fireEvent.change(replacement,{target:{value:'1'}});
+  fireEvent.click(within(cucumber).getByRole('button',{name:'שמירה בטיוטה'}));
+  expect(within(cucumber).queryByRole('button',{name:/מלפפון חמוץ/})).not.toBeInTheDocument();
+  fireEvent.click(within(cucumber).getByRole('button',{name:'אשר שיוך'}));
+  expect(within(cucumber).getByText('שיוך מאושר')).toBeInTheDocument();
+
+  fireEvent.click(within(tomato).getByRole('button',{name:'עריכה'}));
+  const tomatoOptions = within(tomato).getByRole('combobox',{name:'שורה לשיוך'});
+  expect(within(tomatoOptions).getAllByRole('option')).toHaveLength(3);
+  expect(tomatoOptions.options[1].textContent).toContain('זיהוי לא מלא');
+  expect(tomatoOptions.options[1].parentElement.label).toBe('התאמות מוצעות');
+  expect(within(tomatoOptions).queryByRole('option',{name:/מלפפון טרי/})).not.toBeInTheDocument();
+  fireEvent.change(within(tomato).getByLabelText('חיפוש שורת קבלה'),{target:{value:'9000207'}});
+  expect(within(tomatoOptions).getByRole('option',{name:'אין תוצאות בשורות הזמינות'})).toBeInTheDocument();
+  fireEvent.click(within(cucumber).getByRole('button',{name:/מלפפון טרי.*שורת קבלה 2/}));
+  expect(screen.getByLabelText('שם מוצר 2')).toHaveValue('מלפפון טרי');
+  expect(screen.getByText('שיוך מאושר')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'שמירת טיוטה'}));
+  await waitFor(() => expect(api.saveShoppingReceiptDraft).toHaveBeenCalledWith(1, expect.objectContaining({
+    draft: expect.objectContaining({ items: [
+      expect.objectContaining({ review_link:{list_id:'1',list_item_id:null,confirmed:false} }),
+      expect.objectContaining({ review_link:{list_id:'1',list_item_id:'20',confirmed:true} }),
+      expect.objectContaining({row_id:'r3'}),
+    ] }),
+  })));
+  expect(api.confirmShoppingReceipt).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'פריטי הרשימה'}));
+  fireEvent.click(screen.getByRole('button',{name:'בטל אישור'}));
+  const other = screen.getByText('עגבנייה', {selector:'strong'}).closest('article');
+  fireEvent.click(within(other).getByRole('button',{name:'עריכה'}));
+  expect(within(other).getByRole('option',{name:/מלפפון טרי/})).toBeInTheDocument();
 });

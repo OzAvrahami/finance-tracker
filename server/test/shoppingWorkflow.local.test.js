@@ -80,7 +80,15 @@ test('receipt upload/progress/frozen plan/confirmation and checkout preserve exa
   const receipt = await upload.json();assert.equal(upload.status, 200, JSON.stringify(receipt));assert.equal(receipt.state, 'review');assert.equal(extractionCalls, 1);
   const plan = f.sql(`SELECT items FROM shopping_purchase_plans WHERE list_id=${id}`);
   const context = await request('GET', `/lists/${id}/intelligence`);assert.equal(context.status, 200, JSON.stringify(context.body));
-  const body = { context_token: context.body.context_token, reviewed: true, extraction_attempt: 1, purchase_date: '2026-11-01', identity: receipt.extracted.identity, items: receiptRows };
+  const link = { list_id: String(id), list_item_id: String(context.body.plan[0].list_item_id), confirmed: true };
+  const draft = { items: [{ ...receiptRows[0], name: 'Reviewed purchase', review_link: link }], identity: receipt.extracted.identity, purchase_date: '2026-11-01' };
+  const saved = await request('PUT', `/lists/${id}/receipt/draft`, { attempt: 1, revision: 0, draft });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  const reopened = await request('GET', `/lists/${id}/intelligence`);
+  assert.equal(reopened.body.receipt.state, 'review');
+  assert.deepEqual(reopened.body.reconciliation.items[0].review_link, link);
+  assert.equal(reopened.body.reconciliation.items[0].name, 'Reviewed purchase');
+  const body = { ...draft, context_token: reopened.body.context_token, reviewed: true, extraction_attempt: 1, draft_revision: saved.body.revision };
   const before = f.sql('SELECT count(*) FROM transactions');
   const confirm = await request('POST', `/lists/${id}/receipt/confirm`, body);assert.equal(confirm.status, 200, JSON.stringify(confirm.body));assert.equal(confirm.body.state, 'confirmed');
   assert.equal(f.sql('SELECT count(*) FROM transactions'), before, 'confirmation cannot post cash');

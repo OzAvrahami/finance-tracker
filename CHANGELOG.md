@@ -10,6 +10,11 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Shopping receipt review (related #95)
+
+- Review receipt issues, planned items and receipt lines in three views. Search replacement lines by name, product code or row number, with suggestions first. Approved matches stay visible on the list and receipt, and undoing approval makes the line available again.
+- Saved drafts retain match approvals and exact line-total edits. Approval into shopping history checks the sum against the printed total when available. Financial checkout remains a separate action.
+
 ### FX ingestion and explicit reconciliation (#99 follow-up)
 
 - Correct the unapplied 064 candidate for a migration-first rollout: accept only the deployed CAL writer's legacy no-op/conflict or guarded provisional-date enrichment forms on non-FX targets. Preserve its existing integrity checks and atomic behavior. Updated-backend owner links still send no enrichment and preserve the complete target row. PostgreSQL 17 compatibility/recovery verification is local; production activation remains pending.

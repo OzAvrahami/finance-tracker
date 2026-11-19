@@ -1032,3 +1032,115 @@
   box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
   text-align: right;
 }
+
+.receipt-reconciliation { min-inline-size: 0; }
+.receipt-review-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: var(--ft-space-2);
+  margin: 0;
+}
+.receipt-review-totals > div, .receipt-plan-row, .receipt-link-editor {
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-md);
+  padding: var(--ft-space-3);
+}
+.receipt-review-totals dt, .receipt-view-count, .receipt-plan-row p, .receipt-plan-match small {
+  font-size: 12px;
+  color: var(--ft-text-muted);
+}
+.receipt-review-totals dd { margin: 0; font-weight: 600; }
+.receipt-totals-gap { background: var(--ft-bg-secondary); }
+.receipt-list-controls { display: flex; align-items: end; flex-wrap: wrap; gap: var(--ft-space-2); }
+.receipt-list-controls > * { flex: 1; min-inline-size: min(100%, 140px); }
+.receipt-list-controls label, .receipt-link-editor label {
+  display: grid;
+  gap: var(--ft-space-1);
+  font-size: 12px;
+}
+.receipt-list-controls select, .receipt-link-editor select {
+  width: 100%;
+  min-inline-size: 0;
+  min-block-size: 36px;
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-sm);
+  background: var(--ft-bg-secondary);
+  color: var(--ft-text);
+  padding-inline: var(--ft-space-2);
+}
+.receipt-plan-rows { display: grid; gap: var(--ft-space-2); }
+.receipt-plan-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(130px, 1.3fr) minmax(0, auto);
+  align-items: start;
+  gap: var(--ft-space-3);
+}
+.receipt-plan-row p { margin: 0; }
+.receipt-plan-match { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--ft-space-2); }
+.receipt-plan-actions { display: flex; flex-wrap: wrap; gap: var(--ft-space-2); }
+.receipt-text-action, .receipt-table-plan-link button {
+  border: 0;
+  background: transparent;
+  color: var(--ft-primary);
+  cursor: pointer;
+  text-align: start;
+  padding: 0;
+}
+.receipt-link-confirmed {
+  display: inline-flex;
+  background: var(--ft-bg-secondary);
+  color: var(--ft-text);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--ft-radius-sm);
+  font-size: 12px;
+  padding: 2px 6px;
+}
+.receipt-link-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--ft-space-2);
+  background: var(--ft-bg-secondary);
+}
+.receipt-table-plan-link { display: flex; align-items: center; gap: var(--ft-space-2); flex-wrap: wrap; }
+.receipt-edit-table .receipt-table-plan-link button { color: var(--ft-primary); }
+.receipt-edit-table tr:focus-visible, .receipt-plan-row:focus-visible {
+  outline: 2px solid var(--ft-primary);
+  outline-offset: -2px;
+}
+.receipt-reconciliation .receipt-table-scroll { min-block-size: 0; overflow: visible; }
+.receipt-reconciliation .receipt-edit-table { min-inline-size: 0; min-width: 0; }
+.receipt-reconciliation .receipt-edit-table th { width: auto; }
+.receipt-reconciliation .receipt-edit-table th:first-child { width: 23%; }
+.receipt-reconciliation .receipt-edit-table th:nth-child(8) { width: 68px; }
+.receipt-reconciliation .receipt-row-detail-content { position: static; }
+.receipt-row-details label:has(input[aria-label^="סה״כ לשורה אחרי הנחה"]) { max-inline-size: 190px; }
+@media (max-width: 760px) {
+  .receipt-plan-row { grid-template-columns: minmax(0, 1fr); }
+  .receipt-reconciliation .receipt-edit-table,
+  .receipt-reconciliation .receipt-edit-table tbody { display: block; }
+  .receipt-reconciliation .receipt-edit-table thead {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .receipt-reconciliation .receipt-edit-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--ft-space-1);
+    padding: var(--ft-space-2);
+    border-block-end: 1px solid var(--ft-border);
+  }
+  .receipt-reconciliation .receipt-edit-table td { height: auto; min-inline-size: 0; border: 0; }
+  .receipt-reconciliation .receipt-edit-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--ft-text-muted);
+    font-size: 11px;
+  }
+  .receipt-reconciliation .receipt-edit-table td.receipt-product-cell,
+  .receipt-reconciliation .receipt-edit-table .receipt-row-details > td { grid-column: 1 / -1; }
+  .receipt-reconciliation .receipt-edit-table td.receipt-product-cell { position: relative; }
+  .receipt-reconciliation .receipt-row-detail-content { width: auto; }
+}

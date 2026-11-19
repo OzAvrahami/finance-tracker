@@ -8,10 +8,35 @@ const compatible = (row, plan) => {
   return !variants.some(v=>actual.includes(v)&&!required.includes(v)) && words(plan.notes).every(t=>actual.includes(t))
     && newRequirements.every(t=>actual.includes(t));
 };
+export function receiptMatchesPlan(row, item) {
+  if (row.review_link) return row.review_link.list_item_id != null &&
+    String(row.review_link.list_item_id) === String(item.list_item_id);
+  const catalogId = row.mapping_snapshot?.personal_item_id ?? row.catalog_item_id;
+  return catalogId != null ? String(catalogId) === String(item.catalog_item_id)
+    : row.planned_item_id != null && String(row.planned_item_id) === String(item.list_item_id);
+}
+
+export function receiptMatchSuggested(row, item) {
+  if (receiptMatchesPlan(row, item)) return true;
+  if (item.catalog_item_id != null && row.suggested_personal_items?.some(
+    candidate => String(candidate.id) === String(item.catalog_item_id)
+  )) return true;
+  const tokens = words(row.original_name ?? row.name);
+  return words(item.name).some(token => token.length > 2 && tokens.includes(token));
+}
+
+export function receiptLinksForList(rows, listId) {
+  return rows.map(row => {
+    if (!row.review_link || String(row.review_link.list_id) === String(listId)) return row;
+    const { review_link: ignored, ...other } = row;
+    return other;
+  });
+}
+
 // All explicit plan tokens are requirements, including brand/diet/flavor/size.
 export function suggestReceiptMatches(items, plan) {
   return items.map(row => {
-    if (row.mapping_snapshot?.personal_item_id || row.catalog_item_id || row.planned_item_id || row.owner_edited_fields?.includes('catalog_item_id')) return row;
+    if (row.review_link || row.mapping_snapshot?.personal_item_id || row.catalog_item_id || row.planned_item_id || row.owner_edited_fields?.includes('catalog_item_id')) return row;
     const tokens = words(row.original_name ?? row.name);
     const candidates = plan.filter(p => (p.catalog_item_id||p.list_item_id) && words(`${p.name} ${p.notes??''}`).some(t => tokens.includes(t)));
     const clear = candidates.filter(p => compatible(row,p)&&words(`${p.name} ${p.notes??''}`).every(t => tokens.includes(t)));
@@ -22,7 +47,8 @@ export function suggestReceiptMatches(items, plan) {
   });
 }
 export function receiptPlanningQuantity(row, target) {
-  if (row.mapping_snapshot) {
+  if (row.mapping_snapshot && (!row.review_link ||
+      String(row.mapping_snapshot.personal_item_id) === String(target.catalog_item_id))) {
     const p = mappedQuantity(row);
     return p ? convertQuantity(p.quantity, p.unit, target.unit) : null;
   }
@@ -42,10 +68,8 @@ export function allocateReceipt(plan, rows) {
     let allocated = 0n, unresolved = false;
     const required = decimal(p.quantity), matches = [];
     rows.forEach((r, index) => {
-      const id = r.mapping_snapshot?.personal_item_id ?? r.catalog_item_id;
-      const matchesTarget = id ? String(id)===String(p.catalog_item_id) : r.planned_item_id && String(r.planned_item_id)===String(p.list_item_id);
-      if (!matchesTarget || remaining[index] === 0n) return;
-      if(!compatible(r,p)&&!r.owner_edited_fields?.includes('catalog_item_id')) {unresolved=true;return;}
+      if (!receiptMatchesPlan(r, p) || remaining[index] === 0n) return;
+      if(!r.review_link&&!compatible(r,p)&&!r.owner_edited_fields?.includes('catalog_item_id')) {unresolved=true;return;}
       const converted = receiptPlanningQuantity({ ...r, quantity: remaining[index] == null ? null : quantityText(remaining[index]) }, p);
       const available = decimal(converted);
       if (available === null || required === null) { unresolved = true; return; }

@@ -12,7 +12,9 @@ const product=z.object({code:z.string().regex(/^\d{3,20}$/),full_name:text,sourc
   package_quantity:value.optional(),package_unit:value.optional(),
   language:z.string().max(10).nullable().optional(),source_url:z.string().regex(/^https:\/\/world\.open(food|products)facts\.(org|net)\/product\/\d{8,14}$/).optional(),license:text.optional(),environment:z.enum(['staging','production']).optional()}).strict();
 const reviewItemSchema=z.object({
- name:text,quantity:value,unit:value,price:value,catalog_item_id:z.union([z.string().regex(/^\d+$/),z.number().int().positive()]).nullable().optional(),planned_item_id:z.string().regex(/^\d+$/).nullable().optional(),
+ name:text,quantity:value,unit:value,price:value,reviewed_line_total:value.optional(),
+ review_link:z.object({list_id:z.string().regex(/^\d+$/),list_item_id:z.string().regex(/^\d+$/).nullable(),confirmed:z.boolean()}).strict().optional(),
+ catalog_item_id:z.union([z.string().regex(/^\d+$/),z.number().int().positive()]).nullable().optional(),planned_item_id:z.string().regex(/^\d+$/).nullable().optional(),
  package_quantity:value.optional(),package_unit:z.enum(['unit','package','pack','g','kg','ml','l']).nullable().optional(),
  continuation_text:z.string().max(300).optional(),provenance:z.array(z.object({file_number:z.number().int().min(1).max(ceilings.files),page_number:z.number().int().min(1).max(ceilings.pdfPages).nullable(),kind:z.enum(['photo','pdf_text','pdf_scan']),line_number:z.number().int().min(1).max(ceilings.rows),layout_y:z.number().optional()}).strict()).max(ceilings.sources).optional(),
  row_id:z.string().max(120).optional(),original_name:text.optional(),product_code:z.string().regex(/^\d{3,20}$/).nullable().optional(),
@@ -36,9 +38,10 @@ const reviewSchema=z.object({items:z.array(reviewItemSchema).max(ceilings.rows),
 function sourceIdentity(row,index,attempt) {
  return row.row_id ?? `a${attempt}:${row.source_lines?.length?row.source_lines.map(s=>`p${s.photo_number}l${s.line_number}`).join('-'):`r${index+1}`}`;
 }
-async function reviewProjection(items,attempt) {
+async function reviewProjection(items,attempt,listId) {
  const {projectPrice}=await import('../../shared/receiptPricing.mjs');
- return items.map((r,i)=>({...projectPrice(r),row_id:sourceIdentity(r,i,attempt),original_name:r.original_name??r.name}));
+ const {receiptLinksForList}=await import('../../shared/shoppingReceiptMatching.mjs');
+ return (listId==null?items:receiptLinksForList(items,listId)).map((r,i)=>({...projectPrice(r),row_id:sourceIdentity(r,i,attempt),original_name:r.original_name??r.name}));
 }
 async function confirmationItems(items) {
  const {priceBreakdown,scaled,moneyText}=await import('../../shared/receiptPricing.mjs');
@@ -46,8 +49,30 @@ async function confirmationItems(items) {
   const r=reviewItemSchema.parse(input),b=priceBreakdown(r);
   if(!r.name.trim() || !r.unit?.trim() || b.final===null || b.conflict || scaled(r.quantity,3)>10000000n) throw Error('receipt_invalid');
   if(r.resolved_product && !identifier(r.resolved_product.code,r.resolved_product.kind??'gtin',r.resolved_product.retailer_scope??'')) throw Error('receipt_invalid');
+  if (Object.hasOwn(r,'reviewed_line_total')) {
+   // Checkout already supports exact discounted totals. Keep the extracted discount in raw_price.
+   const discount=scaled(r.row_discount,2)??0n;
+   return {...r,price_basis:'line_discount',price:b.net_unit_price,row_discount:moneyText(discount),
+    final_total:b.final,calculated_gross_total:moneyText(scaled(b.final,2)+discount)};
+  }
   return {...r,...(r.price_basis==='line_discount'?{price:b.net_unit_price,final_total:b.final,
     calculated_gross_total:moneyText(scaled(b.final,2)+scaled(r.row_discount,2))}:{} )};
  });
 }
-module.exports={reviewItemSchema,reviewSchema,reviewProjection,confirmationItems};
+function validateReviewLinks(items,plan,listId) {
+ const {receiptMatchesPlan}=require('../../shared/shoppingReceiptMatching.mjs');
+ const byId=new Map(plan.filter(item=>item.list_item_id!=null).map(item=>[String(item.list_item_id),item]));
+ const confirmed=new Map();
+ for (const row of items) {
+  const link=row.review_link;
+  if (!link) continue;
+  if (link.list_id!==String(listId) || (link.list_item_id!==null&&!byId.has(link.list_item_id))) throw Error('receipt_invalid');
+  if (!link.confirmed) continue;
+  if (link.list_item_id===null||confirmed.has(link.list_item_id)) throw Error('receipt_invalid');
+  confirmed.set(link.list_item_id,row);
+ }
+ for (const [id,owner] of confirmed) {
+  if (items.some(row=>row!==owner&&receiptMatchesPlan(row,byId.get(id)))) throw Error('receipt_invalid');
+ }
+}
+module.exports={reviewItemSchema,reviewSchema,reviewProjection,confirmationItems,validateReviewLinks};

@@ -8,7 +8,7 @@ const { openList, listProjection } = require('../lists/listService');
 const { planCommercial } = require('../catalog/commercialService');
 const { prepareConfirmation } = require('../../../services/shoppingReceiptConfirmation');
 const { confirmationSchema } = require('../../../services/shoppingHabitsService');
-const { reviewSchema, confirmationItems } = require('../../../services/shoppingReceiptReview');
+const { reviewSchema, confirmationItems, validateReviewLinks } = require('../../../services/shoppingReceiptReview');
 
 const confirmSchema = confirmationSchema.omit({ items: true }).extend({ items: reviewSchema.shape.items.min(1),
   draft_revision: z.number().int().nonnegative().optional(), context_token: z.string().length(32),
@@ -25,7 +25,7 @@ async function planReceipt(facts, intent, actor, context) {
     }
     openList(facts, intent.id);
     let prepared;
-    try { prepared = await prepareConfirmation({ ...base, items: await confirmationItems(base.items) }, context, factsReader(facts), actor); }
+    try { prepared = await prepareConfirmation({ ...base, items: await confirmationItems(base.items) }, context, factsReader(facts), actor, intent.id); }
     catch (error) { if (/^(receipt_|shopping_mapping_)[a-z_]+$/.test(error.message)) throw new ShoppingDomainError(error.message);throw error; }
     const view = catalogView(facts), scope = view.visibility.forListType(facts.lists[0].list_type_id);
     const effects = new Map();
@@ -49,6 +49,8 @@ async function planReceipt(facts, intent, actor, context) {
   }
   if (action === 'draft') {
     const input = z.object({ attempt: z.number().int().min(1).max(5), revision: z.number().int().nonnegative(), draft: reviewSchema }).strict().parse(body);
+    try { validateReviewLinks(input.draft.items, facts.plans?.[0]?.items ?? [], intent.id); }
+    catch (error) { throw new ShoppingDomainError(error.message); }
     return { action, data: input };
   }
   requireRule(['begin', 'progress', 'extracted', 'failed'].includes(action), 'receipt_action_invalid');

@@ -126,21 +126,23 @@ function suggestions(catalog, regulars, history, now = new Date()) {
     });
 }
 function reconcile(plan, items, catalog) {
-  const {suggestReceiptMatches,allocateReceipt}=require('../../shared/shoppingReceiptMatching.mjs');
-  const actual = suggestReceiptMatches(items,plan).map((i) => {
+  const {suggestReceiptMatches,allocateReceipt,receiptMatchesPlan}=require('../../shared/shoppingReceiptMatching.mjs');
+  const suggested = suggestReceiptMatches(items,plan);
+  const fulfillment = allocateReceipt(plan,suggested);
+  const actual = suggested.map((i) => {
     const exact = catalog.filter(
       (c) => normalizeName(c.name) === normalizeName(i.name),
     );
     const catalog_item_id = i.mapping_snapshot?.personal_item_id ?? i.catalog_item_id ?? null;
-    const planned = plan.find(
-      (p) => catalog_item_id && String(p.catalog_item_id) === catalog_item_id,
-    );
+    const planned = fulfillment.find(item=>receiptMatchesPlan(i,item));
     return {
       ...i,
       catalog_item_id,
       match_requires_review: true,
       suggested_personal_items: i.suggested_personal_items?.length?i.suggested_personal_items:(!catalog_item_id?exact.map(c=>({id:String(c.id),name:c.name})):[]),
-      comparison: planned
+      comparison: i.review_link
+        ? planned ? planned.status==='full' && planned.purchased_quantity===planned.quantity ? 'bought' : 'quantity_changed' : 'added'
+        : planned
         ? aggregatePlanning(items,{...planned,unit:planned.unit}).unresolved===0 &&
           Number(planned.quantity) === Number(aggregatePlanning(items,{...planned,unit:planned.unit}).quantity)
           ? "bought"
@@ -163,15 +165,8 @@ function reconcile(plan, items, catalog) {
   });
   return {
     items: actual,
-    fulfillment:allocateReceipt(plan,actual),
-    absent: plan.filter(
-      (p) =>
-        !actual.some(
-          (i) =>
-            i.catalog_item_id &&
-            String(p.catalog_item_id) === i.catalog_item_id,
-        ),
-    ),
+    fulfillment,
+    absent: plan.filter(item=>!actual.some(row=>receiptMatchesPlan(row,item))),
   };
 }
 module.exports = {

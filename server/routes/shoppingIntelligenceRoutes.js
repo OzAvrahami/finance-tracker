@@ -8,7 +8,7 @@ const { createProductLookup, enrichKnownProducts } = require('../services/shoppi
 const { identifier } = require('../services/shoppingProductIdentifiers');
 const {commercialProduct,validateMappingSnapshots,hydrateCommercialRows}=require('../services/shoppingCommercialProducts');
 const {unitCode}=require('../../shared/shoppingQuantities.mjs');
-const { reviewSchema, reviewProjection, confirmationItems } = require('../services/shoppingReceiptReview');
+const { reviewSchema, reviewProjection, confirmationItems, validateReviewLinks } = require('../services/shoppingReceiptReview');
 const { normalizeReceiptRow } = require("../services/shoppingReceiptOverlap");
 const express = require("express");
 const multer = require("multer");
@@ -126,7 +126,7 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
               plans[0]?.items ?? [],
               receipts[0].state === "confirmed"
                 ? receipts[0].confirmed.items
-                : await enrichKnownProducts(await reviewProjection(receipts[0].review_draft?.items ?? receipts[0].extracted.items.map(normalizeReceiptRow), receipts[0].attempts),db),
+                : await enrichKnownProducts(await reviewProjection(receipts[0].review_draft?.items ?? receipts[0].extracted.items.map(normalizeReceiptRow), receipts[0].attempts,req.params.id),db),
               catalog,
             )
           : null,
@@ -176,6 +176,10 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
   }));
   router.put('/lists/:id/receipt/draft', handle(async(req,res)=> {
     const input=z.object({attempt:z.number().int().min(1).max(5),revision:z.number().int().nonnegative(),draft:reviewSchema}).strict().parse(req.body);
+    if(input.draft.items.some(row=>row.review_link)) {
+      const context=await unwrap(db.rpc('shopping_receipt_context',{p_list:req.params.id}));
+      validateReviewLinks(input.draft.items,context.plan??[],req.params.id);
+    }
     if(Buffer.byteLength(JSON.stringify(input.draft))>2097152) return res.status(413).json({error:'receipt_draft_too_large'});
     res.json(await unwrap(db.rpc('shopping_save_receipt_draft',{p_list:req.params.id,p_attempt:input.attempt,p_revision:input.revision,p_draft:input.draft})));
   }));
@@ -349,7 +353,7 @@ function createShoppingIntelligenceRouter({ db, extract = extractReceipt, lookup
         if(!require('node:util').isDeepStrictEqual(context.receipt.confirmation_request,base))throw Error('receipt_confirmation_conflict');
         return res.json(context.receipt);
       }
-      const prepared=await prepareConfirmation({...base,items:await confirmationItems(base.items)},context,db,req.user.id);
+      const prepared=await prepareConfirmation({...base,items:await confirmationItems(base.items)},context,db,req.user.id,req.params.id);
       res.json(await rpc(req.params.id, 'confirm', {...prepared,_request:base}));
     }),
   );
