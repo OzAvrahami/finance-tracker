@@ -16,6 +16,7 @@ export function receiptTotals(rows, printed) {
     delta = receipt === null ? null : cents - receipt;
   return {
     total: money(cents),
+    difference: delta === null ? null : (delta < 0n ? "−" : delta > 0n ? "+" : "") + money(delta < 0n ? -delta : delta),
     discrepancy:
       delta === null || delta === 0n
         ? null

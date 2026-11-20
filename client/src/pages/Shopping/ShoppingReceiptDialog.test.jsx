@@ -555,3 +555,160 @@ it('shows all unconfirmed replacement rows, preserves approved links in both vie
   fireEvent.click(within(other).getByRole('button',{name:'עריכה'}));
   expect(within(other).getByRole('option',{name:/מלפפון טרי/})).toBeInTheDocument();
 });
+
+it.each([
+  ['שיוך אל חלב', '20'],
+  ['השארה ללא שיוך', null],
+])('reviews suggested soy milk separately from olive oil and saves the explicit choice: %s', async (action, targetId) => {
+  const milk = {list_item_id:'20', name:'חלב', quantity:'1', unit:'ליטר'};
+  const row = {quantity:'1', unit:'ליטר', price:'10', match_requires_review:true};
+  const soy = {...row, name:'חלב סויה', possible_substitutions:['חלב']};
+  const oliveOil = {...row, name:'שמן זית', possible_substitutions:[]};
+  const legacyItem = {list_item_id:null, name:'לחם', quantity:'1', unit:'יחידה'};
+  const data = {...review, plan:[milk, legacyItem], reconciliation:{items:[soy, oliveOil]}};
+  api.getShoppingIntelligence.mockResolvedValue({data});
+  api.saveShoppingReceiptDraft.mockResolvedValueOnce({data:{revision:1}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+  await screen.findByRole('button',{name:'לטיפול 1'});
+  expect(screen.getByRole('button',{name:/חלב סויה.*תחליף אפשרי/})).toBeInTheDocument();
+  expect(screen.queryByText('שמן זית')).not.toBeInTheDocument();
+  const choices = screen.getByRole('region',{name:'תחליפים מוצעים'});
+  expect(within(choices).getByRole('button',{name:'שיוך אל חלב'})).toBeEnabled();
+  fireEvent.click(within(choices).getByRole('button',{name:action}));
+  expect(screen.getByRole('button',{name:'לטיפול 0'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'שמירה ויציאה'}));
+  await waitFor(() => expect(api.saveShoppingReceiptDraft).toHaveBeenCalledWith(1,expect.objectContaining({
+    draft:expect.objectContaining({items:[{...soy,review_link:{list_id:'1',list_item_id:targetId,confirmed:false}},oliveOil]}),
+  })));
+});
+
+it('replaces the unconfirmed milk link from the substitution shortcut and lets the owner approve soy milk', async () => {
+  const milk = {list_item_id:'20', name:'חלב', quantity:'1', unit:'ליטר'};
+  const link = {list_id:'1',list_item_id:'20',confirmed:false};
+  const row = {quantity:'1',unit:'ליטר',price:'10'};
+  const original = {...row, name:'חלב רגיל',review_link:link};
+  const soy = {...row, name:'חלב סויה',match_requires_review:true,possible_substitutions:['חלב']};
+  api.getShoppingIntelligence.mockResolvedValue({data:{...review,plan:[milk],reconciliation:{items:[original,soy]}}});
+  api.saveShoppingReceiptDraft.mockResolvedValueOnce({data:{revision:1}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+
+  const choices = await screen.findByRole('region',{name:'תחליפים מוצעים'});
+  const shortcut = within(choices).getByRole('button',{name:'שיוך אל חלב'});
+  expect(shortcut).toHaveAccessibleDescription(/יוסר השיוך.*חלב רגיל.*שורה 1/);
+  fireEvent.click(shortcut);
+  fireEvent.click(screen.getByRole('button',{name:'פריטי הרשימה'}));
+  expect(screen.getByRole('button',{name:/חלב סויה.*שורת קבלה 2/})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'אשר שיוך'}));
+
+  fireEvent.click(screen.getByRole('button',{name:'שורות הקבלה'}));
+  const receiptRows = screen.getAllByRole('article');
+  expect(receiptRows).toHaveLength(2);
+  expect(receiptRows[0]).toHaveTextContent('חלב רגיל');
+  expect(receiptRows[0]).toHaveTextContent('ללא שיוך');
+  expect(receiptRows[1]).toHaveTextContent('חלב סויה');
+  expect(receiptRows[1]).toHaveTextContent('שיוך מאושר');
+  fireEvent.click(screen.getByRole('button',{name:'שמירה ויציאה'}));
+  await waitFor(() => expect(api.saveShoppingReceiptDraft).toHaveBeenCalledWith(1,expect.objectContaining({
+    draft:expect.objectContaining({items:[
+      {...original,review_link:{...link,list_item_id:null}},
+      {...soy,review_link:{...link,confirmed:true}},
+    ]}),
+  })));
+});
+
+it('keeps confirmed milk links intact when another receipt line suggests the same target', async () => {
+  const milk = {list_item_id:'20', name:'חלב', quantity:'1', unit:'ליטר'};
+  const soy = {name:'חלב סויה', quantity:'1', unit:'ליטר', price:'10', match_requires_review:true, possible_substitutions:['חלב']};
+  const confirmed = {...soy, name:'חלב', review_link:{list_id:'1',list_item_id:'20',confirmed:true}};
+  api.getShoppingIntelligence.mockResolvedValue({data:{...review,plan:[milk],reconciliation:{items:[confirmed,soy]}}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+  await screen.findByRole('button',{name:'לטיפול 1'});
+  expect(screen.getByRole('button',{name:'שיוך אל חלב'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'השארה ללא שיוך'})).toBeEnabled();
+});
+
+it('dedicated page corrects an evidenced line, keeps an extra purchase and only exits after a successful draft save', async () => {
+  const rows = [
+    {row_id:'tuna',name:'טונה',quantity:'2',unit:'יחידה',price:'30.00',line_total:'60.00',discount:'30.00'},
+    {row_id:'oil',name:'שמן זית',quantity:'1',unit:'יחידה',price:'19.90',match_requires_review:true},
+  ];
+  const data = {...review, receipt:{...review.receipt,extracted:{...review.receipt.extracted,receipt_total:'49.90'}}, reconciliation:{items:rows}};
+  api.getShoppingIntelligence.mockResolvedValue({data});
+  api.saveShoppingReceiptDraft.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({data:{revision:1}});
+  const exit = vi.fn();
+  render(<ShoppingReceiptDialog list={list} onExit={exit} onChanged={vi.fn()}/>);
+  await screen.findByRole('button',{name:'לטיפול 1'});
+  for (const [label, value] of [['ברוטו לשורה','₪60.00'], ['הנחה לשורה','₪30.00'], ['נטו לשורה בקבלה','₪30.00']]) {
+    expect(screen.getByText(label, {selector:'dt'}).nextElementSibling).toHaveTextContent(value);
+  }
+  expect(screen.queryByText('שמן זית')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'עדכון ל־₪30.00'}));
+  expect(screen.getByRole('button',{name:'לטיפול 0'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'ביטול התיקון'}));
+  fireEvent.click(screen.getByRole('button',{name:'עדכון ל־₪30.00'}));
+  const save = screen.getByRole('button',{name:'שמירה ויציאה'});
+  fireEvent.click(save);
+  await screen.findByRole('alert');
+  expect(exit).not.toHaveBeenCalled();
+  fireEvent.click(save);
+  await waitFor(()=>expect(exit).toHaveBeenCalledWith(1));
+  expect(api.saveShoppingReceiptDraft).toHaveBeenLastCalledWith(1,expect.objectContaining({
+    draft:expect.objectContaining({items:[expect.objectContaining({reviewed_line_total:'30.00',line_total:'60.00'}), rows[1]]}),
+  }));
+  expect(api.confirmShoppingReceipt).not.toHaveBeenCalled();
+});
+
+it('approval with an unknown printed total still requires explicit duplicate review and acknowledgement', async () => {
+  const candidate={receipt_id:'other',list_id:2,list_title:'רשימה ב',identity:{merchant:'Market',receipt_number:'123',purchase_date:'2026-11-10'}};
+  api.getShoppingIntelligence.mockResolvedValue({data:{...review,duplicate_candidates:[candidate],
+    reconciliation:{items:[{name:'שמן זית',quantity:'1',unit:'יחידה',price:'19.90'}]}}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'מעבר לאישור'}));
+  const approve = screen.getByRole('button',{name:'אישור להיסטוריה',exact:true});
+  expect(screen.queryByText(/הסכום תואם לקבלה/)).not.toBeInTheDocument();
+  expect(approve).toBeDisabled();
+  fireEvent.click(screen.getByLabelText(/בדקתי את השורות/));
+  expect(approve).toBeDisabled();
+  fireEvent.click(screen.getByText('קבלה דומה קיימת · נדרשת בדיקה לפני אישור'));
+  fireEvent.click(screen.getByLabelText(/בדקתי את הרשימות המוצגות/));
+  expect(approve).toBeEnabled();
+  expect(api.confirmShoppingReceipt).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['missing', null, []],
+  ['conflicting', '5.00', [{field:'discount',values:['0.00','5.00']}]],
+])('leaves the source net unresolved with a %s line discount', async (_state, discount, field_conflicts) => {
+  const row = {name:'טונה',quantity:'1',unit:'יחידה',price:null,line_total:'20.00',discount,field_conflicts};
+  api.getShoppingIntelligence.mockResolvedValue({data:{...review, reconciliation:{items:[row]}}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+  await screen.findByText('ברוטו לשורה');
+  expect(screen.getByText('הנחה לשורה', {selector:'dt'}).nextElementSibling).toHaveTextContent('לא ידוע');
+  expect(screen.queryByText('נטו לשורה בקבלה')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/עדכון ל־₪/})).not.toBeInTheDocument();
+});
+
+it.each([
+  ['matched', '5.00', false, true],
+  ['mismatched', '5.01', false, false],
+  ['partial even when the subtotal matches', '5.00', true, false],
+])('shows the appropriate approval summary for a %s total', async (_state, printed, partial, matched) => {
+  const row = {name:'טונה', quantity:'1', unit:'יחידה', price:'5.00'};
+  const items = partial ? [row, {...row, name:'שורה חסרה', price:null}] : [row];
+  api.getShoppingIntelligence.mockResolvedValue({data:{...review, reconciliation:{items},
+    receipt:{...review.receipt, extracted:{...review.receipt.extracted, receipt_total:printed}}}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+  await screen.findByRole('heading', {name:'בדיקת קבלה'});
+  fireEvent.click(within(screen.getByRole('navigation',{name:'שלבי הבדיקה'})).getByRole('button',{name:/אישור להיסטוריה/}));
+  const approve = screen.getByRole('button',{name:'אישור להיסטוריה', exact:true});
+  expect(approve).toBeDisabled();
+  if (matched) {
+    expect(screen.getByText(/הסכום תואם לקבלה/).nextElementSibling).toHaveTextContent('₪5.00');
+    expect(screen.queryByText('פער בסכום')).not.toBeInTheDocument();
+  } else {
+    expect(screen.queryByText(/הסכום תואם לקבלה/)).not.toBeInTheDocument();
+    expect(screen.getByText('פער בסכום')).toBeInTheDocument();
+  }
+  fireEvent.click(screen.getByLabelText(/בדקתי את השורות/));
+  expect(approve.disabled).toBe(!matched);
+});

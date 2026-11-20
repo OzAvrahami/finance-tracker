@@ -7,6 +7,7 @@ import AddTransaction from './pages/AddTransaction';
 import LegoCollection from './pages/LegoCollection';
 import Loans from './pages/Loans';
 import Budget from './pages/Budget';
+import ShoppingReceiptPage, { ShoppingListRoute } from './pages/Shopping/ShoppingReceiptPage';
 import ShoppingLists from './pages/Shopping';
 import Tasks from './pages/Tasks';
 import Settings from './pages/Settings';
@@ -23,6 +24,8 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
+        <Route path="/shopping/:listId/receipt" element={<ProtectedRoute><ShoppingReceiptPage /></ProtectedRoute>} />
+
         <Route element={
           <ProtectedRoute>
             <Layout />
@@ -36,6 +39,7 @@ function App() {
           <Route path="/savings" element={<Savings />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/import" element={<Import />} />
+          <Route path="/shopping/:listId" element={<ShoppingListRoute />} />
           <Route path="/shopping" element={<ShoppingLists />} />
           <Route path="/settings/shopping/catalog" element={<ShoppingAdministration />} />
           <Route path="/tasks" element={<Tasks />} />

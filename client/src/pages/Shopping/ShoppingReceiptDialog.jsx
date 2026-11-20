@@ -1,3 +1,6 @@
+import ReceiptPageFrame from './ReceiptPageFrame';
+import ReceiptWorkbench from './ReceiptWorkbench';
+import { receiptIssues } from './receiptIssues';
 import ReceiptStoreReview from './ReceiptStoreReview';
 import ReceiptReviewWorkspace from './ReceiptReviewWorkspace';
 import { changeReceiptLink, confirmReceiptLink } from './receiptReviewLinks';
@@ -129,7 +132,15 @@ function Photo({ file, index, total, onRemove, onMove, readOnly }) {
     </li>
   );
 }
-export default function ShoppingReceiptDialog({ list, onChanged, compact = false }) {
+export default function ShoppingReceiptDialog({ list, onChanged, compact = false, onExit, onTransfer }) {
+  const page = Boolean(onExit);
+  const Frame = page ? ReceiptPageFrame : Dialog;
+  const Workspace = page ? ReceiptWorkbench : ReceiptReviewWorkspace;
+  const [view,setView] = useState('issues');
+  const [selected,setSelected] = useState(null);
+  const [mobileDetail,setMobileDetail] = useState(false);
+  const [toolsOpen,setToolsOpen] = useState(false);
+  const [lastCorrection, setLastCorrection] = useState(null);
   const [activeListId,setActiveListId]=useState(list.id);
   const [merchantAck,setMerchantAck]=useState(''),[identityConflictReviewed,setIdentityConflictReviewed]=useState(false);
   const [progress,setProgress]=useState(null),[targetLists,setTargetLists]=useState(null);
@@ -213,7 +224,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
         }
       })
       .catch(() => {
-        if (active) setError("טעינת הקבלה נכשלה. פתחו את החלון כדי לנסות שוב.");
+        if (active) setError("טעינת הקבלה נכשלה. נסו לפתוח שוב את הקבלה מהרשימה.");
       });
     return () => {
       active = false;
@@ -265,15 +276,32 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
     setReviewed(false);
     setDirty(true);
   };
+  const applyLineTotal = (index, total) => {
+    const original = rows[index];
+    const corrected = editPrice(original, 'reviewed_line_total', total);
+    setRows(all => all.map(row => row === original ? corrected : row));
+    setLastCorrection({ original, corrected });
+    setReviewed(false);
+    setDirty(true);
+  };
+  const undoPrice = lastCorrection && rows.includes(lastCorrection.corrected) ? {
+    name: lastCorrection.corrected.name,
+    undo: () => {
+      setRows(all => all.map(row => row === lastCorrection.corrected ? lastCorrection.original : row));
+      setLastCorrection(null);
+      setReviewed(false);
+      setDirty(true);
+    },
+  } : null;
   const editLinks = update => {
     setRows(update);
     setReviewed(false);
     setDirty(true);
   };
-  const linkRow = (index, planId) =>
-    editLinks(all => changeReceiptLink(all, data.plan ?? [], index, planId, activeListId));
-  const assignReceipt = (item, index) => {
-    if (index !== null) { linkRow(index, item.list_item_id); return; }
+  const linkRow = (index, planId, keepMatches = false) =>
+    editLinks(all => changeReceiptLink(all, data.plan ?? [], index, planId, activeListId, keepMatches));
+  const assignReceipt = (item, index, keepMatches = false) => {
+    if (index !== null) { linkRow(index, item.list_item_id, keepMatches); return; }
     editLinks(all => all.map(row => !row.review_link?.confirmed && receiptMatchesPlan(row, item)
       ? { ...row, review_link: { list_id: String(activeListId), list_item_id: null, confirmed: false } }
       : row));
@@ -328,6 +356,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
   const changeIdentity = (key, value) => {
     setIdentity((v) => ({ ...v, [key]: value || null }));
     setIdentityChecked(false);
+    if (page) setReviewed(false);
     setDuplicateReviewed(false);
     setDirty(true);
   };
@@ -438,7 +467,16 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
     return ()=>{active=false;clearInterval(timer);};
   },[scanState,data?.receipt?.state,activeListId]);
   const printedTotal = data?.receipt?.extracted?.receipt_total;
-  const { total, discrepancy } = receiptTotals(rows, printedTotal);
+  const { total, difference, discrepancy } = receiptTotals(rows, printedTotal);
+  const confirmed = data?.receipt?.state === 'confirmed';
+  const issues = page ? receiptIssues(rows, fulfillment) : [];
+  const nextIssue = () => {
+    const current = issues.findIndex(issue => issue.id === selected);
+    const position = current >= 0 ? current : 0;
+    const openingQueue = window.matchMedia('(max-width: 720px)').matches && !mobileDetail;
+    const next = issues[openingQueue ? position : (position + 1) % issues.length];
+    setView('issues'); setSelected(next?.id); setMobileDetail(true);
+  };
   const canConfirm =
     !discrepancy &&
     (storeReview.state==='matched'||merchantAck===storeReview.acknowledgment) &&
@@ -454,7 +492,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
     !(data?.receipt?.extracted?.receipt_adjustments?.length) &&
     rows.every(
       (r) =>
-        priceBreakdown(r).final!==null &&
+        (!page || r.name?.trim()) && priceBreakdown(r).final!==null &&
         r.quantity !== null &&
         r.quantity !== "" &&
         Number(r.quantity) > 0 &&
@@ -476,12 +514,14 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
       });
       await readData();
       setDirty(false);
+      if (page) setTab("approval");
       await onChanged();
     });
   const close = () => {
     lookupQueue.current=false;
     if (busy) return;
     if (dirty) setClosing(true);
+    else if (page) onExit(activeListId);
     else setOpen(false);
   };
   const previousDraft =
@@ -495,8 +535,8 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
       r.quantity === "",
   );
   return (
-    <section className={`shopping-receipt-summary${compact ? ' shopping-receipt-summary--compact' : ''}`} dir="rtl" aria-label="קבלה">
-      <div>
+    <section className={page ? "rr-root" : `shopping-receipt-summary${compact ? ' shopping-receipt-summary--compact' : ''}`} dir="rtl" aria-label="קבלה">
+      {!page && <><div>
         {!compact && <strong>קבלה מול התוכנית</strong>}
         {(!compact || dirty || data?.receipt?.state === "review") && <p role="status">
           {dirty
@@ -516,8 +556,12 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
         }}
       >
         {data?.receipt?.extracted ? "בדיקת קבלה" : compact ? "קבלות" : "סריקת קבלה"}
-      </SecondaryButton>
-      <Dialog
+      </SecondaryButton></>}
+      <Frame
+        {...(page ? { step: tab, onStep: setTab, hasReceipt:Boolean(data?.receipt?.extracted), listTitle:list.title,
+          store:identity.merchant || data?.store, date:identity.purchase_date || data?.receipt?.review_draft?.purchase_date || data?.receipt?.confirmed?.purchase_date, pages:data?.receipt?.extracted?.sources?.every(source => source.page_number != null) ? data.receipt.extracted.sources.length : null,
+          busy, confirmed, total, printed:printedTotal, difference, incomplete:incompleteTotal, toolsOpen,
+          toggleTools:() => {setToolsOpen(!toolsOpen);setDetails(true);} } : {})}
         open={open}
         onClose={close}
         title="בדיקת קבלה"
@@ -527,7 +571,21 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
         returnFocusRef={entry}
         initialFocusRef={titleFocus}
         closeDisabled={busy}
-        footer={
+        footer={page ? <>
+          <span role="status">{confirmed ? 'הקנייה בהיסטוריה' : dirty ? 'שינויים בטיוטה' : tab === 'review' ? `פריטים לטיפול: ${issues.length}` : ''}</span>
+          <button className="rr-text" disabled={busy || looking} onClick={() => run(async () => {
+            if (photosChanged) { setClosing(true); return; }
+            if (dirty) await saveDraft();
+            onExit(activeListId);
+          })}>{confirmed || !data?.receipt?.extracted ? 'חזרה לרשימה' : 'שמירה ויציאה'}</button>
+          {tab === 'upload' && !confirmed && <PrimaryButton disabled={busy || !data || !files.length || !nonEmpty}
+            onClick={() => data?.receipt?.state === 'review' ? setReplacing(true) : scan()}>סריקת התמונות</PrimaryButton>}
+          {tab === 'review' && !confirmed && issues.length > 0 && <button className="rr-primary" onClick={nextIssue} disabled={busy}>לפריט הבא</button>}
+          {tab === 'review' && !confirmed && !issues.length && <button className="rr-primary" onClick={() => discrepancy ? setView('rows') : setTab('approval')} disabled={busy}>{discrepancy ? 'בדיקת סכום השורות' : 'מעבר לאישור'}</button>}
+          {tab === 'approval' && !confirmed && <>
+            <button className="rr-text" disabled={busy} onClick={() => setTab('review')}>חזרה לבדיקה</button>
+            <button className="rr-primary" disabled={!canConfirm || looking} onClick={confirm}>אישור להיסטוריה</button></>}
+        </> :
           <>
             <div aria-live="polite">
               {!rows.length ? (
@@ -565,7 +623,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
             {data?.receipt?.state !== "confirmed" &&
               (tab === "upload" ? (
                 <PrimaryButton
-                  disabled={busy || !files.length || !nonEmpty}
+                  disabled={busy || !data || !files.length || !nonEmpty}
                   onClick={() => {
                     if (data?.receipt?.state === "review") setReplacing(true);
                     else scan();
@@ -582,7 +640,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
         }
       >
         <div dir="rtl">
-          <div className="shopping-receipt-tabs">
+          {!page && <div className="shopping-receipt-tabs">
             <SecondaryButton
               ref={titleFocus}
               aria-pressed={tab === "upload"}
@@ -596,7 +654,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
             >
               בדיקת פריטים
             </SecondaryButton>
-          </div>
+          </div>}
           {busy && <p role="status">מעבד… {progress ? `${progress.stage==='preparing'?'הכנת קבצים':'עיבוד מקורות'} ${progress.completed}/${progress.total}` : 'אין לסגור עד לסיום.'}</p>}
           {!nonEmpty && <Alert>{messages.receipt_list_empty}</Alert>}
           {error && (
@@ -667,8 +725,19 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                 )}
               </div>
             )}
-            {tab === "review" && data && (
+            {(tab === "review" || tab === "approval") && data && (
               <div className="receipt-review-workspace">
+                {tab === 'approval' && <div className="rr-approval-note">
+                  <strong>{rows.length} שורות · {fulfillment.length} פריטים ברשימה</strong>
+                  {!!issues.length && <div>פריטים שעדיין דורשים בדיקה<ul>{issues.map(i => <li key={i.id}>{i.row.name} · {i.label}</li>)}</ul></div>}
+                  {fulfillment.filter(i => i.status === 'unresolved').map((i,index) => <p key={index}>כמות טרם אומתה · {i.name}</p>)}
+                  {discrepancy && <p role="alert">{discrepancy}</p>}
+                  {previousDraft && <p role="alert">הטיוטה אינה תוצאת סריקה עדכנית.</p>}
+                  <p>האישור שומר את הקנייה בהיסטוריה. הוצאה כספית נוצרת בנפרד בסגירת הקנייה ברשימה.</p>
+                </div>}
+                {page && !confirmed && !!data.receipt?.extracted?.receipt_adjustments?.length &&
+                  <Alert>יש להסדיר התאמות לכל הקבלה לפני אישור להיסטוריה. הפרטים מופיעים בכלי הקבלה.</Alert>}
+                {(!page || toolsOpen) && <div className="rr-tools-body">
                 <div className="receipt-review-toolbar">
                   <input
                     aria-label="בית עסק"
@@ -688,12 +757,12 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                     }}
                     readOnly={data.receipt?.state === "confirmed"}
                   />
-                  <SecondaryButton
+                  {!page && <SecondaryButton
                     aria-expanded={details}
                     onClick={() => setDetails(!details)}
                   >
                     פרטי קבלה
-                  </SecondaryButton>
+                  </SecondaryButton>}
                 </div>
                 {details && (
                   <div className="receipt-secondary-details">
@@ -780,6 +849,8 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                     )}
                   </div>
                 )}
+                {page && !confirmed && <button className="rr-text" onClick={() => setTab('upload')}>סריקה מחדש</button>}
+                </div>}
                 {!identityChecked && (
                   <div className="receipt-context-action">
                     מזהי הקבלה השתנו.{" "}
@@ -798,23 +869,25 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                     />
                   </details>
                 )}
-                {data.receipt?.state!=='confirmed'&&<div className="receipt-lookup-toolbar">
+                {(!page || toolsOpen) && data.receipt?.state!=='confirmed'&&<div className="receipt-lookup-toolbar">
                   <button type="button" disabled={busy||looking||!rows.length} onClick={lookupNames}>איתור שמות מוצרים</button>
                   {looking&&<button type="button" onClick={()=>{lookupQueue.current=false;}}>עצירת איתור</button>}
                   {!!lookupSummary&&<span role="status">{lookupSummary}</span>}
                 </div>}
-                {data.receipt?.state!=='confirmed'&&<ReceiptStoreReview review={storeReview}
+                {(!page || storeReview.state !== 'matched' || data.receipt?.extracted?.identity_conflict) && data.receipt?.state!=='confirmed'&&<ReceiptStoreReview review={storeReview}
                   conflict={data.receipt?.extracted?.identity_conflict} conflictReviewed={identityConflictReviewed} onConflictReview={setIdentityConflictReviewed}
                   acknowledgment={merchantAck} onAcknowledge={setMerchantAck} onCancel={close} lists={targetLists}
                   onLists={()=>run(async()=>{const {data:lists}=await getShoppingLists();setTargetLists(lists.filter(l=>l.item_count>0&&['draft','active'].includes(l.status)&&String(l.id)!==String(activeListId)));})}
                   onStore={store=>run(async()=>{await saveDraft();await updateShoppingList(activeListId,{store},...(data._mutation_tokens ? [data] : []));const {data:next}=await getShoppingIntelligence(activeListId);setData(next);setMerchantAck('');await onChanged();})}
-                  onMove={target=>run(async()=>{await saveDraft();const {data:latest}=await getShoppingIntelligence(activeListId);await moveShoppingReceipt(activeListId,{target_list_id:target,context_token:latest.context_token});setActiveListId(target);setTargetLists(null);setMerchantAck('');await onChanged();})}/>}
-                <dl className="receipt-review-totals">
+                  onMove={target=>run(async()=>{await saveDraft();const {data:latest}=await getShoppingIntelligence(activeListId);await moveShoppingReceipt(activeListId,{target_list_id:target,context_token:latest.context_token});if (onTransfer) {onTransfer(target);return;}setActiveListId(target);setTargetLists(null);setMerchantAck('');await onChanged();})}/>}
+                {!page && <dl className="receipt-review-totals">
                   <div><dt>סה״כ הטיוטה</dt><dd><bdi>₪{total}</bdi>{incompleteTotal && ' · חלקי'}</dd></div>
                   <div><dt>סה״כ מודפס</dt><dd>{printedTotal == null ? '—' : <bdi>₪{printedTotal}</bdi>}</dd></div>
                   {discrepancy && <div className="receipt-totals-gap"><dt>התאמת סכומים</dt><dd>{discrepancy}</dd></div>}
-                </dl>
-                <ReceiptReviewWorkspace
+                </dl>}
+                {tab === 'review' && <Workspace
+                  {...(page ? {issues, discrepancy, selected, onApplyPrice:applyLineTotal, undoPrice, onSelect:setSelected, mobileDetail, onMobileDetail:setMobileDetail,
+                    view:confirmed && view === 'issues' ? 'rows' : view, onView:setView} : {})}
                   key={`${activeListId}:${data.receipt?.attempts}`}
                   fulfillment={fulfillment}
                   onAssign={assignReceipt}
@@ -850,15 +923,15 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                     setReviewed(false);
                     setDirty(true);
                   }}
-                />
-                {data.receipt?.state !== "confirmed" && (
+                />}
+                {(!page || tab === "approval") && data.receipt?.state !== "confirmed" && (
                   <label className="receipt-confirm-check">
                     <input
                       type="checkbox"
                       checked={reviewed}
                       onChange={(e) => {
                         setReviewed(e.target.checked);
-                        setDirty(true);
+                        if (!page) setDirty(true);
                       }}
                     />
                     בדקתי את השורות; הקנייה לא אושרה ברשימה אחרת
@@ -868,7 +941,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
             )}
           </fieldset>
         </div>
-      </Dialog>
+      </Frame>
       <ConfirmDialog
         open={closing}
         onClose={() => setClosing(false)}
@@ -876,7 +949,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
         message="התיקונים יישמרו כטיוטה ללא אישור להיסטוריה וללא הוצאה. תמונות שטרם נסרקו נשמרות רק במסך."
         confirmLabel="שמירת טיוטה וסגירה"
         cancelLabel="המשך בדיקה"
-        onConfirm={() => run(async()=>{await saveDraft();setClosing(false);setOpen(false);})}
+        onConfirm={() => run(async()=>{await saveDraft();setClosing(false);if(page)onExit(activeListId);else setOpen(false);})}
       />
       <ConfirmDialog
         open={!!restoreDraft}
