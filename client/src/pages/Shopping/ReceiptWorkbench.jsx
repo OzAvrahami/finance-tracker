@@ -9,7 +9,26 @@ const tabs = [['issues','לטיפול'], ['plan','פריטי הרשימה'], ['r
 const filters = [['all','הכול'], ['linked','עם שיוך'], ['unlinked','ללא שיוך'], ['confirmed','שיוכים מאושרים']];
 const amount = value => value == null ? 'לא ידוע' : <bdi dir="ltr">₪{value}</bdi>;
 
-function IssueDetail({ issue, onBack, onEdit, onMatch, onConfirmLink, onApplyPrice }) {
+function SubstitutionChoices({ names, plan, rows, onChoose }) {
+  return <section aria-label="תחליפים מוצעים">
+    <h3>פריטים מוצעים מהרשימה</h3>
+    <ul>{[...new Set(names)].map(name => {
+      const targets = plan.filter(item => item.name === name);
+      if (!targets.length) return <li key={name}>{name} · הפריט אינו ברשימה הנוכחית</li>;
+      return targets.map((target, index) => {
+        const confirmed = rows.some(row => row.review_link?.confirmed && receiptMatchesPlan(row, target));
+        return <li key={target.list_item_id ?? `${name}-${index}`}>
+          <button className="rr-text" type="button" disabled={confirmed || target.list_item_id == null}
+            onClick={() => onChoose(target.list_item_id)}>שיוך אל {name}{targets.length > 1 && ` · ${target.quantity} ${target.unit} · שורה ${plan.indexOf(target)+1}`}</button>
+          {confirmed && ' · קיים שיוך מאושר'}
+        </li>;
+      });
+    })}</ul>
+    <button className="rr-text" type="button" onClick={() => onChoose(null)}>השארה ללא שיוך</button>
+  </section>;
+}
+
+function IssueDetail({ issue, plan, rows, onLinkRow, onBack, onEdit, onMatch, onConfirmLink, onApplyPrice }) {
   const { row, index, label, links, expected, kind, price } = issue;
   const source = row.provenance?.[0];
   const original = price.row.raw_price;
@@ -20,6 +39,7 @@ function IssueDetail({ issue, onBack, onEdit, onMatch, onConfirmLink, onApplyPri
     <button type="button" className="rr-back rr-text" onClick={onBack}>חזרה לפריטים ›</button>
     <header><h2>{row.name || 'שורה ללא שם'}</h2><span className="rr-badge">{label}</span></header>
     <p>{kind === 'price' ? 'בדקו את סכום השורה לאחר ההנחה מול הקבלה.' :
+      kind === 'substitution' ? 'ייתכן שהמוצר נקנה כתחליף לפריט ברשימה. בחרו אם לשייך אותו.' :
       kind === 'match' ? 'השוו את המוצר והכמות לשיוך ברשימת הקניות.' : 'השוו את הפרטים שנקראו למקור בקבלה.'}</p>
     {kind === 'price' && <div className="rr-compare">
       <div><small>הסכום בטיוטה</small><strong>{amount(price.final)}</strong></div>
@@ -41,12 +61,13 @@ function IssueDetail({ issue, onBack, onEdit, onMatch, onConfirmLink, onApplyPri
         {expected != null && <div className="rr-source-net"><dt>נטו לשורה בקבלה</dt><dd>{amount(expected)}</dd></div>}
       </dl> : original.discount != null && original.discount !== '0.00' && <small>הנחה לשורה {amount(original.discount)}</small>}
     </div>
-    <div className="rr-decision"><button className="rr-primary" type="button" onClick={() => {
+    {kind === 'substitution' ? <SubstitutionChoices names={row.possible_substitutions} plan={plan} rows={rows}
+      onChoose={id => onLinkRow(index, id, true)}/> : <div className="rr-decision"><button className="rr-primary" type="button" onClick={() => {
       if (expected != null) onApplyPrice(index, expected);
       else if (issue.unitReview) onConfirmLink(links[0], true);
       else if (kind === 'match' && links[0]?.list_item_id != null) onMatch(links[0]);
       else onEdit(index);
-    }}>{expected != null ? `עדכון ל־₪${expected}` : issue.unitReview ? 'אישור השיוך ללא אימות הכמות' : kind === 'match' ? 'בדיקת השיוך' : 'עריכת השורה'}</button></div>
+    }}>{expected != null ? `עדכון ל־₪${expected}` : issue.unitReview ? 'אישור השיוך ללא אימות הכמות' : kind === 'match' ? 'בדיקת השיוך' : 'עריכת השורה'}</button></div>}
   </article>;
 }
 
@@ -87,11 +108,11 @@ export default function ReceiptWorkbench({ rows, fulfillment, issues, discrepanc
       <section className="rr-panel rr-queue"><h2>{issues.length ? 'פריטים לטיפול' : 'אין פריטים לטיפול'}</h2>
         {issues.length > 0 && <p>בחרו שורה כדי לראות את המקור והתיקון.</p>}
         {issues.map(i => <button key={i.id} type="button" aria-pressed={issue?.id === i.id} onClick={() => {onSelect(i.id); onMobileDetail(true);}}>
-          <span className={`rr-icon ${i.kind}`} aria-hidden="true">{i.kind === 'price' ? '₪' : i.kind === 'match' ? '↔' : '≠'}</span>
+          <span className={`rr-icon ${i.kind}`} aria-hidden="true">{i.kind === 'price' ? '₪' : i.kind === 'source' ? '≠' : '↔'}</span>
           <span><b>{i.row.name || 'שורה ללא שם'}</b><small>{i.label} · שורה {i.index+1}</small></span><span aria-hidden="true">‹</span>
         </button>)}
       </section>
-      <div className="rr-detail-wrap" ref={detail} tabIndex={-1}>{issue ? <IssueDetail issue={issue} onBack={() => onMobileDetail(false)}
+      <div className="rr-detail-wrap" ref={detail} tabIndex={-1}>{issue ? <IssueDetail issue={issue} plan={fulfillment} rows={rows} onLinkRow={onLinkRow} onBack={() => onMobileDetail(false)}
         onEdit={i => showRow(i,true)} onMatch={item => showPlan(item,true)} onApplyPrice={onApplyPrice} onConfirmLink={onConfirmLink}/> :
         <div className="rr-panel rr-detail"><h2>{discrepancy ? 'סכום השורות דורש בדיקה' : 'בדיקת השורות הושלמה'}</h2>{discrepancy && <p>{discrepancy}</p>}<button className="rr-text" onClick={() => switchView('rows')}>עיון בשורות הקבלה</button></div>}</div>
     </div> : <section className="rr-panel rr-records">

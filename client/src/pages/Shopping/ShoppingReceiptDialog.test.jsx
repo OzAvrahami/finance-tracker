@@ -556,6 +556,43 @@ it('shows all unconfirmed replacement rows, preserves approved links in both vie
   expect(within(other).getByRole('option',{name:/מלפפון טרי/})).toBeInTheDocument();
 });
 
+it.each([
+  ['שיוך אל חלב', '20'],
+  ['השארה ללא שיוך', null],
+])('reviews suggested soy milk separately from olive oil and saves the explicit choice: %s', async (action, targetId) => {
+  const milk = {list_item_id:'20', name:'חלב', quantity:'1', unit:'ליטר'};
+  const row = {quantity:'1', unit:'ליטר', price:'10', match_requires_review:true};
+  const soy = {...row, name:'חלב סויה', possible_substitutions:['חלב']};
+  const oliveOil = {...row, name:'שמן זית', possible_substitutions:[]};
+  const legacyItem = {list_item_id:null, name:'לחם', quantity:'1', unit:'יחידה'};
+  const data = {...review, plan:[milk, legacyItem], reconciliation:{items:[soy, oliveOil]}};
+  api.getShoppingIntelligence.mockResolvedValue({data});
+  api.saveShoppingReceiptDraft.mockResolvedValueOnce({data:{revision:1}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+  await screen.findByRole('button',{name:'לטיפול 1'});
+  expect(screen.getByRole('button',{name:/חלב סויה.*תחליף אפשרי/})).toBeInTheDocument();
+  expect(screen.queryByText('שמן זית')).not.toBeInTheDocument();
+  const choices = screen.getByRole('region',{name:'תחליפים מוצעים'});
+  expect(within(choices).getByRole('button',{name:'שיוך אל חלב'})).toBeEnabled();
+  fireEvent.click(within(choices).getByRole('button',{name:action}));
+  expect(screen.getByRole('button',{name:'לטיפול 0'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'שמירה ויציאה'}));
+  await waitFor(() => expect(api.saveShoppingReceiptDraft).toHaveBeenCalledWith(1,expect.objectContaining({
+    draft:expect.objectContaining({items:[{...soy,review_link:{list_id:'1',list_item_id:targetId,confirmed:false}},oliveOil]}),
+  })));
+});
+
+it('keeps confirmed milk links intact when another receipt line suggests the same target', async () => {
+  const milk = {list_item_id:'20', name:'חלב', quantity:'1', unit:'ליטר'};
+  const soy = {name:'חלב סויה', quantity:'1', unit:'ליטר', price:'10', match_requires_review:true, possible_substitutions:['חלב']};
+  const confirmed = {...soy, name:'חלב', review_link:{list_id:'1',list_item_id:'20',confirmed:true}};
+  api.getShoppingIntelligence.mockResolvedValue({data:{...review,plan:[milk],reconciliation:{items:[confirmed,soy]}}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+  await screen.findByRole('button',{name:'לטיפול 1'});
+  expect(screen.getByRole('button',{name:'שיוך אל חלב'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'השארה ללא שיוך'})).toBeEnabled();
+});
+
 it('dedicated page corrects an evidenced line, keeps an extra purchase and only exits after a successful draft save', async () => {
   const rows = [
     {row_id:'tuna',name:'טונה',quantity:'2',unit:'יחידה',price:'30.00',line_total:'60.00',discount:'30.00'},

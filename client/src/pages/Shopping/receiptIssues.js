@@ -24,6 +24,8 @@ export function receiptIssues(rows, plan) {
       kind = 'match'; label = 'התאמה או יחידות לבדיקה';
     } else if (!row.review_link && !row.mapping_snapshot && row.match_requires_review && links.length) {
       kind = 'match'; label = 'שיוך לבדיקה';
+    } else if (!row.review_link && !links.length && row.match_requires_review && row.possible_substitutions?.length) {
+      kind = 'substitution'; label = 'תחליף אפשרי';
     } else return [];
     const target = links.length === 1 ? links[0] : null;
     const unitReview = kind === 'match' && target?.list_item_id != null &&

@@ -31,7 +31,7 @@ export function receiptReplacementOptions(rows, item, query) {
 
 export function changeReceiptLink(rows, plan, index, planId, listId, keepMatches = false) {
   const chosen = rows[index];
-  const target = plan.find(item => String(item.list_item_id) === String(planId));
+  const target = planId == null ? null : plan.find(item => String(item.list_item_id) === String(planId));
   if (!chosen || chosen.review_link?.confirmed || (planId != null && !target)) return rows;
   if (target && rows.some(row => row.review_link?.confirmed && receiptMatchesPlan(row, target))) return rows;
   const link = id => ({ list_id: String(listId), list_item_id: id, confirmed: false });
