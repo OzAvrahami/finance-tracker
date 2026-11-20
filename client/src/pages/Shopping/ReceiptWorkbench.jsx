@@ -10,17 +10,24 @@ const filters = [['all','הכול'], ['linked','עם שיוך'], ['unlinked','ל
 const amount = value => value == null ? 'לא ידוע' : <bdi dir="ltr">₪{value}</bdi>;
 
 function SubstitutionChoices({ names, plan, rows, onChoose }) {
+  const previewPrefix = useId();
   return <section aria-label="תחליפים מוצעים">
     <h3>פריטים מוצעים מהרשימה</h3>
     <ul>{[...new Set(names)].map(name => {
       const targets = plan.filter(item => item.name === name);
       if (!targets.length) return <li key={name}>{name} · הפריט אינו ברשימה הנוכחית</li>;
       return targets.map((target, index) => {
-        const confirmed = rows.some(row => row.review_link?.confirmed && receiptMatchesPlan(row, target));
+        const matches = rows.flatMap((row, i) => receiptMatchesPlan(row, target) ? [{row, number:i + 1}] : []);
+        const confirmed = matches.some(({row}) => row.review_link?.confirmed);
+        const previewId = !confirmed && target.list_item_id != null && matches.length
+          ? `${previewPrefix}-${target.list_item_id}` : undefined;
         return <li key={target.list_item_id ?? `${name}-${index}`}>
           <button className="rr-text" type="button" disabled={confirmed || target.list_item_id == null}
+            aria-describedby={previewId}
             onClick={() => onChoose(target.list_item_id)}>שיוך אל {name}{targets.length > 1 && ` · ${target.quantity} ${target.unit} · שורה ${plan.indexOf(target)+1}`}</button>
           {confirmed && ' · קיים שיוך מאושר'}
+          {previewId && <small id={previewId}>בבחירה זו יוסר השיוך של {matches.map(({row, number}) =>
+            `${row.name || 'שורה ללא שם'} (שורה ${number})`).join(' · ')}.</small>}
         </li>;
       });
     })}</ul>
@@ -62,7 +69,7 @@ function IssueDetail({ issue, plan, rows, onLinkRow, onBack, onEdit, onMatch, on
       </dl> : original.discount != null && original.discount !== '0.00' && <small>הנחה לשורה {amount(original.discount)}</small>}
     </div>
     {kind === 'substitution' ? <SubstitutionChoices names={row.possible_substitutions} plan={plan} rows={rows}
-      onChoose={id => onLinkRow(index, id, true)}/> : <div className="rr-decision"><button className="rr-primary" type="button" onClick={() => {
+      onChoose={id => onLinkRow(index, id)}/> : <div className="rr-decision"><button className="rr-primary" type="button" onClick={() => {
       if (expected != null) onApplyPrice(index, expected);
       else if (issue.unitReview) onConfirmLink(links[0], true);
       else if (kind === 'match' && links[0]?.list_item_id != null) onMatch(links[0]);

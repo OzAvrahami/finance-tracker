@@ -582,6 +582,40 @@ it.each([
   })));
 });
 
+it('replaces the unconfirmed milk link from the substitution shortcut and lets the owner approve soy milk', async () => {
+  const milk = {list_item_id:'20', name:'חלב', quantity:'1', unit:'ליטר'};
+  const link = {list_id:'1',list_item_id:'20',confirmed:false};
+  const row = {quantity:'1',unit:'ליטר',price:'10'};
+  const original = {...row, name:'חלב רגיל',review_link:link};
+  const soy = {...row, name:'חלב סויה',match_requires_review:true,possible_substitutions:['חלב']};
+  api.getShoppingIntelligence.mockResolvedValue({data:{...review,plan:[milk],reconciliation:{items:[original,soy]}}});
+  api.saveShoppingReceiptDraft.mockResolvedValueOnce({data:{revision:1}});
+  render(<ShoppingReceiptDialog list={list} onExit={vi.fn()} onChanged={vi.fn()}/>);
+
+  const choices = await screen.findByRole('region',{name:'תחליפים מוצעים'});
+  const shortcut = within(choices).getByRole('button',{name:'שיוך אל חלב'});
+  expect(shortcut).toHaveAccessibleDescription(/יוסר השיוך.*חלב רגיל.*שורה 1/);
+  fireEvent.click(shortcut);
+  fireEvent.click(screen.getByRole('button',{name:'פריטי הרשימה'}));
+  expect(screen.getByRole('button',{name:/חלב סויה.*שורת קבלה 2/})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'אשר שיוך'}));
+
+  fireEvent.click(screen.getByRole('button',{name:'שורות הקבלה'}));
+  const receiptRows = screen.getAllByRole('article');
+  expect(receiptRows).toHaveLength(2);
+  expect(receiptRows[0]).toHaveTextContent('חלב רגיל');
+  expect(receiptRows[0]).toHaveTextContent('ללא שיוך');
+  expect(receiptRows[1]).toHaveTextContent('חלב סויה');
+  expect(receiptRows[1]).toHaveTextContent('שיוך מאושר');
+  fireEvent.click(screen.getByRole('button',{name:'שמירה ויציאה'}));
+  await waitFor(() => expect(api.saveShoppingReceiptDraft).toHaveBeenCalledWith(1,expect.objectContaining({
+    draft:expect.objectContaining({items:[
+      {...original,review_link:{...link,list_item_id:null}},
+      {...soy,review_link:{...link,confirmed:true}},
+    ]}),
+  })));
+});
+
 it('keeps confirmed milk links intact when another receipt line suggests the same target', async () => {
   const milk = {list_item_id:'20', name:'חלב', quantity:'1', unit:'ליטר'};
   const soy = {name:'חלב סויה', quantity:'1', unit:'ליטר', price:'10', match_requires_review:true, possible_substitutions:['חלב']};

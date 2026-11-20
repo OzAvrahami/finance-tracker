@@ -18,7 +18,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
-- Shopping receipt review (#95, PR #105) shows suggested substitutes in the issue queue. Choose a planned item or explicitly keep the purchase unlinked. Ordinary off-list purchases stay out of the queue.
+- Shopping receipt review (#95, PR #105) shows suggested substitutes in the issue queue. Choosing a substitute previews and replaces the planned item's unconfirmed links. Both receipt lines stay visible and the new link can be approved. Use the replacement editor's checkbox to keep multiple links, or leave a purchase unlinked. Ordinary off-list purchases stay out of the queue.
 
 - Shopping receipt review opens on its own page. Review flagged lines beside their receipt evidence, including the gross amount, line discount and supported net total. Search between planned and purchased items and save corrections back to the same list. History approval shows a single final amount when the totals match, alongside any outstanding checks. Financial checkout remains a separate action.
 
