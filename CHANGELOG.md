@@ -6,7 +6,7 @@ Formal release tracking begins with **v0.9.0**, the first formally tracked Finan
 
 This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and will use semantic-version-style tracking for formal releases.
 
-> [v2.0.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.0.0) is the latest published release as of 2026-11-19. Earlier preparation checkpoints record the status at the time.
+> [v2.1.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.1.0) is the latest published release as of 2026-11-20. v2.2.0 is prepared and unpublished.
 
 ## [Unreleased]
 
@@ -17,10 +17,6 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Bank account payment sources: add `bank_account` (חשבון בנק) in the existing payment-source settings, with bank/issuer, last four digits, owner and active status. Forward migration 055 extends the method constraint without changing existing source IDs or historical transactions. CSV bank-account observations remain held with `bank_event_semantics_required`; migration 056 below permits ordinary external expenses through existing reconciliation. No bank synchronization is enabled. Requires migration 054 and its unified backend. See [implementation and release prerequisites](docs/history/BANK_ACCOUNT_PAYMENT_SOURCES.md). Owner acceptance pending.
 
 ### Changed
-
-- Shopping receipt review (#95, PR #105) shows suggested substitutes in the issue queue. Choosing a substitute previews and replaces the planned item's unconfirmed links. Both receipt lines stay visible and the new link can be approved. Use the replacement editor's checkbox to keep multiple links, or leave a purchase unlinked. Ordinary off-list purchases stay out of the queue.
-
-- Shopping receipt review opens on its own page. Review flagged lines beside their receipt evidence, including the gross amount, line discount and supported net total. Search between planned and purchased items and save corrections back to the same list. History approval shows a single final amount when the totals match, alongside any outstanding checks. Financial checkout remains a separate action.
 
 - #99 Package 1: move transaction normalization, eligibility, matching, reconciliation, owner review and historical receipt-correction decisions into shared JavaScript services. Migration 058 replaces the active SQL decision engines with private atomic persistence, locked snapshot checks and unchanged durable identities. Persistence binds financial fields and nested receipt corrections to frozen evidence, rejects protected links, and preserves sticky owner charge-date decisions. Pin the historical merchant Unicode repertoire so runtime ICU updates do not change matching evidence. Requires a coordinated writer pause and backend/database cutover; no mixed-version write window. Existing v1 single/Bulk, manual/CSV domain boundaries and paused Wallet compatibility remain. Evidence-backed ILS refunds now work across payment-source methods as negative expenses; income policy remains separate. No producer activation or historical refund recovery. See [package design, verification and cutover requirements](docs/architecture/INGESTION_PACKAGE_1.md). Package 1 local owner acceptance completed; production cutover prerequisites and authorization remain outstanding. Issue #99 stays open for the remaining domain packages.
 
@@ -40,9 +36,19 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
 
-## [2.1.0] - Prepared (unpublished)
+## [2.2.0] - Prepared (unpublished)
 
-Prepared on 2026-11-19 against v2.0.0. The implementation scope is [Shopping receipt review (#95, PR #104)](https://github.com/OzAvrahami/finance-tracker/pull/104) and the FX changes from `9e9222f`, `ba3d6ac` and `53699f7` in [#99](https://github.com/OzAvrahami/finance-tracker/issues/99).
+Prepared on 2026-11-20 against v2.1.0. The candidate covers the dedicated Shopping receipt review page for [#95](https://github.com/OzAvrahami/finance-tracker/issues/95), merged in [PR #105](https://github.com/OzAvrahami/finance-tracker/pull/105). Owner review with the original Osher Ad receipt and live-provider OCR remain unverified.
+
+### Changed
+
+- Shopping receipt review opens on its own page. Review flagged lines beside their receipt evidence, including the gross amount, line discount and supported net total. Search between planned and purchased items and save corrections back to the same list. History approval shows a single final amount when the totals match, alongside any outstanding checks. Financial checkout remains a separate action.
+
+- Shopping receipt review (#95, PR #105) shows suggested substitutes in the issue queue. Choosing a substitute previews and replaces the planned item's unconfirmed links. Both receipt lines stay visible and the new link can be approved. Use the replacement editor's checkbox to keep multiple links, or leave a purchase unlinked. Ordinary off-list purchases stay out of the queue.
+
+## [2.1.0] - 2026-11-19
+
+[Published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.1.0). This release includes [Shopping receipt review (#95, PR #104)](https://github.com/OzAvrahami/finance-tracker/pull/104) and the FX changes from `9e9222f`, `ba3d6ac` and `53699f7` in [#99](https://github.com/OzAvrahami/finance-tracker/issues/99).
 
 ### Added
 

@@ -8,11 +8,12 @@ SwiftUI FlowLink companion in the same repository.
 **Start with the [documentation index](docs/README.md)** for setup, architecture,
 database guidance, operator instructions and historical evidence.
 
-[v2.0.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.0.0).
-[v2.1.0 is prepared locally and unpublished](CHANGELOG.md#210---prepared-unpublished).
-It includes Shopping receipt review (#95, PR #104), FX refunds, explicit owner links
-and settlement validation (#99). Manual review of the Osher Ad receipt, live-provider
-OCR and owner acceptance of the FX changes remain pending.
+[v2.1.0 is the latest published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.1.0).
+It includes the initial Shopping receipt review workflow (#95, PR #104) and FX updates (#99).
+The v2.1.0 release notes record owner acceptance of the FX changes as pending.
+[v2.2.0 is prepared locally and unpublished](CHANGELOG.md#220---prepared-unpublished).
+It adds the dedicated Shopping receipt review page and substitution shortcuts (#95, PR #105).
+Owner review with the original Osher Ad receipt and live-provider OCR remain unverified.
 
 The application is privately controlled and does not provide multi-user tenant isolation.
 The [v2.0.0 preparation record](docs/history/RELEASE_2_0_0.md) documents the Shopping
