@@ -26,7 +26,7 @@ ALTER TABLE public.shopping_checkouts
  ALTER COLUMN payment_method DROP DEFAULT,
  ALTER COLUMN payment_method DROP NOT NULL,
  ADD CONSTRAINT shopping_checkout_expense_fk FOREIGN KEY(transaction_id)
- REFERENCES public.transactions(id) ON DELETE RESTRICT NOT VALID;
+ REFERENCES public.transactions(id) ON DELETE SET NULL NOT VALID;
 
 CREATE UNIQUE INDEX shopping_checkouts_one_per_expense
  ON public.shopping_checkouts(transaction_id) WHERE transaction_id IS NOT NULL;

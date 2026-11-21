@@ -11,7 +11,7 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 ## [Unreleased]
 
 - Shopping receipt review now uses the normal app navigation. Filter planned items awaiting match approval, add multiple receipt lines and approve or undo each match independently (#106).
-- **Breaking — Shopping checkout** now closes the list with an explicitly selected existing expense or without a financial link. Both choices retain purchase history and leave transactions untouched. Legacy expense-creation requests are rejected. Apply migration 065 before upgrading the backend and client (#107).
+- **Breaking — Shopping checkout** now closes the list with an explicitly selected existing expense or without a financial link. Both choices retain purchase history and leave transactions untouched. A later permitted hard delete clears only the checkout transaction reference. Legacy expense-creation requests are rejected. Apply migration 065 before upgrading the backend and client (#107).
 
 ### Added
 
