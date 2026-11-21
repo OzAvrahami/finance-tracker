@@ -219,6 +219,8 @@ export const addShoppingListItem = (listId, data, context) => workflowWrite('pos
 export const updateShoppingListItem = (listId, itemId, data, context) => workflowWrite('put', `/shopping/lists/${listId}/items/${itemId}`, data, context?._mutation_tokens?.['item.edit:'+itemId]);
 export const removeShoppingListItem = (listId, itemId, context) => workflowWrite('delete', `/shopping/lists/${listId}/items/${itemId}`, {}, context?._mutation_tokens?.['item.remove:'+itemId]);
 export const toggleShoppingItemPurchased = (listId, itemId, context) => workflowWrite('patch', `/shopping/lists/${listId}/items/${itemId}/toggle`, {}, context?._mutation_tokens?.['item.toggle:'+itemId]);
+export const getCheckoutCandidates = (listId, q, offset = 0) =>
+  api.get(`/shopping/lists/${listId}/checkout-candidates`, { params: { q, offset } });
 export const checkoutShoppingList = (listId, data, context) => workflowWrite('post', `/shopping/lists/${listId}/checkout`, data, context?._mutation_tokens?.checkout);
 
 // Annual Summary

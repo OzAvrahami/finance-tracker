@@ -8,14 +8,24 @@ const { frozenCopy, catalogView } = require('./repository');
 const { validateResult } = require('../lists/listCommands');
 const { planCommercial } = require('../catalog/commercialService');
 const { planReceipt } = require('../receipts/receiptService');
+const { planCheckout } = require('../lists/checkoutService');
 const { listProjection, fields, openList } = require('../lists/listService');
-const { regularSchema } = require('../../../services/shoppingHabitsService');
+const { regularSchema, duplicateReviewSchema } = require('../../../services/shoppingHabitsService');
 
 const allowed = new Set(['receipt.read', 'receipt.begin', 'receipt.progress', 'receipt.extracted', 'receipt.failed', 'receipt.draft', 'receipt.confirm', 'receipt.move',
   'commercial.read', 'commercial.approve', 'commercial.map', 'regular.set', 'regular.remove', 'checkout', 'lookup.read', 'lookup.claim', 'lookup.finalize', 'type.read', 'type.create', 'type.edit', 'type.deactivate', 'entry.category']);
 function translate(error, committing = false) {
   if (error?.code === 'P0001' && /^(receipt_|checkout_|shopping_mapping_|shopping_legacy_result_)[a-z_]+$/.test(error.message)) return new ShoppingDomainError(error.message);
   return repositoryError(error, { committing });
+}
+function checkoutSelection(body) {
+  const linked = body?.mode === 'linked';
+  fields(body, linked ? ['mode', 'transaction_id', 'fingerprint', 'duplicate_reviewed_ids'] : ['mode', 'duplicate_reviewed_ids']);
+  requireRule(linked || body.mode === 'unlinked', 'checkout_selection_invalid');
+  if (body.duplicate_reviewed_ids !== undefined) duplicateReviewSchema.parse(body.duplicate_reviewed_ids);
+  if (!linked) return null;
+  requireRule(typeof body.fingerprint === 'string' && /^[a-f0-9]{32}$/.test(body.fingerprint), 'checkout_selection_invalid');
+  return identity(body.transaction_id);
 }
 function createWorkflowCommands({ supabase, authorize }) {
   requireRule(typeof authorize === 'function', 'shopping_authorizer_required');
@@ -33,7 +43,25 @@ function createWorkflowCommands({ supabase, authorize }) {
       p_projection: listProjection(facts, id), p_expected: { ...facts.expected, actor: authenticatedActor(request), operation, target_id: targetId } });
     if (error) throw translate(error);return data;
   }
-  return Object.freeze({ read, context,
+  // Authorize the list before reading household finance data. The same filters
+  // restrict discovery. The command verifies the selected row before committing.
+  function availableExpenses() {
+    return supabase.from('shopping_checkout_expenses')
+      .select('transaction_id,description,transaction_date,total_amount,payment_source,last4,fingerprint')
+      .eq('movement_type', 'expense').gt('total_amount', 0).is('voided_at', null);
+  }
+  async function candidates(request, id, query) {
+    const facts = await read(request, 'checkout', id);
+    openList(facts, id);
+    const search = query.q ?? '', offset = Number(query.offset ?? 0);
+    requireRule(typeof search === 'string' && search.length <= 120 && Number.isSafeInteger(offset) && offset >= 0, 'shopping_input_invalid');
+    let rows = availableExpenses().is('linked_list_id', null).order('transaction_date', { ascending:false }).order('id', { ascending:false });
+    if (search.trim()) rows = rows.ilike('search_text', `%${search.trim()}%`);
+    const { data, error } = await rows.range(offset, offset + 30);
+    if (error) throw translate(error);
+    return { rows: data.slice(0, 30), has_more: data.length > 30 };
+  }
+  return Object.freeze({ read, context, candidates,
     async execute(request, operation, id = null, body = request.body, internalPlan = null) {
       const actor = authenticatedActor(request), headers = { ...parseHeaders(request.headers) };
       const target = operation === 'receipt.move' ? identity(body.target_list_id) : null;
@@ -44,6 +72,7 @@ function createWorkflowCommands({ supabase, authorize }) {
       }
       const facts = await read(request, operation, id, target, headers.key);
       const intent = { operation, id, body: structuredClone(body) };
+      const expenseId = operation === 'checkout' ? checkoutSelection(body) : null;
       if (facts.command) {
         requireRule(facts.command.actor === actor && facts.command.key === headers.key, 'shopping_snapshot_invalid');
         requireRule(isDeepStrictEqual(facts.command.intent, intent), 'shopping_key_conflict');
@@ -68,9 +97,27 @@ function createWorkflowCommands({ supabase, authorize }) {
         if (operation === 'regular.remove') fields(body, []);
         decision = { kind: operation, values: operation === 'regular.set' ? regularSchema.parse(body) : {} };rpc = 'shopping_list_commit';
       } else if (operation === 'checkout') {
-        fields(body, ['category_id', 'payment_source_id', 'duplicate_reviewed_ids']);
-        if (!naturalCheckout) openList(facts, id);
-        decision = { projection: listProjection(facts, id) };rpc = 'shopping_checkout_commit';
+        if (naturalCheckout) {
+          const previous = facts.checkouts[0].transaction_id;
+          requireRule((previous == null ? null : String(previous)) === expenseId, 'checkout_conflict');
+        } else {
+          openList(facts, id);
+          if (expenseId !== null) {
+            const { data, error } = await supabase.from('shopping_checkout_expenses')
+              .select('movement_type,total_amount,voided_at,linked_list_id,fingerprint').eq('id', expenseId).maybeSingle();
+            if (error) throw translate(error);
+            requireRule(data && data.movement_type === 'expense' && data.total_amount > 0 && data.voided_at === null &&
+              (data.linked_list_id === null || String(data.linked_list_id) === String(id)) &&
+              data.fingerprint === body.fingerprint, 'checkout_transaction_conflict');
+          }
+          const duplicates = await supabase.rpc('shopping_receipt_duplicates', { p_list: id });
+          if (duplicates.error) throw translate(duplicates.error);
+          const reviewed = new Set(body.duplicate_reviewed_ids ?? []);
+          requireRule(duplicates.data.every(row => reviewed.has(row.receipt_id)), 'receipt_duplicate_review_required');
+        }
+        // A natural replay is resolved from the immutable checkout under lock.
+        decision = naturalCheckout ? {} : planCheckout(facts, id, expenseId);
+        rpc = 'shopping_checkout_commit';
       } else {
         requireRule(typeof internalPlan === 'function', 'shopping_operation_invalid');
         decision = internalPlan(facts, intent);rpc = 'shopping_lookup_commit';

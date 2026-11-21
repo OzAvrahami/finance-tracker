@@ -22,8 +22,8 @@ export default function ShoppingReceiptPage() {
       .catch(() => { if (active) setFailedListId(listId); });
     return () => { active = false; };
   }, [listId]);
-  if (failedListId === listId) return <main dir="rtl" role="alert">טעינת הרשימה נכשלה. <Link to={`/shopping/${listId}`}>חזרה לרשימה</Link></main>;
-  if (String(list?.id) !== listId) return <main dir="rtl" role="status">טוען קבלה…</main>;
+  if (failedListId === listId) return <div dir="rtl" role="alert">טעינת הרשימה נכשלה. <Link to={`/shopping/${listId}`}>חזרה לרשימה</Link></div>;
+  if (String(list?.id) !== listId) return <div dir="rtl" role="status">טוען קבלה…</div>;
   return <ShoppingReceiptDialog key={listId} list={list} onExit={id => navigate(`/shopping/${id}`)}
     onTransfer={id => navigate(`/shopping/${id}/receipt`, { replace: true })}
     onChanged={async () => { const { data } = await getShoppingListById(listId); setList(data); }} />;

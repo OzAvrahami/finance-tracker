@@ -6,14 +6,7 @@ const setup = (initial = []) => {
   const tables = { shopping_lists: structuredClone(initial), shopping_checkouts: [], transactions: [], categories: [] };
   const calls = [];
   // Controller boundary fake only; real atomicity is covered in shoppingPurchasePostgres.local.test.js.
-  const client = { async rpc(name, args) {
-    assert.equal(name, 'shopping_checkout');
-    const list=tables.shopping_lists.find(l=>String(l.id)===args.p_list);
-    const total=list.shopping_list_items.filter(i=>i.is_purchased).reduce((sum,i)=>sum+i.quantity*i.price,0);
-    const transaction={id:1,description:list.title,total_amount:total,payment_source_id:Number(args.p_source),category_id:Number(args.p_category)};
-    tables.transactions.push(transaction);tables.shopping_checkouts.push({transaction_id:1,list_id:list.id});list.status='checked_out';
-    return {data:{total_amount:total,transaction_id:1},error:null};
-  }, from(table) {
+  const client = { from(table) {
     calls.push(table);
     assert.ok(tables[table], `Unexpected table ${table}`);
     let operation = 'read'; let payload; const filters = [];
@@ -101,19 +94,15 @@ for (const invalid of [
 }
 
 for (const metadata of [{}, fields]) {
-  test(`checkout preserves optional headers and financial/item behavior (${Object.keys(metadata).length} fields)`, async () => {
+  test(`retired checkout refuses creation and preserves the open list (${Object.keys(metadata).length} fields)`, async () => {
     const items = [{ id: 7, quantity: 2, price: 10, is_purchased: true }, { id: 8, quantity: 4, price: 5, is_purchased: false }];
     const { invoke, tables } = setup([{ id: 1, title: 'רשימה', status: 'active', ...metadata, shopping_list_items: items }]);
     const result = await invoke('checkoutList', { payment_source_id: 4, category_id: 3 });
-    assert.equal(result.body.total_amount, 20);
-    assert.equal(tables.transactions[0].total_amount, 20);
-    assert.equal(tables.transactions[0].description, 'רשימה');
-    assert.equal(tables.transactions[0].payment_source_id, 4);
-    assert.equal(tables.shopping_checkouts[0].transaction_id, 1);
-    assert.equal(tables.shopping_lists[0].status, 'checked_out');
+    assert.equal(result.statusCode, 410);
+    assert.deepEqual(tables.transactions, []);
+    assert.deepEqual(tables.shopping_checkouts, []);
+    assert.equal(tables.shopping_lists[0].status, 'active');
     assert.deepEqual(tables.shopping_lists[0].shopping_list_items, items);
     for (const key of Object.keys(metadata)) assert.equal(tables.shopping_lists[0][key], metadata[key]);
-    assert.equal(tables.transactions[0].store, undefined);
-    assert.equal(tables.transactions[0].target_date, undefined);
   });
 }

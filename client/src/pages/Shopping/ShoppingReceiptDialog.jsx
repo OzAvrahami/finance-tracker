@@ -542,7 +542,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
           {dirty
             ? "שינויים שטרם נשמרו — שמרו טיוטה לפני יציאה"
             : data?.receipt?.state === "confirmed"
-              ? "הקנייה אושרה להיסטוריה — ההוצאה נוצרת בנפרד בסגירת קנייה"
+              ? "הקנייה אושרה להיסטוריה — סגירת הקנייה מתבצעת בנפרד"
               : data?.receipt?.state === "review"
                 ? "הסריקה מוכנה לבדיקה"
                 : "תמונות של קבלה אחת, בדיקה ואישור בנפרד מהוצאה"}
@@ -565,7 +565,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
         open={open}
         onClose={close}
         title="בדיקת קבלה"
-        description="אישור להיסטוריה בלבד · הוצאה נוצרת בסגירת קנייה"
+        description="אישור להיסטוריה בלבד · סגירת הקנייה בנפרד"
         size="lg"
         className="shopping-receipt-dialog"
         returnFocusRef={entry}
@@ -733,7 +733,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                   {fulfillment.filter(i => i.status === 'unresolved').map((i,index) => <p key={index}>כמות טרם אומתה · {i.name}</p>)}
                   {discrepancy && <p role="alert">{discrepancy}</p>}
                   {previousDraft && <p role="alert">הטיוטה אינה תוצאת סריקה עדכנית.</p>}
-                  <p>האישור שומר את הקנייה בהיסטוריה. הוצאה כספית נוצרת בנפרד בסגירת הקנייה ברשימה.</p>
+                  <p>האישור שומר את הקנייה בהיסטוריה. בסגירת הקנייה ברשימה אפשר לקשר הוצאה קיימת.</p>
                 </div>}
                 {page && !confirmed && !!data.receipt?.extracted?.receipt_adjustments?.length &&
                   <Alert>יש להסדיר התאמות לכל הקבלה לפני אישור להיסטוריה. הפרטים מופיעים בכלי הקבלה.</Alert>}
@@ -892,7 +892,7 @@ export default function ShoppingReceiptDialog({ list, onChanged, compact = false
                   fulfillment={fulfillment}
                   onAssign={assignReceipt}
                   onLinkRow={linkRow}
-                  onConfirmLink={(item, confirmed) => editLinks(all => confirmReceiptLink(all, item, confirmed, activeListId))}
+                  onConfirmLink={(item, confirmed, index) => editLinks(all => confirmReceiptLink(all, item, confirmed, activeListId, index))}
                   mutationContext={data}
                   rows={rows}
                   catalog={data.catalog ?? []}

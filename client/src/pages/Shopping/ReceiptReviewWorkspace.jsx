@@ -66,7 +66,7 @@ export default function ReceiptReviewWorkspace({
       <TextField value={query} onValueChange={setQuery}
         label={selectedView === 'plan' ? 'חיפוש פריט ברשימה' : 'חיפוש שורת קבלה'} />
       <label>סינון לפי שיוך<select value={filter} onChange={event => setFilter(event.target.value)}>
-        {filters.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        {(selectedView === 'plan' ? [...filters, ['pending', 'מחכים לאישור שיוך']] : filters).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select></label>
     </div>
     {selectedView === 'plan' ? (

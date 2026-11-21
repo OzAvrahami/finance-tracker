@@ -122,6 +122,9 @@ function createWorkflowIntelligenceRouter({ commands, supabase, authorize, extra
         await commands.execute(worker, 'receipt.failed', req.params.id, { attempt: r.attempts });throw e;
       }
     }));
+  router.get('/lists/:id/checkout-candidates', handle(async (req, res) => {
+    res.json(await commands.candidates(req, req.params.id, req.query));
+  }));
   router.post('/lists/:id/checkout', handle(async (req, res) => respond(res, await commands.execute(req, 'checkout', req.params.id))));
   return router;
 }

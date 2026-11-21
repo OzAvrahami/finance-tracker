@@ -226,7 +226,7 @@ it('duplicate warning shows prior list/history/expense and requires distinct-pur
  render(<ShoppingIntelligence list={list} onChanged={vi.fn()} />);await open();
   fireEvent.click(screen.getByRole("button",{name:/^(סריקת קבלה|בדיקת קבלה)$/}));
  fireEvent.click(screen.getByText('קבלה דומה קיימת · נדרשת בדיקה לפני אישור'));
- expect(screen.getByText('קנייה קודמת')).toBeInTheDocument();expect(screen.getByText(/כבר נוצרה הוצאה/)).toBeInTheDocument();
+ expect(screen.getByText('קנייה קודמת')).toBeInTheDocument();expect(screen.getByText(/סכום הסגירה/)).toBeInTheDocument();
  fireEvent.click(screen.getByLabelText(/בדקתי את השורות/));
  const confirm=screen.getByRole('button',{name:'אישור להיסטוריה'});expect(confirm).toBeDisabled();
  fireEvent.click(screen.getByLabelText(/אלו רכישות נפרדות/));expect(confirm).toBeEnabled();

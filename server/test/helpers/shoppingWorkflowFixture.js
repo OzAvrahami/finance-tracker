@@ -6,12 +6,14 @@ const express = require('express');
 const { createShoppingHttpFixture } = require('./shoppingHttpFixture');
 const { createWorkflowRouter } = require('../../modules/shopping/http/workflowRouter');
 
-async function createWorkflowFixture(options = {}) {
+async function createWorkflowFixture({ beforeCheckoutMigration, ...options } = {}) {
   const base = await createShoppingHttpFixture();let server;
   try {
     base.env.guard();
     assert.equal(base.sql("SELECT shobj_description(oid,'pg_database') FROM pg_database WHERE datname=current_database();"), base.env.identity);
     base.sql(`SET shopping.isolated_migration='${base.env.identity}';` + fs.readFileSync(path.join(__dirname, '../../migrations/063_shopping_workflow_persistence.sql'), 'utf8'));
+    if (beforeCheckoutMigration) beforeCheckoutMigration(base);
+    base.sql(fs.readFileSync(path.join(__dirname, '../../migrations/065_shopping_checkout_links.sql'), 'utf8'));
     base.sql("SELECT setval(pg_get_serial_sequence('shopping_list_types','id'),(SELECT max(id) FROM shopping_list_types)); SELECT setval(pg_get_serial_sequence('shopping_lists','id'),(SELECT max(id) FROM shopping_lists)); SELECT setval(pg_get_serial_sequence('shopping_list_items','id'),(SELECT max(id) FROM shopping_list_items));");
     // The minimal full_schema fixture lacks the hosted default privileges on
     // unrelated finance reference tables. Only these authenticated read helpers

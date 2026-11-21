@@ -60,19 +60,15 @@ async function confirmationItems(items) {
  });
 }
 function validateReviewLinks(items,plan,listId) {
- const {receiptMatchesPlan}=require('../../shared/shoppingReceiptMatching.mjs');
- const byId=new Map(plan.filter(item=>item.list_item_id!=null).map(item=>[String(item.list_item_id),item]));
- const confirmed=new Map();
+ const targets = new Set(plan.filter(item => item.list_item_id != null).map(item => String(item.list_item_id)));
+ const seen = new Set();
  for (const row of items) {
-  const link=row.review_link;
-  if (!link) continue;
-  if (link.list_id!==String(listId) || (link.list_item_id!==null&&!byId.has(link.list_item_id))) throw Error('receipt_invalid');
-  if (!link.confirmed) continue;
-  if (link.list_item_id===null||confirmed.has(link.list_item_id)) throw Error('receipt_invalid');
-  confirmed.set(link.list_item_id,row);
- }
- for (const [id,owner] of confirmed) {
-  if (items.some(row=>row!==owner&&receiptMatchesPlan(row,byId.get(id)))) throw Error('receipt_invalid');
+  if (row.row_id != null && seen.has(row.row_id)) throw Error('receipt_invalid');
+  if (row.row_id != null) seen.add(row.row_id);
+  const link = row.review_link;
+  if (link && (link.list_id !== String(listId) || (link.list_item_id === null ? link.confirmed : !targets.has(link.list_item_id)))) {
+   throw Error('receipt_invalid');
+  }
  }
 }
 module.exports={reviewItemSchema,reviewSchema,reviewProjection,confirmationItems,validateReviewLinks};

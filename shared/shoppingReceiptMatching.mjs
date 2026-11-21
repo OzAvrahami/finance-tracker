@@ -64,6 +64,9 @@ export function receiptPlanningQuantity(row, target) {
 }
 export function allocateReceipt(plan, rows) {
   const remaining = rows.map(r => decimal(r.quantity));
+  // A uniquely assigned line belongs entirely to its planned item, even in excess.
+  // Ambiguous catalog matches continue sharing the remaining quantity across the plan.
+  const uniqueTarget = rows.map(row => plan.filter(item => receiptMatchesPlan(row, item)).length === 1);
   return plan.map(p => {
     let allocated = 0n, unresolved = false;
     const required = decimal(p.quantity), matches = [];
@@ -73,7 +76,7 @@ export function allocateReceipt(plan, rows) {
       const converted = receiptPlanningQuantity({ ...r, quantity: remaining[index] == null ? null : quantityText(remaining[index]) }, p);
       const available = decimal(converted);
       if (available === null || required === null) { unresolved = true; return; }
-      const take = available < required - allocated ? available : required - allocated;
+      const take = uniqueTarget[index] || available < required - allocated ? available : required - allocated;
       if (take <= 0n) return;
       // Exact rational allocation only; never guess a conversion or duplicate quantity.
       if (available === 0n || remaining[index] * take % available !== 0n) { unresolved = true; return; }
