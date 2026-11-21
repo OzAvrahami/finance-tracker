@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PrimaryButton, SecondaryButton, TextField } from '../../components/ui';
+import { planningUnitLabel } from '../../../../shared/shoppingEntryOptions.mjs';
 import { receiptMatchesPlan } from '../../../../shared/shoppingReceiptMatching.mjs';
 import { receiptReplacementOptions, receiptRowMatchesSearch } from './receiptReviewLinks';
 
@@ -10,16 +11,16 @@ const statusText = {
   unresolved: 'התאמה או המרת כמות לא פתורה',
 };
 
-function ReplacementPicker({ item, rows, plan, matches, onAssign, onCancel }) {
+function ReplacementPicker({ item, rows, plan, matches, adding, onAssign, onCancel }) {
   const picker = useRef(null);
   useEffect(() => { picker.current?.scrollIntoView?.({ block:'nearest' }); }, []);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState('');
-  const [keepMatches, setKeepMatches] = useState(false);
+  const [keepMatches, setKeepMatches] = useState(adding);
   const chosen = selected === '' ? null : rows[Number(selected)];
-  const released = matches.filter(match => match.index !== Number(selected));
+  const released = matches.filter(match => !match.row.review_link?.confirmed && match.index !== Number(selected));
   const previous = chosen && plan.find(p => p !== item && receiptMatchesPlan(chosen, p));
-  const { suggested, available } = receiptReplacementOptions(rows, item, query);
+  const { suggested, available } = receiptReplacementOptions(rows, item, query, adding);
   const option = ({ row, index }) => {
     const previous = plan.find(p => receiptMatchesPlan(row, p));
     const assignment = previous === item ? ' · השורה המשויכת כרגע' : previous ? ` · משויך ל${previous.name}` : '';
@@ -32,7 +33,7 @@ function ReplacementPicker({ item, rows, plan, matches, onAssign, onCancel }) {
     <div>השיוך הנוכחי: {matches.map(({row}) => row.name).join(' · ') || 'ללא שיוך'}</div>
     <div className="rr-picker-fields"><TextField label="חיפוש שורת קבלה" value={query} onValueChange={value => { setQuery(value); setSelected(''); }} />
     <label>
-      {matches.length ? 'שורה מחליפה' : 'שורה לשיוך'}
+      {adding ? 'שורה נוספת' : matches.length ? 'שורה מחליפה' : 'שורה לשיוך'}
       <select value={selected} onChange={event => setSelected(event.target.value)}>
         <option value="">{suggested.length || available.length ? 'בחר שורה מהקבלה'
           : query.trim() ? 'אין תוצאות בשורות הזמינות' : 'אין שורות ללא שיוך מאושר'}</option>
@@ -40,7 +41,7 @@ function ReplacementPicker({ item, rows, plan, matches, onAssign, onCancel }) {
         {!!available.length && <optgroup label="שורות זמינות">{available.map(option)}</optgroup>}
       </select>
     </label></div>
-    {chosen && released.length > 0 && <label className="receipt-keep-matches">
+    {!adding && chosen && released.length > 0 && <label className="receipt-keep-matches">
       <input type="checkbox" checked={keepMatches} onChange={e => setKeepMatches(e.target.checked)}/>שמירת השורות המשויכות בנוסף לשורה שנבחרה
     </label>}
     {chosen && <p role="status">בשמירה, {chosen.name} תשויך ל{item.name}.
@@ -65,21 +66,23 @@ export default function ReceiptPlanComparison({
     (item.name.toLowerCase().includes(query.trim().toLowerCase()) || matches.some(({row,index}) => receiptRowMatchesSearch(row,index,query))) &&
     (filter === 'all' || (filter === 'linked' && matches.length > 0) ||
       (filter === 'unlinked' && matches.length === 0) ||
+      (filter === 'pending' && matches.some(({ row }) => !row.review_link?.confirmed)) ||
       (filter === 'confirmed' && matches.some(({ row }) => row.review_link?.confirmed))));
 
   const shownEditor = activePlan;
   const select = onEdit;
-  if (!visible.length) return <p className="receipt-table-empty">אין פריטים בתצוגה הזו.</p>;
 
   return <section aria-label="פריטי הרשימה" className="receipt-plan-rows">
     <p role="status">{visible.length} מתוך {fulfillment.length} פריטים</p>
+    {!visible.length && <p className="receipt-table-empty">אין פריטים בתצוגה הזו.</p>}
     {visible.map(({ item, key, matches }) => {
-      const confirmed = matches.some(({ row }) => row.review_link?.confirmed);
-      const editable = !readOnly && item.list_item_id != null && !confirmed;
+      const canReplace = !matches.length || matches.some(({ row }) => !row.review_link?.confirmed);
+      const editable = !readOnly && item.list_item_id != null;
+      const adding = shownEditor === `add-${key}`;
       return <article key={key} id={`${rowPrefix}-plan-${key}`} tabIndex={-1} className="receipt-plan-row">
         <div>
           <strong>{item.name}</strong>
-          <p>תוכנן {item.quantity} {item.unit} · {statusText[item.status]}</p>
+          <p>תוכנן {item.quantity} {planningUnitLabel(item.unit)} · נרכשו {item.purchased_quantity} {planningUnitLabel(item.unit)} · {statusText[item.status]}</p>
         </div>
         <div className="receipt-plan-matches">
           {matches.length ? matches.map(({ row, index }) => (
@@ -87,23 +90,22 @@ export default function ReceiptPlanComparison({
               <button type="button" className="receipt-text-action" onClick={() => onShowRow(index)}>
                 {row.name || 'שורה ללא שם'} · שורת קבלה {index + 1}
               </button>
-              <small>{row.quantity} {row.unit}</small>
+              <small>{row.quantity} {planningUnitLabel(row.unit)}{row.product_code && ` · מק״ט ${row.product_code}`}</small>
+              {row.review_link?.confirmed && <span className="receipt-link-confirmed">שיוך מאושר</span>}
+              {editable && shownEditor !== key && !adding && <SecondaryButton onClick={() => onConfirm(item, !row.review_link?.confirmed, index)}>
+                {row.review_link?.confirmed ? 'בטל אישור' : 'אשר שיוך'}
+              </SecondaryButton>}
             </div>
           )) : <p>ללא שיוך לקבלה</p>}
-          {confirmed && <span className="receipt-link-confirmed">שיוך מאושר</span>}
         </div>
         {!readOnly && <div className="receipt-plan-actions">
-          {editable && <SecondaryButton aria-expanded={shownEditor === key} onClick={() => select(shownEditor === key ? null : key)}>עריכה</SecondaryButton>}
-          {item.list_item_id != null && (confirmed || (matches.length === 1 && shownEditor !== key)) && (
-            <SecondaryButton onClick={() => { select(null); onConfirm(item, !confirmed); }}>
-              {confirmed ? 'בטל אישור' : 'אשר שיוך'}
-            </SecondaryButton>
-          )}
-          {editable && matches.length > 0 && shownEditor === key && (
+          {editable && matches.length > 0 && <SecondaryButton aria-expanded={adding} onClick={() => select(adding ? null : `add-${key}`)}>הוספת שורת קבלה</SecondaryButton>}
+          {editable && canReplace && <SecondaryButton aria-expanded={shownEditor === key} onClick={() => select(shownEditor === key ? null : key)}>עריכה</SecondaryButton>}
+          {editable && canReplace && matches.length > 0 && shownEditor === key && (
             <SecondaryButton onClick={() => { select(null); onAssign(item, null); }}>הסר שיוך</SecondaryButton>
           )}
         </div>}
-        {editable && shownEditor === key && <ReplacementPicker
+        {editable && (shownEditor === key || adding) && <ReplacementPicker key={String(shownEditor)} adding={adding}
           item={item} rows={rows} plan={fulfillment} matches={matches} onCancel={() => select(null)}
           onAssign={(index, keepMatches) => { onAssign(item, index, keepMatches); select(null); }}
         />}

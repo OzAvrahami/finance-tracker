@@ -21,6 +21,7 @@ describe('Finance Tracker route metadata', () => {
     ['/loans', 'הלוואות'],
     ['/savings', 'חסכונות'],
     ['/shopping', 'רשימות קניות'],
+    ['/shopping/42/receipt', 'רשימות קניות'],
     ['/tasks', 'מטלות'],
     ['/import', 'ייבוא תנועות'],
     ['/lego', 'אוסף לגו'],

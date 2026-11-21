@@ -202,6 +202,7 @@ module.exports = {
   calculateFinalUnitCents,
   fromMinorUnits,
   normalizeGlobalDiscountSource,
+  parseDecimalRatio,
   roundDivide,
   toMinorUnits,
 };

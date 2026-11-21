@@ -478,15 +478,5 @@ exports.toggleItemPurchased = async (req, res) => {
 
 // ========== Checkout ==========
 
-exports.checkoutList = async (req, res) => {
-  try {
-    await require('../services/savingsTransactionService').rejectUnsupported(supabase, req.body, [req.body.category_id]);
-    const { id, duplicateReviewSchema } = require('../services/shoppingHabitsService');
-    const list = id.parse(req.params.id);
-    const category = req.body.category_id ? id.parse(req.body.category_id) : null;
-    const source = req.body.payment_source_id ? id.parse(req.body.payment_source_id) : null;
-    const {data,error}=await supabase.rpc('shopping_checkout',{p_list:list,p_category:category,p_source:source,...(req.body.duplicate_reviewed_ids !== undefined ? {p_duplicate_reviewed_ids: duplicateReviewSchema.parse(req.body.duplicate_reviewed_ids)} : {})});
-    if(error)throw error;
-    res.json(data);
-  } catch(error) { require('../routes/shoppingIntelligenceRoutes').errorResponse(res,error); }
-};
+// Only the authorized, revision-aware workflow router supports checkout.
+exports.checkoutList = (_req, res) => res.status(410).json({ error: 'checkout_client_upgrade_required' });

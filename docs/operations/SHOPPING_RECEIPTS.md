@@ -1,5 +1,34 @@
 # Shopping habits and receipt reconciliation (#92, follow-up #95)
 
+## Checkout after migration 065 (#107)
+
+Receipt draft saving and approval into Shopping history remain separate from closing the list.
+The owner can close without a financial reference while a charge is still syncing, or explicitly select an existing positive, non-void expense in the shared household ledger. One expense can be linked to one checkout. A referenced expense cannot be deleted while the checkout points to it. The purchase total continues to come from the receipt or purchased list items and may differ from the linked charge.
+
+- Use the owner-authenticated `GET /api/shopping/lists/:id/checkout-candidates?q=…&offset=0` to search description, date, amount or payment source. Each page contains up to 30 rows and a `has_more` flag.
+- Submit `POST /api/shopping/lists/:id/checkout` with the list's checkout `If-Match` token and an `Idempotency-Key`. The body is `{"mode":"unlinked"}` or `{"mode":"linked","transaction_id":"123","fingerprint":"<selected row fingerprint>"}`. Include the reviewed receipt IDs when a duplicate warning requires acknowledgement. Retry an uncertain response with the same key, body and token.
+- The database locks and rechecks the selected expense, persists checkout/history and closes the list atomically. Historical expense references stay readable. Legacy requests, including empty bodies and category/payment-source creation payloads, cannot post expenses.
+
+**Owner rollout.** Apply `server/migrations/065_shopping_checkout_links.sql` to the activated 063 workflow before deploying the matching server and frontend. During the transition old clients cannot complete new checkouts. Check for duplicate non-null checkout transaction IDs before application. Baseline or uniqueness failures roll back the migration and require inspection. Preserve historical rows. The consolidated reference alone disables legacy checkout and needs the separate Shopping activation chain for the current workflow. Never replay old migrations to enable checkout.
+
+### Checkout decision and persistence boundary
+
+| Step | JavaScript decision | Database responsibility |
+| --- | --- | --- |
+| Mode and access | The authenticated Shopping workflow authorizes the owner and list. `checkoutSelection` accepts exactly one explicit mode. A linked request requires the selected ID and fingerprint. An unlinked request omits both. The HTTP body cannot supply a total, date, history or effect. | The service-only commit RPC validates the request shape and binds the planned transaction ID to that request. |
+| Expense selection | Candidate search applies owner-scoped filters and pagination. At submit, the server rereads the selected row and checks positive expense, active (non-void) row, available link and displayed fingerprint. | The workflow locks the selected transaction before the Shopping locks, compares its full-row fingerprint, copies its existing source/category references, and enforces FK and uniqueness. |
+| Purchase and history | `planCheckout` uses the confirmed purchase when present. Otherwise it selects the purchased checklist rows for new history. An empty purchase or extraction in progress blocks checkout. JavaScript verifies the owner's duplicate acknowledgements. | The actor-bound snapshot and list lock protect freshness. The RPC checks duplicate acknowledgements under the cross-list receipt lock, validates checklist evidence against the locked rows and preserves existing confirmed history. |
+| Amount | For a confirmed line discount, use its saved final line total. For ordinary rows, multiply quantity by net unit price. An unpriced checklist row contributes zero. Accumulate exact decimal products and round once to two decimals. | Validate the decimal representation and persist the server's total. The existing nonnegative check applies. |
+| Date | Keep the confirmed purchase date, or derive the Jerusalem calendar day from the snapshot's database timestamp for a checklist purchase. | Validate the date, bind it to retained receipt history when applicable, and persist the supplied date. |
+| Commit and replay | The client retains the intent, token and key for uncertain responses. The server rejects a different selection for an already closed list. | The RPC records checkout, any new history, closed status, revision and command receipt atomically. A retry returns the stored result. |
+
+**Why 065 needs DDL**
+
+- `shopping_checkouts.transaction_id` was already nullable. Add a foreign key to `transactions(id)` with `ON DELETE RESTRICT NOT VALID` and a unique partial index for non-null references. The FK enforces new references and protects linked expenses from deletion without rejecting historical orphans at installation. The existing unique list constraint still permits only one checkout per list.
+- Drop the `payment_method` default of `credit_card` and its `NOT NULL` constraint. A new checkout may lack payment-method evidence. Historical values and the existing allowed-value check are retained.
+- Grant `service_role` SELECT on the new `shopping_checkout_expenses` recognition view. Revoke all view privileges from PUBLIC, anon and authenticated. The view supplies search fields, the existing checkout reference and a row fingerprint. The commit facade retains service-role-only EXECUTE. The migration grants no financial-table write privileges.
+- Drop 063's private `checkout_financial(bigint,bigint,bigint,jsonb,jsonb)`, which inserted expenses. Replace `workflow_lock(uuid,uuid,jsonb,jsonb)`, whose natural replay called that helper, and `shopping_checkout_commit(uuid,uuid,jsonb,jsonb,jsonb)`, which called it for fresh checkouts. The original public `shopping_checkout(bigint,bigint,bigint,jsonb)` was dropped by 060. The 065 guard rejects an active database that still has a public overload. The consolidated pre-activation schema disables its legacy RPC, and the retired Express controller returns HTTP 410.
+
 Implementation guide. Release-preparation checkpoint (2026-09-30): the owner accepted the name-approval, personal-item mapping and draft-persistence workflow. Earlier pending-acceptance statements below record their dated implementation checkpoints. The initial successful owner extraction and isolated desktop/mobile review are not full OCR or production acceptance. No production migration, configuration or deployment has been performed by this release preparation.
 
 ## PDF, store validation and automatic fulfillment — #95 (2026-10-16)

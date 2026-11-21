@@ -10,6 +10,9 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+- Shopping receipt review now uses the normal app navigation. Filter planned items awaiting match approval, add multiple receipt lines and approve or undo each match independently (#106).
+- **Breaking — Shopping checkout** now closes the list with an explicitly selected existing expense or without a financial link. Both choices retain purchase history and leave transactions untouched. Legacy expense-creation requests are rejected. Apply migration 065 before upgrading the backend and client (#107).
+
 ### Added
 
 - Classified bank-account credits through the existing single/Bulk API: migration 057 supports verified ordinary income and separate ILS refund credits. Refunds retain positive source evidence and post as explicitly marked contra-expenses, preserving net cash without inflating income or requiring a debit link. Preserve replay/conflict, historical reservations, review guards and legacy evidence fingerprints. Update refund display and coordinated producer release guidance. Local verification only; production migration, deployment and owner acceptance pending.

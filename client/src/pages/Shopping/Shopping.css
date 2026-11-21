@@ -1144,3 +1144,18 @@
   .receipt-reconciliation .receipt-edit-table td.receipt-product-cell { position: relative; }
   .receipt-reconciliation .receipt-row-detail-content { width: auto; }
 }
+
+.shopping-checkout-choices {
+  display: grid;
+  gap: .5rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.shopping-checkout-choices label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding-block: .35rem;
+}
+.shopping-checkout-selection { overflow-wrap: anywhere; }

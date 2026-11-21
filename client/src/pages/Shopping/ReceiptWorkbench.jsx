@@ -71,7 +71,7 @@ function IssueDetail({ issue, plan, rows, onLinkRow, onBack, onEdit, onMatch, on
     {kind === 'substitution' ? <SubstitutionChoices names={row.possible_substitutions} plan={plan} rows={rows}
       onChoose={id => onLinkRow(index, id)}/> : <div className="rr-decision"><button className="rr-primary" type="button" onClick={() => {
       if (expected != null) onApplyPrice(index, expected);
-      else if (issue.unitReview) onConfirmLink(links[0], true);
+      else if (issue.unitReview) onConfirmLink(links[0], true, index);
       else if (kind === 'match' && links[0]?.list_item_id != null) onMatch(links[0]);
       else onEdit(index);
     }}>{expected != null ? `עדכון ל־₪${expected}` : issue.unitReview ? 'אישור השיוך ללא אימות הכמות' : kind === 'match' ? 'בדיקת השיוך' : 'עריכת השורה'}</button></div>}
@@ -125,7 +125,7 @@ export default function ReceiptWorkbench({ rows, fulfillment, issues, discrepanc
     </div> : <section className="rr-panel rr-records">
       <header><h2>{view === 'plan' ? 'פריטי הרשימה' : 'שורות הקבלה'}</h2>
         <input type="search" aria-label={view === 'plan' ? 'חיפוש פריט ברשימה' : 'חיפוש שורת קבלה'} placeholder="חיפוש…" value={query} onChange={e => setQuery(e.target.value)}/></header>
-      <div className="rr-filters" aria-label="סינון לפי שיוך">{filters.map(([key,label]) =>
+      <div className="rr-filters" aria-label="סינון לפי שיוך">{(view === 'plan' ? [...filters, ['pending', 'מחכים לאישור שיוך']] : filters).map(([key,label]) =>
         <button type="button" key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
       {view === 'plan' ? <ReceiptPlanComparison fulfillment={fulfillment} rows={rows} query={query} filter={filter} activePlan={activePlan}
         readOnly={readOnly} onEdit={setActivePlan} onAssign={onAssign} onConfirm={onConfirmLink} onShowRow={i => showRow(i)} rowPrefix={prefix}/> :

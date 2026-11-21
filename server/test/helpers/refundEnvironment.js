@@ -42,7 +42,7 @@ async function start({ baseline = false, browser = false, schemaBoundary = null,
     launch('db', postgresImage, { POSTGRES_PASSWORD: 'refund-test-only' });
     for (let i = 0; i < 100; i++) { if (!docker(['exec', `${prefix}-db`, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], undefined, true).status) break; await pause(200); }
     sql("CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE ROLE authenticator LOGIN PASSWORD 'refund-test-only' NOINHERIT; GRANT anon,authenticated,service_role TO authenticator; CREATE ROLE supabase_auth_admin LOGIN SUPERUSER PASSWORD 'refund-test-only'; CREATE SCHEMA auth AUTHORIZATION supabase_auth_admin;");
-    const schema = fs.readFileSync(path.join(root, 'server/full_schema.sql'), 'utf8');
+    const schema = fs.readFileSync(path.join(root, 'server/full_schema.sql'), 'utf8').replaceAll('\r\n', '\n');
     const boundary = baseline ? '-- Migration 059:' : schemaBoundary;
     if (boundary) assert.equal(schema.split(boundary).length, 2, 'Expected exactly one historical schema boundary');
     sql(boundary ? schema.split(boundary)[0] : schema);

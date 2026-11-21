@@ -135,7 +135,8 @@ test('receipt review stores exact approved row links and line totals without cha
     review_link:{list_id:'7',list_item_id:'11',confirmed:true}};
   const combined=[detached,assigned];
   validateReviewLinks(combined,lists,'7');
-  assert.throws(()=>validateReviewLinks([original,assigned],lists,'7'),/receipt_invalid/);
+  validateReviewLinks([original,assigned],lists,'7');
+  assert.throws(()=>validateReviewLinks([original,assigned].map(row=>({...row,row_id:'same'})),lists,'7'),/receipt_invalid/);
   assert.throws(()=>validateReviewLinks(combined,lists,'8'),/receipt_invalid/);
   assert.equal(suggestReceiptMatches([detached],lists)[0],detached);
   assert.deepEqual(allocateReceipt(lists,combined).map(row=>row.status),['absent','unresolved']);
