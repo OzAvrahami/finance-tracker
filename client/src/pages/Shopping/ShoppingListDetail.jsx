@@ -39,8 +39,7 @@ import {
   checkoutShoppingList,
   getShoppingReceiptDuplicates,
   getShoppingIntelligence,
-  getCategories,
-  getPaymentSources,
+  getCheckoutCandidates,
   getShoppingListById,
   removeShoppingListItem,
   toggleShoppingItemPurchased,
@@ -239,19 +238,47 @@ const ShoppingItemGroup = ({ group, editable, pendingItemId, onToggle, onRemove,
   );
 };
 
+function ExpensePicker({ listId, selected, onSelect, pending }) {
+  const [query, setQuery] = useState('');
+  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setPage(null);
+    setError(false);
+    const timer = setTimeout(() => {
+      getCheckoutCandidates(listId, query, offset).then(({ data }) => { if (active) setPage(data); })
+        .catch(() => { if (active) setError(true); });
+    }, 180);
+    return () => { active = false; clearTimeout(timer); };
+  }, [listId, query, offset]);
+  return <div>
+    <TextField label="חיפוש תנועה לפי תיאור, תאריך, סכום או אמצעי תשלום" value={query} disabled={pending}
+      onValueChange={value => { setQuery(value); setOffset(0); onSelect(null); }} />
+    {error ? <Alert variant="error">טעינת התנועות נכשלה. נסו לפתוח שוב את החיפוש.</Alert> : !page ? <p role="status">טוען תנועות…</p> :
+      <Select label="תנועת הוצאה לקישור" value={selected?.transaction_id ?? ''} disabled={pending}
+        onValueChange={value => onSelect(page.rows.find(row => row.transaction_id === value) ?? null)}>
+        <option value="">{page.rows.length ? 'בחרו תנועה' : 'אין תנועות מתאימות'}</option>
+        {page.rows.map(row => <option key={row.transaction_id} value={row.transaction_id}>
+          {row.description || 'ללא תיאור'} · {row.transaction_date} · ₪{row.total_amount} · {row.payment_source || 'ללא אמצעי תשלום'} {row.last4}
+        </option>)}
+      </Select>}
+    {selected && <p className="shopping-checkout-selection">
+      <strong>{selected.description || 'ללא תיאור'}</strong><br />
+      {formatCalendarDate(selected.transaction_date)} · <MoneyAmount value={selected.total_amount} /> · {selected.payment_source || 'ללא אמצעי תשלום'} {selected.last4}
+    </p>}
+    {offset > 0 && <SecondaryButton disabled={pending} onClick={() => {setOffset(offset - 30); onSelect(null);}}>הקודם</SecondaryButton>}
+    {page?.has_more && <SecondaryButton disabled={pending} onClick={() => {setOffset(offset + 30); onSelect(null);}}>הבא</SecondaryButton>}
+  </div>;
+}
+
 const CheckoutDialog = ({
   duplicates, duplicateReviewed, onDuplicateReview,
   open,
   list,
   stats,
-  paymentSources,
-  expenseCategories,
-  paymentSourceId,
-  categoryId,
-  pending,
-  error,
-  onPaymentSourceChange,
-  onCategoryChange,
+  mode, onMode, selected, onSelect, pending, error,
   onClose,
   onConfirm,
   returnFocusRef,
@@ -260,7 +287,7 @@ const CheckoutDialog = ({
     open={open}
     onClose={onClose}
     title="סגירת קנייה"
-    description="תיווצר תנועת הוצאה בסכום הפריטים שנקנו."
+    description="אפשר לקשר את הקנייה להוצאה שכבר מופיעה בתנועות."
     size="md"
     className="shopping-dialog shopping-checkout-dialog"
     returnFocusRef={returnFocusRef}
@@ -268,9 +295,9 @@ const CheckoutDialog = ({
     footer={(
       <>
         <SecondaryButton type="button" disabled={pending} onClick={() => onClose('cancelled')}>ביטול</SecondaryButton>
-        <PrimaryButton type="button" disabled={duplicates.length > 0 && !duplicateReviewed} loading={pending} loadingText="סוגר קנייה…" onClick={onConfirm}>
+        <PrimaryButton type="button" disabled={!mode || (mode === 'linked' && !selected) || (duplicates.length > 0 && !duplicateReviewed)} loading={pending} loadingText="סוגר קנייה…" onClick={onConfirm}>
           <Receipt size={16} aria-hidden="true" />
-          סגירת הקנייה ויצירת תנועה
+          אישור סגירת הקנייה
         </PrimaryButton>
       </>
     )}
@@ -279,7 +306,7 @@ const CheckoutDialog = ({
       <ReceiptDuplicateWarning candidates={duplicates} checked={duplicateReviewed} onChange={onDuplicateReview} />
       {error && (
         <Alert variant="error" urgent title="סגירת הקנייה לא הושלמה">
-          הרשימה לא הוצגה כקנייה סגורה. סימוני הפריטים נשמרו. אם קבלה עדיין נסרקת, המתינו לסיום; בדקו גם את אזהרת הכפילויות לפני ניסיון נוסף.
+          {error}
         </Alert>
       )}
 
@@ -291,35 +318,12 @@ const CheckoutDialog = ({
         <MoneyAmount value={stats.purchasedCost} minimumFractionDigits={2} maximumFractionDigits={2} />
       </div>
 
-      <Select
-        id="shopping-checkout-category"
-        label="קטגוריה פיננסית לתנועה"
-        helperText="זו קטגוריה של תנועות כספיות — שונה מקטגוריות הקטלוג שמארגנות את פריטי הרשימה."
-        value={categoryId}
-        onValueChange={onCategoryChange}
-        disabled={pending}
-      >
-        <option value="">ללא שיוך לקטגוריה פיננסית</option>
-        {expenseCategories.map((category) => (
-          <option key={category.id} value={category.id}>{category.icon} {category.name}</option>
-        ))}
-      </Select>
-
-      <Select
-        id="shopping-checkout-source"
-        label="אמצעי תשלום"
-        value={paymentSourceId}
-        onValueChange={onPaymentSourceChange}
-        disabled={pending}
-      >
-        <option value="">ללא שיוך לאמצעי תשלום</option>
-        {paymentSources.map((source) => (
-          <option key={source.id} value={source.id}>
-            {source.name}{source.last4 ? ` (${source.last4})` : ''}
-          </option>
-        ))}
-      </Select>
-
+      <fieldset className="shopping-checkout-choices" disabled={pending}><legend>אופן הסגירה</legend>
+        {[['linked', 'סגירה וקישור לתנועה קיימת'], ['unlinked', 'סגירה ללא קישור']].map(([value, label]) =>
+          <label key={value}><input type="radio" name="checkout-mode" checked={mode === value}
+            onChange={() => { onMode(value); onSelect(null); }} />{label}</label>)}
+      </fieldset>
+      {mode === 'linked' && <ExpensePicker listId={list.id} selected={selected} onSelect={onSelect} pending={pending} />}
       <div className="shopping-readonly-note">
         <Lock size={16} aria-hidden="true" />
         אחרי הסגירה הרשימה עוברת למצב קריאה בלבד ולא ניתן לערוך את הפריטים שבה.
@@ -350,10 +354,8 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState(false);
-  const [paymentSources, setPaymentSources] = useState([]);
-  const [expenseCategories, setExpenseCategories] = useState([]);
-  const [checkoutPaymentSourceId, setCheckoutPaymentSourceId] = useState('');
-  const [checkoutCategoryId, setCheckoutCategoryId] = useState('');
+  const [checkoutMode, setCheckoutMode] = useState('');
+  const [selectedExpense, setSelectedExpense] = useState(null);
   const [mutationError, setMutationError] = useState('');
 
   const fetchList = useCallback(async ({ showLoading = true } = {}) => {
@@ -473,15 +475,9 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     setMutationError('');
     setCheckoutError(false);
     try {
-      const [sourcesResponse, categoriesResponse, duplicatesResponse] = await Promise.all([
-        getPaymentSources(),
-        getCategories(),
-        getShoppingReceiptDuplicates(listId),
-      ]);
-      const sources = Array.isArray(sourcesResponse.data) ? sourcesResponse.data : [];
-      setPaymentSources(sources);
-      setExpenseCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : []);
-      setCheckoutPaymentSourceId(sources[0]?.id ? String(sources[0].id) : '');
+      const duplicatesResponse = await getShoppingReceiptDuplicates(listId);
+      setCheckoutMode('');
+      setSelectedExpense(null);
       setCheckoutDuplicates(duplicatesResponse.data);
       setCheckoutDuplicateReviewed(false);
       setShowCheckout(true);
@@ -498,26 +494,33 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
     setCheckoutError(false);
     try {
       await checkoutShoppingList(listId, {
-        payment_source_id: checkoutPaymentSourceId || null,
-        category_id: checkoutCategoryId || null,
+        mode: checkoutMode,
+        ...(checkoutMode === 'linked' ? { transaction_id: selectedExpense.transaction_id, fingerprint: selectedExpense.fingerprint } : {}),
         ...(checkoutDuplicates.length ? {duplicate_reviewed_ids: checkoutDuplicates.map(c=>c.receipt_id)} : {}),
       }, ...(list._mutation_tokens ? [list] : []));
       const refreshedList = await fetchList({ showLoading: false });
       if (refreshedList?.status !== 'checked_out') {
-        setCheckoutError(true);
+        setCheckoutError('תוצאת הסגירה לא אומתה. רעננו את הרשימה ובדקו את מצבה.');
         return;
       }
       setShowCheckout(false);
       toast.success({
         title: 'הקנייה נסגרה',
-        message: 'הרשימה נסגרה ותנועת ההוצאה נוצרה בהצלחה.',
+        message: 'הרשימה נסגרה והקנייה נשמרה בהיסטוריה.',
       });
     } catch (error) {
       if (error.response?.data?.error === 'receipt_duplicate_review_required') {
         setCheckoutDuplicateReviewed(false);
         try {setCheckoutDuplicates((await getShoppingReceiptDuplicates(listId)).data);} catch {setShowCheckout(false);setMutationError('בדיקת הכפילויות נכשלה. פתחו שוב את סגירת הקנייה כדי לבדוק.');}
       }
-      setCheckoutError(true);
+      const code = error.response?.data?.code;
+      if (code === 'checkout_transaction_conflict') {
+        setSelectedExpense(null);
+        setCheckoutMode('');
+        setCheckoutError('התנועה השתנתה או כבר קושרה לקנייה. בחרו שוב תנועה זמינה.');
+      } else {
+        setCheckoutError(workflowErrorMessage(error, 'בדקו את מצב הרשימה, הסריקה ואזהרת הכפילויות לפני ניסיון נוסף.'));
+      }
     } finally {
       setCheckoutPending(false);
     }
@@ -644,6 +647,7 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
         )}
       </GlassCard>
 
+      {list.checkout && <p>סגירת הקנייה · {list.checkout.transaction_id ? `תנועה מקושרת ${list.checkout.transaction_id}` : 'ללא קישור לתנועה'}</p>}
       {confirmedPurchase && <Alert>הסכום לסגירת הקנייה מבוסס על פריטי הקבלה שאושרו, בנפרד מסימוני הרשימה. לאחר סגירה, אישור קבלה אינו משנה הוצאה קיימת.</Alert>}
 
 
@@ -725,14 +729,9 @@ const ShoppingListDetail = ({ listId, listTypeName = '', onBack }) => {
         open={showCheckout}
         list={list}
         stats={checkoutStats}
-        paymentSources={paymentSources}
-        expenseCategories={expenseCategories}
-        paymentSourceId={checkoutPaymentSourceId}
-        categoryId={checkoutCategoryId}
-        pending={checkoutPending}
-        error={checkoutError}
-        onPaymentSourceChange={setCheckoutPaymentSourceId}
-        onCategoryChange={setCheckoutCategoryId}
+        mode={checkoutMode} onMode={setCheckoutMode}
+        selected={selectedExpense} onSelect={setSelectedExpense}
+        pending={checkoutPending} error={checkoutError}
         onClose={() => !checkoutPending && setShowCheckout(false)}
         onConfirm={handleCheckout}
         returnFocusRef={checkoutReturnFocusRef}

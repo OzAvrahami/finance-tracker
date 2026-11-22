@@ -8,6 +8,7 @@ import {
   addShoppingListItem,
   getShoppingReceiptDuplicates,
   getShoppingIntelligence,
+  getCheckoutCandidates,
   checkoutShoppingList,
   createShoppingCatalogCategory,
   createShoppingList,
@@ -30,6 +31,7 @@ vi.mock('../../services/api', () => ({
   addShoppingListItem: vi.fn(),
   getShoppingReceiptDuplicates: vi.fn(),
   getShoppingIntelligence: vi.fn(),
+  getCheckoutCandidates: vi.fn(),
   checkoutShoppingList: vi.fn(),
   createShoppingCatalogCategory: vi.fn(),
   createShoppingList: vi.fn(),
@@ -413,7 +415,7 @@ describe('Shopping checkout safety', () => {
     expect(checkoutShoppingList).not.toHaveBeenCalled();
   });
 
-  it('uses purchased-only total, optional financial links, unchanged payload, and blocks duplicate checkout', async () => {
+  it('uses purchased-only total, optional financial links, explicit selection, and blocks duplicate checkout', async () => {
     const request = deferred();
     checkoutShoppingList.mockReturnValueOnce(request.promise);
     getShoppingListById
@@ -424,14 +426,16 @@ describe('Shopping checkout safety', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'סגירת קנייה' });
     expect(within(dialog).getByText('₪9.70')).toBeInTheDocument();
-    expect(within(dialog).getByText(/קטגוריה של תנועות כספיות/)).toBeInTheDocument();
-    await userEvent.selectOptions(within(dialog).getByLabelText('קטגוריה פיננסית לתנועה'), '51');
-    expect(within(dialog).getByLabelText('אמצעי תשלום')).toHaveValue('41');
-    const confirm = within(dialog).getByRole('button', { name: /סגירת הקנייה ויצירת תנועה/ });
+    const expense = {transaction_id:'91', description:'יבוא כרטיס', total_amount:'9.70', transaction_date:'2026-11-01', payment_source:'כרטיס', fingerprint:'a'.repeat(32)};
+    getCheckoutCandidates.mockResolvedValue({data:{rows:[expense],has_more:false}});
+    const confirm = within(dialog).getByRole('button', { name: 'אישור סגירת הקנייה' });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(within(dialog).getByLabelText('סגירה וקישור לתנועה קיימת'));
+    await userEvent.selectOptions(await within(dialog).findByLabelText('תנועת הוצאה לקישור'), '91');
     await userEvent.click(confirm);
     await userEvent.click(confirm);
     expect(checkoutShoppingList).toHaveBeenCalledTimes(1);
-    expect(checkoutShoppingList).toHaveBeenCalledWith(1, { payment_source_id: '41', category_id: '51' });
+    expect(checkoutShoppingList).toHaveBeenCalledWith(1, { mode:'linked', transaction_id:'91', fingerprint:expense.fingerprint });
 
     await act(async () => request.resolve({ data: { transaction_id: 91, total_amount: 9.7 } }));
     expect(await screen.findByText('הקנייה נסגרה')).toBeInTheDocument();
@@ -443,7 +447,8 @@ describe('Shopping checkout safety', () => {
     await openList();
     await userEvent.click(screen.getByRole('button', { name: 'סגירת קנייה' }));
     const dialog = await screen.findByRole('dialog', { name: 'סגירת קנייה' });
-    await userEvent.click(within(dialog).getByRole('button', { name: /סגירת הקנייה ויצירת תנועה/ }));
+    await userEvent.click(within(dialog).getByLabelText('סגירה ללא קישור'));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'אישור סגירת הקנייה' }));
 
     expect(await within(dialog).findByText('סגירת הקנייה לא הושלמה')).toBeInTheDocument();
     expect(screen.queryByText('הקנייה נסגרה')).not.toBeInTheDocument();
@@ -558,7 +563,8 @@ it('checkout duplicate warning blocks financial confirmation until candidate com
  getShoppingReceiptDuplicates.mockResolvedValue({data:[candidate]});
  await openList();await userEvent.click(screen.getByRole('button',{name:'סגירת קנייה'}));
  const dialog=await screen.findByRole('dialog',{name:'סגירת קנייה'});
- const confirm=within(dialog).getByRole('button',{name:'סגירת הקנייה ויצירת תנועה'});
+ await userEvent.click(within(dialog).getByLabelText('סגירה ללא קישור'));
+ const confirm=within(dialog).getByRole('button',{name:'אישור סגירת הקנייה'});
  expect(within(dialog).getByText('קבלה קודמת')).toBeInTheDocument();expect(confirm).toBeDisabled();
  expect(checkoutShoppingList).not.toHaveBeenCalled();
  await userEvent.click(within(dialog).getByLabelText(/אלו רכישות נפרדות/));

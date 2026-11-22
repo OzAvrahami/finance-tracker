@@ -6,8 +6,7 @@ export default function ReceiptPageFrame({ children, footer, step, onStep, hasRe
   busy, confirmed, total, printed, difference, incomplete, listTitle, toolsOpen, toggleTools }) {
   const balanced = difference === '0.00' && !incomplete;
   return <div className="rr-page" dir="rtl">
-    <header className="rr-bar"><div><b aria-hidden="true">₪</b><strong>מעקב פיננסי</strong><span>‹ רשימות קניות ‹ {listTitle}</span></div></header>
-    <main className="rr-shell">
+    <section className="rr-shell" aria-label={listTitle}>
       <nav className="rr-steps" aria-label="שלבי הבדיקה">{steps.map(([key,label], i) => <Fragment key={key}>
         {i > 0 && <i aria-hidden="true"/>}<button aria-current={step === key ? 'step' : undefined}
           disabled={busy || (!hasReceipt && i > 0) || (confirmed && key !== 'review')}
@@ -29,7 +28,7 @@ export default function ReceiptPageFrame({ children, footer, step, onStep, hasRe
         {children}
         {step === 'approval' && <div className="rr-approval-actions">{footer}</div>}
       </div>
-    </main>
+    </section>
     {step !== 'approval' && <footer className="rr-footer"><div>{footer}</div></footer>}
   </div>;
 }

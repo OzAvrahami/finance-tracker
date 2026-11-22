@@ -24,8 +24,6 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
-        <Route path="/shopping/:listId/receipt" element={<ProtectedRoute><ShoppingReceiptPage /></ProtectedRoute>} />
-
         <Route element={
           <ProtectedRoute>
             <Layout />
@@ -39,6 +37,7 @@ function App() {
           <Route path="/savings" element={<Savings />} />
           <Route path="/budget" element={<Budget />} />
           <Route path="/import" element={<Import />} />
+          <Route path="/shopping/:listId/receipt" element={<ShoppingReceiptPage />} />
           <Route path="/shopping/:listId" element={<ShoppingListRoute />} />
           <Route path="/shopping" element={<ShoppingLists />} />
           <Route path="/settings/shopping/catalog" element={<ShoppingAdministration />} />

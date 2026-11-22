@@ -3,8 +3,14 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { createWorkflowFixture } = require('./helpers/shoppingWorkflowFixture');
+let historicalCheckout;
 let f, receiptRows = [], extractionCalls = 0, providerCalls = 0;
-before(async () => { f = await createWorkflowFixture({ extract: async (images, { onProgress }) => {
+before(async () => { f = await createWorkflowFixture({ beforeCheckoutMigration(base) {
+  historicalCheckout = JSON.parse(base.sql(`
+    INSERT INTO shopping_lists(id,title,list_type_id) VALUES(9090,'Historical purchase',1);
+    INSERT INTO shopping_confirmed_purchases(list_id,items,basis,purchase_date) VALUES(9090,'[{"quantity":"1","price":"23.40"}]','receipt','2026-10-01');
+    SELECT shopping_private.checkout_financial(9090,NULL,NULL,'[]','[]')->'checkout';`));
+}, extract: async (images, { onProgress }) => {
   extractionCalls++;await onProgress({ stage: 'extracting', completed: 1, total: 1 });
   return { items: receiptRows, identity: { merchant: 'Synthetic shop', receipt_number: randomUUID(), purchase_date: '2026-11-01' } };
 }, lookupOptions: { fetchProduct: async code => { providerCalls++;return { status: 'found', product: { code, full_name: 'Synthetic provider result' } }; } } });
@@ -38,6 +44,20 @@ test('list create, metadata edit and exact replay after later changes', async ()
   assert.deepEqual(await request('POST', '/lists', body, { 'Idempotency-Key': key }), a);
   assert.equal((await request('POST', '/lists', { ...body, title: 'different' }, { 'Idempotency-Key': key })).status, 409);
 });
+test('migration preserves a checkout created by 063 and its financial reference', async () => {
+  const response = await request('GET', '/lists/9090');
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.checkout, historicalCheckout);
+  assert.equal(f.sql("SELECT has_table_privilege('authenticated','shopping_checkout_expenses','SELECT') OR has_table_privilege('anon','shopping_checkout_expenses','SELECT')"), 'f');
+  assert.equal(f.sql("SELECT to_regprocedure('shopping_private.checkout_financial(bigint,bigint,bigint,jsonb,jsonb)') IS NULL AND to_regprocedure('public.shopping_checkout(bigint,bigint,bigint,jsonb)') IS NULL"), 't');
+  assert.equal(f.sql(`SELECT has_function_privilege('service_role','shopping_checkout_commit(uuid,uuid,jsonb,jsonb,jsonb)','EXECUTE')
+    AND NOT has_function_privilege('authenticated','shopping_checkout_commit(uuid,uuid,jsonb,jsonb,jsonb)','EXECUTE')
+    AND NOT has_function_privilege('anon','shopping_checkout_commit(uuid,uuid,jsonb,jsonb,jsonb)','EXECUTE')`), 't');
+  assert.equal(response.body.status, 'checked_out');
+  assert.equal(response.body.shopping_confirmed_purchases.basis, 'receipt');
+  assert.equal(f.sql(`SELECT total_amount FROM transactions WHERE id=${historicalCheckout.transaction_id}`), '23.40');
+});
+
 test('catalog/custom/name-first appends preserve zero, omission, null and catalog identity', async () => {
   const id = await create();
   const cat = await request('GET', '/catalog-items?list_type_id=1');assert.equal(cat.status, 200);
@@ -69,7 +89,7 @@ test('item editing, reversible keyed toggle, stale edits and item removal use on
   assert.equal(f.sql(`SELECT count(*) FROM shopping_list_items WHERE id=${itemId}`), '0');
 });
 
-test('receipt upload/progress/frozen plan/confirmation and checkout preserve exact evidence and one financial effect', async () => {
+test('receipt upload/progress/frozen plan/confirmation and checkout preserve exact evidence without a financial effect', async () => {
   const id = await create();
   assert.equal((await request('PUT', `/lists/${id}`, { store: 'Synthetic shop' }, { 'If-Match': await revision(id, 'list.edit') })).status, 200);
   assert.equal((await request('POST', `/lists/${id}/items`, { entry_mode: 'name_first', custom_name: 'Synthetic purchase', quantity: 2, unit: 'unit', price: '7.25' })).status, 201);
@@ -95,11 +115,12 @@ test('receipt upload/progress/frozen plan/confirmation and checkout preserve exa
   assert.equal(f.sql(`SELECT items FROM shopping_purchase_plans WHERE list_id=${id}`), plan);
   assert.deepEqual((await request('POST', `/lists/${id}/receipt/confirm`, body)).body, confirm.body);
   const key = randomUUID(), checkoutHeaders = { 'If-Match': await revision(id, 'checkout'), 'Idempotency-Key': key };
-  const paid = await request('POST', `/lists/${id}/checkout`, {}, checkoutHeaders);assert.equal(paid.status, 200, JSON.stringify(paid.body));assert.equal(Number(paid.body.total_amount), 14.5);
-  assert.equal(f.sql('SELECT count(*) FROM transactions'), String(Number(before) + 1));
-  assert.deepEqual(await request('POST', `/lists/${id}/checkout`, {}, { 'Idempotency-Key': key }), paid);
-  const natural = await request('POST', `/lists/${id}/checkout`, {});assert.equal(natural.status, 200, JSON.stringify(natural.body));assert.equal(natural.body.replay, true);
-  assert.equal(f.sql('SELECT count(*) FROM transactions'), String(Number(before) + 1));
+  const paid = await request('POST', `/lists/${id}/checkout`, {mode:'unlinked'}, checkoutHeaders);assert.equal(paid.status, 200, JSON.stringify(paid.body));assert.equal(Number(paid.body.total_amount), 14.5);
+  assert.equal(paid.body.checkout.checkout_date, draft.purchase_date);
+  assert.equal(f.sql('SELECT count(*) FROM transactions'), before);
+  assert.deepEqual(await request('POST', `/lists/${id}/checkout`, {mode:'unlinked'}, { 'Idempotency-Key': key }), paid);
+  const natural = await request('POST', `/lists/${id}/checkout`, {mode:'unlinked'});assert.equal(natural.status, 200, JSON.stringify(natural.body));assert.equal(natural.body.replay, true);
+  assert.equal(f.sql('SELECT count(*) FROM transactions'), before);
   assert.equal((await request('POST', `/lists/${id}/items`, { entry_mode: 'name_first', custom_name: 'Cannot alter history' })).status, 409);
 });
 
@@ -182,14 +203,15 @@ test('invalid atomic append rolls back catalog/category/list/ledger changes',asy
  assert.equal(f.sql("SELECT (SELECT count(*) FROM shopping_catalog_items)||'/'||(SELECT count(*) FROM shopping_list_items)||'/'||(SELECT count(*) FROM shopping_private.commands)"),counts);
 });
 
-test('checkout rejects malformed projections; concurrent retries create one zero-valued cash record',async()=>{
+test('checkout rejects malformed projections; concurrent retries close one zero-valued purchase',async()=>{
  const id=await create(),add=await request('POST','/lists/'+id+'/items',{entry_mode:'name_first',custom_name:'Zero checkout',quantity:1,price:0});
  await request('PATCH','/lists/'+id+'/items/'+add.body.id+'/toggle',{}, {'If-Match':await revision(id,'item.toggle',add.body.id),'Idempotency-Key':randomUUID()});
  const {createWorkflowCommands}=require('../modules/shopping/shared/workflowCommands');const cmd=createWorkflowCommands({supabase:f.client,authorize:async()=>true});const req={user:{id:f.users[0].id},headers:{}};
- const facts=await cmd.read(req,'checkout',String(id)),projection=require('../modules/shopping/lists/listService').listProjection(facts,id);
- const forged=await f.client.rpc('shopping_checkout_commit',{p_actor:f.users[0].id,p_key:randomUUID(),p_intent:{operation:'checkout',id:String(id),body:{}},p_expected:facts.expected,p_decision:{projection:[...projection,...projection]}});assert(forged.error);
+ const facts=await cmd.read(req,'checkout',String(id));
+ const decision=require('../modules/shopping/lists/checkoutService').planCheckout(facts,String(id),null);
+ const forged=await f.client.rpc('shopping_checkout_commit',{p_actor:f.users[0].id,p_key:randomUUID(),p_intent:{operation:'checkout',id:String(id),body:{mode:'unlinked'}},p_expected:facts.expected,p_decision:{...decision,projection:[...decision.projection,...decision.projection]}});assert(forged.error);
  assert.equal(f.sql('SELECT count(*) FROM shopping_checkouts WHERE list_id='+id),'0');
- const h={'If-Match':facts.etag,'Idempotency-Key':randomUUID()};const replies=await Promise.all([1,2,3].map(()=>request('POST','/lists/'+id+'/checkout',{},h)));replies.forEach(r=>assert.deepEqual(r,replies[0]));assert.equal(replies[0].status,200,JSON.stringify(replies[0]));assert.equal(Number(replies[0].body.total_amount),0);
+ const h={'If-Match':facts.etag,'Idempotency-Key':randomUUID()};const replies=await Promise.all([1,2,3].map(()=>request('POST','/lists/'+id+'/checkout',{mode:'unlinked'},h)));replies.forEach(r=>assert.deepEqual(r,replies[0]));assert.equal(replies[0].status,200,JSON.stringify(replies[0]));assert.equal(Number(replies[0].body.total_amount),0);
  assert.equal(f.sql('SELECT count(*) FROM shopping_checkouts WHERE list_id='+id),'1');
 });
 
@@ -262,16 +284,123 @@ test('receipt drafts, reprocessing and historical assignments preserve frozen ev
  assert.equal(f.sql('SELECT jsonb_array_length(previous_drafts) FROM shopping_receipts WHERE list_id='+id),'1');
 });
 
-test('checkout failure after preliminary cash insert rolls back all financial effects',async()=>{
+test('explicit imported expense link binds the displayed row, checks access and replays without financial writes', async () => {
+  const { seedImportedExpense, ledgerSnapshot } = require('./helpers/shoppingCheckoutFixture');
+  const tx = seedImportedExpense(f, 'Sample imported checkout');
+  const id = await create();
+  const item = await request('POST', `/lists/${id}/items`, {entry_mode:'name_first', custom_name:'Purchased item', price:15});
+  await request('PATCH', `/lists/${id}/items/${item.body.id}/toggle`, {}, {'If-Match':await revision(id,'item.toggle',item.body.id),'Idempotency-Key':randomUUID()});
+  f.sql("INSERT INTO transactions(description,movement_type,total_amount,transaction_date) VALUES('Sample imported income','income',15,current_date),('Sample imported refund','expense',-15,current_date);");
+  const before = ledgerSnapshot(f);
+  const url = `/lists/${id}/checkout`, search = url + '-candidates?q=Sample%20imported';
+  assert.equal((await request('GET', search, undefined, {}, 2)).status, 403);
+  const found = await request('GET', search);
+  assert.equal(found.status, 200);
+  const candidate = found.body.rows.find(row => row.transaction_id === tx);
+  assert.equal(candidate.payment_source, 'Fixture Card');
+  assert.equal(found.body.rows.length, 1);
+  const headers = {'If-Match':await revision(id,'checkout'),'Idempotency-Key':randomUUID()};
+  const body = {mode:'linked', transaction_id:tx, fingerprint:candidate.fingerprint};
+  for (const invalid of [{}, {payment_source_id:null,category_id:null}, {...body,total_amount:'0.01'}, {mode:'unlinked',purchase_date:'2000-01-01'}, {...body,fingerprint:'0'.repeat(32)}, {...body,transaction_id:'99999999'}]) {
+    assert.ok((await request('POST', url, invalid, headers)).status >= 400);
+    assert.equal((await request('GET', `/lists/${id}`)).body.checkout, null);
+  }
+  assert.equal((await request('POST', url, body, headers, 2)).status, 403);
+  const facts = await require('../modules/shopping/shared/workflowCommands').createWorkflowCommands({supabase:f.client,authorize:async()=>true})
+    .read({user:{id:f.users[0].id}},'checkout',String(id));
+  const legacy = await f.client.rpc('shopping_checkout_commit',{p_actor:f.users[0].id,p_key:randomUUID(),
+    p_intent:{operation:'checkout',id:String(id),body:{category_id:null,payment_source_id:null}},p_expected:facts.expected,p_decision:{projection:[]}});
+  assert.ok(legacy.error);
+  const [paid, concurrent] = await Promise.all([1,2].map(() => request('POST',url,body,headers)));
+  assert.deepEqual(concurrent,paid);
+  assert.equal(paid.status, 200, JSON.stringify(paid.body));
+  assert.equal(String(paid.body.checkout.transaction_id), tx);
+  assert.deepEqual(await request('POST', url, body, headers), paid);
+  assert.equal((await request('POST',url,{mode:'unlinked'})).status, 409);
+  const other = await create();
+  assert.equal((await request('POST',`/lists/${other}/checkout`,body,{'If-Match':await revision(other,'checkout')})).status,409);
+  assert.equal((await request('GET',`/lists/${other}`)).body.checkout,null);
+  assert.equal(f.sql(`SELECT count(*) FROM shopping_confirmed_purchases WHERE list_id=${id}`),'1');
+  assert.equal(ledgerSnapshot(f), before);
+});
+
+test('both checkout paths persist the JavaScript plan with transaction writes prohibited', async () => {
+  const { seedImportedExpense, ledgerSnapshot } = require('./helpers/shoppingCheckoutFixture');
+  const tx = seedImportedExpense(f,'Checkout audit');
+  const before = ledgerSnapshot(f);
+  f.sql(`CREATE FUNCTION synthetic_no_cash_write() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'checkout attempted a ledger write'; END $$;
+    CREATE TRIGGER synthetic_no_cash_write BEFORE INSERT OR UPDATE OR DELETE ON public.transactions
+    FOR EACH STATEMENT EXECUTE FUNCTION synthetic_no_cash_write();`);
+  try {
+    for (const mode of ['linked','unlinked']) {
+      const id = await create();
+      for (let n=0; n<2; n++) {
+        const add = await request('POST',`/lists/${id}/items`,{entry_mode:'name_first',custom_name:'Soap '+n,quantity:'0.5',price:'0.01'});
+        assert.equal(add.status,201);
+        const toggle = await request('PATCH',`/lists/${id}/items/${add.body.id}/toggle`,{},
+          {'If-Match':await revision(id,'item.toggle',add.body.id),'Idempotency-Key':randomUUID()});
+        assert.equal(toggle.status,200);
+      }
+      const url = `/lists/${id}/checkout`, headers = {'If-Match':await revision(id,'checkout'),'Idempotency-Key':randomUUID()};
+      const body = {mode};
+      if (mode === 'linked') {
+        const found = await request('GET',url+'-candidates?q=Checkout%20audit');
+        const candidate = found.body.rows.find(row => row.transaction_id === tx);
+        Object.assign(body,{transaction_id:tx,fingerprint:candidate.fingerprint});
+      }
+      const result = await request('POST',url,body,headers);
+      assert.equal(result.status,200,JSON.stringify(result.body));
+      assert.equal(result.body.checkout.total_amount,0.01);
+      assert.equal(result.body.checkout.transaction_id,mode === 'linked' ? Number(tx) : null);
+      assert.deepEqual(await request('POST',url,body,headers),result);
+      const history = (await request('GET',`/lists/${id}`)).body.shopping_confirmed_purchases;
+      assert.equal(history.items.length,2);
+      assert.equal(history.purchase_date,result.body.checkout.checkout_date);
+    }
+    assert.equal(ledgerSnapshot(f),before);
+  } finally {
+    f.sql('DROP TRIGGER synthetic_no_cash_write ON transactions; DROP FUNCTION synthetic_no_cash_write();');
+  }
+});
+
+test('receipt duplicate acknowledgement is required for unlinked checkout under the list lock', async () => {
+  const commands = require('../modules/shopping/shared/workflowCommands').createWorkflowCommands({supabase:f.client,authorize:async()=>true});
+  const actor = {user:{id:f.users[0].id},headers:{}};
+  const identity = {merchant:'Synthetic duplicate',purchase_date:'2026-11-01',receipt_number:randomUUID()};
+  const lists = [];
+  for (const mark of ['5','6']) {
+    const id = await create();
+    const item = await request('POST',`/lists/${id}/items`,{entry_mode:'name_first',custom_name:'Soap',price:5});
+    await request('PATCH',`/lists/${id}/items/${item.body.id}/toggle`,{}, {'If-Match':await revision(id,'item.toggle',item.body.id),'Idempotency-Key':randomUUID()});
+    const hash = mark.repeat(64);
+    await commands.execute(actor,'receipt.begin',String(id),{image_hash:hash,image_hashes:[hash],expected_attempt:0});
+    await commands.execute(actor,'receipt.extracted',String(id),{attempt:1,extracted:{items:[{name:'Soap',quantity:'1',unit:'unit',price:'5'}],identity}});
+    lists.push(id);
+  }
+  const url = `/lists/${lists[0]}/checkout`, headers = {'If-Match':await revision(lists[0],'checkout')};
+  const denied = await request('POST',url,{mode:'unlinked'},headers);
+  assert.equal(denied.body.code,'receipt_duplicate_review_required');
+  assert.equal((await request('GET',`/lists/${lists[0]}`)).body.checkout,null);
+  const duplicate = (await request('POST',`/lists/${lists[0]}/receipt/duplicates`,{})).body;
+  assert.equal(duplicate.length,1);
+  const done = await request('POST',url,{mode:'unlinked',duplicate_reviewed_ids:[duplicate[0].receipt_id]},headers);
+  assert.equal(done.status,200,JSON.stringify(done.body));
+  assert.equal(done.body.transaction_id,null);
+});
+
+test('checkout failure rolls back history, checkout and command receipt',async()=>{
  const id=await create(),add=await request('POST','/lists/'+id+'/items',{entry_mode:'name_first',custom_name:'Financial rollback',price:3});
  await request('PATCH','/lists/'+id+'/items/'+add.body.id+'/toggle',{}, {'If-Match':await revision(id,'item.toggle',add.body.id),'Idempotency-Key':randomUUID()});
  const before=f.sql('SELECT count(*) FROM transactions'),key=randomUUID();
  // Test-only failing trigger in a verified disposable database, after the
- // financial tail inserts its transaction and before checkout can complete.
+ // plan snapshot and before checkout can complete.
  f.sql("CREATE FUNCTION public.synthetic_checkout_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic failure'; END $$; CREATE TRIGGER synthetic_checkout_failure BEFORE INSERT ON shopping_checkouts FOR EACH ROW EXECUTE FUNCTION public.synthetic_checkout_failure();");
  try{
-  const failed=await request('POST','/lists/'+id+'/checkout',{}, {'If-Match':await revision(id,'checkout'),'Idempotency-Key':key});assert.equal(failed.status,503);assert.equal(failed.body.code,"shopping_commit_unknown");
+  const failed=await request('POST','/lists/'+id+'/checkout',{mode:'unlinked'}, {'If-Match':await revision(id,'checkout'),'Idempotency-Key':key});assert.equal(failed.status,503);assert.equal(failed.body.code,"shopping_commit_unknown");
   assert.equal(f.sql('SELECT count(*) FROM transactions'),before);assert.equal(f.sql('SELECT count(*) FROM shopping_checkouts WHERE list_id='+id),'0');
+  assert.equal(f.sql('SELECT count(*) FROM shopping_confirmed_purchases WHERE list_id='+id),'0');
+  assert.equal(f.sql('SELECT count(*) FROM shopping_purchase_plans WHERE list_id='+id),'0');
   assert.equal(f.sql("SELECT count(*) FROM shopping_private.commands WHERE request_key='"+key+"'"),'0');
  }finally{f.sql('DROP TRIGGER synthetic_checkout_failure ON shopping_checkouts; DROP FUNCTION public.synthetic_checkout_failure();');}
 });

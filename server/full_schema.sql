@@ -28138,3 +28138,13 @@ END $migration$;
 
 NOTIFY pgrst, 'reload schema';
 COMMIT;
+
+-- Migration 065: the consolidated reference predates the separate 060–063
+-- Shopping activation bundle. Disable its legacy RPC even for fresh installs.
+-- The active workflow uses migrations/065_shopping_checkout_links.sql after 063.
+CREATE OR REPLACE FUNCTION public.shopping_checkout(p_list bigint,p_category bigint DEFAULT NULL,p_source bigint DEFAULT NULL,p_duplicate_reviewed_ids jsonb DEFAULT '[]') RETURNS jsonb
+ LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ RAISE EXCEPTION 'checkout_client_upgrade_required';
+END $$;
+REVOKE ALL ON FUNCTION public.shopping_checkout(bigint,bigint,bigint,jsonb) FROM PUBLIC,anon,authenticated,service_role;

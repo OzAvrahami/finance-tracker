@@ -22,8 +22,9 @@ test('FX ingestion and explicit links: real HTTP, forward/fresh schema and atomi
     t.diagnostic(`Disposable PostgreSQL ${version}`);
     process.env.FLOWLINK_OWNER_USER_IDS = JSON.stringify([env.session.user.id]);
     const db = createClient(env.url, env.service);
-    const migration = fs.readFileSync(path.join(__dirname, '../migrations/064_fx_owner_links.sql'), 'utf8');
-    const schema = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8');
+    const migration = fs.readFileSync(path.join(__dirname, '../migrations/064_fx_owner_links.sql'), 'utf8').replaceAll('\r\n', '\n');
+    const fullSchema = fs.readFileSync(path.join(__dirname, '../full_schema.sql'), 'utf8').replaceAll('\r\n', '\n');
+    const schema = fullSchema.slice(0, fullSchema.indexOf('-- Migration 065:')).trimEnd();
     const count = () => Number(env.sql('SELECT count(*) FROM transactions;'));
     const cash = id => env.sql(`SELECT to_jsonb(t) FROM transactions t WHERE id=${Number(id)};`);
     const post = async body => {
@@ -68,7 +69,7 @@ test('FX ingestion and explicit links: real HTTP, forward/fresh schema and atomi
       }
       env.sql(migration); assert.equal(frozen(), before); assert.equal(grants(), beforeGrants);
       assert.notEqual(env.sqlFailure(migration).status, 0, 'repeat migration must not silently overwrite');
-      assert.ok(schema.endsWith(migration));
+      assert.ok(schema.endsWith(migration.trimEnd()));
       env.sql('CREATE DATABASE fx_fresh;');
       const fresh = spawnSync('docker', ['exec', '-i', `${env.prefix}-db`, 'psql', '-U', 'postgres', '-d', 'fx_fresh', '-v', 'ON_ERROR_STOP=1', '-Atq'],
         { input: schema, encoding: 'utf8', timeout: 90000, maxBuffer: 32e6 });
@@ -76,6 +77,11 @@ test('FX ingestion and explicit links: real HTTP, forward/fresh schema and atomi
       const defs = "SELECT jsonb_object_agg(oid::regprocedure::text,jsonb_build_array(replace(pg_get_functiondef(oid),chr(13),''),proacl::text,prosecdef,proconfig)) FROM pg_proc WHERE pronamespace='public'::regnamespace;";
       const freshDefs = spawnSync('docker', ['exec', '-i', `${env.prefix}-db`, 'psql', '-U', 'postgres', '-d', 'fx_fresh', '-Atq'], { input: defs, encoding: 'utf8', maxBuffer: 32e6 });
       assert.equal(freshDefs.status, 0, freshDefs.stderr); assert.deepEqual(JSON.parse(freshDefs.stdout), JSON.parse(env.sql(defs)));
+      // Bring the legacy consolidated reference up to its current checkout boundary.
+      const finish = spawnSync('docker', ['exec', '-i', `${env.prefix}-db`, 'psql', '-U', 'postgres', '-d', 'fx_fresh', '-v', 'ON_ERROR_STOP=1', '-Atq'],
+        { input: fullSchema.slice(schema.length) + "\nSELECT has_function_privilege('service_role','shopping_checkout(bigint,bigint,bigint,jsonb)','execute');", encoding:'utf8' });
+      assert.equal(finish.status, 0, finish.stderr);
+      assert.equal(finish.stdout.trim(), 'f');
       for (const role of ['anon', 'authenticated', 'service_role']) {
         assert.equal(env.sql(`SELECT has_function_privilege('${role}','ingestion_core_apply(jsonb,jsonb,jsonb)','EXECUTE');`), 'f');
         assert.equal(env.sql(`SELECT has_function_privilege('${role}','ingestion_core_commit(jsonb,text,jsonb)','EXECUTE');`), role === 'service_role' ? 't' : 'f');

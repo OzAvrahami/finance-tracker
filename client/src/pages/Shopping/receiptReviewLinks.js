@@ -19,10 +19,10 @@ export function receiptRowMatchesSearch(row, index, query) {
     .some(value => token(value).includes(search));
 }
 
-export function receiptReplacementOptions(rows, item, query) {
+export function receiptReplacementOptions(rows, item, query, adding = false) {
   const suggested = [], available = [];
   rows.forEach((row, index) => {
-    if (row.review_link?.confirmed || !receiptRowMatchesSearch(row, index, query)) return;
+    if (row.review_link?.confirmed || (adding && receiptMatchesPlan(row, item)) || !receiptRowMatchesSearch(row, index, query)) return;
     const options = receiptMatchSuggested(row, item) ? suggested : available;
     options.push({ row, index });
   });
@@ -33,23 +33,18 @@ export function changeReceiptLink(rows, plan, index, planId, listId, keepMatches
   const chosen = rows[index];
   const target = planId == null ? null : plan.find(item => String(item.list_item_id) === String(planId));
   if (!chosen || chosen.review_link?.confirmed || (planId != null && !target)) return rows;
-  if (target && rows.some(row => row.review_link?.confirmed && receiptMatchesPlan(row, target))) return rows;
   const link = id => ({ list_id: String(listId), list_item_id: id, confirmed: false });
   return rows.map((row, i) => {
     if (i === index) return { ...row, review_link: link(target ? String(target.list_item_id) : null) };
-    if (!keepMatches && target && receiptMatchesPlan(row, target)) return { ...row, review_link: link(null) };
+    if (!keepMatches && !row.review_link?.confirmed && target && receiptMatchesPlan(row, target)) return { ...row, review_link: link(null) };
     return row;
   });
 }
 
-export function confirmReceiptLink(rows, item, confirmed, listId) {
-  if (item.list_item_id == null) return rows;
-  const matches = rows.filter(row => receiptMatchesPlan(row, item));
-  const match = confirmed
-    ? matches.length === 1 ? matches[0] : null
-    : matches.find(row => row.review_link?.confirmed);
-  if (!match) return rows;
-  return rows.map(row => row === match ? {
+export function confirmReceiptLink(rows, item, confirmed, listId, index) {
+  const match = rows[index];
+  if (item.list_item_id == null || !match || !receiptMatchesPlan(match, item)) return rows;
+  return rows.map((row, i) => i === index ? {
     ...row,
     review_link: { list_id: String(listId), list_item_id: String(item.list_item_id), confirmed },
   } : row);

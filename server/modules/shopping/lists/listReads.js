@@ -40,7 +40,7 @@ function legacyReads(facts) {
     },
     detail(id) {
       const row = list(facts, id), scope = scopeFor(String(row.list_type_id));
-      return { ...row, _mutation_tokens: facts.read_tokens?.[row.id] ?? {}, shopping_confirmed_purchases: facts.confirmed[0] ? { items: facts.confirmed[0].items, basis: facts.confirmed[0].basis, purchase_date: facts.confirmed[0].purchase_date } : null,
+      return { ...row, checkout: facts.checkouts.find(c => String(c.list_id) === String(row.id)) ?? null, _mutation_tokens: facts.read_tokens?.[row.id] ?? {}, shopping_confirmed_purchases: facts.confirmed[0] ? { items: facts.confirmed[0].items, basis: facts.confirmed[0].basis, purchase_date: facts.confirmed[0].purchase_date } : null,
         shopping_list_items: facts.items.filter(i => String(i.list_id) === String(row.id)).map(i => item(i, scope)) };
     },
   };
