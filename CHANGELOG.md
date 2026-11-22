@@ -6,12 +6,9 @@ Formal release tracking begins with **v0.9.0**, the first formally tracked Finan
 
 This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and will use semantic-version-style tracking for formal releases.
 
-> [v2.1.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.1.0) is the latest published release as of 2026-11-20. v2.2.0 is prepared and unpublished.
+> [v2.2.0](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.2.0) is the latest published release as of 2026-11-22. v3.0.0 is prepared and unpublished.
 
 ## [Unreleased]
-
-- Shopping receipt review now uses the normal app navigation. Filter planned items awaiting match approval, add multiple receipt lines and approve or undo each match independently (#106).
-- **Breaking — Shopping checkout** now closes the list with an explicitly selected existing expense or without a financial link. Both choices retain purchase history and leave transactions untouched. A later permitted hard delete clears only the checkout transaction reference. Legacy expense-creation requests are rejected. Apply migration 065 before upgrading the backend and client (#107).
 
 ### Added
 
@@ -39,9 +36,20 @@ This format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 - #90: Make FlowLink configured Wallet capture local-first: resolve saved card metadata locally, persist immutable receipts before credential/network access, and show cached cards during refresh. Add bounded local diagnostics and a non-deliverable synthetic-test marker. Mac native builds and automated tests verified, with hardware-only Data Protection verification explicitly deferred. Keep diagnostics refresh accessible above populated history. Owner synthetic execution verified local persistence before disabled delivery on hardware. Recognize the explicit synthetic-test marker case-insensitively after outer whitespace trimming, preserving strict eligibility and confirmation without rewriting receipt evidence. Owner synthetic cleanup is accepted; real Wallet/locked-device acceptance remains pending.
 
-## [2.2.0] - Prepared (unpublished)
+## [3.0.0] - Prepared (unpublished)
 
-Prepared on 2026-11-20 against v2.1.0. The candidate covers the dedicated Shopping receipt review page for [#95](https://github.com/OzAvrahami/finance-tracker/issues/95), merged in [PR #105](https://github.com/OzAvrahami/finance-tracker/pull/105). Owner review with the original Osher Ad receipt and live-provider OCR remain unverified.
+Prepared on 2026-11-22 against v2.2.0. This candidate includes #106 and #107, merged in [PR #108](https://github.com/OzAvrahami/finance-tracker/pull/108). Owner functional acceptance is pending.
+
+### Changed
+
+- Shopping receipt review now uses the normal app navigation. Filter planned items awaiting match approval, add multiple receipt lines and approve or undo each match independently (#106).
+- **Breaking — Shopping checkout** now closes the list with an explicitly selected existing expense or without a financial link. Both choices retain purchase history and leave transactions untouched. A later permitted hard delete clears only the checkout transaction reference. The expense-creation contract for `POST /api/shopping/lists/:id/checkout` is retired. The endpoint now requires an explicit `linked` or `unlinked` mode and rejects legacy creation requests (#107).
+
+**Upgrade.** Apply `065_shopping_checkout_links.sql` before deploying the matching backend and frontend. Reload any open Finance Tracker client before checking out. The [production rollout record](https://github.com/OzAvrahami/finance-tracker/issues/107) confirms migration 065 was already applied in production.
+
+## [2.2.0] - 2026-11-20
+
+[Published release](https://github.com/OzAvrahami/finance-tracker/releases/tag/v2.2.0). This release covers the dedicated Shopping receipt review page for [#95](https://github.com/OzAvrahami/finance-tracker/issues/95), merged in [PR #105](https://github.com/OzAvrahami/finance-tracker/pull/105). Owner review with the original Osher Ad receipt and live-provider OCR remain unverified.
 
 ### Changed
 
