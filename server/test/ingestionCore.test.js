@@ -76,6 +76,51 @@ test('overflow and pending cross-source evidence hold observations without a cas
   f.observations.push({source_id:'2',transaction_id:null,payment_source_id:'6',amount_minor:'55755',movement_type:'expense',source_transaction_date:'2026-11-08'});
   const r=match(f,draft);assert.equal(r.reason,'pending_observation_review');assert.equal(r.target,null);
 });
+test('an unrelated installment does not hold a standalone external bank income', () => {
+  const f = facts();
+  f.installments.push({ payment_source_id: '14', idempotency_key: 'other-purchase' });
+  const income = scope({ type: 'income', amount: 450, payment_source_id: 14, external_id: 'bank-credit' });
+
+  const created = core.decideIngestion(f, income);
+  assert.equal(created.outcome, 'created');
+  assert.equal(created.reason, 'no_candidate');
+  assert.equal(created.posting.movement_type, 'income');
+  assert.equal(created.posting.total_amount, '450');
+  assert.deepEqual(created.candidate_ids, []);
+
+  f.observations.push({ id: '42', source_id: '1', idempotency_key: 'bank-credit', payload_fingerprint: f.hash });
+  assert.deepEqual(core.decideIngestion(f, income), { action: 'replay', observation_id: '42' });
+  f.hash = 'different-payload-hash';
+  assert.deepEqual(core.decideIngestion(f, income), { action: 'conflict', observation_id: '42' });
+});
+
+test('standalone bank income still checks existing cash and unposted observations', () => {
+  const f = facts();
+  f.installments.push({ payment_source_id: '14', idempotency_key: 'other-purchase' });
+  const income = scope({ type: 'income', amount: 450, payment_source_id: 14 });
+  f.transactions.push({ id: '9', payment_source_id: '14', movement_type: 'income', currency: 'ILS',
+    total_amount: '450', transaction_date: income.date });
+  const held = core.decideIngestion(f, income);
+  assert.equal(held.outcome, 'ambiguous');
+  assert.deepEqual(held.candidate_ids, [9]);
+
+  f.transactions = [];
+  f.observations.push({ source_id: '2', transaction_id: null, payment_source_id: '14', movement_type: 'income',
+    amount_minor: '45000', source_transaction_date: income.date });
+  assert.equal(core.decideIngestion(f, income).reason, 'pending_observation_review');
+});
+
+test('bank income exception preserves installment, source and identity checks', () => {
+  const f = facts();
+  f.installments.push({ payment_source_id: '14', idempotency_key: 'other-purchase' });
+  const reason = fields => core.decideIngestion(f, scope({ payment_source_id: 14, ...fields })).reason;
+  assert.equal(reason({ type: 'expense' }), 'installment_series_review');
+  assert.equal(reason({ type: 'refund' }), 'installment_series_review');
+  assert.equal(reason({ type: 'expense', installment_number: 1, installment_count: 3 }), 'installment_series_required');
+  assert.equal(reason({ type: 'income', external_id: undefined }), 'identity_evidence_required');
+  assert.equal(reason({ type: 'income', payment_source_id: 6 }), 'refund_semantics_required');
+});
+
 test('domain-linked, FX and installment cash is protected from generic reconciliation',()=>{
   const plain={total_amount:'557.55',currency:'ILS',links:[]};assert.equal(protectedCash(plain),false);
   for(const extra of [{links:['loan']},{links:['lego']},{links:['shopping']},{links:['savings']},{installment_count:3},{original_amount:'1.00'},{loan_id:1}])

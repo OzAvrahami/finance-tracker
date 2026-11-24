@@ -87,7 +87,7 @@ The existing fields **do not cover every required economic distinction**:
 | Original amount for a foreign purchase | Hold until evidence is corrected; generic separate review cannot invent it |
 | Missing, inactive or ambiguous payment source | Retain unresolved observation; no guessed mapping |
 
-Until a series identity is available, a payment source with installment evidence conservatively holds subsequent imports for series review. This intentionally broad rule can create substantial review volume. It avoids guessing that a whole purchase and individual installments are different cash. The ordinary v1 payload cannot express a pending-to-posted amendment, refund relation or transfer legs. Changed payloads under one key remain conflicts; do not mint another ID to escape a conflict. Contract expansion requires separate owner approval.
+Until a series identity is available, a payment source with installment evidence conservatively holds subsequent imports for series review. Classified single-occurrence external income on a bank account can post when there are no matching cash candidates and all other checks pass. It avoids guessing that a whole purchase and individual installments are different cash. The ordinary v1 payload cannot express a pending-to-posted amendment, refund relation or transfer legs. Changed payloads under one key remain conflicts; do not mint another ID to escape a conflict. Contract expansion requires separate owner approval.
 
 ## Retirement and migration
 
